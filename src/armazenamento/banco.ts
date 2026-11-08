@@ -44,7 +44,7 @@ export const raizDo = (banco: DatabaseSync): string =>
 
 /**
  * Leva o banco à versão atual: banco vazio (versão 0) recebe a linha de base `ESQUEMA_V36`, banco de versão 1 a 35 é
- * recusado, e as `migracoes` (a primeira é a 37) ainda não aplicadas rodam em ordem, cada uma na sua transação.
+ * rejeitado, e as `migracoes` (a primeira é a 37) ainda não aplicadas rodam em ordem, cada uma na sua transação.
  * A versão fica em `user_version`.
  */
 /** @testes os testes aplicam migrações próprias para provar o mecanismo */

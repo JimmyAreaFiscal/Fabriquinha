@@ -14,7 +14,7 @@ import { AUDITOR } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
-test("I-266: o agente com o trabalho de outro ticket é recusado; o do próprio ticket passa", () => {
+test("I-266: o agente com o trabalho de outro ticket é rejeitado; o do próprio ticket passa", () => {
   const { banco, fechar } = abrirBancoTemporario();
   cadastrarProjetoLoja(banco);
   gravarAgregadoPronto(banco, agregadoEmRevisao());

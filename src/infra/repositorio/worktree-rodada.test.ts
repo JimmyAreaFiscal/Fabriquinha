@@ -65,7 +65,7 @@ const snapshot = (c: Cenario) => ({
   worktrees: git(c.repo, "worktree", "list", "--porcelain"),
 });
 
-test("identificadores inválidos recusados antes de I/O em ambas operações", async () => {
+test("identificadores inválidos rejeitados antes de I/O em ambas operações", async () => {
   const c = criarRepositorioDeTeste();
   const antes = snapshot(c);
   for (const r of [
@@ -103,7 +103,7 @@ test("demanda obrigatória: ausente, removida, movida ou checkout incorreto não
   }
 });
 
-test("posses ausentes, legadas, alheias e config órfã são recusadas sem alterar refs/config/conteúdo", async () => {
+test("posses ausentes, legadas, alheias e config órfã são rejeitadas sem alterar refs/config/conteúdo", async () => {
   for (const demanda of [false, true]) {
     for (const posse of ["", "legada 2026", "demanda:/alheia", "rodada:/alheia"]) {
       const c = await cenario();
@@ -196,7 +196,7 @@ test("recriação conserva commits próprios e ref com prefixo não é adotada",
   assert.deepEqual(snapshot(d), antes);
 });
 
-test("symlink, pasta ocupada, aninhamento e checkout estrangeiro são recusados", async () => {
+test("symlink, pasta ocupada, aninhamento e checkout estrangeiro são rejeitados", async () => {
   for (const tipo of ["symlink", "pasta", "ancestral", "descendente", "registrada", "branch", "repo"]) {
     const c = await cenario();
     const p = caminho(c);
@@ -285,7 +285,7 @@ test("conflitos com espaços, acentos e newline retornam nomes exatos e abort co
   for (const arquivo of arquivos) assert.equal(readFileSync(join(c.rodada, arquivo), "utf8"), "rodada\n");
 });
 
-test("sujeira tracked/untracked e todas operações pendentes são recusadas sem alteração", async () => {
+test("sujeira tracked/untracked e todas operações pendentes são rejeitadas sem alteração", async () => {
   for (const tipo of [
     "tracked",
     "untracked",
@@ -377,7 +377,7 @@ fi`;
   }
 });
 
-test("reference-transaction recusada mantém HEAD e índice alterado sem descarte automático", async () => {
+test("reference-transaction rejeitada mantém HEAD e índice alterado sem descarte automático", async () => {
   const c = await cenario();
   const r = await garantir(c);
   const antes = git(r, "rev-parse", "HEAD");
@@ -414,7 +414,7 @@ test("HEAD avançado invalida marca mesmo quando post-merge deixa sujeira", asyn
   assert.equal(readFileSync(join(r, "base.txt"), "utf8"), "humano");
 });
 
-test("merge recusado antes de iniciar não tenta abortar operação inexistente", async () => {
+test("merge rejeitado antes de iniciar não tenta abortar operação inexistente", async () => {
   const c = await cenario();
   const r = await garantir(c);
   commit(c.demanda, "novo", "demanda");

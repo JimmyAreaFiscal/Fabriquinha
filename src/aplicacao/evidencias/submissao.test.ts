@@ -130,7 +130,7 @@ test("criterios_aceite não aceita arquivo; comportamento exige pelo menos um", 
   c.banco.close();
 });
 
-test("origem: só da worktree ou da saída, pelo caminho real do descritor; link simbólico para fora é recusado", async () => {
+test("origem: só da worktree ou da saída, pelo caminho real do descritor; link simbólico para fora é rejeitado", async () => {
   const c = cenario();
   const fora = c.arquivo(c.raiz, "segredo.txt", "senha");
   const foraDaSaida = "fora da worktree da demanda e do diretório de saída";
@@ -263,7 +263,7 @@ test("regressão TOCTOU: trocar o anexo por um link para fora durante a submiss�
   const segredo = c.arquivo(c.raiz, "segredo.txt", "SEGREDO\n");
   c.arquivo(c.worktree, "regular", "inocente\n");
   c.arquivo(c.worktree, "x.txt", "inocente\n");
-  const linkRecusado = `ErroDeRegra: ${join(c.worktree, "x.txt")} é um link simbólico (anexe o próprio arquivo, não um link para ele)`;
+  const linkRejeitado = `ErroDeRegra: ${join(c.worktree, "x.txt")} é um link simbólico (anexe o próprio arquivo, não um link para ele)`;
   // Troca x.txt, atomicamente, entre um arquivo regular e um link para fora.
   const desfechos = await corrida(
     c,
@@ -272,14 +272,14 @@ test("regressão TOCTOU: trocar o anexo por um link para fora durante a submiss�
     ({ conteudo, mime }) => `${mime} ${conteudo}`,
   );
   // Os dois desfechos aparecem, então a troca aconteceu durante a corrida; nenhum outro aparece.
-  assert.deepEqual([...desfechos.keys()].sort(), [linkRecusado, `${TEXTO} inocente\n`].sort());
+  assert.deepEqual([...desfechos.keys()].sort(), [linkRejeitado, `${TEXTO} inocente\n`].sort());
   c.banco.close();
 });
 
 test("regressão TOCTOU: reescrever o anexo no mesmo inode durante a submissão não guarda o que não foi validado", async () => {
   const c = cenario();
   c.arquivo(c.worktree, "x.txt", "inocente\n");
-  const htmlRecusado = `ErroDeRegra: ${join(c.worktree, "x.txt")} é html, e comportamento aceita só video ou texto (anexe um arquivo de uma dessas classes)`;
+  const htmlRejeitado = `ErroDeRegra: ${join(c.worktree, "x.txt")} é html, e comportamento aceita só video ou texto (anexe um arquivo de uma dessas classes)`;
   // Mesmo tamanho, mesmo inode: alterna entre um texto e um HTML, que comportamento não aceita.
   const desfechos = await corrida(
     c,
@@ -288,7 +288,7 @@ test("regressão TOCTOU: reescrever o anexo no mesmo inode durante a submissão 
     ({ conteudo, mime }) => (/^\s*<html/i.test(conteudo) ? `HTML guardado como ${mime}` : mime),
   );
   // Leitura no meio de uma escrita pode misturar os dois; o que importa é que o guardado é o que foi classificado.
-  assert.deepEqual([...desfechos.keys()].sort(), [htmlRecusado, TEXTO].sort());
+  assert.deepEqual([...desfechos.keys()].sort(), [htmlRejeitado, TEXTO].sort());
   c.banco.close();
 });
 

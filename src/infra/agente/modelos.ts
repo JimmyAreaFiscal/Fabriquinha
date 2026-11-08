@@ -1,4 +1,4 @@
-// Conferência de modelos (F4 §9): o par provedor + nome precisa existir no pi, para ser recusado no formulário
+// Conferência de modelos (F4 §9): o par provedor + nome precisa existir no pi, para ser rejeitado no formulário
 // e não no meio de uma execução. A mesma tabela alimenta os seletores do web (F7 §4.2, `GET /api/modelos`).
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";

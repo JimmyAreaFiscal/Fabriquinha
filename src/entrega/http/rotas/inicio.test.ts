@@ -196,7 +196,7 @@ test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa p
     {
       motivo: "revisao_parada",
       ...comum("I-307"),
-      erro: "a revisão integral foi recusada: o ticket 9 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
+      erro: "a revisão integral foi rejeitada: o ticket 9 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
       desde: em(9),
     },
     {

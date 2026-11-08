@@ -351,7 +351,7 @@ export function rodarPi(r: Processo): Promise<FalhaDaTentativa | undefined> {
         return;
       }
       // Na interativa a recusa já chegou ao chat; um `steer` que cruzou o `agent_settled` não derruba a sessão. O prompt
-      // recusado devolve o estado de antes dele: o pi que o recusa por já estar trabalhando continua ocupado.
+      // rejeitado devolve o estado de antes dele: o pi que o recusa por já estar trabalhando continua ocupado.
       anotar(r.log, recusa);
       if (evento.command === "prompt") {
         ocupar(ocupadoAntesDoPrompt);

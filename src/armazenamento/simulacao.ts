@@ -132,7 +132,7 @@ export function removerAnexo(banco: DatabaseSync, usuario: Id, nome: string): vo
   }
 }
 
-/** Cria a Tarefa do projeto e a aloca aos Usuários Simulados dele; usuário de outro projeto é recusado. */
+/** Cria a Tarefa do projeto e a aloca aos Usuários Simulados dele; usuário de outro projeto é rejeitado. */
 export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, entrada: unknown): Tarefa {
   const { texto, n, usuarios } = NovaTarefa.parse(entrada);
   const criadaEm = new Date().toISOString();

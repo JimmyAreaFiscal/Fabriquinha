@@ -114,7 +114,7 @@ test("ticket reaberto leva a instrução ao prompt como reabertura", async () =>
   assert.ok(prompts.some((p) => p.includes("refaça com atenção")));
 });
 
-test("ticket inexistente é recusado", async () => {
+test("ticket inexistente é rejeitado", async () => {
   const { banco } = await cenarioRevisao();
   await assert.rejects(
     conduzirRevisao(banco, { demanda_id: "I-1", ticket_id: 99 }, { limiteMin: 1 }),

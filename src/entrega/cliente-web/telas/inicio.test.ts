@@ -125,7 +125,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
         espera("dialogo", { sessao: "s/1", pergunta: "Qual ordem?" }),
         espera("dialogo", { sessao: "s2" }),
         espera("conversa", { sessao: "s3", ticket: { ref: "I-206.T5", etapa: "planejar", modo: "interativo" } }),
-        espera("revisao_parada", { erro: "a revisão integral foi recusada: o ticket 3 está cancelado" }),
+        espera("revisao_parada", { erro: "a revisão integral foi rejeitada: o ticket 3 está cancelado" }),
       ],
     }),
     agora,
@@ -161,7 +161,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
       "O agente pergunta: Qual ordem?",
       "O agente abriu uma pergunta",
       "O agente respondeu e espera você",
-      "a revisão integral foi recusada: o ticket 3 está cancelado",
+      "a revisão integral foi rejeitada: o ticket 3 está cancelado",
     ],
   );
   // Os gates, os ajustes e a falha se decidem na página da demanda; o diálogo e a conversa, no chat.

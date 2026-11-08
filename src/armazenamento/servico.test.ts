@@ -46,7 +46,7 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
   ]) {
     assert.throws(() => salvarConfiguracao(banco, errada), ZodError);
   }
-  assert.equal(configuracao(banco).agendadorAtivo, true, "a recusada não gravou nada");
+  assert.equal(configuracao(banco).agendadorAtivo, true, "a rejeitada não gravou nada");
   assert.throws(() => {
     banco.exec("INSERT INTO configuracao (id) VALUES (2)");
   }, /CHECK constraint/);

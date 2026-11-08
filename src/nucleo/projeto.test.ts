@@ -42,7 +42,7 @@ test("Projeto mínimo válido ganha etapas e verificações vazias", () => {
   });
 });
 
-test("Projeto aceita preparação; os campos do fluxo legado são recusados", () => {
+test("Projeto aceita preparação; os campos do fluxo legado são rejeitados", () => {
   const completo = Projeto.parse({ ...cadastro, hospedagem: "azure-devops", verificacoes: { preparacao: ["npm ci"] } });
   assert.deepEqual(completo.verificacoes.preparacao, ["npm ci"]);
   assert.equal(completo.hospedagem, "azure-devops");
@@ -79,7 +79,7 @@ test("Projeto recusa cada campo fora da regra, com o caminho do campo", () => {
   }
 });
 
-test("CA-1: projeto configurado válido; mesma linguagem em caminhos diferentes; campos estranhos recusados", () => {
+test("CA-1: projeto configurado válido; mesma linguagem em caminhos diferentes; campos estranhos rejeitados", () => {
   assert.ok(aceitaVerificacoes({}));
   assert.equal(ProjetoConfigurado.safeParse({ ...configurado, cursor_commit_humano: "abc" }).success, false);
   assert.ok(
@@ -95,7 +95,7 @@ test("CA-2: recusa sem linguagens, caminho absoluto ou com ..", () => {
   assert.ok(aceitaVerificacoes({ linguagens: [{ ...verificacoes.linguagens[0], caminho: "a..b/c" }] }));
 });
 
-test("CA-3 e CA-4: preparação preserva a ordem informada; etapas e chaves repetidas são recusadas", () => {
+test("CA-3 e CA-4: preparação preserva a ordem informada; etapas e chaves repetidas são rejeitadas", () => {
   assert.deepEqual(ComandosDePreparacao.parse([" b ", "a", "b"]), ["b", "a", "b"]);
   assert.deepEqual(ComandosDePreparacao.parse(undefined), []);
   assert.ok(!aceitaVerificacoes({ preparacao: [" "] }));
