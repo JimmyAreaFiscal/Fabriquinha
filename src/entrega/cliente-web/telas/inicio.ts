@@ -1,6 +1,7 @@
 // Início (F7 §4.4; comparacao-sdlc §9.1) como funções puras: a frase do mês, o que aguarda o Auditor, o que roda e o
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
+import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import type {
   CartaoDoBoard,
   ColunaDoBoard,
@@ -20,7 +21,7 @@ import {
   rotuloDoModelo,
   nomeDoEstadoDoTicket,
 } from "../render.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
+import { ROTULO_DA_ETAPA, faseDoProcesso } from "../rotulos.ts";
 import { fraseDoMes } from "./metricas.ts";
 
 /** Cada motivo de espera: o título do cartão, a marca no board e o botão que leva aonde se decide. */
@@ -55,16 +56,16 @@ const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
 const GATES: ReadonlySet<ColunaDoBoard> = new Set(["gate_demanda", "gate_planejamento", "gate_pr"]);
 
 /** As 5 etapas do processo sobre as colunas do board, com quantas colunas cada uma agrupa. */
-const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
-  ["Registrar", 2],
-  ["Planejar", 2],
-  ["Implementar", 1],
-  ["Revisar", 1],
-  ["Encerrar", 5],
+const FASES_DO_PROCESSO: readonly (readonly [EtapaTicket, number])[] = [
+  ["entender_e_desenhar", 2],
+  ["planejar", 2],
+  ["implementar", 1],
+  ["revisar_rodada", 1],
+  ["encerrar_rodada", 5],
 ];
 
 /** A etapa do ticket em minúsculas, no meio da frase. */
-const nomeDaEtapa = (etapa: keyof typeof ETAPA_DO_TICKET): string => ETAPA_DO_TICKET[etapa].toLowerCase();
+const nomeDaEtapa = (etapa: EtapaTicket): string => ROTULO_DA_ETAPA[etapa].toLowerCase();
 
 /** O endereço do que a espera ou a sessão trata: a rodada, quando é de uma, ou a demanda. */
 const enderecoDe = (x: { demanda: string; rodada?: string }): string => x.rodada ?? x.demanda;
@@ -116,7 +117,7 @@ function linhaDaSessaoRodando(s: SessaoRodando, agora: Date): string {
   return `<a class="rodando-linha" href="${caminhoDaSessao(s.sessao)}">
     <span class="pill pill-rodando">${MODO_DA_SESSAO[s.modo]}</span>
     <span class="id">${escapar(s.demanda)}</span>
-    <span class="titulo">${escapar(s.titulo)} <span class="muted">— ${escapar(s.fazendo ?? ETAPA_DO_TICKET[s.etapa])}</span></span>
+    <span class="titulo">${escapar(s.titulo)} <span class="muted">— ${escapar(s.fazendo ?? ROTULO_DA_ETAPA[s.etapa])}</span></span>
     <span class="muted esconde"><span class="mono">${escapar(s.ticket)}</span> · ${nomeDaEtapa(s.etapa)}</span>
     ${rotuloDoModelo(s.modelo ? nomeDoModelo(s.modelo) : "padrão do pi")}
     <span class="tempo muted">${ha(s.desde, agora)}</span>
@@ -169,8 +170,9 @@ function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
     </div>`;
   };
   return (
-    ETAPAS_DO_PROCESSO.map(
-      ([nome, colunas]) => `<div class="etapa" style="grid-column: span ${String(colunas)}">${nome}</div>`,
+    FASES_DO_PROCESSO.map(
+      ([etapa, colunas]) =>
+        `<div class="etapa" style="grid-column: span ${String(colunas)}">${faseDoProcesso(etapa)}</div>`,
     ).join("") + COLUNAS.map(coluna).join("")
   );
 }

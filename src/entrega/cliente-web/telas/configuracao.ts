@@ -6,6 +6,7 @@ import type { Effort, EtapaTicket } from "../../../nucleo/primitivos.ts";
 import type { Configuracao } from "../../../armazenamento/servico.ts";
 import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import { escapar, nomeDoModelo } from "../render.ts";
+import { ACAO_DA_ETAPA } from "../rotulos.ts";
 
 /** `GET /api/configuracao`. */
 export interface EstadoDaConfiguracao extends Configuracao {
@@ -113,18 +114,7 @@ const EFFORTS = Object.keys({
 } satisfies Record<Effort, 0>);
 
 /** As etapas do ticket, na ordem do fluxo da demanda, com o rótulo do formulário. */
-const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Demanda",
-  planejar: "Planejar",
-  implementar: "Implementar",
-  revisar_rodada: "Revisar rodada",
-  encerrar_rodada: "Encerrar rodada",
-  ajustar_resultado: "Sessão em aberto",
-  revisar_demanda: "Revisar demanda",
-  encerrar_demanda: "Encerrar demanda",
-  resolver_conflito: "Resolver conflito",
-};
-export const ETAPAS = Object.entries(ROTULOS_DA_ETAPA) as [EtapaTicket, string][];
+export const ETAPAS = Object.entries(ACAO_DA_ETAPA) as [EtapaTicket, string][];
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 

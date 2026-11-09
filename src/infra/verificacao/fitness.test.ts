@@ -33,6 +33,10 @@ test("fitness aprova com saída 0 e roda cada comando na worktree", async () => 
   assert.equal(ok.passou, true);
   assert.equal(ok.logs[0]?.texto.trim(), worktree);
   assert.equal((ok.dados as { linhas: unknown[] }).linhas.length, 2);
+  assert.deepEqual(
+    (ok.dados as { linhas: { log: string }[] }).linhas.map((l) => l.log),
+    ok.logs.map((l) => l.nome),
+  );
 });
 
 test("fitness com saída 1 reprova tecnicamente", async () => {

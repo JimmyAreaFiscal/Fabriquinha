@@ -32,13 +32,15 @@ export class VerificacaoE2E extends Verificacao {
     const comandos = [];
     const logs = [];
     const build = await rodar(comando_build, cwd);
-    comandos.push({ ...linhaDoComando(comando_build, build), caminho });
-    logs.push({ nome: `${nome}-build.log`, texto: build.log });
+    const nomeDoLogDoBuild = `${nome}-build.log`;
+    comandos.push({ ...linhaDoComando(comando_build, build, nomeDoLogDoBuild), caminho });
+    logs.push({ nome: nomeDoLogDoBuild, texto: build.log });
     const falhaDoBuild = classificarComando(comando_build, build);
     if (falhaDoBuild) return { comandos, logs, falhas: [falhaDoBuild] };
     const execucao = await rodar(comando_execucao, cwd);
-    comandos.push({ ...linhaDoComando(comando_execucao, execucao), caminho });
-    logs.push({ nome: `${nome}.log`, texto: execucao.log });
+    const nomeDoLogDaExecucao = `${nome}.log`;
+    comandos.push({ ...linhaDoComando(comando_execucao, execucao, nomeDoLogDaExecucao), caminho });
+    logs.push({ nome: nomeDoLogDaExecucao, texto: execucao.log });
     const falhaDaExecucao = classificarComando(comando_execucao, execucao, codigo_falha);
     return { comandos, logs, falhas: falhaDaExecucao ? [falhaDaExecucao] : [] };
   }

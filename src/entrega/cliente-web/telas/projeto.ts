@@ -15,8 +15,8 @@ import {
   rotuloDoModelo,
   nomeDoEstadoDoTicket,
 } from "../render.ts";
+import { ROTULO_DA_ETAPA, TITULO_PADRAO_DA_ETAPA, faseDoProcesso } from "../rotulos.ts";
 import type { ProjetoListado } from "./configuracao.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
 import { cardsDoMes } from "./metricas.ts";
 
 export const caminhoDoProjeto = (nome: string): string => `/projects/${encodeURIComponent(nome)}`;
@@ -89,12 +89,12 @@ const COLUNAS: readonly Coluna[] = [
 ];
 
 /** As 5 etapas do processo sobre as colunas, com quantas colunas cada uma agrupa: Implementar é o trecho das rodadas. */
-const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
-  ["Registrar", 2],
-  ["Planejar", 2],
-  ["Implementar", 5],
-  ["Revisar", 1],
-  ["Encerrar", 1],
+const FASES_DO_PROCESSO: readonly (readonly [EtapaTicket, number])[] = [
+  ["entender_e_desenhar", 2],
+  ["planejar", 2],
+  ["implementar", 5],
+  ["revisar_demanda", 1],
+  ["encerrar_demanda", 1],
 ];
 
 /** A cor do marco atual e da borda da linha: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
@@ -257,19 +257,6 @@ function rodadas(d: DemandaDoProjeto): string {
     .join("");
 }
 
-/** O título do ticket que não tem um: o que a etapa faz, como o antigo mostrava. */
-const TITULO_DA_ETAPA: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Registrar a demanda",
-  planejar: "Planejar a demanda",
-  implementar: "Implementar",
-  revisar_rodada: "Revisar a rodada",
-  encerrar_rodada: "Encerrar a rodada",
-  ajustar_resultado: "Sessão de ajustes",
-  resolver_conflito: "Resolver o conflito",
-  revisar_demanda: "Revisar a demanda",
-  encerrar_demanda: "Encerrar a demanda",
-};
-
 /** A gaveta: os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
 function gaveta(d: DemandaDoProjeto): string {
   const linhas = d.tickets.map((t) => {
@@ -280,9 +267,9 @@ function gaveta(d: DemandaDoProjeto): string {
         ? ""
         : `<a class="chat" href="${caminhoDaSessao(t.sessao)}"><span class="ir">chat →</span></a>`;
     return `<tr${encerrado ? ' class="apagada"' : ""}>
-      <td class="etapa-cel">${ETAPA_DO_TICKET[t.etapa].toLowerCase()}</td>
+      <td class="etapa-cel">${ROTULO_DA_ETAPA[t.etapa].toLowerCase()}</td>
       <td class="id-cel"><span class="id">${escapar(t.ref)}</span></td>
-      <td class="titulo-cel">${escapar(t.titulo ?? TITULO_DA_ETAPA[t.etapa])}</td>
+      <td class="titulo-cel">${escapar(t.titulo ?? TITULO_PADRAO_DA_ETAPA[t.etapa])}</td>
       <td class="status-cel"><span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.piAtivo)}">${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}</span></td>
       <td class="modelo-cel">${rotuloDoModelo(t.modelo ?? "padrão do pi")}</td>
       <td class="sessao-cel">${chat}</td>
@@ -316,8 +303,9 @@ function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string 
  * horizontal na janela estreita: dentro dela, deixaria de ficar fixo ao rolar a página (a montagem o acompanha).
  */
 function cabeca(): string {
-  const etapas = ETAPAS_DO_PROCESSO.map(
-    ([nome, estados]) => `<div class="pista-etapa" style="grid-column: span ${String(estados)}">${nome}</div>`,
+  const etapas = FASES_DO_PROCESSO.map(
+    ([etapa, estados]) =>
+      `<div class="pista-etapa" style="grid-column: span ${String(estados)}">${faseDoProcesso(etapa)}</div>`,
   );
   const estados = COLUNAS.map(
     ({ rotulo, gate }) => `<div class="${gate ? "pista-coluna gate" : "pista-coluna"}">${rotulo}</div>`,

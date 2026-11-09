@@ -7,7 +7,7 @@ import type { Resultado, SessaoDeDemanda } from "../../http/rotas/historico.ts";
 import { markdown } from "../markdown.ts";
 import { caminhoDaSessao, diaMes, duracao, escapar, hora, MODO_DA_SESSAO, plural, rotuloDoModelo } from "../render.ts";
 import { type Bloco, blocos, ferramenta, type MensagemPi, modeloDe, textoDe } from "./chat.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
+import { ROTULO_DA_ETAPA } from "../rotulos.ts";
 
 /** O que o Auditor escolheu nos filtros, como digitou. */
 export interface Filtros {
@@ -21,7 +21,7 @@ const RESULTADOS: Record<Resultado, [rotulo: string, pilula: string]> = {
   falha: ["falha", "pill-falha"],
 };
 
-const etapa = (e: EtapaTicket): string => ETAPA_DO_TICKET[e].toLowerCase();
+const etapa = (e: EtapaTicket): string => ROTULO_DA_ETAPA[e].toLowerCase();
 
 const selecionado = (valor: string, atual: string): string => (valor === atual ? " selected" : "");
 
@@ -30,7 +30,7 @@ export function paginaDoHistorico(projetos: readonly string[], f: Filtros): stri
   const opcoesDeProjeto = projetos
     .map((p) => `<option value="${escapar(p)}"${selecionado(p, f.projeto)}>${escapar(p)}</option>`)
     .join("");
-  const opcoesDeEtapa = (Object.keys(ETAPA_DO_TICKET) as EtapaTicket[])
+  const opcoesDeEtapa = (Object.keys(ROTULO_DA_ETAPA) as EtapaTicket[])
     .map((e) => `<option value="${e}"${selecionado(e, f.etapa)}>${etapa(e)}</option>`)
     .join("");
   return (

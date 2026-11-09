@@ -42,8 +42,9 @@ export class VerificacaoDeTestes extends Verificacao {
       const falhas: Falha[] = [];
       for (const { caminho, comando_teste: comando } of projeto.verificacoes.linguagens) {
         const r = await rodar(comando, join(worktree, caminho));
-        comandos.push({ ...linhaDoComando(comando, r), caminho });
-        logs.push({ nome: `teste-${caminho}.log`, texto: r.log });
+        const nomeDoLog = `teste-${caminho}.log`;
+        comandos.push({ ...linhaDoComando(comando, r, nomeDoLog), caminho });
+        logs.push({ nome: nomeDoLog, texto: r.log });
         const falha = classificarComando(comando, r);
         if (falha) falhas.push(falha);
       }

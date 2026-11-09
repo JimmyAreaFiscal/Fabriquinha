@@ -1,5 +1,6 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
+import { ROTULO_DA_ETAPA } from "../rotulos.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada } from "../../../nucleo/primitivos.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
@@ -30,19 +31,6 @@ export interface DadosDoQuadro {
   demandas: DemandaDoQuadro[];
   trabalho: { ref: string; etapa: EtapaTicket; rodada?: string; pi_ativo?: true }[];
 }
-
-/** A etapa do ticket como o quadro a mostra. */
-export const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Demanda",
-  planejar: "Planejamento",
-  implementar: "Implementação",
-  revisar_rodada: "Revisão da rodada",
-  encerrar_rodada: "Encerramento da rodada",
-  ajustar_resultado: "Sessão em aberto",
-  revisar_demanda: "Revisão da demanda",
-  encerrar_demanda: "Encerramento da demanda",
-  resolver_conflito: "Resolução de conflito",
-};
 
 export const pilula = ([rotulo, classe]: readonly [string, string]): string =>
   `<span class="pill ${classe}">${rotulo}</span>`;
@@ -89,7 +77,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
 export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
   const ativo = trabalho.map(
     (t) =>
-      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
+      `<li><span class="id">${escapar(t.ref)}</span> ${ROTULO_DA_ETAPA[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
   );
   return `<div class="cabeca-pagina"><h1>Demandas</h1></div>
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-trabalho">
@@ -122,7 +110,7 @@ export interface DadosDaPagina {
     estado: EstadoRodada;
     pr?: { id: string; url: string };
     /** O endereço do ticket atual de cada etapa que a rodada já teve. */
-    ticket_atual_por_etapa: Partial<Record<EtapaTicket, string>>;
+    ticket_atual_por_etapa: Partial<Record<keyof typeof ROTULO_DA_ETAPA, string>>;
   }[];
   tickets: {
     ref: string;
@@ -304,7 +292,7 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
   const marco = decidido ?? (t.estado === "aberto" && t.elegivel ? "elegivel" : t.estado);
   return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
-    <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ETAPA_DO_TICKET[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
+    <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ROTULO_DA_ETAPA[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo)}</p>`}
     ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
