@@ -140,6 +140,6 @@ export async function triarPergunta(
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
-  const saida = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
-  return saida === undefined ? undefined : lerDecisao(saida, p, contexto.etapa);
+  const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
+  return resposta === undefined ? undefined : lerDecisao(resposta.saida, p, contexto.etapa);
 }

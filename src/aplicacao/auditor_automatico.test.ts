@@ -118,9 +118,10 @@ test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código dife
     resposta: "Sim",
     justificativa: "Sonar se corrige",
   });
-  assert.deepEqual(chamadas[0]?.slice(0, 9), [
+  // O 3º argumento é o diretório temporário da sessão, que muda a cada chamada.
+  assert.deepEqual(chamadas[0]?.toSpliced(2, 1).slice(0, 9), [
     "-p",
-    "--no-session",
+    "--session-dir",
     "--no-tools",
     "--no-skills",
     "--no-context-files",

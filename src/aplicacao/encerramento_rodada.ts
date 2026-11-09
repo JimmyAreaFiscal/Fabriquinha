@@ -52,7 +52,7 @@ async function resumirContextoDoPR(contexto: string, limite: number): Promise<st
     "Não use títulos (#). Responda só com o resumo.",
     contexto,
   ].join("\n\n");
-  return (await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
+  return (await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS))?.saida.trim();
 }
 
 /** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */
