@@ -50,17 +50,6 @@ export type TrabalhoGerenciado = z.infer<typeof TrabalhoGerenciado>;
 export type ProcessoDoTrabalho = z.infer<typeof ProcessoDoTrabalho>;
 export type UsoModeloExecucao = z.infer<typeof UsoModeloExecucao>;
 
-export interface TotalUso {
-  tokens_entrada: number;
-  tokens_saida: number;
-  tokens_cache_leitura: number;
-  tokens_cache_escrita: number;
-  /** Soma só dos custos conhecidos. */
-  custo_conhecido: number;
-  /** Algum uso somado está sem custo: `custo_conhecido` é um piso, não o total. */
-  custo_incompleto: boolean;
-}
-
 export const criarTrabalho = (
   sessoes: readonly TrabalhoGerenciado[],
   nova: TrabalhoGerenciado,
@@ -124,44 +113,3 @@ export const registrarUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloE
   const novo = UsoModeloExecucao.parse(uso);
   return [...usos.filter((u) => !mesmaChave(u, novo)), novo];
 };
-
-/** Soma os usos das execuções das sessões dadas; cada chave conta uma vez, mesmo em sessões retomadas. */
-/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export const totalDeTrabalhos = (
-  sessoes: readonly TrabalhoGerenciado[],
-  execucoes: readonly ProcessoDoTrabalho[],
-  usos: readonly UsoModeloExecucao[],
-): TotalUso => {
-  const ids = new Set(sessoes.map((s) => s.id));
-  const execs = new Set(execucoes.filter((e) => ids.has(e.trabalho_id)).map((e) => e.id));
-  const unicos = usos.reduce<UsoModeloExecucao[]>((acc, u) => registrarUso(acc, u), []);
-  const total: TotalUso = {
-    tokens_entrada: 0,
-    tokens_saida: 0,
-    tokens_cache_leitura: 0,
-    tokens_cache_escrita: 0,
-    custo_conhecido: 0,
-    custo_incompleto: false,
-  };
-  for (const u of unicos.filter((u) => execs.has(u.execucao_id))) {
-    total.tokens_entrada += u.tokens_entrada;
-    total.tokens_saida += u.tokens_saida;
-    total.tokens_cache_leitura += u.tokens_cache_leitura;
-    total.tokens_cache_escrita += u.tokens_cache_escrita;
-    if (u.custo === undefined) total.custo_incompleto = true;
-    else total.custo_conhecido += u.custo;
-  }
-  return total;
-};
-
-export const totalDoTicket = (
-  sessoes: readonly TrabalhoGerenciado[],
-  execucoes: readonly ProcessoDoTrabalho[],
-  usos: readonly UsoModeloExecucao[],
-  ticket: z.infer<typeof TicketRef>,
-) =>
-  totalDeTrabalhos(
-    sessoes.filter((s) => s.demanda_id === ticket.demanda_id && s.ticket_id === ticket.ticket_id),
-    execucoes,
-    usos,
-  );

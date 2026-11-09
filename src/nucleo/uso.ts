@@ -32,7 +32,6 @@ function somarLinha(a: LinhaDeUso, b: LinhaDeUso): LinhaDeUso {
 
 /**
  * O consumo de qualquer Trabalho Agêntico, agrupado por modelo, e quantos Trabalhos não trouxeram custo.
- * @testes o chamador de produção (o leitor do pi e a avaliação) entra no I-278.T2; a marca sai com ele
  */
 export class Uso {
   readonly #linhas: ReadonlyMap<string, LinhaDeUso>;
