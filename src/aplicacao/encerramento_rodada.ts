@@ -1,17 +1,13 @@
-// Serviço Encerramento da rodada (comparacao-sdlc-implementacao.md §§4 e 6): conduz o `encerrar_rodada` até o gate do PR.
-// Reserva e agente (documentação), relatório de produtividade, ponta da demanda (D04), PR da rodada, `pr_aberto` e
+// Serviço Encerramento da rodada (comparacao-sdlc-implementacao.md §§4 e 6): o que a `ConducaoDeEncerrarRodada` faz depois do
+// agente (documentação) até o gate do PR: relatório de produtividade, ponta da demanda (D04), PR da rodada, `pr_aberto` e
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { type AgregadoDemanda, comPrDaRodada, type TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
-import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { reservarTicket } from "../nucleo/reserva_ticket.ts";
-import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { conferirPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
-import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { LIMITE_DO_CORPO } from "./evidencias/pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
@@ -21,7 +17,6 @@ import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
@@ -30,16 +25,13 @@ import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
-import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
-import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import type { instanteAtual } from "./relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 
 export interface RefRodada {
   demanda_id: string;
   rodada_id: number;
 }
-
-const contexto = () => ({ agora: new Date().toISOString() });
 
 /** Tempo máximo do resumo do contexto do PR; passado, o PR vai sem o contexto. */
 const LIMITE_RESUMO_MS = 3 * 60_000;
@@ -71,46 +63,20 @@ function rodadaEmEncerramento(ag: AgregadoDemanda, ref: RefRodada) {
   return rodada;
 }
 
-/** O `encerrar_rodada` atual da rodada em encerramento, num dos `estados`. */
-function encerramentoNoEstado(ag: AgregadoDemanda, ref: RefRodada, estados: readonly TicketDemanda["estado"][]) {
+/** O `encerrar_rodada` atual da rodada em encerramento, em execução. */
+function encerramentoEmExecucao(ag: AgregadoDemanda, ref: RefRodada) {
   const ticket = existe(
     ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );
-  if (!estados.includes(ticket.estado)) {
+  if (ticket.estado !== "em_execucao") {
     throw new ErroDeRegra(
       `o ticket ${formatarTicketRef(ticket)} está ${ticket.estado}`,
-      `só o encerrar_rodada ${estados.join(" ou ")} segue`,
+      "só o encerrar_rodada em_execucao segue",
     );
   }
   return ticket;
-}
-
-/**
- * Reserva o `encerrar_rodada` (aberto, só com as predecessoras satisfeitas) e roda o agente que escreve a documentação do
- * PR; com o ticket já em execução só roda de novo. Reabrir o ticket falho é chamar de novo.
- */
-export function iniciarEncerramentoRodada(
-  banco: DatabaseSync,
-  ref: RefRodada,
-  limiteMin: number,
-): ReturnType<typeof iniciarExecucaoDemanda> {
-  const ag = carregarDemanda(banco, ref.demanda_id);
-  rodadaEmEncerramento(ag, ref);
-  const ticket = encerramentoNoEstado(ag, ref, ["aberto", "em_execucao"]);
-  if (ticket.estado === "aberto") {
-    const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ref.demanda_id)).length === 0;
-    comDemanda(banco, ref.demanda_id, (a) =>
-      reservarTicket(a, { ticket_id: ticket.ticket_id }, FABRIQUINHA, contexto(), satisfeitas),
-    );
-  }
-  const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, ref.demanda_id).tentativas, ticket.ticket_id);
-  return iniciarExecucaoDemanda(
-    banco,
-    { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id },
-    { limiteMin, retomada },
-  );
 }
 
 /** Uma correção da rodada: id local, na rodada, sem dependências (o domínio renumera). */
@@ -152,12 +118,13 @@ function submeterEvidenciaDoEncerramento(
 /** Os fatos da conferência vão ao domínio, que volta a `implementar` com as correções ou leva ao gate. */
 function conferir(
   banco: DatabaseSync,
+  relogio: typeof instanteAtual,
   ref: RefRodada,
   ticket: TicketDemanda,
   fatos: { documentacao_entregue: boolean; conflito: boolean; check_falho: boolean; correcoes?: unknown[] },
 ): AgregadoDemanda {
   return comDemanda(banco, ref.demanda_id, (ag) =>
-    conferirPullRequestRodada(ag, { ...ref, ticket_id: ticket.ticket_id, ...fatos }, FABRIQUINHA, contexto()),
+    conferirPullRequestRodada(ag, { ...ref, ticket_id: ticket.ticket_id, ...fatos }, FABRIQUINHA, relogio()),
   );
 }
 
@@ -168,31 +135,30 @@ function conferir(
  * 3. Incorpora a ponta da demanda (D04); conflito volta a `implementar` com uma correção para o merge, sem PR.
  * 4. Publica (ou atualiza, pela marca do ticket) o PR da branch da rodada para a da demanda e grava o `pr_aberto`.
  * 5. Confere conflito e checks do PR: com problema volta a `implementar`, sem ele vai ao gate.
- * 6. No projeto com a aprovação automática, o PR que chegou ao gate é aprovado ali mesmo.
- * Erro de 2 a 5 falha o ticket com a mensagem e sobe; o `pr_aberto` só existe com o PR publicado.
+ * O erro sobe para a condução falhar o ticket; o `pr_aberto` só existe com o PR publicado.
  */
-export async function concluirEncerramentoRodada(banco: DatabaseSync, ref: RefRodada): Promise<AgregadoDemanda> {
+export async function conferirEncerramentoRodada(
+  banco: DatabaseSync,
+  relogio: typeof instanteAtual,
+  ref: RefRodada,
+): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const rodada = rodadaEmEncerramento(ag, ref);
-  const ticket = encerramentoNoEstado(ag, ref, ["em_execucao"]);
+  const ticket = encerramentoEmExecucao(ag, ref);
   const entregue = (tipo: string) => ag.evidencias.some((e) => e.ticket_id === ticket.ticket_id && e.tipo === tipo);
   if (!entregue("mensagem_pr") || !entregue("aula_codigo")) {
-    return conferir(banco, ref, ticket, { documentacao_entregue: false, conflito: false, check_falho: false });
+    return conferir(banco, relogio, ref, ticket, {
+      documentacao_entregue: false,
+      conflito: false,
+      check_falho: false,
+    });
   }
-  let conferido: AgregadoDemanda;
-  try {
-    conferido = await publicarEConferir(banco, ag, ref, rodada.branch, ticket);
-  } catch (erro) {
-    comDemanda(banco, ref.demanda_id, (a) =>
-      registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, falha: falhaDoErro(erro) }, contexto()),
-    );
-    throw erro;
-  }
-  return aprovarPRRodadaSeAutomatico(banco, conferido, ref);
+  return publicarEConferir(banco, relogio, ag, ref, rodada.branch, ticket);
 }
 
 async function publicarEConferir(
   banco: DatabaseSync,
+  relogio: typeof instanteAtual,
   ag: AgregadoDemanda,
   ref: RefRodada,
   branchRodada: string,
@@ -225,7 +191,12 @@ async function publicarEConferir(
         atualizacao.arquivos,
       ),
     ];
-    return conferir(banco, ref, ticket, { documentacao_entregue: true, conflito: true, check_falho: false, correcoes });
+    return conferir(banco, relogio, ref, ticket, {
+      documentacao_entregue: true,
+      conflito: true,
+      check_falho: false,
+      correcoes,
+    });
   }
 
   const pr = await montarPRRodada(
@@ -307,7 +278,7 @@ async function publicarEConferir(
       url: publicado.url,
       head: publicado.head,
       estado: "aberto",
-      atualizado_em: new Date().toISOString(),
+      atualizado_em: relogio().agora,
     }),
   }));
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
@@ -339,7 +310,7 @@ async function publicarEConferir(
       ),
     ),
   ];
-  return conferir(banco, ref, ticket, {
+  return conferir(banco, relogio, ref, ticket, {
     documentacao_entregue: true,
     conflito: problemas.conflito,
     check_falho: problemas.checksFalhos.length > 0,

@@ -15,9 +15,9 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
-import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import { ConducaoDeEncerrarRodada } from "./etapas/conducao_de_encerrar_rodada.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
 import { ConducaoDePlanejar } from "./etapas/conducao_de_planejar.ts";
 import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
@@ -42,11 +42,6 @@ export interface DepsDespacho {
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
-const rodadaDe = (t: TicketDemanda) => ({
-  demanda_id: t.demanda_id,
-  rodada_id: existe(t.rodada_id, `o ticket ${formatarTicketRef(t)} não é de uma rodada`, "use um ticket de rodada"),
-});
-
 const depsDaConducaoDe = (banco: DatabaseSync): DepsDaConducao => ({
   banco,
   relogio: instanteAtual,
@@ -65,17 +60,6 @@ const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco 
     ).ticket_id,
   );
 
-/** Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket. */
-async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<unknown> {
-  const rodada = rodadaDe(t);
-  const falha = await iniciarEncerramentoRodada(banco, rodada, limiteMin).fim;
-  if (falha !== undefined) {
-    falharTicketDemanda(banco, t, falha);
-    return;
-  }
-  return falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
-}
-
 /** Roda `etapa`; se ela recusar sem falhar o ticket (documentação, estado), falha-o para não ficar preso em execução. */
 async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: () => Promise<T>): Promise<T> {
   try {
@@ -91,9 +75,8 @@ async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: ()
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
-function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, deps: DepsDespacho): Promise<unknown> {
+function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
   const { demanda_id, ticket_id } = t;
-  const limiteMin = c.timeoutMin;
   if (t.etapa === "encerrar_demanda") {
     const ctx = { agora: new Date().toISOString() };
     comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
@@ -114,7 +97,7 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
   }
   if (t.etapa === "revisar_rodada") return new ConducaoDeRevisarRodada(depsDaConducao).conduzir(endereco);
   if (t.etapa === "revisar_demanda") return new ConducaoDeRevisarDemanda(depsDaConducao).conduzir(endereco);
-  return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as sete etapas acima
+  return new ConducaoDeEncerrarRodada(depsDaConducao).conduzir(endereco); // a seleção só devolve as sete etapas acima
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */
@@ -157,7 +140,7 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
     limite,
     vagasOcupadas: ocupacaoDoLimite(banco),
   });
-  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, c, deps)))];
+  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, deps)))];
 }
 
 /**
@@ -203,6 +186,6 @@ export function executarAgoraDemanda(
       );
       return ag;
     });
-    return acompanhar(iniciarEtapa(banco, ticket, c, deps));
+    return acompanhar(iniciarEtapa(banco, ticket, deps));
   });
 }
