@@ -68,3 +68,15 @@ test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso co
   assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 2))), "≥ US$ 4,20 (2 sessões sem custo)");
   assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 1))), "≥ US$ 4,20 (1 sessão sem custo)");
 });
+
+test("a sessão declarada em duas demandas, somada, conta os tokens uma vez", () => {
+  // O armazenamento entrega a sessão repetida só na demanda dona; a outra recebe Uso.vazio().
+  const usoDaDemandaDona = Uso.de([linhaDeUso("a/m", 1.5, 10)], 1);
+  const usoDaOutraDemanda = Uso.vazio();
+  const soma = usoDaDemandaDona.somar(usoDaOutraDemanda);
+  assert.deepEqual(
+    soma.porModelo().map(({ tokens_entrada, custo }) => ({ tokens_entrada, custo })),
+    [{ tokens_entrada: 10, custo: 1.5 }],
+  );
+  assert.equal(textoDoCusto(soma), "US$ 1,50");
+});
