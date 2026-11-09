@@ -72,7 +72,6 @@ export function configuracaoDoAmbiente(banco: DatabaseSync): ConfiguracaoDoAmbie
 
 /**
  * Grava a configuração do Ambiente inteira; campo ausente volta ao padrão.
- * @testes o consumidor de produção é a tela de Configuração, de outro ticket da I-286
  */
 export function salvarConfiguracaoDoAmbiente(banco: DatabaseSync, entrada: unknown): ConfiguracaoDoAmbiente {
   const a = ConfiguracaoDoAmbiente.parse(entrada);
