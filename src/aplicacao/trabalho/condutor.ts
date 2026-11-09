@@ -417,8 +417,6 @@ export class CondutorDeTrabalhos {
       /** As ferramentas em execução, por `toolCallId`: enquanto alguma roda, o silêncio do pi não é do modelo. */
       const ferramentasRodando = new Set<string>();
       let vigiaDoModelo: NodeJS.Timeout | undefined;
-      /** Antes do primeiro evento o pi ainda sobe: o prompt nem chegou ao modelo, então o silêncio não é dele. */
-      let piJaEmitiuEvento = false;
       let feito = false;
       this.sessoesEmCurso.add(sessaoPi);
       const fim = (falha?: FalhaDaTentativa) => {
@@ -470,8 +468,7 @@ export class CondutorDeTrabalhos {
        */
       const rearmarVigiaDoModelo = () => {
         clearTimeout(vigiaDoModelo);
-        if (feito || !piJaEmitiuEvento || !estaViva.ocupado || ferramentasRodando.size > 0 || pendentes.size > 0)
-          return;
+        if (feito || !estaViva.ocupado || ferramentasRodando.size > 0 || pendentes.size > 0) return;
         const silencioMin = r.silencioMaximoDoModeloMin ?? SILENCIO_MAXIMO_DO_MODELO_MIN;
         vigiaDoModelo = setTimeout(() => {
           const falha: FalhaDaTentativa = {
@@ -603,7 +600,6 @@ export class CondutorDeTrabalhos {
         (evento) => {
           // O `--mode json` não fala o protocolo RPC: o resultado do trabalho é o que ele grava em disco.
           if (r.terminaSozinho) return;
-          piJaEmitiuEvento = true;
           if (agenteTerminou) estaViva.naoGravadas = [];
           agenteTerminou = false;
           this.repassar(sessaoPi, evento, r.log);
