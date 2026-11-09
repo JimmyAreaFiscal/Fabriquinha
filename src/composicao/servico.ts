@@ -10,12 +10,14 @@ import { varrerBase } from "../aplicacao/retrabalho.ts";
 import { abrir } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
 import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
-import { configuracao } from "../armazenamento/servico.ts";
+import { configuracao, configuracaoDoAmbiente } from "../armazenamento/servico.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
 import { condutor } from "../aplicacao/trabalho/condutor.ts";
-import { montarAmbienteDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
+import { montarAmbienteDoServico, montarConjuntoDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+import { GeradorDeAmbientes } from "../infra/ambiente/container/gerador_de_ambientes.ts";
+import { ConjuntoDeAmbientes } from "../aplicacao/ambiente/conjunto.ts";
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -93,6 +95,18 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   }
   const banco = aberto;
 
+  /** O conjunto de Ambientes em container: só existe com `tipo = container`, e com `host_local` o docker nunca é chamado. */
+  let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
+  const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => {
+    if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
+    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes()));
+  };
+  montarConjuntoDoServico(conjuntoSeContainer);
+  /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
+  let eliminacaoDeOciosos: Promise<void> | undefined;
+  // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.
+  await conjuntoSeContainer()?.reconciliarNaSubida().catch(noLog);
+
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
 
@@ -114,6 +128,14 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     batida = Date.now();
     try {
       const c = configuracao(banco);
+      const conjunto = conjuntoSeContainer();
+      if (conjunto && !eliminacaoDeOciosos)
+        eliminacaoDeOciosos = conjunto
+          .eliminarOciosos(new Date().toISOString())
+          .catch(noLog)
+          .finally(() => {
+            eliminacaoDeOciosos = undefined;
+          });
       // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
       if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
@@ -160,6 +182,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
+      await eliminacaoDeOciosos;
       await condutor.aguardarTodos(LIMITE_PARADA_MS);
       banco.close();
     },
