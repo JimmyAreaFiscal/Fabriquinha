@@ -897,13 +897,13 @@ test("o gate do planejamento traz o último plano, e não as evidências de outr
     evidencias: [
       { tipo: "plano", ticket: "I-206.T2", dados: { versao: "antiga" }, anexos: [] },
       { tipo: "plano", ticket: "I-206.T3", dados: { versao: "nova" }, anexos: [] },
-      { tipo: "custos_realizados", ticket: "I-206.T1", dados: {}, anexos: [] },
+      { tipo: "comportamento", ticket: "I-206.T1", dados: {}, anexos: [] },
     ],
   });
   const gate = html.slice(html.indexOf('id="gate"'), html.indexOf("</textarea>"));
   assert.match(gate, /data-evidencia="Plano · I-206\.T3">Plano</);
   assert.match(gate, /nova/);
-  assert.doesNotMatch(gate, /antiga|Custos/);
+  assert.doesNotMatch(gate, /antiga|Comportamento/);
 });
 
 test("a sessão de ajustes leva ao chat da sessão do ticket e conclui pela página (CA-10)", () => {

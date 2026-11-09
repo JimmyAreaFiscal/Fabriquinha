@@ -188,3 +188,16 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
     ],
   });
 });
+
+test("GET /api/metricas e /api/metricas/demandas: o Uso declarado soma ao medido, com o mesmo texto do custo", async () => {
+  demandaComExecucao("I-1", "loja");
+  banco.exec(`INSERT INTO uso_declarado VALUES ('claude', 's1', 'I-1', json_array(json_object(
+    'modelo', 'p/m', 'tokens_entrada', 3, 'tokens_saida', 1, 'tokens_cache_leitura', 0, 'tokens_cache_escrita', 0,
+    'custo', NULL, 'chamadas', 0)))`);
+  const texto = "≥ US$ 2,00 (1 sessão sem custo)";
+  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasMesDemanda];
+  assert.equal(mesAtual.total.textoDoCusto, texto);
+  const { demandas, total } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
+  assert.equal(demandas[0]?.textoDoCusto, texto);
+  assert.equal(total.textoDoCusto, texto);
+});

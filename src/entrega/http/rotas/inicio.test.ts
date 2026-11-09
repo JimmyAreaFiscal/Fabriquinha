@@ -336,3 +336,25 @@ test("GET /api/inicio: o custo do mês sai no texto do Uso somado, com ≥ e o a
   assert.equal(mes.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
   assert.equal(mes.total.modelos[0]?.tokens_entrada, 15);
 });
+
+test("GET /api/inicio: o Uso declarado soma ao medido do mês, e a sessão declarada sem custo traz o ≥", async () => {
+  const banco = cenario();
+  const agoraIso = new Date().toISOString();
+  banco.exec(`
+    UPDATE demanda SET estado_alterado_em = '${agoraIso}' WHERE id = 'I-300';
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2);`);
+  const declarar = (sessao: string, custo: string) => {
+    banco.exec(`INSERT INTO uso_declarado VALUES ('claude', '${sessao}', 'I-300', json_array(json_object(
+      'modelo', 'p/m', 'tokens_entrada', 5, 'tokens_saida', 1, 'tokens_cache_leitura', 0, 'tokens_cache_escrita', 0,
+      'custo', ${custo}, 'chamadas', 0)))`);
+  };
+  declarar("d1", "1.8");
+  const { pedir } = await servir(banco);
+  const comCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
+  assert.equal(comCusto.textoDoCusto, "US$ 6,00");
+  assert.equal(comCusto.modelos[0]?.tokens_entrada, 15);
+  declarar("d2", "NULL");
+  const semCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
+  assert.equal(semCusto.textoDoCusto, "≥ US$ 6,00 (1 sessão sem custo)");
+});

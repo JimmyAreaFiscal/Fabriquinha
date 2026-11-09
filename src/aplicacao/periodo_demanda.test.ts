@@ -224,3 +224,40 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   assert.deepEqual(abr.prs, { abertos: 0, mergeados: 0 }); // o PR é da coorte de fevereiro
   assert.deepEqual(abr.nota, { media: null, notas: 0 });
 });
+
+test("o Uso declarado soma ao medido no mês do registro da demanda, por nível e por demanda, com ≥ quando falta custo", () => {
+  const b = banco();
+  const declarar = (demanda: string, sessao: string, custo: number | null) =>
+    b.prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('claude', ?, ?, ?)").run(
+      sessao,
+      demanda,
+      JSON.stringify([
+        {
+          modelo: "x/y",
+          tokens_entrada: 1,
+          tokens_saida: 2,
+          tokens_cache_leitura: 3,
+          tokens_cache_escrita: 4,
+          custo,
+          chamadas: 0,
+        },
+      ]),
+    );
+  declarar("I-1", "d1", 2);
+  declarar("I-1", "d2", null);
+  declarar("I-3", "d3", 1);
+  const [jan, fev, mar] = metricasDemandaPorMes(b, { de: "2026-01", ate: "2026-03" }) as [
+    ReturnType<typeof metricasDemandaPorMes>[number],
+    ReturnType<typeof metricasDemandaPorMes>[number],
+    ReturnType<typeof metricasDemandaPorMes>[number],
+  ];
+  assert.deepEqual(jan.total.tokens, { entrada: 2, saida: 4, cacheLeitura: 6, cacheEscrita: 8, total: 20 });
+  assert.equal(jan.total.textoDoCusto, "≥ US$ 2,00 (1 sessão sem custo)");
+  assert.equal(fev.total.textoDoCusto, "≥ US$ 3,00 (1 sessão sem custo)", "fevereiro segue só o medido");
+  assert.equal(mar.total.textoDoCusto, "US$ 13,00");
+  for (const m of [jan, mar])
+    for (const n of m.niveis) assert.equal(n.total.textoDoCusto, m.total.textoDoCusto, `${m.mes} ${n.nivel}`);
+  const { demandas, total } = metricasPorDemanda(b, { de: "2026-01", ate: "2026-03" });
+  assert.equal(ver(demandas[0]).textoDoCusto, "≥ US$ 9,00 (2 sessões sem custo)");
+  assert.equal(total.textoDoCusto, "≥ US$ 18,00 (2 sessões sem custo)");
+});
