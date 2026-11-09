@@ -23,7 +23,7 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
-import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
+import { carregarTrabalhosDaDemanda, carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
@@ -33,6 +33,7 @@ import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
+import { registrarUsoDaConsulta } from "./trabalho/processo_do_ticket.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -44,15 +45,28 @@ const contexto = () => ({ agora: new Date().toISOString() });
 /** Tempo máximo do resumo do contexto do PR; passado, o PR vai sem o contexto. */
 const LIMITE_RESUMO_MS = 3 * 60_000;
 
-/** O contexto do PR (demanda, tickets e custo) resumido por uma chamada do pi com o modelo padrão. */
-async function resumirContextoDoPR(contexto: string, limite: number): Promise<string | undefined> {
+/**
+ * O contexto do PR (demanda, tickets e custo) resumido por uma chamada do pi com o modelo padrão. O Uso da consulta conta
+ * para a rodada: vai à última execução do `encerrar_rodada`, que é da rodada.
+ */
+async function resumirContextoDoPR(
+  banco: DatabaseSync,
+  ticket: TicketDemanda,
+  contexto: string,
+  limite: number,
+): Promise<string | undefined> {
   const prompt = [
     `Resuma, em português e em Markdown, o contexto do pull request abaixo em no máximo ${String(limite)} caracteres.`,
     "Mantenha o porquê da demanda, os endereços (como I-206.R2 e I-206.T3) e o custo total.",
     "Não use títulos (#). Responda só com o resumo.",
     contexto,
   ].join("\n\n");
-  return (await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
+  const resposta = await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS);
+  const execucaoDoEncerramento = carregarTrabalhosDoTicket(banco, ticket).execucoes.at(-1);
+  if (resposta && execucaoDoEncerramento) {
+    registrarUsoDaConsulta(banco, ticket, execucaoDoEncerramento.id, resposta.uso);
+  }
+  return resposta?.saida.trim();
 }
 
 /** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */
@@ -235,7 +249,7 @@ async function publicarEConferir(
     relatorio,
     LIMITE_DO_CORPO[projeto.hospedagem],
     async (contexto, limite) => {
-      const resumo = await resumirContextoDoPR(contexto, limite);
+      const resumo = await resumirContextoDoPR(banco, ticket, contexto, limite);
       if (resumo === undefined || resumo.length > limite) {
         anotar(log, `${refRodada}: o pi não resumiu o contexto do PR em ${String(limite)} caracteres; vai sem ele`);
       }

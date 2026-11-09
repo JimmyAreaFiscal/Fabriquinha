@@ -5,12 +5,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { existe, mensagem } from "../../nucleo/erros.ts";
 import { falhaPorServicoReiniciado, type FalhaDaTentativa } from "../../nucleo/tentativa.ts";
 import {
+  acumularUso,
   encerrarProcesso,
-  registrarUso,
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
+import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { colunasDoModelo, lerUsoDoPi } from "../../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import {
@@ -34,6 +35,17 @@ interface ProcessoEncerravel {
 /** Avisa quem assina a sessão que o estado dela pode ter mudado (`CondutorDeTrabalhos.avisar`). */
 export type AvisarSessao = (sessao: string, log: string) => void;
 
+/** A linha de Uso como o banco a guarda, na execução; custo desconhecido fica sem a chave, nunca zero. */
+const usoDaExecucao = (execucao_id: string, l: LinhaDeUso): UsoModeloExecucao => ({
+  execucao_id,
+  ...colunasDoModelo(l.modelo),
+  tokens_entrada: l.tokens_entrada,
+  tokens_saida: l.tokens_saida,
+  tokens_cache_leitura: l.tokens_cache_leitura,
+  tokens_cache_escrita: l.tokens_cache_escrita,
+  ...(l.custo !== null && { custo: l.custo }),
+});
+
 /** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
 function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloExecucao[] {
   try {
@@ -41,15 +53,7 @@ function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloE
     const linhas = arquivo
       ? lerUsoDoPi(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim))
       : [];
-    return linhas.map((l) => ({
-      execucao_id: c.execucao.id,
-      ...colunasDoModelo(l.modelo),
-      tokens_entrada: l.tokens_entrada,
-      tokens_saida: l.tokens_saida,
-      tokens_cache_leitura: l.tokens_cache_leitura,
-      tokens_cache_escrita: l.tokens_cache_escrita,
-      ...(l.custo !== null && { custo: l.custo }),
-    }));
+    return linhas.map((l) => usoDaExecucao(c.execucao.id, l));
   } catch (error_) {
     // Métrica nunca impede o encerramento.
     anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
@@ -64,7 +68,21 @@ export function encerrarProcessoDoTicket(c: ProcessoEncerravel, falhou: boolean,
   comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
     execucoes: encerrarProcesso(estado.execucoes, c.execucao.id, fim, falhou),
-    usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
+    // Soma, não substitui: a execução pode já ter o Uso de uma consulta (`registrarUsoDaConsulta`).
+    usos: usos.reduce((acc, u) => acumularUso(acc, u), estado.usos),
+  }));
+}
+
+/** Soma o Uso de uma consulta à execução do ticket que a pediu, para ele contar no ticket e na rodada dele. */
+export function registrarUsoDaConsulta(
+  banco: DatabaseSync,
+  ref: TicketRef,
+  execucao: string,
+  linhas: readonly LinhaDeUso[],
+): void {
+  comTrabalhosDoTicket(banco, ref, (estado) => ({
+    ...estado,
+    usos: linhas.reduce((acc, l) => acumularUso(acc, usoDaExecucao(execucao, l)), estado.usos),
   }));
 }
 
