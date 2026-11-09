@@ -63,6 +63,8 @@ export interface OpcoesExecucaoDemanda {
   mensagem?: string;
   /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
   fechar?: typeof fecharTicketDemanda;
+  /** O Espaço que a condução já criou (e se buscou a base); sem ele, a execução o cria. */
+  espaco?: { pasta: string; buscouBase: boolean };
 }
 
 interface Conducao {
@@ -77,10 +79,13 @@ interface Conducao {
 }
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
-async function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+async function worktreeDoEspacoDoTicket(
+  { banco, ag, ticket, projeto, opcoes }: Conducao,
+  log: string,
+): Promise<string> {
   const raiz = raizDo(banco);
   const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
-  const { pasta, buscouBase } = await ciclo.criar();
+  const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
   if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
 }

@@ -6,22 +6,27 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
 import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
-import { noLog } from "../infra/registro.ts";
+import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
+import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
+import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
-import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
+import { instanteAtual } from "./relogio.ts";
+import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface DepsDespacho {
@@ -81,10 +86,10 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
     const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
     return (deps.iniciarProcesso ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
   }
-  if (t.etapa === "revisar_rodada") {
-    return conduzirRevisaoRodada(banco, rodadaDe(t), { limiteMin });
-  }
-  if (t.etapa === "revisar_demanda") return conduzirRevisaoIntegral(banco, demanda_id, { limiteMin });
+  const depsDaConducao: DepsDaConducao = { banco, relogio: instanteAtual, condutor, registro: anotar };
+  const endereco = Endereco.doTicket(demanda_id, ticket_id);
+  if (t.etapa === "revisar_rodada") return new ConducaoDeRevisarRodada(depsDaConducao).conduzir(endereco);
+  if (t.etapa === "revisar_demanda") return new ConducaoDeRevisarDemanda(depsDaConducao).conduzir(endereco);
   return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as sete etapas acima
 }
 

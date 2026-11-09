@@ -5,7 +5,6 @@ import type { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
@@ -13,7 +12,7 @@ import {
   comEvidencia,
 } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
-import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
+import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const revisorIntegral = (banco: Banco): Ator => abrirTrabalhoDoAgente(banco, REF_GLOBAL);
@@ -69,28 +68,6 @@ test("CA-10: com todas as rodadas concluídas a demanda vai a revisar_demanda co
   }));
   assert.equal(iniciarRevisaoIntegral(banco, "I-1").demanda.estado, "revisar_demanda");
   assert.equal(estado(banco).tickets.find((t) => t.etapa === "revisar_demanda")?.estado, "aberto");
-});
-
-test("CA-11: o pi roda na worktree da demanda", async () => {
-  const { c, banco, pastas } = await cenarioRevisao({ integral: true });
-  assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
-  assert.equal(estado(banco).tickets.find((t) => t.ticket_id === 3)?.estado, "falhou");
-  assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
-});
-
-test("CA-12: pi com falha deixa o ticket falhou e a demanda em revisar_demanda", async () => {
-  const { banco, piFalso } = await cenarioRevisao({ integral: true });
-  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
-  assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
-  const e = estado(banco);
-  assert.deepEqual([e.tickets.find((t) => t.ticket_id === 3)?.estado, e.estado], ["falhou", "revisar_demanda"]);
-  assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
-});
-
-test("conduzirRevisaoIntegral recusa demanda sem revisar_demanda", async () => {
-  const { banco } = await cenarioRevisao();
-  comDemanda(banco, "I-1", (ag) => ({ ...ag, tickets: ag.tickets.filter((t) => t.etapa !== "revisar_demanda") }));
-  await assert.rejects(conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), /não tem ticket revisar_demanda/);
 });
 
 test("CA-13: achado alto ou crítico recusa a aprovação", async () => {

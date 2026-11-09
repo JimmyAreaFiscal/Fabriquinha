@@ -5,7 +5,7 @@ import type { NomeGate } from "./agregado_demanda.ts";
 import type { EtapaTicket } from "./primitivos.ts";
 import type { TipoVerificacao } from "./verificacao.ts";
 
-interface DefinicaoDaEtapa {
+export interface DefinicaoDaEtapa {
   nome: EtapaTicket;
   objetivo: string;
   escopo: "demanda" | "rodada";
