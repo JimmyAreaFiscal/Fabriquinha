@@ -5,7 +5,7 @@ import { ErroDeInexistente } from "../nucleo/erros.ts";
 
 type EstadoDoAmbiente = "livre" | "alocado" | "sujo" | "eliminado";
 
-interface AmbienteGravado {
+export interface AmbienteGravado {
   id: string;
   container_id: string;
   imagem: string;
