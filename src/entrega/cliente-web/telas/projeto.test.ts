@@ -39,6 +39,7 @@ const MES: MetricasMesDemanda = {
     duracaoMs: 0,
     tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0 },
     custo: { conhecido: 1.5, trabalhosSemCusto: 0 },
+    textoDoCusto: "US$ 1,50",
     modelos: [],
   },
   niveis: [],

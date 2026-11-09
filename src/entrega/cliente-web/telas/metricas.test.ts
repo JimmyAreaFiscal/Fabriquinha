@@ -46,6 +46,7 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   duracaoMs: 0,
   tokens: { entrada, saida, cacheLeitura, cacheEscrita },
   custo: { conhecido: custo, trabalhosSemCusto: 0 },
+  textoDoCusto: `US$ ${String(custo)}`,
 });
 
 /** Um mês com custo, contagens e nota; as etapas repartem o custo (metade no desenvolvimento). */

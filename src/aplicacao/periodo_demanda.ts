@@ -13,7 +13,7 @@ import {
   usoNoPeriodo,
 } from "../armazenamento/metricas_demanda.ts";
 import { linhaDeUsoDoBanco } from "./demanda.ts";
-import { type LinhaDeUso, Uso } from "../nucleo/uso.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { intervalo, Periodo } from "../nucleo/periodo.ts";
 
 export interface Soma {
@@ -22,6 +22,8 @@ export interface Soma {
   duracaoMs: number;
   tokens: { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number };
   custo: ReturnType<Uso["custo"]>;
+  /** O custo como todas as telas o mostram (`textoDoCusto`). */
+  textoDoCusto: string;
 }
 
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
@@ -84,6 +86,7 @@ function resumir(execs: ExecucaoNoPeriodo[], doUso: Uso): Soma {
       cacheEscrita: tokens("tokens_cache_escrita"),
     },
     custo: doUso.custo(),
+    textoDoCusto: textoDoCusto(doUso),
   };
 }
 

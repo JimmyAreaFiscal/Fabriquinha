@@ -12,7 +12,7 @@ import {
   type UsoDaExecucao,
   usoDaDemanda,
 } from "../armazenamento/metricas_demanda.ts";
-import { type LinhaDeUso, Uso } from "../nucleo/uso.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { type Conformidade, conformidadeDaRodada } from "./conformidade.ts";
 
 /** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
@@ -27,6 +27,8 @@ interface Contagens {
   reprovacoes: number;
   modelos: LinhaDeUso[];
   custo: CustoDoUso;
+  /** O custo como todas as telas o mostram (`textoDoCusto`). */
+  textoDoCusto: string;
 }
 
 /** Nota dos PRs de rodada com `soma` e `quantidade`, para o projeto somar sem tirar média de médias. */
@@ -101,6 +103,7 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
       reprovacoes: decisoes.filter((d) => dono(d) && d.reprovada).length,
       modelos: u.porModelo(),
       custo: u.custo(),
+      textoDoCusto: textoDoCusto(u),
     };
   };
   const escopo = (dono: (l: DonoDaLinha) => boolean): Escopo => {

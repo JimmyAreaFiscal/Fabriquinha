@@ -12,6 +12,7 @@ import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../../armazenamento/demandas.ts";
+import { metricasDaDemanda } from "../../../aplicacao/demanda.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
@@ -122,6 +123,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   );
   const comPiAtivo = ticketsComPiAtivo(banco);
   const predecessoras = predecessorasDaDemanda(banco, id);
+  const { modelos, custo, textoDoCusto } = metricasDaDemanda(banco, id).total;
   const elegiveis = new Set(
     selecionarTrabalho(
       ag,
@@ -140,6 +142,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
       arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
+    uso: { modelos, custo, textoDoCusto },
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoGateDaRodada(ag, r.rodada_id);
       return {

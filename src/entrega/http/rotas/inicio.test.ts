@@ -322,3 +322,17 @@ test("GET /api/inicio responde com o mês corrente de todos os projetos", async 
   assert.equal(dados.aguarda.length, 10);
   assert.equal((await pedir("/api/inicio", { cookie: false })).status, 401);
 });
+
+test("GET /api/inicio: o custo do mês sai no texto do Uso somado, com ≥ e o aviso quando uma sessão não trouxe custo", async () => {
+  const banco = cenario();
+  const agoraIso = new Date().toISOString();
+  banco.exec(`
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0),
+      ('xu2', 's-ajustes', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu2', 'p', 'm', 5, 1, 0, 0, NULL);`);
+  const { pedir } = await servir(banco);
+  const { mes } = (await pedir("/api/inicio")).json<DadosDoInicio>();
+  assert.equal(mes.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
+  assert.equal(mes.total.modelos[0]?.tokens_entrada, 15);
+});

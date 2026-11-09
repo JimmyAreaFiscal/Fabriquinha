@@ -83,10 +83,7 @@ export class Uso {
   }
 }
 
-/**
- * O custo de `uso` como as telas o mostram: "US$ 4,20", ou "≥ US$ 4,20 (2 sessões sem custo)" quando falta custo.
- * @testes as telas passam a usá-la nos próximos tickets da rodada
- */
+/** O custo de `uso` como as telas o mostram: "US$ 4,20", ou "≥ US$ 4,20 (2 sessões sem custo)" quando falta custo. */
 export function textoDoCusto(uso: Uso): string {
   const { conhecido, trabalhosSemCusto } = uso.custo();
   const dolares = `US$ ${conhecido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
