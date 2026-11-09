@@ -23,6 +23,7 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
+import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
 import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
@@ -185,19 +186,22 @@ export async function fecharTicketDemanda(
     return;
   }
   const commits: Commit[] = [];
-  const hooks = new HooksDoCommit(async ({ worktree: raiz, limiteMs }) => {
-    const commit = await commitarTicketDemanda(
-      banco,
-      ref,
-      {
-        worktree: raiz,
-        tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
-        titulo: ticket.titulo ?? ag.demanda.titulo,
-        etapa: ticket.etapa,
-      },
-      limiteMs,
-    );
-    commits.push(commit);
+  const { hooks_do_commit: hooks } = montarVerificacoesDaEtapa(ticket.etapa, {
+    hooks_do_commit: () =>
+      new HooksDoCommit(async ({ worktree: raiz, limiteMs }) => {
+        const commit = await commitarTicketDemanda(
+          banco,
+          ref,
+          {
+            worktree: raiz,
+            tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
+            titulo: ticket.titulo ?? ag.demanda.titulo,
+            etapa: ticket.etapa,
+          },
+          limiteMs,
+        );
+        commits.push(commit);
+      }),
   });
   let resultadoDosHooks;
   try {

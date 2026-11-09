@@ -12,7 +12,7 @@ import {
   type ContextoDaVerificacao,
   type Falha,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 // ponytail: o servidor local do Auditor, o mesmo comando do sonar_gate.py; vira configuração se a Fabriquinha
@@ -201,7 +201,7 @@ export async function analisarSonar(
 }
 
 /** Qualquer ErroDeRegra do Sonar (fora do ar, scanner, tempo) é infraestrutura; issue aberta em arquivo alterado, técnica. */
-export class VerificacaoSonar extends Verificacao {
+export class VerificacaoSonar extends VerificacaoComRegistro {
   readonly tipo = "sonar";
   readonly #chaveSonarqube: string;
   readonly #arquivosAlterados: string[];

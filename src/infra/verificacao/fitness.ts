@@ -8,10 +8,10 @@ import {
   type Falha,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
-export class VerificacaoDeFitness extends Verificacao {
+export class VerificacaoDeFitness extends VerificacaoComRegistro {
   readonly tipo = "fitness";
   readonly #projeto: Projeto;
 

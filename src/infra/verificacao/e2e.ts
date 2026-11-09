@@ -10,12 +10,12 @@ import {
   type ContextoDaVerificacao,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 type ConfiguracaoE2E = Projeto["verificacoes"]["e2e"][number];
 
-export class VerificacaoE2E extends Verificacao {
+export class VerificacaoE2E extends VerificacaoComRegistro {
   readonly tipo = "e2e";
   readonly #configuracao: ConfiguracaoE2E;
 

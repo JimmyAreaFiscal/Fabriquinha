@@ -26,7 +26,7 @@ import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
-import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
+import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
@@ -312,10 +312,10 @@ async function publicarEConferir(
   }));
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
-  const problemas = await exigidaPelaEtapa(
-    "encerrar_rodada",
-    new ConferenciaDoPR(projeto, publicado.id, log),
-  ).conferir();
+  const { conferencia_do_pr: conferenciaDoPR } = montarVerificacoesDaEtapa("encerrar_rodada", {
+    conferencia_do_pr: () => new ConferenciaDoPR(projeto, publicado.id, log),
+  });
+  const problemas = await conferenciaDoPR.conferir();
   const correcoes = [
     ...(problemas.conflito
       ? [

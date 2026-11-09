@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { CATALOGO_DE_ETAPAS } from "../../nucleo/etapa.ts";
 import type { EtapaTicket } from "../../nucleo/primitivos.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
 import type { CausaDeInfraestrutura } from "../../nucleo/tentativa.ts";
@@ -69,6 +70,11 @@ function resultadoDoRegistro({ passou, falhas, dados, logs }: RegistroDaVerifica
 export abstract class Verificacao {
   abstract readonly tipo: TipoVerificacao;
 
+  abstract executar(contexto: ContextoDaVerificacao): Promise<ResultadoDaVerificacao>;
+}
+
+/** A Verificação que deixa registro completo (testes, fitness, sonar, e2e): `coletar` o guarda e `executar` o reduz. */
+export abstract class VerificacaoComRegistro extends Verificacao {
   abstract coletar(contexto: ContextoDaVerificacao): Promise<RegistroDaVerificacao>;
 
   async executar(contexto: ContextoDaVerificacao): Promise<ResultadoDaVerificacao> {
@@ -76,27 +82,29 @@ export abstract class Verificacao {
   }
 }
 
-// Até a demanda 15 as Verificações que cada Etapa exige são esta tabela fechada. O E2E não é item: entra em `testes`.
-const VERIFICACOES_DA_ETAPA: Record<EtapaTicket, readonly TipoVerificacao[]> = {
-  entender_e_desenhar: [],
-  planejar: [],
-  implementar: ["testes", "fitness", "sonar", "hooks_do_commit"],
-  revisar_rodada: ["fitness"],
-  encerrar_rodada: ["conferencia_do_pr"],
-  ajustar_resultado: [],
-  revisar_demanda: [],
-  encerrar_demanda: ["conferencia_do_pr"],
-  resolver_conflito: ["testes", "fitness", "sonar", "hooks_do_commit"],
-};
+type VerificacoesMontadas<F> = { [T in keyof F]: F[T] extends () => infer V ? V : never };
 
-export const verificacoesDaEtapa = (etapa: EtapaTicket): readonly TipoVerificacao[] => VERIFICACOES_DA_ETAPA[etapa];
+type FabricasDeVerificacao = Partial<Record<TipoVerificacao, () => Verificacao>>;
 
-/** Devolve a Verificação que quem chama montou, depois de conferir que a tabela da Etapa a exige. */
-export function exigidaPelaEtapa<V extends Verificacao>(etapa: EtapaTicket, verificacao: V): V {
-  if (!verificacoesDaEtapa(etapa).includes(verificacao.tipo)) {
-    throw new ErroDeRegra(`a etapa ${etapa} não exige a verificação ${verificacao.tipo}`);
-  }
-  return verificacao;
+/**
+ * Monta, na ordem do catálogo, as Verificações que quem chama sabe construir (`fabricas`), por tipo. Recusa a fábrica
+ * de uma Verificação que `CATALOGO_DE_ETAPAS[etapa].verificacoes` não lista; a que a Etapa lista e não vem em
+ * `fabricas` fica de fora, para quem chama montar só a parte que usa (os hooks, por exemplo, são do fechamento).
+ */
+export function montarVerificacoesDaEtapa<F extends FabricasDeVerificacao>(
+  etapa: EtapaTicket,
+  fabricas: F,
+): VerificacoesMontadas<F> {
+  const exigidas: readonly string[] = CATALOGO_DE_ETAPAS[etapa].verificacoes;
+  const naoExigida = Object.keys(fabricas).find((tipo) => !exigidas.includes(tipo));
+  if (naoExigida) throw new ErroDeRegra(`a etapa ${etapa} não exige a verificação ${naoExigida}`);
+  const fabricasPorTipo: FabricasDeVerificacao = fabricas;
+  const montadas = exigidas.flatMap((tipo) => {
+    const fabrica = fabricasPorTipo[tipo as TipoVerificacao];
+    return fabrica ? [[tipo, fabrica()]] : [];
+  });
+  // O cast vale porque cada chave de `montadas` vem de `fabricas`.
+  return Object.fromEntries(montadas) as VerificacoesMontadas<F>;
 }
 
 /** Traduz a classificação única para a Falha do ticket; o motivo e a causa de infraestrutura dependem de como o comando falhou. */
