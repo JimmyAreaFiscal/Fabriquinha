@@ -25,6 +25,8 @@ import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenament
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
+import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
+import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
 import { despacharDemandas, type DepsDespacho, executarAgoraDemanda } from "./despacho_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -164,8 +166,9 @@ const aberta = (banco: DatabaseSync, n: number, ticket_id: number) =>
 const execucoes = (banco: DatabaseSync, n: number, ticket_id: number) =>
   carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
 
+type ConduzirFalso = (banco: DatabaseSync, endereco: Endereco) => Promise<void>;
 /** Reserva o ticket e abre sessão e execução como a condução do `implementar`, sem subir o pi nem o git. */
-const conduzirFalso: NonNullable<DepsDespacho["conduzirImplementacao"]> = (banco, endereco) => {
+const conduzirFalso: ConduzirFalso = (banco, endereco) => {
   const ref = { demanda_id: endereco.demanda_id, ticket_id: Number(endereco.ticket_id) };
   comDemanda(banco, ref.demanda_id, (ag) =>
     reservarTicket(ag, { ticket_id: ref.ticket_id }, FABRIQUINHA, { agora: em }, true),
@@ -182,7 +185,18 @@ const conduzirFalso: NonNullable<DepsDespacho["conduzirImplementacao"]> = (banco
   });
   return Promise.resolve();
 };
-const deps: DepsDespacho = { conduzirImplementacao: conduzirFalso };
+/** Despacho cujo `implementar` e `resolver_conflito` rodam `conduzir` no lugar da condução de verdade. */
+const comConducaoFalsa = (conduzir: ConduzirFalso): DepsDespacho => ({
+  conducoesSubstitutas: (d) => ({
+    implementar: new (class extends ConducaoDeImplementar {
+      override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
+    })(d),
+    resolver_conflito: new (class extends ConducaoDeResolverConflito {
+      override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
+    })(d),
+  }),
+});
+const deps = comConducaoFalsa(conduzirFalso);
 const silenciar = (t: TestContext) => t.mock.method(console, "error", () => undefined);
 
 test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta", async () => {
@@ -326,12 +340,10 @@ test("falha síncrona ao iniciar desfaz a reserva e vai ao log; fim rejeitado ta
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  const quebrado: DepsDespacho = {
-    conduzirImplementacao: (b, endereco) => {
-      if (endereco.demanda_id === "I-2") throw new Error("sem sessão");
-      return conduzirFalso(b, endereco).then(() => Promise.reject(new Error("pi caiu")));
-    },
-  };
+  const quebrado = comConducaoFalsa((b, endereco) => {
+    if (endereco.demanda_id === "I-2") throw new Error("sem sessão");
+    return conduzirFalso(b, endereco).then(() => Promise.reject(new Error("pi caiu")));
+  });
   await Promise.all(despacharDemandas(banco, config, quebrado));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["aberto", 0]);
   assert.equal(estadoDoTicket(banco, 3, 1), "em_execucao");

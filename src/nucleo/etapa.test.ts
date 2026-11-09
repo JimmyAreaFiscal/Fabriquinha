@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CATALOGO_DE_ETAPAS } from "./etapa.ts";
+import { CATALOGO_DE_ETAPAS, exigirEtapaConduzida } from "./etapa.ts";
 import { catalogoDaEtapa } from "./evidencia_etapa.ts";
 import { EtapaTicket } from "./primitivos.ts";
 
@@ -34,4 +34,11 @@ test("a chave de cada definição é o nome dela, e as evidências são as da pr
     assert.ok(definicao.evidencias.every((e) => e.etapa === chave));
     assert.equal(catalogoDaEtapa(definicao.nome), definicao.evidencias);
   }
+});
+
+test("exigirEtapaConduzida recusa só a etapa externa", () => {
+  assert.throws(() => {
+    exigirEtapaConduzida("entender_e_desenhar");
+  }, /não tem condução/);
+  for (const etapa of EtapaTicket.options.filter((e) => e !== "entender_e_desenhar")) exigirEtapaConduzida(etapa);
 });

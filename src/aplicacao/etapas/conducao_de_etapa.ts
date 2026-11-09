@@ -33,7 +33,7 @@ export interface DepsDaConducao {
   registro: typeof anotar;
 }
 
-abstract class ConducaoDeEtapa {
+export abstract class ConducaoDeEtapa {
   protected readonly definicao: DefinicaoDaEtapa;
   protected readonly deps: DepsDaConducao;
 

@@ -6,7 +6,9 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { exigirEtapaConduzida } from "../nucleo/etapa.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import type { EtapaTicket } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
 import { escrever } from "../armazenamento/banco.ts";
@@ -14,11 +16,12 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
-import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import type { ConducaoDeEtapa, DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
 import {
   ConducaoDeEncerrarDemanda,
   type OpcoesDoEncerramentoDaDemanda,
 } from "./etapas/conducao_de_encerrar_demanda.ts";
+import { ConducaoDeAjustarResultado } from "./etapas/conducao_de_ajustar_resultado.ts";
 import { ConducaoDeEncerrarRodada } from "./etapas/conducao_de_encerrar_rodada.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
 import { ConducaoDePlanejar } from "./etapas/conducao_de_planejar.ts";
@@ -34,8 +37,10 @@ import { condutor } from "./trabalho/condutor.ts";
 export interface DepsDespacho {
   /** Coleta das verificações e limite do commit do `implementar` e do `resolver_conflito`; injetáveis nos testes. */
   implementacao?: OpcoesDaImplementacao;
-  /** Substitui a condução do `implementar` e do `resolver_conflito` nos testes que não sobem pi nem git. */
-  conduzirImplementacao?: (banco: DatabaseSync, ticket: Endereco) => Promise<void>;
+  /** Substitui conduções nos testes que não sobem pi nem git. */
+  conducoesSubstitutas?: (
+    deps: DepsDaConducao,
+  ) => Partial<Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa>>;
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
   verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
 }
@@ -66,23 +71,20 @@ const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco 
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
 function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
+  exigirEtapaConduzida(t.etapa);
   const depsDaConducao = depsDaConducaoDe(banco);
-  const endereco = Endereco.doTicket(t.demanda_id, t.ticket_id);
-  if (t.etapa === "planejar") return new ConducaoDePlanejar(depsDaConducao).conduzir(endereco);
-  const conduzirImplementacao = (conducao: ConducaoDeImplementar) =>
-    deps.conduzirImplementacao?.(banco, endereco) ?? conducao.conduzir(endereco);
-  if (t.etapa === "implementar") {
-    return conduzirImplementacao(new ConducaoDeImplementar(depsDaConducao, deps.implementacao));
-  }
-  if (t.etapa === "resolver_conflito") {
-    return conduzirImplementacao(new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao));
-  }
-  if (t.etapa === "encerrar_demanda") {
-    return new ConducaoDeEncerrarDemanda(depsDaConducao, { verificacao: deps.verificacao }).conduzir(endereco);
-  }
-  if (t.etapa === "revisar_rodada") return new ConducaoDeRevisarRodada(depsDaConducao).conduzir(endereco);
-  if (t.etapa === "revisar_demanda") return new ConducaoDeRevisarDemanda(depsDaConducao).conduzir(endereco);
-  return new ConducaoDeEncerrarRodada(depsDaConducao).conduzir(endereco); // a seleção só devolve as oito etapas acima
+  const CONDUCAO_DA_ETAPA: Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa> = {
+    planejar: new ConducaoDePlanejar(depsDaConducao),
+    implementar: new ConducaoDeImplementar(depsDaConducao, deps.implementacao),
+    resolver_conflito: new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao),
+    revisar_rodada: new ConducaoDeRevisarRodada(depsDaConducao),
+    revisar_demanda: new ConducaoDeRevisarDemanda(depsDaConducao),
+    encerrar_rodada: new ConducaoDeEncerrarRodada(depsDaConducao),
+    encerrar_demanda: new ConducaoDeEncerrarDemanda(depsDaConducao, { verificacao: deps.verificacao }),
+    ajustar_resultado: new ConducaoDeAjustarResultado(depsDaConducao),
+    ...deps.conducoesSubstitutas?.(depsDaConducao),
+  };
+  return CONDUCAO_DA_ETAPA[t.etapa].conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */
