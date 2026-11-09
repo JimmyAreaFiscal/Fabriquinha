@@ -353,7 +353,12 @@ test("o modelo que para de responder no meio da resposta encerra a execução co
   assert.match(readFileSync(join(dir, "log"), "utf8"), /o modelo ficou 0\.005 min sem responder/);
 });
 
-test("ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {
+test("pi que ainda sobe, ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {
+  // O pi falso só emite o primeiro evento depois do `sleep`, como um pi lento para subir numa máquina carregada.
+  assert.equal(
+    await rodar([{ shell: "sleep 0.6", termina: "assenta" }], "autonomo", 1, undefined, 0.005).fim,
+    undefined,
+  );
   assert.equal(
     await rodar([{ ...ferramentaLonga, termina: "assenta" }], "autonomo", 1, undefined, 0.005).fim,
     undefined,
@@ -429,7 +434,11 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
       ],
       "interativo",
     );
-    await dormir(300);
+    // Espera o pi emitir a mensagem em escrita por um evento, não por uma janela de tempo que a carga estoura.
+    const vistos: string[] = [];
+    const pararVistos = condutor.assinar(execucao.sessao, (evento) => vistos.push(String(evento.type)));
+    await ate(() => vistos.includes(encerrada ? "message_end" : "message_update"), "a mensagem em escrita");
+    pararVistos();
     const recebidos: string[] = [];
     const pararRetrato = condutor.assinar(execucao.sessao, (evento) => recebidos.push(String(evento.type)));
     assert.deepEqual(recebidos, encerrada ? ["message_end"] : ["message_start", "message_update"]);
