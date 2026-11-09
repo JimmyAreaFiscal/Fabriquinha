@@ -867,6 +867,15 @@ input.erro {
 .painel-config .remover-projeto {
   margin-left: auto;
 }
+.limites-ambiente {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-5);
+  margin-top: var(--s-3);
+}
+.conjunto-ambiente {
+  margin-top: var(--s-5);
+}
 
 .agendador {
   display: grid;

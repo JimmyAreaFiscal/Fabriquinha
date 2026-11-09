@@ -4,6 +4,8 @@ import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
+import type { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
+import { conjuntoDoServico } from "./ambiente_do_servico.ts";
 import { limparDemanda, pendenciasDoEspaco } from "../../infra/repositorio/limpeza_demanda.ts";
 import { integrarPR } from "../../infra/repositorio/pr.ts";
 import {
@@ -15,7 +17,10 @@ import {
 import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
 import { anotar } from "../../infra/registro.ts";
 
-type ProjetoDoCiclo = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes" | "hospedagem">;
+type ProjetoDoCiclo = Pick<
+  Projeto,
+  "nome" | "raiz_git" | "branch_base" | "verificacoes" | "hospedagem" | "imagem_do_ambiente"
+>;
 
 /** Onde o ciclo grava: a raiz da Fabriquinha (worktrees e fila git) e o log da operação. */
 interface RegistroDoCiclo {
@@ -29,12 +34,27 @@ abstract class CicloDoEspaco {
   protected readonly registro: RegistroDoCiclo;
   /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. */
   readonly ambiente: Ambiente;
+  /** O conjunto de containers; `undefined` com o Ambiente no host local, que nunca chama o docker. */
+  readonly #conjunto: ConjuntoDeAmbientes | undefined;
 
-  constructor(espaco: EspacoDeTrabalho, projeto: ProjetoDoCiclo, registro: RegistroDoCiclo, ambiente: Ambiente) {
+  constructor(
+    espaco: EspacoDeTrabalho,
+    projeto: ProjetoDoCiclo,
+    registro: RegistroDoCiclo,
+    ambiente: Ambiente,
+    conjunto: ConjuntoDeAmbientes | undefined = conjuntoDoServico(),
+  ) {
     this.espaco = espaco;
     this.projeto = projeto;
     this.registro = registro;
     this.ambiente = ambiente;
+    this.#conjunto = conjunto;
+  }
+
+  /** Dá ao Espaço o container do Projeto; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
+  protected async alocarContainerSeHouver(): Promise<void> {
+    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
+      await this.#conjunto.alocar(this.espaco, this.projeto);
   }
 
   /**
@@ -58,12 +78,15 @@ abstract class CicloDoEspaco {
    * falhou só é reconhecida pela lista.
    */
   async limpar(pendentes?: readonly string[]): Promise<{ removidos: string[]; pendentes: string[] }> {
-    return limparDemanda(
+    const resultado = await limparDemanda(
       this.ambiente,
       this.registro.raiz,
       this.projeto,
       pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
     );
+    // O container só volta ao conjunto quando o Espaço acabou de verdade; com pendência, a repetição do limpar o libera.
+    if (resultado.pendentes.length === 0) await this.#conjunto?.liberar(this.espaco);
+    return resultado;
   }
 }
 
@@ -75,6 +98,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
   }
 
   async criar() {
+    await this.alocarContainerSeHouver();
     const pasta = await garantirWorktreeRodada(
       this.ambiente,
       this.registro.raiz,
@@ -106,6 +130,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
 /** PR final, integrado pelo humano na plataforma: a Fabriquinha só cria e limpa. @testes o teste a instancia direto; a produção a cria por `cicloDoEspaco` */
 export class CicloDoEspacoDaDemanda extends CicloDoEspaco {
   async criar() {
+    await this.alocarContainerSeHouver();
     const { caminho, buscouBase } = await garantirWorktreeDemandaDizendoSeBuscouBase(
       this.ambiente,
       this.registro.raiz,

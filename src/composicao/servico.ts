@@ -14,7 +14,7 @@ import { configuracao, configuracaoDoAmbiente } from "../armazenamento/servico.t
 import { servirWeb } from "../entrega/http/servidor.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
 import { condutor } from "../aplicacao/trabalho/condutor.ts";
-import { montarAmbienteDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
+import { montarAmbienteDoServico, montarConjuntoDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 import { GeradorDeAmbientes } from "../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../aplicacao/ambiente/conjunto.ts";
@@ -101,6 +101,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
     return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes()));
   };
+  montarConjuntoDoServico(conjuntoSeContainer);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
   // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.

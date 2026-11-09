@@ -32,7 +32,10 @@ export class ConjuntoDeAmbientes {
   }
 
   /** Dá ao Espaço um livre da mesma imagem ou, sem nenhum, um container novo; o Espaço que já tem um recebe o mesmo. */
-  async alocar(espaco: EspacoDeTrabalho, projeto: Projeto): Promise<AmbienteGravado> {
+  async alocar(
+    espaco: EspacoDeTrabalho,
+    projeto: Pick<Projeto, "nome" | "raiz_git" | "imagem_do_ambiente">,
+  ): Promise<AmbienteGravado> {
     const alocadoPara = espaco.dono.toString();
     const imagemDoProjeto = projeto.imagem_do_ambiente;
     if (imagemDoProjeto === undefined)

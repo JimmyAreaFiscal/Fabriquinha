@@ -10,8 +10,10 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 import { Projeto } from "../../../nucleo/projeto.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../../../armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
@@ -481,4 +483,66 @@ test("remover projeto com execução em andamento dá 409 e o projeto continua",
   assert.equal(status, 409);
   assert.match(erro, /execução em andamento/);
   assert.equal(((await chamar("GET", "/api/projetos")) as unknown[]).length, 1);
+});
+
+const AMBIENTE_PADRAO = { tipo: "host_local", memoria_maxima_mb: 2048, cpus: 2, ociosidade_para_eliminar_min: 60 };
+
+test("ambiente: o padrão é host_local com o conjunto vazio; salvar grava e um valor inválido dá 422 sem mudar nada", async () => {
+  assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: AMBIENTE_PADRAO, conjunto: [] });
+  const salvo = { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 15 };
+  assert.deepEqual(await chamar("POST", "/api/ambiente", salvo), { configuracao: salvo, conjunto: [] });
+
+  const [status, erro] = (await chamar("POST", "/api/ambiente", { ...salvo, memoria_maxima_mb: 100 })) as [
+    number,
+    string,
+  ];
+  assert.equal(status, 422);
+  assert.match(erro, /→ at memoria_maxima_mb/);
+  assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: salvo, conjunto: [] });
+});
+
+test("ambiente: a lista traz só o conjunto da Fabriquinha; eliminar remove o livre e recusa o alocado, sem tocar nos outros containers", async () => {
+  const docker = instalarDockerFalso(join(base, "docker"));
+  const sonarqube = docker.semearContainer({ imagem: "sonarqube" });
+  const doUsuario = docker.semearContainer({ imagem: "postgres" });
+  const livre = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "a-livre" } });
+  const alocado = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "a-alocado" } });
+  for (const [id, container_id, alocado_para] of [
+    ["a-livre", livre.id, "I-2"],
+    ["a-alocado", alocado.id, "I-1"],
+  ] as const)
+    inserirAmbienteAlocado(banco, {
+      id,
+      container_id,
+      imagem: "alpine",
+      alocado_para,
+      criado_em: "2026-11-09T10:00:00.000Z",
+    });
+  liberarAmbiente(banco, "a-livre", "livre", "2026-11-09T11:00:00.000Z");
+
+  const { conjunto } = (await chamar("GET", "/api/ambiente")) as { conjunto: { id: string; estado: string }[] };
+  assert.deepEqual(
+    conjunto.map(({ id, estado }) => ({ id, estado })),
+    [
+      { id: "a-livre", estado: "livre" },
+      { id: "a-alocado", estado: "alocado" },
+    ],
+  );
+
+  const [status, erro] = (await chamar("DELETE", "/api/ambiente/a-alocado")) as [number, string];
+  assert.equal(status, 409);
+  assert.match(erro, /está alocado a I-1/);
+  assert.equal(await chamar("DELETE", "/api/ambiente/a-livre"), undefined);
+  const restante = (await chamar("GET", "/api/ambiente")) as { conjunto: { id: string }[] };
+  assert.deepEqual(
+    restante.conjunto.map(({ id }) => id),
+    ["a-alocado"],
+  );
+
+  assert.deepEqual(
+    docker.registro().filter(([comando]) => comando === "rm"),
+    [["rm", "--force", livre.id]],
+  );
+  const idsMexidos = docker.registro().flat();
+  assert.ok(!idsMexidos.includes(sonarqube.id) && !idsMexidos.includes(doUsuario.id));
 });
