@@ -149,8 +149,8 @@ test("a página vazia traz o cabeçalho, o trilho e a descrição na lateral, se
 
 test("o cabeçalho mostra o texto do custo que a rota entrega, com ≥ e o aviso quando falta custo", () => {
   assert.match(pagina(dadosDaPagina()), /<span class="muted">Custo US\$ 1,50<\/span>/);
-  const semCusto = pagina(dadosDaPagina({ uso: { textoDoCusto: "≥ US$ 4,20 (1 sessão sem custo)" } }));
-  assert.match(semCusto, /Custo ≥ US\$ 4,20 \(1 sessão sem custo\)<\/span>/);
+  const paginaComSessaoSemCusto = pagina(dadosDaPagina({ uso: { textoDoCusto: "≥ US$ 4,20 (1 sessão sem custo)" } }));
+  assert.match(paginaComSessaoSemCusto, /Custo ≥ US\$ 4,20 \(1 sessão sem custo\)<\/span>/);
 });
 
 test("o trilho marca os estados feitas, a atual e os gates; concluída completa o trilho e cancelada fica sem ele", () => {

@@ -349,14 +349,14 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
     grupos,
     total: { ...consumo(0, 100, 20, 30, 40, 5), textoDoCusto },
   });
-  const semCusto = "≥ US$ 2,00 (1 sessão sem custo)";
+  const textoComSessaoSemCusto = "≥ US$ 2,00 (1 sessão sem custo)";
   const niveis = [
     nivel("execucao", 5, "US$ 2,00"),
-    nivel("sessao", 3, semCusto),
-    nivel("ticket", 3, semCusto),
-    nivel("rodada", 2, semCusto),
-    nivel("demanda", 1, semCusto),
-    nivel("projeto", 1, semCusto),
+    nivel("sessao", 3, textoComSessaoSemCusto),
+    nivel("ticket", 3, textoComSessaoSemCusto),
+    nivel("rodada", 2, textoComSessaoSemCusto),
+    nivel("demanda", 1, textoComSessaoSemCusto),
+    nivel("projeto", 1, textoComSessaoSemCusto),
   ];
   const html = paginaDeMetricas(
     { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis })] },
@@ -367,8 +367,8 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
     texto(secao),
     "Por nível out/26 execução → sessão → ticket → rodada → demanda → projeto: a soma de cada nível é o total do mês " +
       "Nível Grupos Execuções Tokens Custo Execução 5 5 190 US$ 2,00 " +
-      `Sessão 3 5 190 ${semCusto} Ticket 3 5 190 ${semCusto} Rodada 2 5 190 ${semCusto} ` +
-      `Demanda 1 5 190 ${semCusto} Projeto 1 5 190 ${semCusto} ` +
+      `Sessão 3 5 190 ${textoComSessaoSemCusto} Ticket 3 5 190 ${textoComSessaoSemCusto} Rodada 2 5 190 ${textoComSessaoSemCusto} ` +
+      `Demanda 1 5 190 ${textoComSessaoSemCusto} Projeto 1 5 190 ${textoComSessaoSemCusto} ` +
       "Retrabalho: 10 de 100 linhas escritas no mês foram alteradas depois (1 por humanos).",
   );
 });
