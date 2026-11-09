@@ -305,6 +305,84 @@ test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
   );
 });
 
+const USO = {
+  sessoes: [
+    {
+      ferramenta: "claude",
+      sessao: "S1",
+      linhas: [
+        {
+          provedor: "anthropic",
+          modelo: "opus",
+          tokens_entrada: 10,
+          tokens_saida: 2,
+          tokens_cache_leitura: 0,
+          tokens_cache_escrita: 0,
+        },
+      ],
+    },
+  ],
+};
+const linhasDeUso = (env: NodeJS.ProcessEnv) =>
+  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT demanda_id, linhas FROM uso_declarado").all() ?? [];
+
+test("CA-6: uso inválido sai com o caminho do campo e a dica; o válido enviado duas vezes deixa uma só linha", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  arquivo("uso_invalido.json", {
+    sessoes: [{ ...USO.sessoes[0], linhas: [{ ...USO.sessoes[0]?.linhas[0], tokens_entrada: -1 }] }],
+  });
+  falha(
+    await cli(env, ["demanda", "uso", id, "--dados", "uso_invalido.json"]),
+    1,
+    /sessoes\.0\.linhas\.0\.tokens_entrada.*corrija o campo indicado e submeta de novo/s,
+  );
+  assert.deepEqual(linhasDeUso(env), []);
+  arquivo("uso.json", USO);
+  for (let vez = 0; vez < 2; vez++)
+    assert.deepEqual(json(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"])).avisos, []);
+  const [linha, ...resto] = linhasDeUso(env);
+  assert.ok(linha);
+  assert.deepEqual(resto, []);
+  assert.equal(linha.demanda_id, id);
+  assert.deepEqual(JSON.parse(String(linha.linhas)), [
+    {
+      modelo: "anthropic/opus",
+      tokens_entrada: 10,
+      tokens_saida: 2,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo: null,
+      chamadas: 0,
+    },
+  ]);
+});
+
+test("uso: falta --dados, JSON inválido, outra sessão antes do envio e demanda terminada", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  falha(await cli(env, ["demanda", "uso", id]), 2, /^falta --dados/);
+  falha(await cli(env, ["demanda", "uso", id, "--dados", "-"], "{"), 1, /não é um JSON válido/);
+  arquivo("uso.json", USO);
+  falha(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"]), 1, /só a ferramenta claude da sessão S1/);
+  await completar(env, id);
+  json(await cli(env, ["demanda", "enviar", id]));
+  json(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"])); // depois do envio, qualquer sessão
+  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.exec(`UPDATE demanda SET estado = 'concluida' WHERE id = '${id}'`);
+  falha(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"]), 1, /já terminou \(concluida\)/);
+});
+
+test("uso: a sessão que outra demanda já informou é avisada e não é contada de novo", async () => {
+  const env = novaRaiz();
+  const primeira = await registrar(env);
+  const segunda = await registrar(env);
+  arquivo("uso.json", USO);
+  await cli(env, ["demanda", "uso", primeira, "--dados", "uso.json"]);
+  const { avisos } = json(await cli(env, ["demanda", "uso", segunda, "--dados", "uso.json"]));
+  assert.match(String(avisos[0]), /já consta na demanda I-1 e não é contada de novo para I-2/);
+  assert.equal(linhasDeUso(env).length, 1);
+});
+
 test("CA-2: o endereço inválido sai com a mensagem de Endereco.ler e o de rodada ou ticket não é de demanda", async () => {
   const env = novaRaiz();
   const { codigo, out, err } = await cli(env, ["demanda", "ver", "I-x"]);
@@ -373,7 +451,7 @@ test("CA-19: a skill traz um exemplo de cada comando e cada comando citado exist
   const skill = readFileSync(join(cwd, "pacote-pi", "skills", "demanda-externa", "SKILL.md"), "utf8");
   const citados = [...skill.matchAll(/^fabriquinha demanda (\S+)/gm)].map((m) => m[1]);
   const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.palavras[1]);
-  assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "ver"]);
+  assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "uso", "ver"]);
   for (const c of citados) assert.ok(existentes.includes(c), c);
   for (const c of existentes) assert.ok(citados.includes(c), c);
   assert.ok(skill.trimEnd().split("\n").length <= 100);

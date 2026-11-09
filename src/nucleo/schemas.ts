@@ -402,7 +402,6 @@ const Obrigatorio = (campo: string, como: string) =>
 
 // Uso declarado (D10): uma sessão da ferramenta fora da Fabriquinha, com linhas por provedor/modelo. Custo ausente é
 // desconhecido (null), nunca 0, e não há tabela de preços.
-/** @testes o comando `demanda uso` ainda não o lê; só o teste do schema o exercita */
 export const CustosRealizados = z.object({
   sessoes: z
     .array(

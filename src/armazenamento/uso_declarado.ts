@@ -12,9 +12,8 @@ export interface UsoDeclarado {
 
 /**
  * Grava o Uso declarado, idempotente por (ferramenta, sessao): a mesma demanda informando de novo troca as linhas.
+ * A demanda dona também fica em `trabalho_nao_gerenciado`.
  * Devolve a demanda dona da sessão; se não for `uso.demanda_id`, a sessão já constava nela e nada foi gravado.
- *
- * @testes o comando `demanda uso` ainda não a chama; só o teste e o apoio da integração a exercitam
  */
 export function gravarUsoDeclarado(banco: DatabaseSync, uso: UsoDeclarado): { demandaDona: string } {
   banco
@@ -26,7 +25,13 @@ export function gravarUsoDeclarado(banco: DatabaseSync, uso: UsoDeclarado): { de
   const dona = banco
     .prepare("SELECT demanda_id FROM uso_declarado WHERE ferramenta = ? AND sessao = ?")
     .get(uso.ferramenta, uso.sessao);
-  return { demandaDona: String(dona?.demanda_id) };
+  const demandaDona = String(dona?.demanda_id);
+  if (demandaDona === uso.demanda_id) {
+    banco
+      .prepare("INSERT OR IGNORE INTO trabalho_nao_gerenciado (ferramenta, sessao, demanda_id) VALUES (?, ?, ?)")
+      .run(uso.ferramenta, uso.sessao, uso.demanda_id);
+  }
+  return { demandaDona };
 }
 
 /** O Uso declarado das sessões cuja dona é a demanda, na ordem em que foram gravadas. */
