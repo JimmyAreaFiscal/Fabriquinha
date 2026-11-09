@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { ComandoRodado } from "../../nucleo/schemas.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
 import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";
 
@@ -47,6 +48,7 @@ test("CA-1: teste com saída 0 aprova, com o código de saída e o caminho", asy
   assert.equal(c?.codigoSaida, 0);
   assert.equal(c.caminho, "back");
   assert.equal(v.logs[0]?.nome, "teste-back.log");
+  assert.equal(ComandoRodado.parse(c).log, v.logs[0].nome);
 });
 
 test("CA-2: saída diferente de 0 é reprovação técnica", async () => {

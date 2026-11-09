@@ -130,9 +130,11 @@ export async function comAmbienteSemCredenciais<T>(
   }
 }
 
-export const linhaDoComando = (comando: string, r: Resultado) => ({
+/** A linha do comando em `dados`; `log` é o nome do anexo com a saída dele (`ComandoRodado`). */
+export const linhaDoComando = (comando: string, r: Resultado, log: string) => ({
   comando,
   codigoSaida: r.codigo,
   estourou: r.estourou,
   duracaoMs: r.duracaoMs,
+  log,
 });
