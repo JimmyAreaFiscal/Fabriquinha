@@ -4,9 +4,11 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarTrabalho, registrarUso, totalDoTicket } from "../src/nucleo/trabalho_agentico.ts";
+import { retomarTrabalho, registrarUso } from "../src/nucleo/trabalho_agentico.ts";
 import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
+import { produtividadeDaRodada } from "../src/aplicacao/evidencias/produtividade_rodada.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
 import { mesDe } from "../src/nucleo/periodo.ts";
 import { metricasDemandaPorMes } from "../src/aplicacao/periodo_demanda.ts";
@@ -91,8 +93,13 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     [primeira.id, "retomada"],
   );
   assert.equal(depois.usos.length, 3);
-  const total = totalDoTicket(depois.sessoes, depois.execucoes, depois.usos, ref);
-  assert.deepEqual([total.tokens_entrada, total.custo_conhecido, total.custo_incompleto], [60, 3, true]);
+  const { total } = produtividadeDaRodada(
+    depois.sessoes,
+    depois.execucoes,
+    depois.usos,
+    carregarDemanda(c.banco, id).tickets.filter((t) => t.ticket_id === ref.ticket_id),
+  );
+  assert.deepEqual([total.tokensEntrada, total.custo, total.custoIncompleto], [60, 3, true]);
 
   const { total: demandaTotal } = metricasDaDemanda(c.banco, id);
   assert.deepEqual(

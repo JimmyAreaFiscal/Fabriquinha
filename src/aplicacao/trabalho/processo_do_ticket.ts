@@ -11,7 +11,7 @@ import {
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
-import { somar } from "../../nucleo/uso.ts";
+import { colunasDoModelo, lerUsoDoPi } from "../../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import {
   carregarTrabalhosDoTicket,
@@ -38,16 +38,17 @@ export type AvisarSessao = (sessao: string, log: string) => void;
 function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloExecucao[] {
   try {
     const arquivo = new HarnessPi().arquivoDaSessao(raizDo(c.banco), c.sessao.id);
-    const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
-    return somas.map((s) => ({
+    const linhas = arquivo
+      ? lerUsoDoPi(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim))
+      : [];
+    return linhas.map((l) => ({
       execucao_id: c.execucao.id,
-      modelo_provedor: s.provedor,
-      modelo_nome: s.modelo,
-      tokens_entrada: s.input,
-      tokens_saida: s.output,
-      tokens_cache_leitura: s.cacheRead,
-      tokens_cache_escrita: s.cacheWrite,
-      ...(!s.semCusto && { custo: s.custo }),
+      ...colunasDoModelo(l.modelo),
+      tokens_entrada: l.tokens_entrada,
+      tokens_saida: l.tokens_saida,
+      tokens_cache_leitura: l.tokens_cache_leitura,
+      tokens_cache_escrita: l.tokens_cache_escrita,
+      ...(l.custo !== null && { custo: l.custo }),
     }));
   } catch (error_) {
     // Métrica nunca impede o encerramento.
