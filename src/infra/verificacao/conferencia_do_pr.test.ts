@@ -35,7 +35,6 @@ for (const tipo of ["github", "azure-devops"] as const) {
 
     assert.equal(verificacao.tipo, "conferencia_do_pr");
     assert.deepEqual(await verificacao.executar(), { tipo: "passou" });
-    await assert.rejects(verificacao.coletar(), /não gera Evidência/);
   });
 
   test(`${tipo}: o conflito e o check falho reprovam, com o nome do check`, async () => {

@@ -10,12 +10,12 @@ import {
   type ContextoDaVerificacao,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 type ConfiguracaoE2E = Projeto["verificacoes"]["e2e"][number];
 
-export class VerificacaoE2E extends Verificacao {
+export class VerificacaoE2E extends VerificacaoComRegistro {
   readonly tipo = "e2e";
   readonly #configuracao: ConfiguracaoE2E;
 
@@ -32,15 +32,15 @@ export class VerificacaoE2E extends Verificacao {
     const comandos = [];
     const logs = [];
     const build = await rodar(comando_build, cwd);
-    const nomeDoLogDoBuild = `${nome}-build.log`;
-    comandos.push({ ...linhaDoComando(comando_build, build, nomeDoLogDoBuild), caminho });
-    logs.push({ nome: nomeDoLogDoBuild, texto: build.log });
+    const logDoBuild = `${nome}-build.log`;
+    comandos.push({ ...linhaDoComando(comando_build, build, logDoBuild), caminho });
+    logs.push({ nome: logDoBuild, texto: build.log });
     const falhaDoBuild = classificarComando(comando_build, build);
     if (falhaDoBuild) return { comandos, logs, falhas: [falhaDoBuild] };
     const execucao = await rodar(comando_execucao, cwd);
-    const nomeDoLogDaExecucao = `${nome}.log`;
-    comandos.push({ ...linhaDoComando(comando_execucao, execucao, nomeDoLogDaExecucao), caminho });
-    logs.push({ nome: nomeDoLogDaExecucao, texto: execucao.log });
+    const logDaExecucao = `${nome}.log`;
+    comandos.push({ ...linhaDoComando(comando_execucao, execucao, logDaExecucao), caminho });
+    logs.push({ nome: logDaExecucao, texto: execucao.log });
     const falhaDaExecucao = classificarComando(comando_execucao, execucao, codigo_falha);
     return { comandos, logs, falhas: falhaDaExecucao ? [falhaDaExecucao] : [] };
   }

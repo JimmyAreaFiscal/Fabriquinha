@@ -216,8 +216,8 @@ test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", ()
 
 test("etapa sem modo de trabalhar recusa nomeando a etapa (CA-9)", () => {
   assert.throws(
-    () => montar("demanda"),
-    (e: Error) => e.constructor === Error && e.message.includes("demanda"),
+    () => montar("entender_e_desenhar"),
+    (e: Error) => e.constructor === Error && e.message.includes("entender_e_desenhar"),
   );
 });
 

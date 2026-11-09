@@ -15,10 +15,10 @@ import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
 import { logDaOperacao } from "../../infra/registro.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
+import { instanteAtual } from "../relogio.ts";
 import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
 
 const gate = GATES.gate_pr;
-const contexto = () => ({ agora: new Date().toISOString() });
 
 const referenciaDaRodada = (endereco: Endereco) => ({
   demanda_id: endereco.demanda_id,
@@ -62,7 +62,7 @@ export async function aprovarPR(
     );
   }
 
-  gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
+  gate.ensaiar(ag, endereco, entrada, ator, instanteAtual()); // recusa antes de integrar na hospedagem
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
@@ -75,7 +75,7 @@ export async function aprovarPR(
   await cicloDoEspaco(espaco, projeto, { raiz, log }).integrar();
 
   return comDemanda(banco, ref.demanda_id, (a) => {
-    const { agora } = contexto();
+    const { agora } = instanteAtual();
     const decidida = gate.decidir(a, endereco, entrada, ator, { agora });
     return {
       ...decidida,
@@ -103,9 +103,9 @@ export async function reprovarPR(
 ): Promise<{ demanda: AgregadoDemanda; sessao: string }> {
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
-  gate.ensaiar(ag, endereco, entrada, ator, contexto());
+  gate.ensaiar(ag, endereco, entrada, ator, instanteAtual());
   await guardarMarcoDaSessao(banco, ref, ag);
-  const demanda = comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
+  const demanda = comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, instanteAtual()));
   const { id } = abrirSessaoDeAjustes(banco, ref, demanda, motivo, { limiteMin: configuracao(banco).timeoutMin });
   return { demanda, sessao: id };
 }

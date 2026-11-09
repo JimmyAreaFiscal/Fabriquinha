@@ -33,9 +33,8 @@ test("o hook que reprova o commit é reprovação com a saída; o que estoura o 
   });
 });
 
-test("outro erro propaga, e os hooks não geram Evidência", async () => {
+test("outro erro propaga", async () => {
   const hooks = new HooksDoCommit(() => Promise.reject(new Error("disco cheio")));
 
   await assert.rejects(hooks.executar(contexto), /disco cheio/);
-  await assert.rejects(hooks.coletar(), /não geram Evidência/);
 });

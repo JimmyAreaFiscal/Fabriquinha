@@ -11,7 +11,7 @@ import {
   type Falha,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
@@ -25,7 +25,7 @@ export interface EntradaDeTestes {
   aoTerminarAsLinguagens?: () => void;
 }
 
-export class VerificacaoDeTestes extends Verificacao {
+export class VerificacaoDeTestes extends VerificacaoComRegistro {
   readonly tipo = "testes";
   readonly #entrada: EntradaDeTestes;
 

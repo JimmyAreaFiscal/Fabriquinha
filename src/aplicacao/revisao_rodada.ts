@@ -14,7 +14,7 @@ import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
-import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
+import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
@@ -71,7 +71,10 @@ export async function prepararRevisaoRodada(
     previstosNaoTocados: previstos.filter((p) => !arquivos.some((a) => casa(a, p))),
   };
 
-  const fitness = await exigidaPelaEtapa("revisar_rodada", new VerificacaoDeFitness(projeto)).coletar({ worktree });
+  const { fitness: verificacaoDeFitness } = montarVerificacoesDaEtapa("revisar_rodada", {
+    fitness: () => new VerificacaoDeFitness(projeto),
+  });
+  const fitness = await verificacaoDeFitness.coletar({ worktree });
   const linhas = (fitness.dados.linhas as Record<string, unknown>[]).map((l) => ({
     ...l,
     log: `${String(l.nome)}.log`,

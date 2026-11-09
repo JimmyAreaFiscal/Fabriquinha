@@ -59,12 +59,18 @@ export function espacoDaRodada(
   };
 }
 
+/** A única busca do PR por rodada: o da rodada ou, com `rodada_id` indefinido, o final da demanda. */
+export const prDoEscopo = <T extends { rodada_id?: number }>(
+  pull_requests: readonly T[] | undefined,
+  rodada_id: number | undefined,
+): T | undefined => pull_requests?.find((pr) => pr.rodada_id === rodada_id);
+
 /** A leitura única do PR do Espaço: o da rodada ou, sem rodada, o final da demanda. */
 export function prDoEspaco(
   ag: Partial<Pick<AgregadoDemanda, "pull_requests">>,
   rodada_id: number | undefined,
 ): PullRequest | undefined {
-  const achado = ag.pull_requests?.find((pr) => pr.rodada_id === rodada_id);
+  const achado = prDoEscopo(ag.pull_requests, rodada_id);
   return achado && { numero: achado.numero, url: achado.url, head: achado.head, estado: achado.estado };
 }
 
