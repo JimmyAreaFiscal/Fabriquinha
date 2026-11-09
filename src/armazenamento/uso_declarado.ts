@@ -13,6 +13,8 @@ export interface UsoDeclarado {
 /**
  * Grava o Uso declarado, idempotente por (ferramenta, sessao): a mesma demanda informando de novo troca as linhas.
  * Devolve a demanda dona da sessão; se não for `uso.demanda_id`, a sessão já constava nela e nada foi gravado.
+ *
+ * @testes o comando `demanda uso` ainda não a chama; só o teste e o apoio da integração a exercitam
  */
 export function gravarUsoDeclarado(banco: DatabaseSync, uso: UsoDeclarado): { demandaDona: string } {
   banco

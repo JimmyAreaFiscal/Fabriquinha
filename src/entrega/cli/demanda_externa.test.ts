@@ -33,29 +33,10 @@ const arquivo = (nome: string, conteudo: string | object): string => {
 
 const CRITERIOS = { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] };
 const DESENHO = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "m" }] };
-const CUSTOS = {
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao: "ext",
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-};
 const HTML = "<!doctype html><p>x</p>";
 arquivo("desc.md", "descrição");
 arquivo("criterios.json", CRITERIOS);
 arquivo("desenho.json", DESENHO);
-arquivo("custos.json", CUSTOS);
 arquivo("desenho.html", HTML);
 
 const bancoDaRaiz = new Map<string | undefined, DatabaseSync>();
@@ -92,7 +73,7 @@ interface Visao {
   evidencias: { tipo: string; arquivos: { nome: string; sha256: string }[] }[];
 }
 interface Schema {
-  dados: { properties: { sessoes: unknown } };
+  dados: { properties: { criterios: unknown } };
   arquivos: { min: number; max?: number };
 }
 const ler = (s: Saida): unknown => {
@@ -126,7 +107,6 @@ const completar = async (env: NodeJS.ProcessEnv, id: string, pular = "") => {
   const evid = [
     ["criterios_aceite", "criterios.json"],
     ["desenho_solucao", "desenho.json", "--arquivo", "desenho.html"],
-    ["custos_realizados", "custos.json"],
   ].filter(([tipo]) => tipo !== pular);
   for (const [tipo, dados, ...resto] of evid) {
     json(await cli(env, ["demanda", "evidencia", id, String(tipo), "--dados", String(dados), ...resto]));
@@ -313,24 +293,6 @@ test("anexo: a classe vem dos bytes iniciais, não da extensão, e o limite da c
   falha(await cli(env, EVIDENCIA(id, "comportamento", comportamento, "grande.png")), 1, /grande\.png tem 5\.0 MiB/);
 });
 
-test("CA-11: custos depois do envio, sem custo informado", async () => {
-  const env = novaRaiz();
-  const id = await registrar(env);
-  await completar(env, id);
-  json(await cli(env, ["demanda", "enviar", id]));
-  const r = json(
-    await cli(env, ["demanda", "evidencia", id, "custos_realizados", "--dados", "-"], JSON.stringify(CUSTOS)),
-  );
-  assert.equal(r.evidencias.filter((e: { tipo: string }) => e.tipo === "custos_realizados").length, 1);
-  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
-  assert.ok(b);
-  const linha = b.prepare("SELECT dados FROM evidencia_demanda WHERE tipo = 'custos_realizados'").get();
-  assert.equal(
-    (JSON.parse(String(linha?.dados)) as { sessoes: { linhas: { custo: null }[] }[] }).sessoes[0]?.linhas[0]?.custo,
-    null,
-  );
-});
-
 test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
   const env = novaRaiz();
   const id = await registrar(env);
@@ -354,8 +316,8 @@ test("CA-2: o endereço inválido sai com a mensagem de Endereco.ler e o de roda
 
 test("CA-12: schema do tipo com as regras de arquivo", async () => {
   const env = novaRaiz(); // sem FABRIQUINHA_ROOT, o CLI abriria o banco real da Fabriquinha
-  const s = jsonSchema(await cli(env, ["demanda", "schema", "custos_realizados"]));
-  assert.ok(s.dados.properties.sessoes);
+  const s = jsonSchema(await cli(env, ["demanda", "schema", "criterios_aceite"]));
+  assert.ok(s.dados.properties.criterios);
   assert.equal(s.arquivos.max, 0);
   assert.ok(jsonSchema(await cli(env, ["demanda", "schema", "desenho_solucao"])).arquivos.min >= 1);
 });
@@ -368,7 +330,7 @@ test("CA-13: enviar sem desenho_solucao lista o que falta e não envia", async (
   assert.equal(json(await cli(env, ["demanda", "ver", id])).enviada, false);
 });
 
-test("CA-14 e CA-16: enviar com as três evidências e ver", async () => {
+test("CA-14 e CA-16: enviar com as duas evidências e ver", async () => {
   const env = novaRaiz();
   const id = await registrar(env);
   await completar(env, id);
@@ -376,11 +338,7 @@ test("CA-14 e CA-16: enviar com as três evidências e ver", async () => {
   assert.equal(e.enviada, true);
   assert.equal(e.estado, "gate_demanda");
   const v = json(await cli({ FABRIQUINHA_ROOT: env.FABRIQUINHA_ROOT }, ["demanda", "ver", id]));
-  assert.deepEqual(v.evidencias.map((x: { tipo: string }) => x.tipo).sort(), [
-    "criterios_aceite",
-    "custos_realizados",
-    "desenho_solucao",
-  ]);
+  assert.deepEqual(v.evidencias.map((x: { tipo: string }) => x.tipo).sort(), ["criterios_aceite", "desenho_solucao"]);
 });
 
 test("CA-15: outra sessão não envia", async () => {

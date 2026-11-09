@@ -12,7 +12,6 @@ import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } 
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { registrarSessoesExternas } from "../armazenamento/evidencia_demanda.ts";
 import { projetoExistente } from "../armazenamento/projetos.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencia/submeter.ts";
 import type { Origens } from "./evidencias/submissao.ts";
@@ -80,7 +79,7 @@ export const cancelar = (
 
 /**
  * CA-8 a CA-12 e CA-15: a submissão segue o caminho único de evidência (Avaliador, guarda dos anexos e gravação);
- * as sessões externas entram na mesma transação. O aviso é de sessão já contada. A recusa vira ErroDeRegra.
+ * a recusa vira ErroDeRegra. `avisos` segue na resposta do CLI externo e hoje vai sempre vazio.
  */
 export const submeterEvidencia = (
   banco: DatabaseSync,
@@ -93,10 +92,9 @@ export const submeterEvidencia = (
     const { tipo, dados, arquivos, rodada_id } = EntradaEvidencia.parse(entrada);
     const dono = rodada_id === undefined ? Endereco.daDemanda(id) : Endereco.daRodada(id, rodada_id);
     const submissao = { tipo, dono, produtor: autor, dados, anexos: arquivos };
-    const avisos = escrever(banco, () => {
+    escrever(banco, () => {
       const avaliacao = submeterEvidenciaAvaliada(banco, submissao, { origens });
       if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo, "corrija e submeta de novo");
-      return tipo === "custos_realizados" ? registrarSessoesExternas(banco, id).avisos : [];
     });
-    return { demanda: carregarDemanda(banco, id), avisos };
+    return { demanda: carregarDemanda(banco, id), avisos: [] };
   });

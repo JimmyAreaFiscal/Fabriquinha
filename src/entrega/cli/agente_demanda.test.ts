@@ -183,11 +183,11 @@ test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, 
   );
 });
 
-test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem veredito", async () => {
+test("demanda ver: evidência sem schema no tipo (mensagem_pr, plano) sai sem veredito", async () => {
   const { banco, env } = cenario();
   banco
     .prepare(
-      "INSERT INTO evidencia_demanda (demanda_id, ticket_id, tipo, dados, em) VALUES ('I-206', 3, 'custos_realizados', '{}', ?), ('I-206', 3, 'plano', '{}', ?)",
+      "INSERT INTO evidencia_demanda (demanda_id, ticket_id, tipo, dados, em) VALUES ('I-206', 3, 'mensagem_pr', '{}', ?), ('I-206', 3, 'plano', '{}', ?)",
     )
     .run(em, em);
   const lida = JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {

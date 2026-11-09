@@ -1,11 +1,9 @@
-// Anexos e sessões externas da evidência da demanda (D10): gravados na transação da evidência (`comDemanda`, via
+// Anexos da evidência da demanda (D10): gravados na transação da evidência (`comDemanda`, via
 // `aposGravar`), por cima do armazenamento por SHA-256 de `arquivos.ts`. Nada aqui toca o agregado.
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import type { LinhaDeUso } from "../nucleo/uso.ts";
 import { caminhoArquivo } from "./arquivos.ts";
-import { gravarUsoDeclarado, type UsoDeclarado } from "./uso_declarado.ts";
 
 /** Quem é dono da evidência da demanda: rodada e ticket ausentes valem para a própria demanda. */
 interface ChaveEvidencia {
@@ -91,55 +89,4 @@ export function lerAnexo(banco: DatabaseSync, chave: ChaveEvidencia, sha256: str
     bytes: Number(linha.bytes),
     conteudo: readFileSync(arquivo),
   };
-}
-
-/** A linha de `custos_realizados` (já validada pelo schema) como `LinhaDeUso`: `chamadas` a ferramenta externa não informa. */
-const linhaDeUsoDaLinhaExterna = (l: Record<string, unknown>): LinhaDeUso => ({
-  modelo: `${String(l.provedor)}/${String(l.modelo)}`,
-  tokens_entrada: Number(l.tokens_entrada),
-  tokens_saida: Number(l.tokens_saida),
-  tokens_cache_leitura: Number(l.tokens_cache_leitura),
-  tokens_cache_escrita: Number(l.tokens_cache_escrita),
-  custo: typeof l.custo === "number" ? l.custo : null,
-  chamadas: 0,
-});
-
-/**
- * Regrava o Uso declarado e as sessões externas da demanda a partir de todas as `custos_realizados` dela, de qualquer
- * dono (demanda ou rodada). A sessão que outra demanda já informou não muda de dona e vira aviso: não é contada de
- * novo. Não escreve em `processo_do_trabalho` nem em `uso_modelo_execucao`: custo externo não é execução interna.
- */
-export function registrarSessoesExternas(banco: DatabaseSync, demanda_id: string): { avisos: string[] } {
-  banco.prepare("DELETE FROM trabalho_nao_gerenciado WHERE demanda_id = ?").run(demanda_id);
-  banco.prepare("DELETE FROM uso_declarado WHERE demanda_id = ?").run(demanda_id);
-  const registros = banco
-    .prepare(
-      `SELECT json_extract(s.value, '$.ferramenta') AS ferramenta, json_extract(s.value, '$.sessao') AS sessao,
-              json_extract(s.value, '$.linhas') AS linhas
-       FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND json_type(e.dados, '$.sessoes') = 'array'
-       ORDER BY e.rowid, s.key`,
-    )
-    .all(demanda_id) as { ferramenta: string; sessao: string; linhas: string | null }[];
-  const usos = new Map<string, UsoDeclarado>();
-  for (const { ferramenta, sessao, linhas } of registros) {
-    const chave = `${ferramenta}\0${sessao}`;
-    const uso = usos.get(chave) ?? { ferramenta, sessao, demanda_id, linhas: [] };
-    const lidas: unknown = linhas === null ? [] : JSON.parse(linhas);
-    if (Array.isArray(lidas)) uso.linhas.push(...lidas.map(linhaDeUsoDaLinhaExterna));
-    usos.set(chave, uso);
-  }
-  const inserir = banco.prepare(
-    "INSERT INTO trabalho_nao_gerenciado (ferramenta, sessao, demanda_id) VALUES (?, ?, ?)",
-  );
-  const avisos: string[] = [];
-  for (const uso of usos.values()) {
-    const { demandaDona } = gravarUsoDeclarado(banco, uso);
-    if (demandaDona === demanda_id) inserir.run(uso.ferramenta, uso.sessao, demanda_id);
-    else
-      avisos.push(
-        `a sessão ${uso.sessao} de ${uso.ferramenta} já consta na demanda ${demandaDona} e não é contada de novo para ${demanda_id}`,
-      );
-  }
-  return { avisos };
 }

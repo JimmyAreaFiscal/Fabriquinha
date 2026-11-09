@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { retomarTrabalho, registrarUso } from "../src/nucleo/trabalho_agentico.ts";
-import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { produtividadeDaRodada } from "../src/aplicacao/evidencias/produtividade_rodada.ts";
 import { carregarDemanda } from "../src/armazenamento/demandas.ts";
@@ -24,7 +23,7 @@ import {
   despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { AUTOR, ciclo, criarCenario, demanda, gravarLimiteParalelismo, ORIGENS_DOS_ANEXOS } from "./apoio.ts";
+import { ciclo, criarCenario, declararUso, demanda, gravarLimiteParalelismo } from "./apoio.ts";
 
 interface Ref {
   demanda_id: string;
@@ -148,48 +147,8 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   ]);
 
   // Custo externo da demanda (IA que a registrou): uma sessão com custo conhecido e outra sem.
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      dados: {
-        sessoes: [
-          {
-            ferramenta: "claude",
-            sessao: "ext-1",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-                custo: 6.5,
-              },
-            ],
-          },
-          {
-            ferramenta: "claude",
-            sessao: "ext-2",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-              },
-            ],
-          },
-        ],
-      },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
-  );
+  declararUso(c, id, "ext-1", 6.5);
+  declararUso(c, id, "ext-2");
 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
   const vizinha = await demandaEmExecucao(c, [{ tickets: 1 }]);
@@ -228,27 +187,8 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     [0, 0],
   );
 
-  // Custo externo submetido numa rodada: o Uso declarado é da demanda, então soma no total externo e não aparece na rodada.
-  const linhaR2 = {
-    provedor: "x",
-    modelo: "m",
-    tokens_entrada: 1,
-    tokens_saida: 1,
-    tokens_cache_leitura: 0,
-    tokens_cache_escrita: 0,
-    custo: 7,
-  };
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      rodada_id: 2,
-      dados: { sessoes: [{ ferramenta: "claude", sessao: "ext-r2", linhas: [linhaR2] }] },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
-  );
+  // Uso declarado depois: é da demanda, então soma no total externo e não aparece na rodada.
+  declararUso(c, id, "ext-r2", 7);
   const comRodada = metricasDaDemanda(c.banco, id);
   assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
   assert.deepEqual(comRodada.rodadas[1].custo, m.rodadas[1]?.custo, "o externo não entra no custo interno");

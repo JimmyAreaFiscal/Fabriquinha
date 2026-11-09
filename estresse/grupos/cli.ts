@@ -181,18 +181,9 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
       rascunhos.push(registrar(banco, entrada, autor, { agora: em }).demanda.id);
     }
-    // `enviar` exige as três evidências de quem registra; o rascunho de cada chamada nasce com elas.
-    const linha = {
-      provedor: "a",
-      modelo: "m",
-      tokens_entrada: 1,
-      tokens_saida: 1,
-      tokens_cache_leitura: 0,
-      tokens_cache_escrita: 0,
-    };
-    for (const [i, id] of rascunhos.slice(2 * CHAMADAS).entries()) {
+    // `enviar` exige as duas evidências de quem registra; o rascunho de cada chamada nasce com elas.
+    for (const id of rascunhos.slice(2 * CHAMADAS)) {
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
-      const sessoes = [{ ferramenta: "estresse", sessao: `ext-${String(i)}`, linhas: [linha] }];
       const completa = [
         { tipo: "criterios_aceite", dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] } },
         {
@@ -200,7 +191,6 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
           dados: desenho,
           arquivos: [join(pasta, "desenho.html")],
         },
-        { tipo: "custos_realizados", dados: { sessoes } },
       ];
       for (const e of completa) submeterEvidencia(banco, id, e as never, autor, origens);
     }

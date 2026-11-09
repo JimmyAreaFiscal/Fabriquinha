@@ -5,7 +5,7 @@ import { z, ZodError } from "zod";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { schemaDoTipo, TipoEvidencia } from "./evidencia.ts";
-import { type EsquemaDeEvidencia, simbolosDe } from "./schemas.ts";
+import { CustosRealizados, type EsquemaDeEvidencia, simbolosDe } from "./schemas.ts";
 
 /** O que `fabriquinha evidencia schema <tipo>` publica: o JSON Schema de `dados` e as regras de arquivo. */
 const publicado = ({ dados, arquivos }: EsquemaDeEvidencia) => ({
@@ -676,11 +676,11 @@ const LINHA = {
   tokens_cache_escrita: 0,
 };
 const mensagens = (dados: unknown) => {
-  const r = schemaDoTipo("custos_realizados").dados.safeParse(dados);
+  const r = CustosRealizados.safeParse(dados);
   return r.success ? [] : r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
 };
 
-test("custos_realizados: CA-8, campo faltante nomeado com como corrigir", () => {
+test("CustosRealizados: CA-8, campo faltante nomeado com como corrigir", () => {
   for (const [campo, como] of [
     ["ferramenta", "ferramenta externa"],
     ["sessao", "id da sessão no harness"],
@@ -693,7 +693,7 @@ test("custos_realizados: CA-8, campo faltante nomeado com como corrigir", () => 
   assert.match(mensagens({ sessoes: [{ ferramenta: "c", sessao: "s", linhas: [] }] })[0] ?? "", /linhas é obrigatório/);
 });
 
-test("custos_realizados: CA-9, tokens negativos, ausentes ou fracionados nomeiam o campo", () => {
+test("CustosRealizados: CA-9, tokens negativos, ausentes ou fracionados nomeiam o campo", () => {
   const com = (linha: object) => mensagens({ sessoes: [{ ferramenta: "c", sessao: "s", linhas: [linha] }] });
   assert.match(com({ ...LINHA, tokens_entrada: -1 })[0] ?? "", /tokens_entrada não pode ser negativo/);
   assert.match(com({ ...LINHA, tokens_saida: 1.5 })[0] ?? "", /tokens_saida deve ser inteiro/);
@@ -701,15 +701,13 @@ test("custos_realizados: CA-9, tokens negativos, ausentes ou fracionados nomeiam
   assert.match(com({ ...LINHA, custo: -1 })[0] ?? "", /custo não pode ser negativo/);
 });
 
-test("custos_realizados: CA-10, custo ausente fica null e nunca 0; sessão repetida é rejeitada", () => {
-  const { dados } = schemaDoTipo("custos_realizados");
+test("CustosRealizados: CA-10, custo ausente fica null e nunca 0; sessão repetida é rejeitada", () => {
   const sessao = { ferramenta: "c", sessao: "s", linhas: [LINHA, { ...LINHA, custo: 0.5 }] };
-  const ok = dados.parse({ sessoes: [sessao] }) as { sessoes: { linhas: { custo: number | null }[] }[] };
+  const ok = CustosRealizados.parse({ sessoes: [sessao] }) as { sessoes: { linhas: { custo: number | null }[] }[] };
   assert.deepEqual(
     ok.sessoes[0]?.linhas.map((l) => l.custo),
     [null, 0.5],
   );
   assert.match(mensagens({ sessoes: [sessao, sessao] })[0] ?? "", /sessão repetida/);
-  assert.deepEqual(schemaDoTipo("custos_realizados").arquivos.max, 0);
-  assert.equal(Object.keys(jsonSchemaDe("custos_realizados").dados.properties ?? {}).join(), "sessoes");
+  assert.equal(Object.keys(z.toJSONSchema(CustosRealizados, { io: "input" }).properties ?? {}).join(), "sessoes");
 });

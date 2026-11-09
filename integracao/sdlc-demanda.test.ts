@@ -53,7 +53,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.
   assert.throws(
     () => gestao.enviar(c.banco, id, AUTOR, CTX),
-    (e: Error) => e.message.includes("desenho_solucao, custos_realizados"),
+    (e: Error) => e.message.includes("desenho_solucao"),
   );
   assert.equal(demanda(c, id).demanda.enviada, false);
   assert.equal(demanda(c, id).demanda.estado, "entender_e_desenhar");
@@ -65,7 +65,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(gestao.editar(c.banco, id, { titulo: "Corrigido" }, AUTOR).demanda.titulo, "Corrigido");
   assert.throws(() => gestao.enviar(c.banco, id, OUTRA_SESSAO, CTX), ErroDeEscopo);
 
-  // Completo: congela a definição e registra a origem (ferramenta e sessão) e a sessão externa dos custos.
+  // Completo: congela a definição e registra a origem (ferramenta e sessão).
   submeterObrigatorias(c, id);
   const enviada = gestao.enviar(c.banco, id, AUTOR, CTX).demanda;
   assert.equal(enviada.estado, "gate_demanda");
@@ -76,7 +76,6 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
     () => submeter("criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
   );
-  assert.equal(c.banco.prepare("SELECT count(*) AS n FROM trabalho_nao_gerenciado WHERE demanda_id = ?").get(id)?.n, 1);
   assert.equal(pi.prompts().length, 0);
 });
 
