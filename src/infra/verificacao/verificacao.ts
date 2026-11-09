@@ -130,9 +130,10 @@ export async function comAmbienteSemCredenciais<T>(
   }
 }
 
-export const linhaDoComando = (comando: string, r: Resultado) => ({
+export const linhaDoComando = (comando: string, r: Resultado, log: string) => ({
   comando,
   codigoSaida: r.codigo,
   estourou: r.estourou,
   duracaoMs: r.duracaoMs,
+  log,
 });

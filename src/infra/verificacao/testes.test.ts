@@ -47,6 +47,7 @@ test("CA-1: teste com saída 0 aprova, com o código de saída e o caminho", asy
   assert.equal(c?.codigoSaida, 0);
   assert.equal(c.caminho, "back");
   assert.equal(v.logs[0]?.nome, "teste-back.log");
+  assert.equal(c.log, v.logs[0].nome);
 });
 
 test("CA-2: saída diferente de 0 é reprovação técnica", async () => {
