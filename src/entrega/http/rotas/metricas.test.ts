@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { MetricasDemandaPeriodo, MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasMesDemanda, MetricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -75,7 +75,36 @@ test("GET /api/metricas: padrão nos 11 meses anteriores mais o corrente, de tod
   );
   assert.equal(meses.at(-1)?.projeto, null);
   assert.equal(meses.at(-1)?.demandas.registradas, 2);
-  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, incompleto: false });
+  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, trabalhosSemCusto: 0 });
+  assert.equal(meses.at(-1)?.total.textoDoCusto, "US$ 4,00");
+});
+
+test("GET /api/metricas e /api/metricas/demandas: o mesmo texto do custo, com ≥ e o aviso quando uma sessão não trouxe custo", async () => {
+  demandaComExecucao("I-1", "loja");
+  const agoraIso = new Date().toISOString();
+  banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('y-I-1', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('y-I-1', 'p', 'm', 3, 1, 0, 0, NULL);`);
+  const texto = "≥ US$ 2,00 (1 sessão sem custo)";
+  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasMesDemanda];
+  assert.equal(mesAtual.total.textoDoCusto, texto);
+  assert.deepEqual(mesAtual.total.modelos, [
+    {
+      modelo: "p/m",
+      tokens_entrada: 13,
+      tokens_saida: 2,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo: 2,
+      chamadas: 0,
+    },
+  ]);
+  assert.deepEqual(
+    mesAtual.niveis.map((n) => n.total.textoDoCusto),
+    mesAtual.niveis.map(() => texto),
+  );
+  const { demandas, total } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
+  assert.equal(demandas[0]?.textoDoCusto, texto);
+  assert.equal(total.textoDoCusto, texto);
 });
 
 test("GET /api/metricas: de um projeto, de `de` a `ate`; só `ate` leva `de` 11 meses antes", async () => {
@@ -100,17 +129,17 @@ test("GET /api/metricas: 422 para mês inválido, `de` depois de `ate` ou mais d
 });
 
 test("GET /api/metricas/demandas: as demandas com execução no período", async () => {
-  assert.deepEqual(await chamar("/api/metricas/demandas"), []);
+  assert.deepEqual(((await chamar("/api/metricas/demandas")) as MetricasPorDemanda).demandas, []);
   demandaComExecucao("I-1", "loja");
   demandaComExecucao("I-2", "site");
-  const todas = (await chamar("/api/metricas/demandas")) as MetricasDemandaPeriodo[];
+  const { demandas: todas } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
   assert.deepEqual(
     todas.map((d) => d.demanda),
     ["I-1", "I-2"],
   );
-  const site = (await chamar(
+  const { demandas: site } = (await chamar(
     `/api/metricas/demandas?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
-  )) as MetricasDemandaPeriodo[];
+  )) as MetricasPorDemanda;
   assert.deepEqual(
     site.map((d) => [d.demanda, d.custo.conhecido]),
     [["I-2", 2]],
@@ -125,27 +154,37 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
     execucoes: 1,
     falhas: 0,
     duracaoMs: 0,
-    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0 },
-    custo: { conhecido: 2, incompleto: false },
+    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0, total: 11 },
+    custo: { conhecido: 2, trabalhosSemCusto: 0 },
+    textoDoCusto: "US$ 2,00",
   };
-  assert.deepEqual(corpo, [
-    {
-      demanda: "I-1",
-      projeto: "loja",
-      titulo: "Título",
-      estado: "em_execucao",
-      reprovacoes: 0,
-      nota: null,
+  assert.deepEqual(corpo, {
+    total: {
       ...execucaoDeUmaDemanda,
+      execucoes: 2,
+      tokens: { entrada: 20, saida: 2, cacheLeitura: 0, cacheEscrita: 0, total: 22 },
+      custo: { conhecido: 4, trabalhosSemCusto: 0 },
+      textoDoCusto: "US$ 4,00",
     },
-    {
-      demanda: "I-2",
-      projeto: "site",
-      titulo: "Título",
-      estado: "em_execucao",
-      reprovacoes: 0,
-      nota: null,
-      ...execucaoDeUmaDemanda,
-    },
-  ]);
+    demandas: [
+      {
+        demanda: "I-1",
+        projeto: "loja",
+        titulo: "Título",
+        estado: "em_execucao",
+        reprovacoes: 0,
+        nota: null,
+        ...execucaoDeUmaDemanda,
+      },
+      {
+        demanda: "I-2",
+        projeto: "site",
+        titulo: "Título",
+        estado: "em_execucao",
+        reprovacoes: 0,
+        nota: null,
+        ...execucaoDeUmaDemanda,
+      },
+    ],
+  });
 });

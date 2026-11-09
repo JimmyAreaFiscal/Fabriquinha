@@ -127,6 +127,27 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   expect(erros).toEqual([]);
 });
 
+test("a frase do mês mostra o custo com ≥ e o aviso quando uma sessão não trouxe custo", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semearDemandas(fabriquinha.raiz);
+  const agora = new Date().toISOString();
+  const banco = abrir(fabriquinha.raiz);
+  banco.exec(`
+    INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-206', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-206', 2, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xc', 's-com-custo', '${agora}', '${agora}', 0), ('xs', 's-sem-custo', '${agora}', '${agora}', 0);
+    INSERT INTO uso_modelo_execucao VALUES
+      ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2),
+      ('xs', 'anthropic', 'claude-sonnet-5-5', 2000, 500, 0, 0, NULL);
+  `);
+  banco.close();
+  await pagina.goto(`${fabriquinha.base}/home`);
+  await expect(pagina.locator(".frase-mes b").first()).toHaveText("≥ US$ 4,20 (1 sessão sem custo)");
+});
+
 test("sem nada em andamento, o Início diz que nada aguarda nem roda e mostra as colunas vazias", async ({ pagina }) => {
   await expect(pagina.getByText("Nada aguarda você agora.")).toBeVisible();
   await expect(pagina.getByText("Nenhuma sessão rodando.")).toBeVisible();

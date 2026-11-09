@@ -12,15 +12,18 @@ import {
   type UsoNoPeriodo,
   usoNoPeriodo,
 } from "../armazenamento/metricas_demanda.ts";
-import { type Custo, agruparModelos, somarCustos, type UsoDoModelo } from "./demanda.ts";
+import { linhaDeUsoDoBanco } from "./demanda.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { intervalo, Periodo } from "../nucleo/periodo.ts";
 
 export interface Soma {
   execucoes: number;
   falhas: number;
   duracaoMs: number;
-  tokens: { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number };
-  custo: Custo;
+  tokens: { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number; total: number };
+  custo: ReturnType<Uso["custo"]>;
+  /** O custo como todas as telas o mostram (`textoDoCusto`). */
+  textoDoCusto: string;
 }
 
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
@@ -40,7 +43,7 @@ export interface MetricasMesDemanda {
   mes: string;
   /** `null` = todos os projetos. */
   projeto: string | null;
-  total: Soma & { modelos: UsoDoModelo[] };
+  total: Soma & { modelos: LinhaDeUso[] };
   /** A soma dos grupos de cada nível, que é sempre o `total`. */
   niveis: { nivel: Nivel; grupos: number; total: Soma }[];
   demandas: { registradas: number; concluidas: number };
@@ -61,49 +64,45 @@ export interface MetricasDemandaPeriodo extends Soma {
   nota: number | null;
 }
 
-const soma = (ns: number[]) => ns.reduce((s, n) => s + n, 0);
-
-function juntar(somas: Soma[]): Soma {
-  const t = (campo: keyof Soma["tokens"]) => soma(somas.map((s) => s.tokens[campo]));
-  return {
-    execucoes: soma(somas.map((s) => s.execucoes)),
-    falhas: soma(somas.map((s) => s.falhas)),
-    duracaoMs: soma(somas.map((s) => s.duracaoMs)),
-    tokens: {
-      entrada: t("entrada"),
-      saida: t("saida"),
-      cacheLeitura: t("cacheLeitura"),
-      cacheEscrita: t("cacheEscrita"),
-    },
-    custo: { conhecido: soma(somas.map((s) => s.custo.conhecido)), incompleto: somas.some((s) => s.custo.incompleto) },
-  };
+/** As demandas do período e o Uso somado de todas, que é o que o rodapé da tabela mostra. */
+export interface MetricasPorDemanda {
+  demandas: MetricasDemandaPeriodo[];
+  total: Soma;
 }
 
-/** O uso das execuções, sem repetir nenhuma: cada linha de `uso_modelo_execucao` pertence a uma só execução. */
-const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>) =>
-  execs.flatMap((e) => uso.get(e.execucao) ?? []);
+const soma = (ns: number[]) => ns.reduce((s, n) => s + n, 0);
 
-function somar(execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>): Soma {
-  const u = usoDe(execs, uso);
-  const t = (campo: keyof Omit<UsoNoPeriodo, "execucao" | "provedor" | "modelo" | "custo">) =>
-    soma(u.map((x) => x[campo]));
+/** O Uso das execuções, cada uma um Trabalho: cada linha de `uso_modelo_execucao` pertence a uma só execução. */
+const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>): Uso =>
+  execs
+    .map((e) => Uso.de((uso.get(e.execucao) ?? []).map(linhaDeUsoDoBanco), 1))
+    .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
+
+function resumir(execs: ExecucaoNoPeriodo[], doUso: Uso): Soma {
+  const tokens = (campo: Exclude<keyof LinhaDeUso, "modelo" | "custo" | "chamadas">) =>
+    doUso.porModelo().reduce((n, linha) => n + linha[campo], 0);
+  const [entrada, saida, cacheLeitura, cacheEscrita] = [
+    tokens("tokens_entrada"),
+    tokens("tokens_saida"),
+    tokens("tokens_cache_leitura"),
+    tokens("tokens_cache_escrita"),
+  ];
   return {
     execucoes: execs.length,
     falhas: execs.filter((e) => e.falha).length,
     duracaoMs: soma(execs.map((e) => e.duracaoMs)),
-    tokens: {
-      entrada: t("entrada"),
-      saida: t("saida"),
-      cacheLeitura: t("cacheLeitura"),
-      cacheEscrita: t("cacheEscrita"),
-    },
-    custo: somarCustos(u.map((x) => x.custo)),
+    tokens: { entrada, saida, cacheLeitura, cacheEscrita, total: entrada + saida + cacheLeitura + cacheEscrita },
+    custo: doUso.custo(),
+    textoDoCusto: textoDoCusto(doUso),
   };
 }
 
+const somar = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>): Soma => resumir(execs, usoDe(execs, uso));
+
 const porNivel = (execs: ExecucaoNoPeriodo[], nivel: Nivel, uso: Map<string, UsoNoPeriodo[]>) => {
-  const grupos = [...Map.groupBy(execs, CHAVE_DO_NIVEL[nivel]).values()].map((g) => somar(g, uso));
-  return { nivel, grupos: grupos.length, total: juntar(grupos) };
+  const grupos = [...Map.groupBy(execs, CHAVE_DO_NIVEL[nivel]).values()];
+  const usoDosGrupos = grupos.map((g) => usoDe(g, uso)).reduce((total, g) => total.somar(g), Uso.vazio());
+  return { nivel, grupos: grupos.length, total: resumir(grupos.flat(), usoDosGrupos) };
 };
 
 /** Consumo e volume de trabalho de cada mês de `de` a `ate`, de um projeto ou de todos. */
@@ -128,10 +127,11 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
     const notas = mergeados.flatMap((d) => (d.nota === null ? [] : [d.nota]));
     const prsDoMes = prs.get(mes) ?? [];
     const r = retrabalho.get(mes) ?? [];
+    const usoDoMes = usoDe(execs, uso);
     return {
       mes,
       projeto,
-      total: { ...somar(execs, uso), modelos: agruparModelos(usoDe(execs, uso)) },
+      total: { ...resumir(execs, usoDoMes), modelos: usoDoMes.porModelo() },
       niveis: NIVEIS.map((nivel) => porNivel(execs, nivel, uso)),
       demandas: { registradas: n("demandasRegistradas"), concluidas: n("demandasConcluidas") },
       tickets: { criados: n("ticketsCriados"), concluidos: n("ticketsConcluidos") },
@@ -160,12 +160,13 @@ const mesesEntre = (de: string, ate: string): number => {
 };
 
 /** Uma linha por demanda com pelo menos uma execução iniciada no período; `estado` é a atual e o resto só conta o período. */
-export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): MetricasDemandaPeriodo[] {
+export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): MetricasPorDemanda {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const recorte = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto };
   const uso = Map.groupBy(usoNoPeriodo(banco, recorte), (u) => u.execucao);
   const decisoes = Map.groupBy(decisoesNoPeriodo(banco, recorte), (d) => d.demanda);
-  return [...Map.groupBy(execucoesNoPeriodo(banco, recorte), (e) => e.demanda).values()]
+  const execucoes = execucoesNoPeriodo(banco, recorte);
+  const demandas = [...Map.groupBy(execucoes, (e) => e.demanda).values()]
     .map((execs) => {
       const [{ demanda, projeto: p, titulo, estado }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
       const ds = decisoes.get(demanda) ?? [];
@@ -183,4 +184,5 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
       };
     })
     .toSorted((a, b) => a.demanda.localeCompare(b.demanda, "pt-BR", { numeric: true }));
+  return { demandas, total: somar(execucoes, uso) };
 }

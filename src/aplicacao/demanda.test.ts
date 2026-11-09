@@ -83,22 +83,38 @@ test("CA-1 e CA-18: tokens por modelo na demanda e por etapa, com o custo das ex
   execucao(b, 4, "e3", 0, [["m2", 5, 6, 7, 8, 2]]);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(m.total.modelos, [
-    { provedor: "anthropic", modelo: "m1", entrada: 11, saida: 22, cacheLeitura: 33, cacheEscrita: 44, custo: 1.5 },
-    { provedor: "anthropic", modelo: "m2", entrada: 5, saida: 6, cacheLeitura: 7, cacheEscrita: 8, custo: 2 },
+    {
+      modelo: "anthropic/m1",
+      tokens_entrada: 11,
+      tokens_saida: 22,
+      tokens_cache_leitura: 33,
+      tokens_cache_escrita: 44,
+      custo: 1.5,
+      chamadas: 0,
+    },
+    {
+      modelo: "anthropic/m2",
+      tokens_entrada: 5,
+      tokens_saida: 6,
+      tokens_cache_leitura: 7,
+      tokens_cache_escrita: 8,
+      custo: 2,
+      chamadas: 0,
+    },
   ]);
   const implementar = m.total.etapas.implementar;
   assert.ok(implementar);
-  assert.deepEqual(implementar.custo, { conhecido: 3.5, incompleto: false });
+  assert.deepEqual(implementar.custo, { conhecido: 3.5, trabalhosSemCusto: 0 });
   assert.deepEqual(
-    implementar.modelos.map((x) => [x.modelo, x.entrada]),
+    implementar.modelos.map((x) => [x.modelo, x.tokens_entrada]),
     [
-      ["m1", 11],
-      ["m2", 5],
+      ["anthropic/m1", 11],
+      ["anthropic/m2", 5],
     ],
   );
   assert.deepEqual(
     m.rodadas[1]?.modelos.map((x) => x.modelo),
-    ["m2"],
+    ["anthropic/m2"],
   );
 });
 
@@ -143,8 +159,8 @@ test("CA-3: rodadas mais o ticket sem rodada somam o total", () => {
       m.rodadas.reduce((s, r) => s + r[campo], m.semRodada[campo]),
       m.total[campo],
     );
-  assert.equal(m.semRodada.modelos[0]?.entrada, 1);
-  assert.equal(m.total.modelos[0]?.entrada, 7);
+  assert.equal(m.semRodada.modelos[0]?.tokens_entrada, 1);
+  assert.equal(m.total.modelos[0]?.tokens_entrada, 7);
   assert.equal(m.total.custo.conhecido, 7);
 });
 
@@ -153,7 +169,7 @@ test("CA-4: execução de sessão retomada aparece uma vez", () => {
   execucao(b, 2, "e1", 1, [["m1", 1, 1, 1, 1, 1]]);
   execucao(b, 2, "e2", 0, [["m1", 1, 1, 1, 1, 1]]); // mesma sessão s2, retomada
   assert.equal(metricasDaDemanda(b, "I-1").total.execucoes, 2);
-  assert.equal(metricasDaDemanda(b, "I-1").total.modelos[0]?.entrada, 2);
+  assert.equal(metricasDaDemanda(b, "I-1").total.modelos[0]?.tokens_entrada, 2);
 });
 
 test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os informados", () => {
@@ -161,7 +177,7 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
   execucao(b, 2, "e1", 0, [["m1", 1, 1, 1, 1, null]]);
   execucao(b, 2, "e2", 0, [["m2", 1, 1, 1, 1, 2.5]]);
   const { total } = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(total.custo, { conhecido: 2.5, incompleto: true });
+  assert.deepEqual(total.custo, { conhecido: 2.5, trabalhosSemCusto: 1 });
   assert.deepEqual(
     total.modelos.map((x) => x.custo),
     [null, 2.5],
@@ -169,9 +185,12 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
   execucao(b, 4, "e3", 0, [["m1", 1, 1, 1, 1, 1]]);
   b.exec("UPDATE uso_modelo_execucao SET custo = 1.5 WHERE custo IS NULL");
   const completo = metricasDaDemanda(b, "I-1").total;
-  assert.deepEqual(completo.custo, { conhecido: 5, incompleto: false });
+  assert.deepEqual(completo.custo, { conhecido: 5, trabalhosSemCusto: 0 });
   b.exec("UPDATE uso_modelo_execucao SET custo = NULL WHERE execucao_id = 'e3'");
-  assert.equal(metricasDaDemanda(b, "I-1").total.modelos[0]?.custo, null);
+  // O custo desconhecido some diante do conhecido: o modelo vira piso e o Trabalho sem custo é avisado.
+  const parcial = metricasDaDemanda(b, "I-1").total;
+  assert.equal(parcial.modelos[0]?.custo, 1.5);
+  assert.deepEqual(parcial.custo, { conhecido: 4, trabalhosSemCusto: 1 });
 });
 
 const gravarUso = (b: DatabaseSync, sessao: string, demanda: string, linhas: unknown[]) =>
@@ -196,8 +215,8 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   gravarUso(b, "a", "I-1", [linhaDeUso(3), linhaDeUso(null)]);
   gravarUso(b, "de-outra", "I-2", [linhaDeUso(100)]);
   const m = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(m.custoExterno, { conhecido: 3, incompleto: true, sessoes: 1 });
-  assert.deepEqual(m.total.custo, { conhecido: 1, incompleto: false });
+  assert.deepEqual(m.custoExterno, { conhecido: 3, trabalhosSemCusto: 1, sessoes: 1 });
+  assert.deepEqual(m.total.custo, { conhecido: 1, trabalhosSemCusto: 0 });
 });
 
 test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e das rodadas", () => {
@@ -205,15 +224,15 @@ test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e d
   gravarUso(b, "a", "I-1", [linhaDeUso(2)]);
   gravarUso(b, "b", "I-1", [linhaDeUso(7)]);
   const m = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(m.custoExterno, { conhecido: 9, incompleto: false, sessoes: 2 });
-  assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
-  assert.deepEqual(m.rodadas[0].custo, { conhecido: 0, incompleto: false });
+  assert.deepEqual(m.custoExterno, { conhecido: 9, trabalhosSemCusto: 0, sessoes: 2 });
+  assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 });
+  assert.deepEqual(m.rodadas[0].custo, { conhecido: 0, trabalhosSemCusto: 0 });
 });
 
 test("CA-7: sessão declarada sem linhas não conta como sessão externa", () => {
   const b = banco();
   gravarUso(b, "a", "I-1", []);
-  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
+  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 });
 });
 
 test("CA-14: média só das notas dos PRs de rodada aprovados com nota", () => {

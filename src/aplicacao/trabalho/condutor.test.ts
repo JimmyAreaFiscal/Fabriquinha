@@ -523,3 +523,12 @@ test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chego
     fechar();
   }
 });
+
+test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que falhou", async () => {
+  const pi =
+    (codigo: number): typeof executar =>
+    () =>
+      Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
+  assert.deepEqual(await condutor.consultar("pergunta", undefined, 1000, pi(0)), { saida: "resposta", uso: [] });
+  assert.equal(await condutor.consultar("pergunta", undefined, 1000, pi(1)), undefined);
+});

@@ -2,7 +2,6 @@
 // meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses lida das tabelas da demanda.
 import type { EtapaTicket, EstadoDemanda } from "../../../nucleo/primitivos.ts";
-import type { Custo } from "../../../aplicacao/demanda.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda, Nivel, Soma } from "../../../aplicacao/periodo_demanda.ts";
 import {
   caminhoDaDemanda,
@@ -58,12 +57,6 @@ const numero = (v: number, casas = 0): string =>
 /** Uma contagem, ou a média de contagens com uma casa. */
 const qtd = (v: number): string => numero(v, Number.isInteger(v) ? 0 : 1);
 
-const somaDosTokens = ({ tokens: t }: Pick<Soma, "tokens">): number =>
-  t.entrada + t.saida + t.cacheLeitura + t.cacheEscrita;
-
-/** Custo com `*` quando alguma execução não informou o custo: o conhecido é só uma parte, nunca zero. */
-const dinheiro = (c: Custo): string => `${custo(c.conhecido)}${c.incompleto ? " *" : ""}`;
-
 /** A média simples, sem os `null` (mês sem nota fica fora); `null` quando não sobra nada. */
 /** @testes função pura da tela, testada sem montar o DOM */
 export function media(valores: readonly (number | null)[]): number | null {
@@ -114,6 +107,8 @@ export interface DadosDasMetricas {
   /** Um por mês de `de` a `ate` (`GET /api/metricas`). */
   meses: readonly MetricasMes[];
   demandas: readonly MetricasDemandaPeriodo[];
+  /** O Uso somado das `demandas`, que o servidor entrega para o rodapé da tabela. */
+  totalDasDemandas: Soma;
   /** O mês corrente: o último que os filtros oferecem. */
   atual: string;
 }
@@ -150,11 +145,11 @@ const METRICAS: Record<Metrica, DefMetrica> = {
     valor: (m) => m.total.custo.conhecido,
     formato: custo,
     eixo: (v) => `$${v.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}`,
-    extra: (m) => (m.total.custo.incompleto ? " <small>* custo incompleto</small>" : ""),
+    extra: () => "",
   },
   tokens: {
     nome: "Tokens",
-    valor: (m) => somaDosTokens(m.total),
+    valor: (m) => m.total.tokens.total,
     formato: compacto,
     eixo: compacto,
     extra: () => "",
@@ -261,7 +256,7 @@ function regua(meses: readonly MetricasMes[], foco: string): string {
   const maximo = Math.max(...meses.map((m) => m.total.custo.conhecido));
   const botoes = meses.map((m) => {
     const altura = Math.max(3, maximo > 0 ? (m.total.custo.conhecido / maximo) * 42 : 0);
-    return `<button type="button" class="mes-btn${m.mes < foco ? " base" : ""}" data-mes="${m.mes}" aria-pressed="${String(m.mes === foco)}" title="${dinheiro(m.total.custo)}"><i style="height:${altura.toFixed(1)}px"></i><span>${rotuloMes(m.mes)}</span></button>`;
+    return `<button type="button" class="mes-btn${m.mes < foco ? " base" : ""}" data-mes="${m.mes}" aria-pressed="${String(m.mes === foco)}" title="${m.total.textoDoCusto}"><i style="height:${altura.toFixed(1)}px"></i><span>${rotuloMes(m.mes)}</span></button>`;
   });
   return `<div class="regua" role="group" aria-label="Mês em foco">${botoes.join("")}</div>`;
 }
@@ -277,7 +272,7 @@ function cards(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
     const fmt = (v: number | null) => (v === null ? "—" : def.formato(v));
     const comparacao = anteriores.length === 0 ? "sem meses anteriores" : `média ${fmt(med)}`;
     return `<button type="button" class="kpi" data-metrica="${chave}" aria-pressed="${String(e.metrica === chave)}">
-      <span class="rotulo">${def.nome}</span><span class="kpi-valor">${fmt(valor)}${def.extra(atual)}</span>
+      <span class="rotulo">${def.nome}</span><span class="kpi-valor">${chave === "custo" ? atual.total.textoDoCusto : fmt(valor)}${def.extra(atual)}</span>
       <span class="kpi-media">${comparacao}${variacao(valor, med)}</span></button>`;
   };
   return `<div class="kpis">${(Object.keys(METRICAS) as Metrica[]).map(card).join("")}</div>`;
@@ -420,7 +415,7 @@ type NumerosDaEtapa = MetricasMes["etapas"][number];
 
 const numerosDaEtapa = (n: NumerosDaEtapa) => ({
   custo: n.custo.conhecido,
-  tokens: somaDosTokens(n),
+  tokens: n.tokens.total,
   execucoes: n.execucoes,
   falhas: n.falhas,
   reprovacoes: n.reprovacoes,
@@ -434,18 +429,17 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
     const a = numerosDaEtapa(n);
     const ms = anteriores.flatMap((m) => m.etapas.filter((x) => x.etapa === n.etapa)).map(numerosDaEtapa);
     const med = (campo: keyof typeof a) => media(ms.map((x) => x[campo]));
-    return { etapa: n.etapa, incompleto: n.custo.incompleto, a, med };
+    return { etapa: n.etapa, textoDoCusto: n.textoDoCusto, a, med };
   });
   const maximo = Math.max(...linhas.flatMap((l) => [l.a.custo, l.med("custo") ?? 0])) || 1;
   const mm = (v: number | null, f: (x: number) => string) => (v === null ? "—" : f(v));
   const um = (x: number) => numero(x, 1);
   const rotulo = rotuloMes(e.foco);
-  const marca = (incompleto: boolean) => (incompleto ? " *" : "");
-  const corpo = linhas.map(({ etapa, incompleto, a, med }) => {
+  const corpo = linhas.map(({ etapa, textoDoCusto, a, med }) => {
     const mc = med("custo");
     return `<tr><td>${NOME_DA_ETAPA[etapa]}</td>
       <td><div class="barras-cel"><i style="width:${((a.custo / maximo) * 100).toFixed(1)}%;background:var(--foco)"></i><i style="width:${(((mc ?? 0) / maximo) * 100).toFixed(1)}%;background:var(--base)"></i></div></td>
-      <td class="num">${custo(a.custo)}${marca(incompleto)}</td><td class="num muted">${mm(mc, custo)}</td><td class="num">${variacao(a.custo, mc)}</td>
+      <td class="num">${textoDoCusto}</td><td class="num muted">${mm(mc, custo)}</td><td class="num">${variacao(a.custo, mc)}</td>
       <td class="num sep">${compacto(a.tokens)} <span class="muted">/ ${mm(med("tokens"), compacto)}</span></td>
       <td class="num">${qtd(a.execucoes)} <span class="muted">/ ${mm(med("execucoes"), um)}</span></td>
       <td class="num">${qtd(a.falhas)} <span class="muted">/ ${mm(med("falhas"), um)}</span></td>
@@ -478,11 +472,11 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
     execAnteriores,
   );
   const rodape = `<tr><td>Total</td><td></td>
-      <td class="num">${custo(tc.atual)}${marca(atual.total.custo.incompleto)}</td><td class="num muted">${mm(tc.med, custo)}</td><td class="num">${variacao(tc.atual, tc.med)}</td>
-      <td class="num sep">${compacto(total("tokens").atual)} <span class="muted">/ ${mm(total("tokens").med, compacto)}</span></td>
+      <td class="num">${atual.total.textoDoCusto}</td><td class="num muted">${mm(tc.med, custo)}</td><td class="num">${variacao(atual.total.custo.conhecido, tc.med)}</td>
+      <td class="num sep">${compacto(atual.total.tokens.total)} <span class="muted">/ ${mm(total("tokens").med, compacto)}</span></td>
       ${par("execucoes")}${par("falhas")}${par("reprovacoes")}
       <td class="num">${mm(totalDuracao, duracao)} <span class="muted">/ ${mm(mediaDuracao, duracao)}</span></td></tr>`;
-  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo} × média</h3><span class="sub">${rotulo} / média dos meses anteriores · * há execução sem custo informado</span>
+  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo} × média</h3><span class="sub">${rotulo} / média dos meses anteriores</span>
     <div class="legenda"><span><i style="background:var(--foco)"></i>${rotulo}</span><span><i style="background:var(--base)"></i>média</span></div></div>
     <div class="rola"><table class="tabela"><thead><tr><th>Etapa</th><th>Custo</th><th class="num">${rotulo}</th><th class="num">média</th><th class="num">Δ</th><th class="num sep">Tokens</th><th class="num">Execuções</th><th class="num">Falhas</th><th class="num">Reprovações</th><th class="num">Duração média</th></tr></thead>
     <tbody>${corpo.join("")}</tbody><tfoot>${rodape}</tfoot></table></div></section>`;
@@ -504,33 +498,34 @@ function porNivel(m: MetricasMes): string {
   const rotulo = rotuloMes(m.mes);
   const linhas = m.niveis.map(
     (n) => `<tr><td>${NOME_DO_NIVEL[n.nivel]}</td><td class="num">${qtd(n.grupos)}</td>
-      <td class="num">${qtd(n.total.execucoes)}</td><td class="num">${compacto(somaDosTokens(n.total))}</td><td class="num">${dinheiro(n.total.custo)}</td></tr>`,
+      <td class="num">${qtd(n.total.execucoes)}</td><td class="num">${compacto(n.total.tokens.total)}</td><td class="num">${n.total.textoDoCusto}</td></tr>`,
   );
   const r = m.retrabalho;
   return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">execução → sessão → ticket → rodada → demanda → projeto: a soma de cada nível é o total do mês</span></div>
     <div class="rola"><table class="tabela"><thead><tr><th>Nível</th><th class="num">Grupos</th><th class="num">Execuções</th><th class="num">Tokens</th><th class="num">Custo</th></tr></thead>
     <tbody>${linhas.join("")}</tbody></table></div>
-    <p class="muted">Retrabalho: ${qtd(r.alteradas)} de ${qtd(r.adicionadas)} linhas escritas no mês foram alteradas depois (${qtd(r.porHumanos)} por humanos). * há execução sem custo informado.</p></section>`;
+    <p class="muted">Retrabalho: ${qtd(r.alteradas)} de ${qtd(r.adicionadas)} linhas escritas no mês foram alteradas depois (${qtd(r.porHumanos)} por humanos).</p></section>`;
 }
 
 // ——— por modelo ———
 
 function porModelo(m: MetricasMes): string {
   const rotulo = rotuloMes(m.mes);
-  const total = (x: MetricasMes["total"]["modelos"][number]) => x.entrada + x.saida + x.cacheLeitura + x.cacheEscrita;
+  const total = (x: MetricasMes["total"]["modelos"][number]) =>
+    x.tokens_entrada + x.tokens_saida + x.tokens_cache_leitura + x.tokens_cache_escrita;
   const modelos = m.total.modelos.toSorted((a, b) => (b.custo ?? -1) - (a.custo ?? -1) || total(b) - total(a));
   const maximo = Math.max(...modelos.map(total)) || 1;
   const itens = modelos.map((x) => {
     const partes = [
-      ["cache", x.cacheLeitura + x.cacheEscrita, "var(--serie-3)"],
-      ["entrada", x.entrada, "var(--serie-1)"],
-      ["saída", x.saida, "var(--serie-2)"],
+      ["cache", x.tokens_cache_leitura + x.tokens_cache_escrita, "var(--serie-3)"],
+      ["entrada", x.tokens_entrada, "var(--serie-1)"],
+      ["saída", x.tokens_saida, "var(--serie-2)"],
     ] as const;
     const trilha = partes
       .filter(([, v]) => v > 0)
       .map(([nome, v, cor]) => `<i style="flex:${String(v)};background:${cor}" title="${nome} ${compacto(v)}"></i>`)
       .join("");
-    return `<div class="uso-modelo"><span class="nome">${escapar(x.modelo)}<small>${escapar(x.provedor)}</small></span><span class="vals"><b>${x.custo === null ? "custo desconhecido" : custo(x.custo)}</b><small>${compacto(total(x))}</small></span>
+    return `<div class="uso-modelo"><span class="nome">${escapar(x.modelo)}</span><span class="vals"><b>${x.custo === null ? "custo desconhecido" : custo(x.custo)}</b><small>${compacto(total(x))}</small></span>
       <div class="trilha" style="width:${((total(x) / maximo) * 100).toFixed(1)}%">${trilha}</div></div>`;
   });
   return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">tokens por tipo e custo como o pi calculou</span></div>
@@ -558,7 +553,7 @@ function valorDaColuna(d: MetricasDemandaPeriodo, c: Coluna): string | number | 
     case "custo":
       return d.custo.conhecido;
     case "tokens":
-      return somaDosTokens(d);
+      return d.tokens.total;
     case "duracao":
       return d.duracaoMs;
     case "nota":
@@ -589,7 +584,10 @@ function ordenar(demandas: readonly MetricasDemandaPeriodo[], [coluna, direcao]:
   });
 }
 
-function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: EstadoDasMetricas): string {
+function tabelaDeDemandas(
+  { demandas, totalDasDemandas }: Pick<DadosDasMetricas, "demandas" | "totalDasDemandas">,
+  e: EstadoDasMetricas,
+): string {
   const todos = e.projeto === "";
   const [coluna, direcao] = e.ordem;
   const aria = direcao < 0 ? "descending" : "ascending";
@@ -602,28 +600,24 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
       <td>${escapar(d.titulo)}</td>
       ${todos ? `<td class="muted">${escapar(d.projeto)}</td>` : ""}
       <td>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado as EstadoDemanda])}</td>
-      <td class="num">${dinheiro(d.custo)}</td><td class="num">${compacto(somaDosTokens(d))}</td>
+      <td class="num">${d.textoDoCusto}</td><td class="num">${compacto(d.tokens.total)}</td>
       <td class="num">${qtd(d.execucoes)}</td><td class="num">${qtd(d.falhas)}</td><td class="num">${qtd(d.reprovacoes)}</td>
       <td class="num">${duracao(d.duracaoMs)}</td><td class="num">${d.nota === null ? "—" : numero(d.nota, 1)}</td></tr>`,
   );
   const soma = (f: (d: MetricasDemandaPeriodo) => number) => demandas.reduce((t, d) => t + f(d), 0);
-  const custoTotal = {
-    conhecido: soma((d) => d.custo.conhecido),
-    incompleto: demandas.some((d) => d.custo.incompleto),
-  };
   return `<div class="rola"><table class="tabela tabela-demandas"><thead><tr>${th("demanda", "Demanda", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("estado", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
     <tbody>${linhas.join("")}</tbody>
-    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(demandas.length, "demanda", "demandas")}</td><td class="num">${dinheiro(custoTotal)}</td><td class="num">${compacto(soma((d) => somaDosTokens(d)))}</td><td class="num">${qtd(soma((d) => d.execucoes))}</td><td class="num">${qtd(soma((d) => d.falhas))}</td><td class="num">${qtd(soma((d) => d.reprovacoes))}</td><td class="num">${duracao(soma((d) => d.duracaoMs))}</td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(demandas.length, "demanda", "demandas")}</td><td class="num">${totalDasDemandas.textoDoCusto}</td><td class="num">${compacto(totalDasDemandas.tokens.total)}</td><td class="num">${qtd(soma((d) => d.execucoes))}</td><td class="num">${qtd(soma((d) => d.falhas))}</td><td class="num">${qtd(soma((d) => d.reprovacoes))}</td><td class="num">${duracao(soma((d) => d.duracaoMs))}</td><td></td></tr></tfoot>
     </table></div>`;
 }
 
-function porDemanda(demandas: readonly MetricasDemandaPeriodo[], e: EstadoDasMetricas): string {
+function porDemanda(dados: Pick<DadosDasMetricas, "demandas" | "totalDasDemandas">, e: EstadoDasMetricas): string {
   const escopo = e.projeto === "" ? "todos os projetos" : escapar(e.projeto);
   const corpo =
-    demandas.length > 0
-      ? tabelaDeDemandas(demandas, e)
+    dados.demandas.length > 0
+      ? tabelaDeDemandas(dados, e)
       : '<p class="muted">Nenhuma demanda com execução no período.</p>';
-  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>Demandas com execução no período</h3><span class="sub">${rotuloMes(e.de)} a ${rotuloMes(e.ate)} · ${escopo} · clique no cabeçalho para ordenar · * há execução sem custo informado</span></div>
+  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>Demandas com execução no período</h3><span class="sub">${rotuloMes(e.de)} a ${rotuloMes(e.ate)} · ${escopo} · clique no cabeçalho para ordenar</span></div>
     ${corpo}</section>`;
 }
 
@@ -645,7 +639,7 @@ export function paginaDeMetricas(dados: DadosDasMetricas, e: EstadoDasMetricas):
   <div class="titulo-secao"><h2>Por modelo</h2></div>
   ${porModelo(atual)}
   <div class="titulo-secao"><h2>Por demanda</h2></div>
-  ${porDemanda(dados.demandas, e)}
+  ${porDemanda(dados, e)}
   <div class="dica" data-dica hidden></div>`;
 }
 
@@ -655,7 +649,7 @@ export function paginaDeMetricas(dados: DadosDasMetricas, e: EstadoDasMetricas):
 export function fraseDoMes(m: MetricasMes): string {
   const b = (v: number) => `<b>${qtd(v)}</b>`;
   const nome = extenso(m.mes);
-  return `<p class="frase-mes">${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${m.mes.slice(0, 4)}, todos os projetos: <b>${dinheiro(m.total.custo)}</b> · <b>${compacto(somaDosTokens(m.total))}</b> tokens · demandas ${b(m.demandas.registradas)} registradas, ${b(m.demandas.concluidas)} concluídas · tickets ${b(m.tickets.criados)} criados, ${b(m.tickets.concluidos)} concluídos · PRs ${b(m.prs.abertos)} abertos, ${b(m.prs.mergeados)} mergeados <a href="/metrics">Métricas →</a></p>`;
+  return `<p class="frase-mes">${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${m.mes.slice(0, 4)}, todos os projetos: <b>${m.total.textoDoCusto}</b> · <b>${compacto(m.total.tokens.total)}</b> tokens · demandas ${b(m.demandas.registradas)} registradas, ${b(m.demandas.concluidas)} concluídas · tickets ${b(m.tickets.criados)} criados, ${b(m.tickets.concluidos)} concluídos · PRs ${b(m.prs.abertos)} abertos, ${b(m.prs.mergeados)} mergeados <a href="/metrics">Métricas →</a></p>`;
 }
 
 /** Os 6 cards do Projeto (F7 §4.4): o mês corrente só do projeto. */
@@ -665,8 +659,8 @@ export function cardsDoMes(m: MetricasMes): string {
     `<div class="kpi superficie"><span class="rotulo">${rotulo}</span><span class="kpi-valor">${valor}</span><span class="kpi-sub">${sub}</span></div>`;
   const par = (a: number, b: number) => `${qtd(a)} <small class="muted">/ ${qtd(b)}</small>`;
   return `<div class="kpis-mes">
-    ${card(`Custo · ${extenso(m.mes)}`, dinheiro(m.total.custo), plural(m.total.execucoes, "execução", "execuções"))}
-    ${card("Tokens", compacto(somaDosTokens(m.total)), `${compacto(t.entrada)} entrada · ${compacto(t.saida)} saída · ${compacto(t.cacheLeitura + t.cacheEscrita)} cache`)}
+    ${card(`Custo · ${extenso(m.mes)}`, m.total.textoDoCusto, plural(m.total.execucoes, "execução", "execuções"))}
+    ${card("Tokens", compacto(t.total), `${compacto(t.entrada)} entrada · ${compacto(t.saida)} saída · ${compacto(t.cacheLeitura)} cache lido · ${compacto(t.cacheEscrita)} cache escrito`)}
     ${card("Demandas", par(m.demandas.registradas, m.demandas.concluidas), "registradas / concluídas")}
     ${card("Tickets", par(m.tickets.criados, m.tickets.concluidos), "criados / concluídos")}
     ${card("PRs", par(m.prs.abertos, m.prs.mergeados), "abertos / mergeados")}

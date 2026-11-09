@@ -86,7 +86,7 @@ test("a consulta do condutor, sem ferramentas, roda sem as credenciais de hosped
   for (const nome of credenciais) process.env[nome] = "segredo";
   process.env.FABRIQUINHA_PI = piQueImprimeOAmbiente;
   try {
-    const nomes = (await condutor.consultar("oi", undefined, 30_000))?.split("\n") ?? [];
+    const nomes = (await condutor.consultar("oi", undefined, 30_000))?.saida.split("\n") ?? [];
     assert.ok(nomes.includes("PATH"), "a consulta devolve o texto do pi");
     for (const nome of credenciais) assert.ok(!nomes.includes(nome), nome);
   } finally {

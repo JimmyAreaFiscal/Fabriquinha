@@ -114,6 +114,34 @@ test("Projeto com os 5 cards do mês", async ({ pagina, fabriquinha }) => {
   ]);
 });
 
+test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo texto no card, no nível e na demanda", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const banco = abrir(fabriquinha.raiz);
+  banco.exec(`
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
+    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
+      ('I-1', 1, 'implementar', 'aberto', '${em(M0)}'), ('I-1', 2, 'implementar', 'aberto', '${em(M0)}');
+    INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-1', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-1', 2, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xc', 's-com-custo', '${em(M0)}', '${em(M0)}', 0), ('xs', 's-sem-custo', '${em(M0)}', '${em(M0)}', 0);
+    INSERT INTO uso_modelo_execucao VALUES
+      ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2),
+      ('xs', 'anthropic', 'claude-sonnet-5-5', 2000, 500, 0, 0, NULL);
+  `);
+  banco.close();
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.goto(`${fabriquinha.base}/metrics`);
+  const texto = "≥ US$ 4,20 (1 sessão sem custo)";
+  await expect(pagina.locator('[data-metrica="custo"] .kpi-valor')).toHaveText(texto);
+  await expect(pagina.getByRole("row", { name: /^Sessão \d/ })).toContainText(texto);
+  await expect(pagina.getByRole("row", { name: /^I-1 / })).toContainText(texto);
+  await expect(pagina.getByText("custo incompleto")).toHaveCount(0);
+});
+
 /**
  * loja com números grandes no mês corrente: US$ 1.351,76 com uma execução sem custo, 24.929 de 289.424 linhas
  * alteradas e mais de mil execuções; o mês anterior tem custo, para os cards mostrarem a média e a variação.
@@ -152,7 +180,7 @@ test("cards do mês: cada legenda inteira ao lado do valor e nenhum card órfão
   await pagina.clock.setFixedTime(AGORA);
   await pagina.goto(`${fabriquinha.base}/metrics`);
   const cards = pagina.locator(".kpis .kpi");
-  await expect(cards.first()).toContainText("US$ 1.351,76 * custo incompleto");
+  await expect(cards.first()).toContainText("≥ US$ 1.351,76 (1 sessão sem custo)");
   await expect(cards.last()).toContainText("24.929 de 289.424 adicionadas");
 
   for (const largura of [1440, 375]) {
