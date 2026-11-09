@@ -116,6 +116,8 @@ export interface DadosDaPagina {
     terminal: boolean;
     arquivavel: boolean;
   };
+  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo. */
+  uso: { textoDoCusto: string };
   rodadas: {
     ref: string;
     titulo: string;
@@ -756,7 +758,7 @@ export function pagina(p: DadosDaPagina): string {
   ];
   return `<a class="link" href="/home">← Início</a>
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
-    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span><span class="tag">${escapar(d.tipo)}</span>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</div></div>
+    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span><span class="tag">${escapar(d.tipo)}</span>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}<span class="muted">Custo ${escapar(p.uso.textoDoCusto)}</span></div></div>
   ${trilhoDeEstados(d.estado)}
   <div class="dm-mesa">
     <aside class="dm-lateral" aria-label="Contexto da demanda">${lateral.join("")}</aside>

@@ -19,6 +19,7 @@ interface Evidencia {
 }
 interface Pagina {
   demanda: { tipo: string; descricao: string };
+  uso: { modelos: { modelo: string; tokens_entrada: number }[]; textoDoCusto: string };
   rodadas: { ref: string; pr?: { id: string; url: string }; ticket_atual_por_etapa: Record<string, string> }[];
   tickets: {
     ref: string;
@@ -153,6 +154,25 @@ test("a página traz o tipo e a descrição da demanda, que o Auditor lê na apr
   const { pedir } = await cenarioDemandas();
   const { demanda } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual([demanda.tipo, demanda.descricao], ["funcionalidade", "d"]);
+});
+
+test("a página traz o Uso da demanda já somado e o texto do custo, com ≥ quando uma sessão não trouxe custo", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const { uso: semUso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual([semUso.modelos, semUso.textoDoCusto], [[], "US$ 0,00"]);
+  const agoraIso = new Date().toISOString();
+  banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-uso', 'I-206', 1, 'autonomo', 'conv');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-uso', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
+  const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    uso.modelos.map((m) => [m.modelo, m.tokens_entrada]),
+    [
+      ["p/m", 10],
+      ["p/n", 5],
+    ],
+  );
+  assert.equal(uso.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
 });
 
 test("CA-6: a página traz cada ticket com o endereço público e a etapa", async () => {
