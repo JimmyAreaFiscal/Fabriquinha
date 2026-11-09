@@ -50,7 +50,7 @@ async function decidirGateDoPR(
 ): Promise<ResultadoDoGate> {
   const e = GATES.gate_pr.validarEntrada(entrada, ator);
   if (e.resultado === "aprovado") return { demanda: await aprovarPR(banco, endereco, e, ator), canceladas: [] };
-  return { ...(await reprovarPR(banco, endereco, e, ator, e.motivo)), canceladas: [] };
+  return { ...(await reprovarPR(banco, endereco, e, ator)), canceladas: [] };
 }
 
 /** A aprovação só passa com as evidências em ordem; a recusa desfaz tudo. O agente só decide o gate do próprio ticket. */

@@ -6,7 +6,7 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
-import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
 import { falhaDoErro } from "../nucleo/tentativa.ts";
@@ -19,11 +19,11 @@ import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerra
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
+import { ConducaoDePlanejar } from "./etapas/conducao_de_planejar.ts";
 import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
 import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
 import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
-import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { instanteAtual } from "./relogio.ts";
 import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
@@ -46,6 +46,24 @@ const rodadaDe = (t: TicketDemanda) => ({
   demanda_id: t.demanda_id,
   rodada_id: existe(t.rodada_id, `o ticket ${formatarTicketRef(t)} não é de uma rodada`, "use um ticket de rodada"),
 });
+
+const depsDaConducaoDe = (banco: DatabaseSync): DepsDaConducao => ({
+  banco,
+  relogio: instanteAtual,
+  condutor,
+  registro: anotar,
+});
+
+/** O ticket de planejamento mais recente da demanda, que a retomada conduz. */
+const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco =>
+  Endereco.doTicket(
+    demandaId,
+    existe(
+      ticketAtualDaEtapa(carregarDemanda(banco, demandaId), "planejar"),
+      `a demanda ${demandaId} não tem ticket de etapa planejar`,
+      "abra o ticket de planejamento",
+    ).ticket_id,
+  );
 
 /** Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket. */
 async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<unknown> {
@@ -76,7 +94,6 @@ async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: ()
 function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, deps: DepsDespacho): Promise<unknown> {
   const { demanda_id, ticket_id } = t;
   const limiteMin = c.timeoutMin;
-  if (t.etapa === "planejar") return iniciarOuRetomarPlanejamento(banco, demanda_id, limiteMin).fim;
   if (t.etapa === "encerrar_demanda") {
     const ctx = { agora: new Date().toISOString() };
     comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
@@ -84,8 +101,9 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
       conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
     );
   }
-  const depsDaConducao: DepsDaConducao = { banco, relogio: instanteAtual, condutor, registro: anotar };
+  const depsDaConducao = depsDaConducaoDe(banco);
   const endereco = Endereco.doTicket(demanda_id, ticket_id);
+  if (t.etapa === "planejar") return new ConducaoDePlanejar(depsDaConducao).conduzir(endereco);
   const conduzirImplementacao = (conducao: ConducaoDeImplementar) =>
     deps.conduzirImplementacao?.(banco, endereco) ?? conducao.conduzir(endereco);
   if (t.etapa === "implementar") {
@@ -133,9 +151,8 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
   const limite = limiteParalelismo(banco);
   const vagas = limite - ocupacaoDoLimite(banco);
   const retomados = retomadasDePlanejamento(banco).slice(0, Math.max(0, vagas));
-  const fins = retomados.flatMap((id) =>
-    disparar(banco, () => iniciarOuRetomarPlanejamento(banco, id, c.timeoutMin).fim),
-  );
+  const planejar = new ConducaoDePlanejar(depsDaConducaoDe(banco));
+  const fins = retomados.flatMap((id) => disparar(banco, () => planejar.conduzir(ticketDoPlanejamento(banco, id))));
   const escolhidos = selecionarTrabalhoGlobal(demandasParaDespacho(banco), {
     limite,
     vagasOcupadas: ocupacaoDoLimite(banco),

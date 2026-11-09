@@ -8,15 +8,16 @@ import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
-import { type Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
+import { Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { configuracao } from "../../armazenamento/servico.ts";
-import { logDaOperacao } from "../../infra/registro.ts";
+import { anotar, logDaOperacao } from "../../infra/registro.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { instanteAtual } from "../relogio.ts";
-import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
+import { ConducaoDeAjustarResultado } from "../etapas/conducao_de_ajustar_resultado.ts";
+import { guardarMarcoDaSessao, sessaoDaRodada } from "../sessao_ajustes.ts";
+import { condutor } from "../trabalho/condutor.ts";
 
 const gate = GATES.gate_pr;
 
@@ -99,13 +100,18 @@ export async function reprovarPR(
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
-  motivo: string,
 ): Promise<{ demanda: AgregadoDemanda; sessao: string }> {
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
   gate.ensaiar(ag, endereco, entrada, ator, instanteAtual());
   await guardarMarcoDaSessao(banco, ref, ag);
   const demanda = comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, instanteAtual()));
-  const { id } = abrirSessaoDeAjustes(banco, ref, demanda, motivo, { limiteMin: configuracao(banco).timeoutMin });
-  return { demanda, sessao: id };
+  const conducao = new ConducaoDeAjustarResultado({ banco, relogio: instanteAtual, condutor, registro: anotar });
+  const sessao = sessaoDaRodada(demanda, ref);
+  const execucao = existe(
+    await conducao.iniciar(Endereco.doTicket(ref.demanda_id, sessao.ticket_id)),
+    "a sessão de ajustes não subiu",
+    "confira o log da operação",
+  );
+  return { demanda, sessao: execucao.id };
 }

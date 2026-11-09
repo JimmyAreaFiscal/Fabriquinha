@@ -50,34 +50,51 @@ type EspacoPreparado = NonNullable<OpcoesExecucaoDemanda["espaco"]>;
 /** O que `conferirResultado` devolve: a etapa deu certo, foi reprovada (D05, o agente corrige) ou falhou. */
 export type ResultadoDaConferencia = { tipo: "sucesso" } | { tipo: "reprovacao"; motivo: string } | FalhaDaTentativa;
 
+type ExecucaoIniciada = ReturnType<typeof iniciarExecucaoDemanda>;
+
 export abstract class ConducaoAgentica extends ConducaoDeEtapa {
-  /** Reserva o ticket, prepara o Espaço, roda o agente e, no fim, confere: conclui o ticket ou o falha. */
+  /** Inicia a etapa e espera o fim dela: o agente roda, a conferência roda e o ticket é concluído ou falhado. */
   async conduzir(endereco: Endereco): Promise<void> {
-    const { banco, relogio, condutor, registro } = this.deps;
+    await (
+      await this.iniciar(endereco)
+    )?.fim;
+  }
+
+  /**
+   * Reserva o ticket, prepara o Espaço e sobe o agente, sem esperar o fim dele: devolve a execução em segundo plano (ou
+   * nada, se a preparação falhou e o ticket já foi falhado).
+   */
+  async iniciar(endereco: Endereco): Promise<ExecucaoIniciada | undefined> {
+    const { banco, condutor, registro } = this.deps;
     const ticket = this.ticketDe(endereco);
-    comDemanda(banco, ticket.demanda_id, (ag) =>
-      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), true),
-    );
+    this.reservar(ticket);
+    const preparacao = this.prepararEspaco(ticket);
+    // Sem preparação a execução nasce já, na transação da reserva: é ela que ocupa a vaga do limite global.
+    if (preparacao === undefined) return this.subir(ticket, undefined);
     let espaco: EspacoPreparado;
     try {
-      espaco = await this.prepararEspaco(ticket);
+      espaco = await preparacao;
     } catch (erro) {
       // Com o serviço parando, o erro é efeito da parada: o ticket é retomado em vez de esperar o Auditor.
       const falha = condutor.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
       registro(`${raizDo(banco)}/log`, `preparação falhou: ${falha.motivo}`);
-      this.falhar(ticket, falha);
-      return;
+      await this.falhar(ticket, falha);
+      return undefined;
     }
-    // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
-    const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, ticket.demanda_id).tentativas, ticket.ticket_id);
+    return this.subir(ticket, espaco);
+  }
+
+  private subir(ticket: TicketDemanda, espaco: EspacoPreparado | undefined): ExecucaoIniciada {
+    const { banco } = this.deps;
     // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
     // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
-    await iniciarExecucaoDemanda(banco, ticket, {
+    return iniciarExecucaoDemanda(banco, ticket, {
       limiteMin: configuracao(banco).timeoutMin,
-      retomada,
+      modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
+      ...this.retomadaDe(ticket),
       espaco,
       fechar: (_banco, _ticket, { falha }) => this.fechar(ticket, falha),
-    }).fim;
+    });
   }
 
   /** Da falha do agente ou da conferência ao destino do ticket: concluído, devolvido ou falho. */
@@ -86,16 +103,37 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const resultado = falhaDoAgente ?? (await this.conferirResultado(endereco));
     if (resultado.tipo === "sucesso") await this.aoConcluir(endereco);
     else if (resultado.tipo === "reprovacao") this.devolver(ticket, resultado.motivo);
-    else this.falhar(ticket, resultado);
+    else await this.falhar(ticket, resultado);
   }
 
-  /** O Espaço de Trabalho do ticket, criado antes do agente subir. */
-  protected prepararEspaco(ticket: TicketDemanda): Promise<EspacoPreparado> {
+  /** Reserva o ticket aberto para a Fabriquinha. */
+  protected reservar(ticket: TicketDemanda): void {
+    const { banco, relogio } = this.deps;
+    comDemanda(banco, ticket.demanda_id, (ag) =>
+      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), true),
+    );
+  }
+
+  /** O Espaço de Trabalho do ticket, criado antes do agente subir; sem preparação (`undefined`), a execução o cria. */
+  protected prepararEspaco(ticket: TicketDemanda): Promise<EspacoPreparado> | undefined {
     const { banco } = this.deps;
     const ag = carregarDemanda(banco, ticket.demanda_id);
     const projeto = carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     return cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log: `${raiz}/log` }).criar();
+  }
+
+  /**
+   * A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt; só a etapa que
+   * descarta a conversa anterior abre sessão nova.
+   */
+  protected retomadaDe(ticket: TicketDemanda): Pick<OpcoesExecucaoDemanda, "retomada" | "iniciarEmSessaoNova"> {
+    return {
+      retomada: retornoAoAgenteDoTicket(
+        carregarDemanda(this.deps.banco, ticket.demanda_id).tentativas,
+        ticket.ticket_id,
+      ),
+    };
   }
 
   /**
@@ -130,11 +168,12 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     );
   }
 
-  private falhar(ticket: TicketDemanda, falha: FalhaDaTentativa): void {
+  protected falhar(ticket: TicketDemanda, falha: FalhaDaTentativa): Promise<void> {
     const { banco, relogio } = this.deps;
     comDemanda(banco, ticket.demanda_id, (ag) =>
       registrarFalhaTicket(ag, { ticket_id: ticket.ticket_id, falha }, relogio()),
     );
+    return Promise.resolve();
   }
 }
 
@@ -150,4 +189,18 @@ interface PassoDaEtapa {
  */
 export abstract class ConducaoDeterministica extends ConducaoDeEtapa {
   protected abstract readonly passos: PassoDaEtapa[];
+}
+
+/**
+ * A etapa em que o agente conversa com o Auditor (executor `agente_interativo`): o Espaço nasce com a sessão, e o fim do
+ * pi não decide o ticket, que a Decisão do gate ou a conclusão da sessão fecham.
+ */
+export abstract class ConducaoInterativa extends ConducaoAgentica {
+  protected override prepararEspaco(): undefined {
+    return undefined;
+  }
+
+  protected override conferirResultado(): Promise<ResultadoDaConferencia> {
+    return Promise.resolve({ tipo: "sucesso" });
+  }
 }

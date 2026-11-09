@@ -11,21 +11,13 @@ import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, logDaOperacao } from "../../infra/registro.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
-import { condutor } from "../trabalho/condutor.ts";
+import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../etapas/pi_vivo.ts";
 import { instanteAtual } from "../relogio.ts";
 import { varrerBase } from "../retrabalho.ts";
 
 const gate = GATES.gate_planejamento;
-
-/** O pi vivo da última sessão do ticket de planejamento, se há. */
-function piVivoDoPlanejamento(banco: DatabaseSync, demanda_id: string, ticket_id: number) {
-  const { sessoes } = carregarTrabalhosDoTicket(banco, { demanda_id, ticket_id });
-  const atual = sessoes.at(-1);
-  return atual && condutor.situacao(atual.id);
-}
 
 /**
  * O Auditor reprova com motivo; a demanda volta a `planejar`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
@@ -42,13 +34,11 @@ export function reprovarGateDoPlanejamento(
   const reprovado = comDemanda(banco, endereco.demanda_id, (ag) =>
     gate.decidir(ag, endereco, entrada, ator, instanteAtual()),
   );
-  const viva = piVivoDoPlanejamento(banco, endereco.demanda_id, ticket_id);
-  if (viva && !viva.ocupado) {
-    condutor.mandar(viva.execucao, {
-      type: "prompt",
-      message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}`,
-    });
-  }
+  mandarAoPiVivoOcioso(
+    banco,
+    { demanda_id: endereco.demanda_id, ticket_id },
+    `Planejamento reprovado pelo Auditor. Motivo: ${motivo}`,
+  );
   return reprovado;
 }
 
@@ -97,7 +87,6 @@ export async function aprovarGateDoPlanejamento(
   }
   const aprovado = comDemanda(banco, demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, instanteAtual()));
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
-  const viva = piVivoDoPlanejamento(banco, demanda_id, ticket_id);
-  if (viva) condutor.encerrar(viva.execucao);
+  encerrarPiVivo(banco, { demanda_id, ticket_id });
   return aprovado;
 }
