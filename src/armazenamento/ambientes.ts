@@ -82,6 +82,22 @@ export function liberarAmbiente(
   if (changes === 0) throw new ErroDeInexistente(`o ambiente ${id} não existe`, "confira o id do ambiente");
 }
 
+/**
+ * Reserva para eliminar o livre ou sujo `id`, num único UPDATE: o que um `alocar` já pegou não muda e devolve
+ * `undefined`. Só quem reserva pode remover o container, então ele nunca some debaixo de um Espaço.
+ */
+export function reservarAmbienteParaEliminar(banco: DatabaseSync, id: string): AmbienteGravado | undefined {
+  return comoAmbiente(
+    banco
+      .prepare(
+        `UPDATE ambiente SET estado = 'eliminado', alocado_para = NULL
+         WHERE id = ? AND estado IN ('livre', 'sujo')
+         RETURNING ${COLUNAS_DO_AMBIENTE}`,
+      )
+      .get(id),
+  );
+}
+
 /** @testes o conjunto de Ambientes a usa na demanda I-286; hoje só o teste */
 export function eliminarAmbiente(banco: DatabaseSync, id: string): void {
   const { changes } = banco
