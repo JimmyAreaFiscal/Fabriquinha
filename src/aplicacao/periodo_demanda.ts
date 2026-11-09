@@ -13,7 +13,7 @@ import {
   usoNoPeriodo,
 } from "../armazenamento/metricas_demanda.ts";
 import { usoDeclaradoNoPeriodo } from "../armazenamento/uso_declarado.ts";
-import { linhaDeUsoDoBanco } from "./demanda.ts";
+import { usoDeclaradoDe, usoPorExecucao } from "./demanda.ts";
 import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { intervalo, Periodo } from "../nucleo/periodo.ts";
 
@@ -76,12 +76,8 @@ const soma = (ns: number[]) => ns.reduce((s, n) => s + n, 0);
 /** O Uso das execuções, cada uma um Trabalho: cada linha de `uso_modelo_execucao` pertence a uma só execução. */
 const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>): Uso =>
   execs
-    .map((e) => Uso.de((uso.get(e.execucao) ?? []).map(linhaDeUsoDoBanco), 1))
+    .map((e) => usoPorExecucao(uso.get(e.execucao) ?? []))
     .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
-
-/** O Uso declarado, cada sessão externa um Trabalho. */
-const usoDeclaradoDe = (declarado: { linhas: LinhaDeUso[] }[]): Uso =>
-  declarado.map((d) => Uso.de(d.linhas, 1)).reduce((total, daSessao) => total.somar(daSessao), Uso.vazio());
 
 function resumir(execs: ExecucaoNoPeriodo[], doUso: Uso): Soma {
   const tokens = (campo: Exclude<keyof LinhaDeUso, "modelo" | "custo" | "chamadas">) =>
