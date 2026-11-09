@@ -7,7 +7,7 @@ import type { CabecalhoDemanda, ExecucaoDoChat } from "../../../aplicacao/sessoe
 import type { Entrada } from "../../http/rotas/chat.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import { escapar, MODO_DA_SESSAO, nomeDoModelo, plural, rotuloDoModelo } from "../render.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
+import { ROTULO_DA_ETAPA } from "../rotulos.ts";
 import { ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 
 export type Cabecalho = CabecalhoDemanda;
@@ -119,7 +119,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
     `<a class="demanda" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
     (rodada === undefined ? "" : `<span class="sep">│</span><span class="id">${escapar(rodada)}</span>`) +
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
-    `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
+    `<span class="muted">${ROTULO_DA_ETAPA[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
     rotuloDoModelo(modelo) +
     pendenciasDaDemandaNaBarra(c) +
     `<div class="direita"><span class="muted pequeno">${rotuloDaExecucao(sessao.execucao)}</span>` +

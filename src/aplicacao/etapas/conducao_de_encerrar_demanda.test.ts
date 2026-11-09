@@ -7,24 +7,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { prDaDemanda } from "../nucleo/agregado_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
-import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import { ErroDeRegra } from "../nucleo/erros.ts";
-import { concluirResolucaoConflito, podeTentarEncerramento } from "../nucleo/transicoes_encerramento.ts";
-import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
-import { cursorDaBase } from "../armazenamento/retrabalho.ts";
-import { registrarProjeto } from "./projeto/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
-import { pendenciasDeLimpeza } from "../infra/repositorio/limpeza_demanda.ts";
-import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
-import { conduzirEncerramentoDemanda } from "./encerramento_demanda.ts";
-import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { prDaDemanda } from "../../nucleo/agregado_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
+import { FABRIQUINHA } from "../../nucleo/ator.ts";
+import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { concluirResolucaoConflito, podeTentarEncerramento } from "../../nucleo/transicoes_encerramento.ts";
+import { gravarCommitDemanda } from "../../armazenamento/commits_demanda.ts";
+import { cursorDaBase } from "../../armazenamento/retrabalho.ts";
+import { registrarProjeto } from "../projeto/cadastro.ts";
+import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
+import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
+import { pendenciasDeLimpeza } from "../../infra/repositorio/limpeza_demanda.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../infra/repositorio/worktree-demanda.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { anotar } from "../../infra/registro.ts";
+import { instanteAtual } from "../relogio.ts";
+import { condutor } from "../trabalho/condutor.ts";
+import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -60,7 +64,7 @@ interface Opcoes {
 
 /** Projeto `loja` com base `develop`; demanda I-206 em encerramento, com a rodada 1 e um commit de ticket na demanda. */
 async function cenario({
-  estadoDoTicket = "em_execucao",
+  estadoDoTicket = "aberto",
   estado = "encerrar_demanda",
   semTicket = false,
   encerramento,
@@ -161,14 +165,22 @@ async function cenario({
       return motivoDaFalhaDoTicket(ag.tentativas, ticket);
     },
     noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(refname:short)", `refs/heads/${branch}`),
-    /** Como o agendador: reserva o `encerrar_demanda` aberto. */
-    reservar: () =>
+    /** O Auditor ou a retomada reabrem o `encerrar_demanda` falho; a condução o reserva. */
+    reabrir: () =>
       comDemanda(banco, D, (a) => ({
         ...a,
-        // o Auditor ou a retomada reabrem o ticket falho, e reabrir descarta o motivo da falha
-        tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
+        // reabrir descarta o motivo da falha
+        tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "aberto" as const } : t)),
       })),
   };
+}
+
+/** Conduz o `encerrar_demanda` aberto, como o agendador, e devolve a demanda no fim do que deu para fazer. */
+async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDemanda = {}) {
+  await new ConducaoDeEncerrarDemanda({ banco, relogio: instanteAtual, condutor, registro: anotar }, opcoes).conduzir(
+    Endereco.doTicket(D, 8),
+  );
+  return carregarDemanda(banco, D);
 }
 
 const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge");
@@ -176,14 +188,13 @@ const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join
 /** O humano integra o PR final na plataforma; o próximo ciclo do agendador reserva o ticket e conduz o encerramento. */
 async function integrarComoHumano(c: Awaited<ReturnType<typeof cenario>>) {
   execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
-  c.reservar();
-  return conduzirEncerramentoDemanda(c.banco, D);
+  return conduzir(c.banco);
 }
 
 test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada, espera o merge humano, limpa e conclui", async () => {
   const c = await cenario();
 
-  const aguardando = await conduzirEncerramentoDemanda(c.banco, D);
+  const aguardando = await conduzir(c.banco);
 
   // A Fabriquinha não integra: o ticket volta a aberto e a demanda espera o humano integrar o PR na plataforma.
   assert.deepEqual(merges(), []);
@@ -194,8 +205,7 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
 
   // Cada ciclo, enquanto o humano não integra, só relê o PR: sem push, edição nem nova verificação.
   const antes = hospedagem.chamadas().length;
-  c.reservar();
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
   assert.deepEqual(
     hospedagem
       .chamadas()
@@ -276,7 +286,7 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
     ] as never,
   }));
 
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
   const ag = await integrarComoHumano(c);
 
   assert.deepEqual(ag.evidencias.map((e) => [e.ticket_id, e.tipo]).toSorted(), [
@@ -292,12 +302,12 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
 
 test("a base é varrida uma vez antes de publicar o PR final, e a falha da varredura só vai ao log", async () => {
   const varrida = await cenario();
-  await conduzirEncerramentoDemanda(varrida.banco, D);
+  await conduzir(varrida.banco);
   assert.equal(cursorDaBase(varrida.banco, "loja"), rodarGit(varrida.repo, "rev-parse", "refs/remotes/origin/develop"));
 
   const sem = await cenario();
   sem.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
-  await conduzirEncerramentoDemanda(sem.banco, D);
+  await conduzir(sem.banco);
   assert.equal(sem.ag().encerramento?.aguardando_merge_humano, true);
   assert.match(
     readFileSync(join(sem.raiz, "execucoes", "encerramento-I-206.log"), "utf8"),
@@ -310,7 +320,7 @@ test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o t
   hospedagem.abrirPr({ head: BRANCH_DEMANDA, base: "develop", titulo: "meu", corpo: "de fora", estado: "aberto" });
 
   await assert.rejects(
-    conduzirEncerramentoDemanda(c.banco, D),
+    conduzir(c.banco),
     (e: Error) => e instanceof ErroDeRegra && e.message.includes(`PR criado fora da Fabriquinha: ${URL_PR}`),
   );
 
@@ -325,7 +335,7 @@ test("commit de agente fora do desenvolvimento não sobe: o ticket falha antes d
   const c = await cenario();
   c.commitar("intruso.txt");
 
-  await assert.rejects(conduzirEncerramentoDemanda(c.banco, D), /nenhum ticket da I-206 registrou/);
+  await assert.rejects(conduzir(c.banco), /nenhum ticket da I-206 registrou/);
 
   assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
   assert.deepEqual(hospedagem.prs(), []);
@@ -343,7 +353,7 @@ test("CA-4: check final falho falha o ticket em check_final, sem integração, l
     checks: [{ nome: "ci", estado: "falho" }],
   });
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  const ag = await conduzir(c.banco);
 
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(ag.encerramento?.falha?.etapa, "check_final");
@@ -368,7 +378,7 @@ test("CA-4: PR que a plataforma não decide no limite falha o ticket em check_fi
     conflito: "calculando",
   });
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D, { verificacao: { limiteMs: 0 } });
+  const ag = await conduzir(c.banco, { verificacao: { limiteMs: 0 } });
 
   assert.equal(ag.encerramento?.falha?.etapa, "check_final");
   assert.match(ag.encerramento.falha.motivo, /não ficou decidido/);
@@ -386,7 +396,7 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
     conflito: true,
   });
 
-  const conflito = await conduzirEncerramentoDemanda(c.banco, D);
+  const conflito = await conduzir(c.banco);
 
   assert.equal(c.ticket()?.estado, "aberto");
   const resolver = conflito.tickets.find((t) => t.etapa === "resolver_conflito");
@@ -407,8 +417,7 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
   );
   assert.equal(podeTentarEncerramento(c.ag()), true);
   hospedagem.mudar(1, { conflito: false });
-  c.reservar();
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
 
   const ag = await integrarComoHumano(c);
 
@@ -423,11 +432,10 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
 
 test("PR final fechado sem merge falha o ticket em integracao; reaberto e integrado pelo humano, conclui", async () => {
   const c = await cenario();
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
   hospedagem.mudar(1, { estado: "fechado" });
-  c.reservar();
 
-  const fechado = await conduzirEncerramentoDemanda(c.banco, D);
+  const fechado = await conduzir(c.banco);
 
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(fechado.encerramento?.falha?.etapa, "integracao");
@@ -438,8 +446,8 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
 
   // O humano reabre o PR na plataforma, o Auditor reabre o ticket: volta a esperar, sem a falha, até o merge.
   hospedagem.mudar(1, { estado: "aberto" });
-  c.reservar();
-  const reaberto = await conduzirEncerramentoDemanda(c.banco, D);
+  c.reabrir();
+  const reaberto = await conduzir(c.banco);
   assert.equal(reaberto.encerramento?.falha, undefined);
   assert.equal(c.ticket()?.estado, "aberto");
   assert.equal((await integrarComoHumano(c)).demanda.estado, "concluida");
@@ -447,11 +455,10 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
 
 test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro, sem integrar", async () => {
   const c = await cenario();
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
   hospedagem.falhar("pr view", "rede fora");
-  c.reservar();
 
-  await assert.rejects(conduzirEncerramentoDemanda(c.banco, D), /rede fora/);
+  await assert.rejects(conduzir(c.banco), /rede fora/);
 
   assert.equal(c.ticket()?.estado, "aberto");
   assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);
@@ -461,7 +468,7 @@ test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro,
 test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto, só a limpeza pendente roda", async () => {
   const c = await cenario();
   rodarGit(c.repo, "worktree", "lock", c.rodada);
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
 
   const parcial = await integrarComoHumano(c);
 
@@ -482,10 +489,10 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
   // O Auditor reabre; o agendador reserva.
   rodarGit(c.repo, "worktree", "unlock", c.rodada);
-  c.reservar();
+  c.reabrir();
   const chamadas = hospedagem.chamadas().length;
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  const ag = await conduzir(c.banco);
 
   assert.equal(hospedagem.chamadas().length, chamadas);
   assert.equal(ag.encerramento?.integracao?.sha, sha);
@@ -517,7 +524,7 @@ test("árvore de PRs inválida falha a Tentativa, sem gravar evidência nem conc
       },
     ] as never,
   }));
-  await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzir(c.banco);
 
   const ag = await integrarComoHumano(c);
 
@@ -530,18 +537,15 @@ test("árvore de PRs inválida falha a Tentativa, sem gravar evidência nem conc
   assert.equal(ag.demanda.estado, "encerrar_demanda");
 });
 
-test("CA-16: fora de encerramento, ou sem o encerrar_demanda em execução, recusa sem efeito externo", async () => {
+test("CA-16: fora de encerramento, com o encerrar_demanda já reservado ou ausente, recusa sem efeito externo", async () => {
   const casos: [Opcoes, RegExp][] = [
-    [{ estado: "em_execucao" }, /está em em_execucao e o encerrar_demanda está em_execucao/],
-    [{ estadoDoTicket: "aberto" }, /o encerrar_demanda está aberto/],
-    [{ semTicket: true }, /o encerrar_demanda está ausente/],
+    [{ estado: "em_execucao" }, /não pode ser reservado: a etapa encerrar_demanda não é a do trabalho/],
+    [{ estadoDoTicket: "em_execucao" }, /o estado atual é em_execucao \(só no estado aberto\)/],
+    [{ semTicket: true }, /o ticket I-206.T8 não existe/],
   ];
   for (const [opcoes, mensagem] of casos) {
     const c = await cenario(opcoes);
-    await assert.rejects(
-      conduzirEncerramentoDemanda(c.banco, D),
-      (e: Error) => e instanceof ErroDeRegra && mensagem.test(e.message),
-    );
+    await assert.rejects(conduzir(c.banco), mensagem);
     assert.deepEqual(hospedagem.chamadas(), []);
     assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
     assert.equal(existsSync(c.demanda), true);

@@ -1,7 +1,7 @@
-// Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): depois de reprovar o PR da rodada, abre
-// na hora a conversa do Auditor com o agente, que só registra tickets corretivos. A conversa acontece no chat da sessão.
-// Ela não implementa nem integra: os SHAs da rodada e da demanda são gravados ao abrir e restaurados quando a execução
-// termina e quando a sessão conclui.
+// Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): depois de reprovar o PR da rodada, a
+// `ConducaoDeAjustarResultado` abre na hora a conversa do Auditor com o agente, que só registra tickets corretivos. A
+// conversa acontece no chat da sessão. Ela não implementa nem integra: os SHAs da rodada e da demanda são gravados ao
+// abrir e restaurados quando a execução termina e quando a sessão conclui.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -10,8 +10,7 @@ import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
-import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -21,10 +20,10 @@ import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts
 import { descartarAlteracoes, exigirGitNoAmbiente } from "../infra/repositorio/worktree.ts";
 import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { encerrarPiVivo } from "./etapas/pi_vivo.ts";
+import { instanteAtual } from "./relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
-
-type Opcoes = Pick<OpcoesExecucaoDemanda, "limiteMin">;
 
 interface Ponta {
   branch: string;
@@ -35,13 +34,11 @@ interface Marco {
   demanda: Ponta;
 }
 
-const contexto = () => ({ agora: new Date().toISOString() });
-
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
 
 /** O Espaço da rodada, com o PR que o encerramento publicou. */
-function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, ref: RefRodada) {
+export function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, ref: RefRodada) {
   const espaco = espacoDoTicket(
     ag,
     { rodada_id: ref.rodada_id },
@@ -57,7 +54,7 @@ function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, ref: Ref
 }
 
 /** O ticket `ajustar_resultado` mais recente da rodada. */
-const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
+export const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
   existe(
     ticketAtualDaEtapa(ag, "ajustar_resultado", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem sessão de ajustes`,
@@ -65,7 +62,7 @@ const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
   );
 
 /** Volta as duas branches aos SHAs do marco e descarta o que a conversa deixou nas worktrees, sem verificar nem commitar. */
-async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
+export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
   const projeto = projetoExistente(banco, ag.demanda.projeto);
@@ -80,37 +77,6 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
     await descartarAlteracoes(ambienteDoServico(), worktree, log);
   }
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
-}
-
-/** A execução com pi vivo neste serviço na sessão do ticket, se há, e a mais recente, que a conclusão espera terminar. */
-function execucoesDaSessao(
-  banco: DatabaseSync,
-  ticket: TicketDemanda,
-): { viva: string | number | undefined; maisRecente: string | undefined } {
-  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ticket);
-  const sessao = existe(
-    sessoes[0],
-    `o ticket ${formatarTicketRef(ticket)} não tem sessão`,
-    "a sessão nasce ao abrir os ajustes",
-  );
-  return { viva: condutor.situacao(sessao.id)?.execucao, maisRecente: execucoes.at(-1)?.id };
-}
-
-/**
- * Inicia ou retoma a execução interativa do ticket da sessão; ao terminar, restaura as branches em vez de fechar o
- * ticket, que só conclui com a sessão.
- */
-function executar(
-  banco: DatabaseSync,
-  ref: RefRodada,
-  ticket: TicketDemanda,
-  opcoes: Opcoes & Pick<OpcoesExecucaoDemanda, "retomada" | "mensagem">,
-): ReturnType<typeof iniciarExecucaoDemanda> {
-  return iniciarExecucaoDemanda(banco, ticket, {
-    ...opcoes,
-    modo: "interativo",
-    fechar: () => restaurar(banco, ref),
-  });
 }
 
 /**
@@ -133,45 +99,28 @@ export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, 
   writeFileSync(arquivoDoMarco(banco, ref), JSON.stringify(marco));
 }
 
-/** Abre a sessão de ajustes da rodada com o PR já reprovado (interativa, sem esperar o agendador), levando o `motivo` ao agente. */
-export function abrirSessaoDeAjustes(
-  banco: DatabaseSync,
-  ref: RefRodada,
-  reprovada: AgregadoDemanda,
-  motivo: string,
-  opcoes: Opcoes,
-): ReturnType<typeof iniciarExecucaoDemanda> {
-  const { pr } = espacoComPrPublicado(banco, reprovada, ref);
-  const sessao = sessaoDaRodada(reprovada, ref);
-  return executar(banco, ref, sessao, {
-    ...opcoes,
-    retomada: montarRetornoAoAgente(
-      tentativaAnteriorEmMemoria(Endereco.doTicket(ref.demanda_id, sessao.ticket_id), {
-        instrucao:
-          `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
-          `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
-          `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
-      }),
-    ),
-  });
-}
-
 /**
  * Retoma a sessão de ajustes parada com a mensagem do Auditor, enviada pelo chat da sessão. A mensagem é o prompt, como
- * em qualquer retomada interativa; o fim da execução restaura as branches.
+ * em qualquer retomada interativa; o fim da execução restaura as branches, como o da execução que a abriu.
  */
 export function retomarSessaoAjustes(
   banco: DatabaseSync,
   ticket: TicketDemanda,
   mensagem: string,
-  opcoes: Opcoes,
+  opcoes: Pick<OpcoesExecucaoDemanda, "limiteMin">,
 ): void {
   const rodada_id = existe(
     ticket.rodada_id,
     `o ticket ${formatarTicketRef(ticket)} não é de rodada`,
     "confira o banco",
   );
-  executar(banco, { demanda_id: ticket.demanda_id, rodada_id }, ticket, { ...opcoes, mensagem });
+  const ref = { demanda_id: ticket.demanda_id, rodada_id };
+  iniciarExecucaoDemanda(banco, ticket, {
+    ...opcoes,
+    modo: "interativo",
+    mensagem,
+    fechar: () => restaurar(banco, ref),
+  });
 }
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */
@@ -179,15 +128,16 @@ export async function concluirSessaoAjustes(banco: DatabaseSync, ref: RefRodada,
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = sessaoDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id, rodada_id: ref.rodada_id };
+  const concluir = (a: AgregadoDemanda) => concluirSessaoRodada(a, entrada, ator, instanteAtual());
   // Ensaio: uma conclusão rejeitada não pode derrubar a conversa; o agregado volta como veio, então nada é gravado.
   comDemanda(banco, ref.demanda_id, (a) => {
-    concluirSessaoRodada(a, entrada, ator, contexto());
+    concluir(a);
     return a;
   });
 
-  const { viva, maisRecente } = execucoesDaSessao(banco, ticket);
-  if (viva !== undefined) condutor.encerrar(viva);
+  const maisRecente = carregarTrabalhosDoTicket(banco, ticket).execucoes.at(-1)?.id;
+  encerrarPiVivo(banco, ticket);
   if (maisRecente !== undefined) await condutor.aguardarFim(maisRecente);
   await restaurar(banco, ref);
-  return comDemanda(banco, ref.demanda_id, (a) => concluirSessaoRodada(a, entrada, ator, contexto()));
+  return comDemanda(banco, ref.demanda_id, concluir);
 }

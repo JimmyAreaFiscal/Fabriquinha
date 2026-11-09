@@ -5,7 +5,7 @@ import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
-import { PullRequest } from "./espaco_de_trabalho.ts";
+import { PullRequest, prDoEscopo } from "./espaco_de_trabalho.ts";
 import { TipoEvidencia } from "./evidencia.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
@@ -126,7 +126,7 @@ export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): Do
 
 /** O PR do Espaço da demanda: o PR final do encerramento. */
 export const prDaDemanda = (ag: Pick<AgregadoDemanda, "pull_requests">): PullRequestDoEspaco | undefined =>
-  ag.pull_requests.find((pr) => pr.rodada_id === undefined);
+  prDoEscopo(ag.pull_requests, undefined);
 
 /** O PR do Espaço da rodada troca o anterior da mesma rodada e mantém os demais. */
 export const comPrDaRodada = (

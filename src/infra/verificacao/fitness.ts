@@ -8,10 +8,10 @@ import {
   type Falha,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
-export class VerificacaoDeFitness extends Verificacao {
+export class VerificacaoDeFitness extends VerificacaoComRegistro {
   readonly tipo = "fitness";
   readonly #projeto: Projeto;
 
@@ -27,9 +27,9 @@ export class VerificacaoDeFitness extends Verificacao {
       const falhas: Falha[] = [];
       for (const f of this.#projeto.verificacoes.fitness) {
         const r = await rodar(f.comando, worktree);
-        const log = `${f.nome}.log`;
-        linhas.push({ ...f, ...linhaDoComando(f.comando, r, log) });
-        logs.push({ nome: log, texto: r.log });
+        const nomeDoLog = `${f.nome}.log`;
+        linhas.push({ ...f, ...linhaDoComando(f.comando, r, nomeDoLog) });
+        logs.push({ nome: nomeDoLog, texto: r.log });
         const falha = classificarComando(f.comando, r);
         if (falha) falhas.push(falha);
       }

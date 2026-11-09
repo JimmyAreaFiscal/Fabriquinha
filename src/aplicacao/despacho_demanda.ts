@@ -6,86 +6,86 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { exigirEtapaConduzida } from "../nucleo/etapa.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import type { EtapaTicket } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
-import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
-import { noLog } from "../infra/registro.ts";
+import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
-import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
-import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
-import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { falharTicketDemanda } from "./fechamento_ticket.ts";
-import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
+import type { ConducaoDeEtapa, DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import {
+  ConducaoDeEncerrarDemanda,
+  type OpcoesDoEncerramentoDaDemanda,
+} from "./etapas/conducao_de_encerrar_demanda.ts";
+import { ConducaoDeAjustarResultado } from "./etapas/conducao_de_ajustar_resultado.ts";
+import { ConducaoDeEncerrarRodada } from "./etapas/conducao_de_encerrar_rodada.ts";
+import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
+import { ConducaoDePlanejar } from "./etapas/conducao_de_planejar.ts";
+import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
+import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
+import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
-import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
+import { instanteAtual } from "./relogio.ts";
+import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface DepsDespacho {
-  /** Início da execução do `implementar`; injetável nos testes para não subir o pi (padrão: `iniciarExecucaoDemanda`). */
-  iniciarProcesso?: typeof iniciarExecucaoDemanda;
+  /** Coleta das verificações e limite do commit do `implementar` e do `resolver_conflito`; injetáveis nos testes. */
+  implementacao?: OpcoesDaImplementacao;
+  /** Substitui conduções nos testes que não sobem pi nem git. */
+  conducoesSubstitutas?: (
+    deps: DepsDaConducao,
+  ) => Partial<Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa>>;
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
-  verificacao?: DepsEncerramentoDemanda["verificacao"];
+  verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
 }
 
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
-const rodadaDe = (t: TicketDemanda) => ({
-  demanda_id: t.demanda_id,
-  rodada_id: existe(t.rodada_id, `o ticket ${formatarTicketRef(t)} não é de uma rodada`, "use um ticket de rodada"),
+const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao): DepsDaConducao => ({
+  banco,
+  limiteMin: timeoutMin,
+  relogio: instanteAtual,
+  condutor,
+  registro: anotar,
 });
 
-/** Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket. */
-async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<unknown> {
-  const rodada = rodadaDe(t);
-  const falha = await iniciarEncerramentoRodada(banco, rodada, limiteMin).fim;
-  if (falha !== undefined) {
-    falharTicketDemanda(banco, t, falha);
-    return;
-  }
-  return falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
-}
-
-/** Roda `etapa`; se ela recusar sem falhar o ticket (documentação, estado), falha-o para não ficar preso em execução. */
-async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: () => Promise<T>): Promise<T> {
-  try {
-    return await etapa();
-  } catch (erro) {
-    const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
-    if (atual?.estado === "em_execucao") falharTicketDemanda(banco, t, falhaDoErro(erro));
-    throw erro;
-  }
-}
+/** O ticket de planejamento mais recente da demanda, que a retomada conduz. */
+const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco =>
+  Endereco.doTicket(
+    demandaId,
+    existe(
+      ticketAtualDaEtapa(carregarDemanda(banco, demandaId), "planejar"),
+      `a demanda ${demandaId} não tem ticket de etapa planejar`,
+      "abra o ticket de planejamento",
+    ).ticket_id,
+  );
 
 /**
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
-function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, deps: DepsDespacho): Promise<unknown> {
-  const { demanda_id, ticket_id } = t;
-  const limiteMin = c.timeoutMin;
-  if (t.etapa === "planejar") return iniciarOuRetomarPlanejamento(banco, demanda_id, limiteMin).fim;
-  if (t.etapa === "implementar" || t.etapa === "resolver_conflito" || t.etapa === "encerrar_demanda") {
-    const ctx = { agora: new Date().toISOString() };
-    comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
-    if (t.etapa === "encerrar_demanda") {
-      return falharSePreso(banco, t, () =>
-        conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
-      );
-    }
-    // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
-    const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
-    return (deps.iniciarProcesso ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
-  }
-  if (t.etapa === "revisar_rodada") {
-    return conduzirRevisaoRodada(banco, rodadaDe(t), { limiteMin });
-  }
-  if (t.etapa === "revisar_demanda") return conduzirRevisaoIntegral(banco, demanda_id, { limiteMin });
-  return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as sete etapas acima
+function iniciarEtapa(banco: DatabaseSync, c: Configuracao, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
+  exigirEtapaConduzida(t.etapa);
+  const depsDaConducao = depsDaConducaoDe(banco, c);
+  const CONDUCAO_DA_ETAPA: Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa> = {
+    planejar: new ConducaoDePlanejar(depsDaConducao),
+    implementar: new ConducaoDeImplementar(depsDaConducao, deps.implementacao),
+    resolver_conflito: new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao),
+    revisar_rodada: new ConducaoDeRevisarRodada(depsDaConducao),
+    revisar_demanda: new ConducaoDeRevisarDemanda(depsDaConducao),
+    encerrar_rodada: new ConducaoDeEncerrarRodada(depsDaConducao),
+    encerrar_demanda: new ConducaoDeEncerrarDemanda(depsDaConducao, { verificacao: deps.verificacao }),
+    ajustar_resultado: new ConducaoDeAjustarResultado(depsDaConducao),
+    ...deps.conducoesSubstitutas?.(depsDaConducao),
+  };
+  return CONDUCAO_DA_ETAPA[t.etapa].conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */
@@ -122,14 +122,13 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
   const limite = limiteParalelismo(banco);
   const vagas = limite - ocupacaoDoLimite(banco);
   const retomados = retomadasDePlanejamento(banco).slice(0, Math.max(0, vagas));
-  const fins = retomados.flatMap((id) =>
-    disparar(banco, () => iniciarOuRetomarPlanejamento(banco, id, c.timeoutMin).fim),
-  );
+  const planejar = new ConducaoDePlanejar(depsDaConducaoDe(banco, c));
+  const fins = retomados.flatMap((id) => disparar(banco, () => planejar.conduzir(ticketDoPlanejamento(banco, id))));
   const escolhidos = selecionarTrabalhoGlobal(demandasParaDespacho(banco), {
     limite,
     vagasOcupadas: ocupacaoDoLimite(banco),
   });
-  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, c, deps)))];
+  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, c, t, deps)))];
 }
 
 /**
@@ -175,6 +174,6 @@ export function executarAgoraDemanda(
       );
       return ag;
     });
-    return acompanhar(iniciarEtapa(banco, ticket, c, deps));
+    return acompanhar(iniciarEtapa(banco, c, ticket, deps));
   });
 }

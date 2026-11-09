@@ -5,7 +5,7 @@ import type { Projeto } from "../../nucleo/projeto.ts";
 import { VerificacaoDeFitness } from "../../infra/verificacao/fitness.ts";
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/verificacao/sonar.ts";
 import { VerificacaoDeTestes } from "../../infra/verificacao/testes.ts";
-import { type RegistroDaVerificacao, verificacoesDaEtapa } from "../../infra/verificacao/verificacao.ts";
+import { montarVerificacoesDaEtapa, type RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
 export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
@@ -27,27 +27,24 @@ export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise
   const { ambiente, projeto, e2e, worktree, opcoes } = entrada;
   const arquivos = await arquivosAlterados(ambiente, worktree);
   const contexto = { ambiente, worktree, limiteMs: opcoes?.limiteMs };
-  const sonar = new VerificacaoSonar(projeto.chave_sonarqube, arquivos, opcoes);
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;
   const iniciarSonar = () => (sonarEmAndamento ??= sonar.coletar(contexto));
-  const testes = new VerificacaoDeTestes({
-    projeto,
-    e2e,
-    arquivos,
-    aoTerminarAsLinguagens: () => {
-      // A falha sobe quando o Sonar é esperado, abaixo; o allSettled só a trata se o E2E lançar antes dessa espera.
-      void Promise.allSettled([iniciarSonar()]);
-    },
+  // Os hooks ficam com o fechamento; resolver_conflito exige a mesma lista.
+  const { testes, fitness, sonar } = montarVerificacoesDaEtapa("implementar", {
+    testes: () =>
+      new VerificacaoDeTestes({
+        projeto,
+        e2e,
+        arquivos,
+        aoTerminarAsLinguagens: () => {
+          // A falha sobe quando o Sonar é esperado, abaixo; o allSettled só a trata se o E2E lançar antes dessa espera.
+          void Promise.allSettled([iniciarSonar()]);
+        },
+      }),
+    fitness: () => new VerificacaoDeFitness(projeto),
+    sonar: () => new VerificacaoSonar(projeto.chave_sonarqube, arquivos, opcoes),
   });
-  const coletas = {
-    testes: () => testes.coletar(contexto),
-    fitness: () => new VerificacaoDeFitness(projeto).coletar(contexto),
-    sonar: iniciarSonar,
-  };
-  // Os hooks ficam com o fechamento; resolver_conflito exige a mesma lista. Os testes vêm primeiro; o resto roda junto.
-  const depoisDosTestes = verificacoesDaEtapa("implementar").filter(
-    (tipo): tipo is "fitness" | "sonar" => tipo === "fitness" || tipo === "sonar",
-  );
-  const registroDosTestes = await coletas.testes();
-  return [registroDosTestes, ...(await Promise.all(depoisDosTestes.map((tipo) => coletas[tipo]())))];
+  // Os testes vêm primeiro; o resto roda junto.
+  const registroDosTestes = await testes.coletar(contexto);
+  return [registroDosTestes, ...(await Promise.all([fitness.coletar(contexto), iniciarSonar()]))];
 }
