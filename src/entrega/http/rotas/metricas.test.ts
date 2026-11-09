@@ -75,7 +75,7 @@ test("GET /api/metricas: padrão nos 11 meses anteriores mais o corrente, de tod
   );
   assert.equal(meses.at(-1)?.projeto, null);
   assert.equal(meses.at(-1)?.demandas.registradas, 2);
-  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, incompleto: false });
+  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, trabalhosSemCusto: 0 });
 });
 
 test("GET /api/metricas: de um projeto, de `de` a `ate`; só `ate` leva `de` 11 meses antes", async () => {
@@ -126,7 +126,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
     falhas: 0,
     duracaoMs: 0,
     tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0 },
-    custo: { conhecido: 2, incompleto: false },
+    custo: { conhecido: 2, trabalhosSemCusto: 0 },
   };
   assert.deepEqual(corpo, [
     {

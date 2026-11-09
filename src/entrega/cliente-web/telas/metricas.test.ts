@@ -45,7 +45,7 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   falhas: 0,
   duracaoMs: 0,
   tokens: { entrada, saida, cacheLeitura, cacheEscrita },
-  custo: { conhecido: custo, incompleto: false },
+  custo: { conhecido: custo, trabalhosSemCusto: 0 },
 });
 
 /** Um mês com custo, contagens e nota; as etapas repartem o custo (metade no desenvolvimento). */
@@ -324,9 +324,9 @@ test("por etapa: o mês em foco contra a média, com barras duplas e duração m
   assert.match(texto(/<tfoot>[\s\S]*?<\/tfoot>/.exec(pesada)?.[0] ?? ""), /— \/ 1 min 45 s$/);
   // Custo incompleto leva *, no mês e no Total, e o card avisa.
   const incompleto = mes("2026-10", 1, 1, null, {
-    total: { ...consumo(1), custo: { conhecido: 1, incompleto: true }, modelos: [] },
+    total: { ...consumo(1), custo: { conhecido: 1, trabalhosSemCusto: 1 }, modelos: [] },
     etapas: mes("2026-10", 1, 1).etapas.map((x) =>
-      x.etapa === "implementar" ? { ...x, custo: { conhecido: 0.5, incompleto: true } } : x,
+      x.etapa === "implementar" ? { ...x, custo: { conhecido: 0.5, trabalhosSemCusto: 1 } } : x,
     ),
   });
   const parcial = paginaDeMetricas({ ...DADOS, meses: [incompleto] }, { ...ESTADO, de: "2026-10" });
@@ -342,12 +342,12 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
     total: { ...consumo(0, 100, 20, 30, 40, 5), custo },
   });
   const niveis = [
-    nivel("execucao", 5, { conhecido: 2, incompleto: false }),
-    nivel("sessao", 3, { conhecido: 2, incompleto: true }),
-    nivel("ticket", 3, { conhecido: 2, incompleto: true }),
-    nivel("rodada", 2, { conhecido: 2, incompleto: true }),
-    nivel("demanda", 1, { conhecido: 2, incompleto: true }),
-    nivel("projeto", 1, { conhecido: 2, incompleto: true }),
+    nivel("execucao", 5, { conhecido: 2, trabalhosSemCusto: 0 }),
+    nivel("sessao", 3, { conhecido: 2, trabalhosSemCusto: 1 }),
+    nivel("ticket", 3, { conhecido: 2, trabalhosSemCusto: 1 }),
+    nivel("rodada", 2, { conhecido: 2, trabalhosSemCusto: 1 }),
+    nivel("demanda", 1, { conhecido: 2, trabalhosSemCusto: 1 }),
+    nivel("projeto", 1, { conhecido: 2, trabalhosSemCusto: 1 }),
   ];
   const html = paginaDeMetricas(
     { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis })] },
@@ -365,13 +365,13 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
 
 test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo desconhecido à parte e sem segmento vazio", () => {
   const uso = (modelo: string, provedor: string, custo: number | null, entrada = 0, saida = 0, cl = 0, ce = 0) => ({
-    provedor,
-    modelo,
-    entrada,
-    saida,
-    cacheLeitura: cl,
-    cacheEscrita: ce,
+    modelo: `${provedor}/${modelo}`,
+    tokens_entrada: entrada,
+    tokens_saida: saida,
+    tokens_cache_leitura: cl,
+    tokens_cache_escrita: ce,
     custo,
+    chamadas: 0,
   });
   const modelos = [
     uso("qwen <3>", "llamacpp", 0, 100),
@@ -387,7 +387,7 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
   const secao = /<h3>out\/26<\/h3><span class="sub">tokens por tipo[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
   assert.equal(
     texto(secao),
-    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída claude-opus-5-5 anthropic US$ 9,00 8,7 M claude-haiku anthropic US$ 0,00 200 qwen &#60;3&#62; llamacpp US$ 0,00 100 local llamacpp custo desconhecido 50 local-2 llamacpp custo desconhecido 40",
+    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída anthropic/claude-opus-5-5 US$ 9,00 8,7 M anthropic/claude-haiku US$ 0,00 200 llamacpp/qwen &#60;3&#62; US$ 0,00 100 llamacpp/local custo desconhecido 50 llamacpp/local-2 custo desconhecido 40",
   );
   assert.match(
     secao,
@@ -418,7 +418,7 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
       nota: 4,
       falhas: 1,
       reprovacoes: 2,
-      custo: { conhecido: 1, incompleto: true },
+      custo: { conhecido: 1, trabalhosSemCusto: 1 },
     }),
     demanda({ demanda: "I-7", titulo: "Cache", estado: "concluida" }),
   ];
@@ -485,7 +485,7 @@ test("Projeto: os 6 cards do mês corrente", () => {
     cardsDoMes(mes("2026-01", 0, 0, null, { total: { ...consumo(0, 0, 0, 0, 0, 1), modelos: [] } })),
     /1 execução</,
   );
-  const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
+  const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, trabalhosSemCusto: 1 } } };
   assert.match(texto(cardsDoMes(parcial)), /Custo · outubro US\$ 1,00 \*/);
 });
 

@@ -12,34 +12,21 @@ import {
   type UsoDaExecucao,
   usoDaDemanda,
 } from "../armazenamento/metricas_demanda.ts";
+import { type LinhaDeUso, Uso } from "../nucleo/uso.ts";
 import { type Conformidade, conformidadeDaRodada } from "./conformidade.ts";
 
-/** Custo ausente não é zero: `incompleto` avisa que `conhecido` soma só o que foi informado. */
-export interface Custo {
-  conhecido: number;
-  incompleto: boolean;
-}
+/** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
+type CustoDoUso = ReturnType<Uso["custo"]>;
 
-type CustoExterno = Custo & { sessoes: number };
-
-export interface UsoDoModelo {
-  provedor: string;
-  modelo: string;
-  entrada: number;
-  saida: number;
-  cacheLeitura: number;
-  cacheEscrita: number;
-  /** `null` = desconhecido (alguma execução do modelo sem custo), nunca 0. */
-  custo: number | null;
-}
+type CustoExterno = CustoDoUso & { sessoes: number };
 
 interface Contagens {
   execucoes: number;
   falhas: number;
   exigenciasDeAlteracao: number;
   reprovacoes: number;
-  modelos: UsoDoModelo[];
-  custo: Custo;
+  modelos: LinhaDeUso[];
+  custo: CustoDoUso;
 }
 
 /** Nota dos PRs de rodada com `soma` e `quantidade`, para o projeto somar sem tirar média de médias. */
@@ -62,32 +49,38 @@ interface MetricasDaDemanda {
   custoExterno: CustoExterno;
 }
 
-const custoExterno = (linhas: { ferramenta: string; sessao: string; custo: number | null }[]): CustoExterno => ({
-  ...somarCustos(linhas.map((l) => l.custo)),
-  sessoes: new Set(linhas.map((l) => `${l.ferramenta}\0${l.sessao}`)).size,
+/** A linha de `uso_modelo_execucao` como Uso; o banco não guarda as chamadas do uso medido, por isso 0. */
+export const linhaDeUsoDoBanco = (u: Omit<UsoDaExecucao, keyof DonoDaLinha>): LinhaDeUso => ({
+  modelo: `${u.provedor}/${u.modelo}`,
+  tokens_entrada: u.entrada,
+  tokens_saida: u.saida,
+  tokens_cache_leitura: u.cacheLeitura,
+  tokens_cache_escrita: u.cacheEscrita,
+  custo: u.custo,
+  chamadas: 0,
 });
 
-export const somarCustos = (custos: (number | null)[]): Custo => ({
-  conhecido: custos.reduce<number>((s, c) => s + (c ?? 0), 0),
-  incompleto: custos.includes(null),
-});
-
-export function agruparModelos(uso: Omit<UsoDaExecucao, keyof DonoDaLinha>[]): UsoDoModelo[] {
-  const porModelo = new Map<string, UsoDoModelo>();
-  for (const { provedor, modelo, entrada, saida, cacheLeitura, cacheEscrita, custo } of uso) {
-    const m = porModelo.get(`${provedor}\0${modelo}`);
-    if (!m) {
-      porModelo.set(`${provedor}\0${modelo}`, { provedor, modelo, entrada, saida, cacheLeitura, cacheEscrita, custo });
-      continue;
-    }
-    m.entrada += entrada;
-    m.saida += saida;
-    m.cacheLeitura += cacheLeitura;
-    m.cacheEscrita += cacheEscrita;
-    m.custo = m.custo === null || custo === null ? null : m.custo + custo;
-  }
-  return [...porModelo.values()];
-}
+// Cada sessão externa é um Trabalho; só o custo é declarado, por isso os tokens vão em 0.
+const custoExterno = (linhas: { ferramenta: string; sessao: string; custo: number | null }[]): CustoExterno => {
+  const porSessao = Map.groupBy(linhas, (l) => `${l.ferramenta}\0${l.sessao}`);
+  const uso = [...porSessao.values()]
+    .map((sessao) =>
+      Uso.de(
+        sessao.map(({ custo }) => ({
+          modelo: "externo",
+          tokens_entrada: 0,
+          tokens_saida: 0,
+          tokens_cache_leitura: 0,
+          tokens_cache_escrita: 0,
+          custo,
+          chamadas: 0,
+        })),
+        1,
+      ),
+    )
+    .reduce((soma, sessao) => soma.somar(sessao), Uso.vazio());
+  return { ...uso.custo(), sessoes: porSessao.size };
+};
 
 export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): MetricasDaDemanda {
   if (!demandaExiste(banco, demandaId))
@@ -99,14 +92,15 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
   const externas = linhasExternasDaDemanda(banco, demandaId);
 
   const contagens = (dono: (l: DonoDaLinha) => boolean): Contagens => {
-    const u = uso.filter(dono);
+    // O banco não liga o uso à execução: o recorte todo conta como um Trabalho para o custo desconhecido.
+    const u = Uso.de(uso.filter(dono).map(linhaDeUsoDoBanco), 1);
     return {
       execucoes: execucoes.filter(dono).length,
       falhas: execucoes.filter((e) => dono(e) && e.falha).length,
       exigenciasDeAlteracao: tickets.filter(dono).reduce((s, t) => s + t.exigenciasDeAlteracao, 0),
       reprovacoes: decisoes.filter((d) => dono(d) && d.reprovada).length,
-      modelos: agruparModelos(u),
-      custo: somarCustos(u.map((x) => x.custo)),
+      modelos: u.porModelo(),
+      custo: u.custo(),
     };
   };
   const escopo = (dono: (l: DonoDaLinha) => boolean): Escopo => {

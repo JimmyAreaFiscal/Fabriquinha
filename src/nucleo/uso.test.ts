@@ -1,7 +1,7 @@
 // Uso: a soma por modelo, o custo desconhecido e a contagem de Trabalhos sem custo.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type LinhaDeUso, Uso } from "./uso.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "./uso.ts";
 
 const linhaDeUso = (modelo: string, custo: number | null, tokens = 10): LinhaDeUso => ({
   modelo,
@@ -60,4 +60,11 @@ test("Uso.somar agrupa por modelo, mantém o custo conhecido diante do desconhec
 test("Uso.vazio não tem linhas nem Trabalhos sem custo", () => {
   assert.deepEqual(Uso.vazio().porModelo(), []);
   assert.deepEqual(Uso.vazio().custo(), { conhecido: 0, trabalhosSemCusto: 0 });
+});
+
+test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso com '≥' e a contagem", () => {
+  const conhecido = Uso.de([linhaDeUso("a/m", 4.2)], 1);
+  assert.equal(textoDoCusto(conhecido), "US$ 4,20");
+  assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 2))), "≥ US$ 4,20 (2 sessões sem custo)");
+  assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 1))), "≥ US$ 4,20 (1 sessão sem custo)");
 });

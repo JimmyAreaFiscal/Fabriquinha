@@ -14,7 +14,7 @@ export interface LinhaDeUso {
 }
 
 /** Soma dois custos: o desconhecido some diante do conhecido (o total vira piso, avisado por `trabalhosSemCusto`). */
-function somarCustos(a: number | null, b: number | null): number | null {
+function somarCustoDaLinha(a: number | null, b: number | null): number | null {
   return a === null || b === null ? (a ?? b) : a + b;
 }
 
@@ -25,7 +25,7 @@ function somarLinha(a: LinhaDeUso, b: LinhaDeUso): LinhaDeUso {
     tokens_saida: a.tokens_saida + b.tokens_saida,
     tokens_cache_leitura: a.tokens_cache_leitura + b.tokens_cache_leitura,
     tokens_cache_escrita: a.tokens_cache_escrita + b.tokens_cache_escrita,
-    custo: somarCustos(a.custo, b.custo),
+    custo: somarCustoDaLinha(a.custo, b.custo),
     chamadas: a.chamadas + b.chamadas,
   };
 }
@@ -81,4 +81,15 @@ export class Uso {
     for (const { custo } of this.#linhas.values()) conhecido += custo ?? 0;
     return { conhecido, trabalhosSemCusto: this.#trabalhosSemCusto };
   }
+}
+
+/**
+ * O custo de `uso` como as telas o mostram: "US$ 4,20", ou "≥ US$ 4,20 (2 sessões sem custo)" quando falta custo.
+ * @testes as telas passam a usá-la nos próximos tickets da rodada
+ */
+export function textoDoCusto(uso: Uso): string {
+  const { conhecido, trabalhosSemCusto } = uso.custo();
+  const dolares = `US$ ${conhecido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (trabalhosSemCusto === 0) return dolares;
+  return `≥ ${dolares} (${String(trabalhosSemCusto)} ${trabalhosSemCusto === 1 ? "sessão" : "sessões"} sem custo)`;
 }

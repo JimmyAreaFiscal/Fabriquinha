@@ -102,20 +102,20 @@ test("consumo por mês: cada execução uma vez, retomada somada, custo desconhe
   assert.equal(fev.total.falhas, 1);
   assert.equal(fev.total.duracaoMs, 3 * 60_000);
   assert.deepEqual(fev.total.tokens, { entrada: 35, saida: 3, cacheLeitura: 6, cacheEscrita: 9 });
-  assert.deepEqual(fev.total.custo, { conhecido: 3, incompleto: true });
+  assert.deepEqual(fev.total.custo, { conhecido: 3, trabalhosSemCusto: 1 });
   assert.deepEqual(
-    fev.total.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    fev.total.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
     [
-      ["a", 30, 3],
-      ["b", 5, null],
+      ["p/a", 30, 3],
+      ["p/b", 5, null],
     ],
   );
   const mar = ver(meses[MAR]);
   assert.equal(mar.total.execucoes, 2);
-  assert.deepEqual(mar.total.custo, { conhecido: 12, incompleto: false });
+  assert.deepEqual(mar.total.custo, { conhecido: 12, trabalhosSemCusto: 0 });
   assert.equal(mar.total.duracaoMs, 30_000, "execução em andamento não tem duração");
   assert.equal(ver(meses[0]).total.execucoes, 0);
-  assert.deepEqual(ver(meses[0]).total.custo, { conhecido: 0, incompleto: false });
+  assert.deepEqual(ver(meses[0]).total.custo, { conhecido: 0, trabalhosSemCusto: 0 });
 });
 
 test("a soma de cada nível, da execução ao projeto, bate com o total", () => {
@@ -200,7 +200,7 @@ test("por demanda: só quem teve execução no período, com o estado atual e a 
       ["I-3", "site", "Título I-3", "em_execucao", 1, 0, null],
     ],
   );
-  assert.deepEqual(ver(todas[0]).custo, { conhecido: 7, incompleto: true });
+  assert.deepEqual(ver(todas[0]).custo, { conhecido: 7, trabalhosSemCusto: 1 });
   assert.deepEqual(
     metricasPorDemanda(b, { projeto: "site", de: "2026-03", ate: "2026-03" }).map((d) => d.demanda),
     ["I-3"],
@@ -218,7 +218,7 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   ).run(em("2026-04"));
   const abr = ver(metricasDemandaPorMes(b, { de: "2026-04", ate: "2026-04" })[0]);
   assert.equal(abr.total.execucoes, 1);
-  assert.deepEqual(abr.total.custo, { conhecido: 0, incompleto: false });
+  assert.deepEqual(abr.total.custo, { conhecido: 0, trabalhosSemCusto: 0 });
   assert.deepEqual(abr.prs, { abertos: 0, mergeados: 0 }); // o PR é da coorte de fevereiro
   assert.deepEqual(abr.nota, { media: null, notas: 0 });
 });
