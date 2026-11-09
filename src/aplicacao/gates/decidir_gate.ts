@@ -7,6 +7,7 @@ import { GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { conferirAprovacao } from "../revisao_pendencias.ts";
+import { instanteAtual } from "../relogio.ts";
 import { exigirTrabalhoDoTicket } from "../trabalho_do_ticket.ts";
 import { cancelandoEmCascata } from "./cancelamento_em_cascata.ts";
 import { aprovarGateDoPlanejamento, reprovarGateDoPlanejamento } from "./planejamento.ts";
@@ -19,11 +20,9 @@ interface ResultadoDoGate {
   sessao?: string;
 }
 
-const contexto = () => ({ agora: new Date().toISOString() });
-
 /** CA-16 a CA-20: aprovar não cascateia, reprovar cancela a demanda e as dependentes. */
 function decidirGateDaDemanda(banco: DatabaseSync, endereco: Endereco, entrada: unknown, ator: Ator): ResultadoDoGate {
-  const ctx = contexto();
+  const ctx = instanteAtual();
   return cancelandoEmCascata(banco, endereco.demanda_id, ator, ctx, (ag) =>
     GATES.gate_demanda.decidir(ag, endereco, entrada, ator, ctx),
   );
@@ -64,7 +63,7 @@ function decidirGateDeRevisao(
     const demanda = comDemanda(banco, endereco.demanda_id, (ag) => {
       const ticket = gate.ancora(ag, endereco);
       exigirTrabalhoDoTicket(banco, ator, ticket);
-      const decidida = gate.decidir(ag, endereco, entrada, ator, contexto());
+      const decidida = gate.decidir(ag, endereco, entrada, ator, instanteAtual());
       if (resultado === "aprovado") conferirAprovacao(ag, ticket.ticket_id);
       return decidida;
     });
