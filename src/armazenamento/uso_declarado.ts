@@ -27,7 +27,7 @@ export function gravarUsoDeclarado(banco: DatabaseSync, uso: UsoDeclarado): { de
   return { demandaDona: String(dona?.demanda_id) };
 }
 
-/** @testes lido pelo ticket que soma o Uso declarado nas Métricas; por ora só o teste confere o que foi gravado */
+/** O Uso declarado das sessões cuja dona é a demanda, na ordem em que foram gravadas. */
 export function lerUsoDeclarado(banco: DatabaseSync, demandaId: string): UsoDeclarado[] {
   return banco
     .prepare("SELECT ferramenta, sessao, demanda_id, linhas FROM uso_declarado WHERE demanda_id = ? ORDER BY rowid")

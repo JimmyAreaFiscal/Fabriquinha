@@ -174,71 +174,46 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
   assert.equal(metricasDaDemanda(b, "I-1").total.modelos[0]?.custo, null);
 });
 
+const gravarUso = (b: DatabaseSync, sessao: string, demanda: string, linhas: unknown[]) =>
+  b
+    .prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('codex', ?, ?, ?)")
+    .run(sessao, demanda, JSON.stringify(linhas));
+
+const linhaDeUso = (custo: number | null) => ({
+  modelo: "openai/x",
+  tokens_entrada: 1,
+  tokens_saida: 1,
+  tokens_cache_leitura: 0,
+  tokens_cache_escrita: 0,
+  custo,
+  chamadas: 0,
+});
+
 test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a demanda", () => {
   const b = banco();
   b.exec(`INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'b')`);
   execucao(b, 2, "e1", 0, [["m1", 1, 1, 1, 1, 1]]);
-  const linha = (custo: number | null) => ({
-    provedor: "openai",
-    modelo: "x",
-    tokens_entrada: 1,
-    tokens_saida: 1,
-    tokens_cache_leitura: 0,
-    tokens_cache_escrita: 0,
-    ...(custo === null ? {} : { custo }),
-  });
-  const dados = {
-    sessoes: [
-      { ferramenta: "codex", sessao: "a", linhas: [linha(3), linha(null)] },
-      { ferramenta: "codex", sessao: "de-outra", linhas: [linha(100)] },
-    ],
-  };
-  b.prepare(
-    "INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('c1', 'I-1', 'custos_realizados', ?, ?)",
-  ).run(JSON.stringify(dados), "2026-01-01T00:00:00.000Z");
-  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]'), ('codex', 'de-outra', 'I-2', '[]');
-    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'de-outra', 'I-2')`);
+  gravarUso(b, "a", "I-1", [linhaDeUso(3), linhaDeUso(null)]);
+  gravarUso(b, "de-outra", "I-2", [linhaDeUso(100)]);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(m.custoExterno, { conhecido: 3, incompleto: true, sessoes: 1 });
   assert.deepEqual(m.total.custo, { conhecido: 1, incompleto: false });
 });
 
-test("CA-SDLC-24: custo externo de rodada fica na rodada e soma no total externo, fora do custo interno", () => {
+test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e das rodadas", () => {
   const b = banco();
-  const linha = (custo: number) => ({ provedor: "x", modelo: "m", custo });
-  const sessao = (s: string, custo: number) => ({ ferramenta: "codex", sessao: s, linhas: [linha(custo)] });
-  const grava = (id: string, rodada: string, dados: unknown) => {
-    b.exec(`INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, tipo, dados, em)
-      VALUES ('${id}', 'I-1', ${rodada}, 'custos_realizados', '${JSON.stringify(dados)}', ${T})`);
-  };
-  grava("d", "NULL", { sessoes: [sessao("a", 2)] });
-  grava("r1", "1", { sessoes: [sessao("b", 7)] });
-  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]'), ('codex', 'b', 'I-1', '[]');
-    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'b', 'I-1')`);
+  gravarUso(b, "a", "I-1", [linhaDeUso(2)]);
+  gravarUso(b, "b", "I-1", [linhaDeUso(7)]);
   const m = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
-  assert.deepEqual(m.rodadas[1]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
   assert.deepEqual(m.custoExterno, { conhecido: 9, incompleto: false, sessoes: 2 });
+  assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
   assert.deepEqual(m.rodadas[0].custo, { conhecido: 0, incompleto: false });
 });
 
-test("CA-7: evidência de custos malformada ou de ticket não conta linhas", () => {
+test("CA-7: sessão declarada sem linhas não conta como sessão externa", () => {
   const b = banco();
-  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]');
-    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1')`);
-  const grava = (id: string, dados: string, rodada: string, ticket: string, tipo = "custos_realizados") => {
-    b.exec(`INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em)
-      VALUES ('${id}', 'I-1', ${rodada}, ${ticket}, '${tipo}', '${dados}', ${T})`);
-  };
-  const vazio = { conhecido: 0, incompleto: false, sessoes: 0 };
-  grava("c2", '{"sessoes":{"a":1}}', "NULL", "NULL");
-  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
-  b.exec("DELETE FROM evidencia_demanda");
-  grava("c3", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":5}]}', "NULL", "NULL");
-  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
-  b.exec("DELETE FROM evidencia_demanda");
-  grava("c4", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":[{"custo":9}]}]}', "NULL", "1");
-  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
+  gravarUso(b, "a", "I-1", []);
+  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
 });
 
 test("CA-14: média só das notas dos PRs de rodada aprovados com nota", () => {

@@ -228,7 +228,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     [0, 0],
   );
 
-  // Custo externo de rodada: aparece na própria rodada, soma no total externo e não substitui o da demanda.
+  // Custo externo submetido numa rodada: o Uso declarado é da demanda, então soma no total externo e não aparece na rodada.
   const linhaR2 = {
     provedor: "x",
     modelo: "m",
@@ -250,7 +250,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     ORIGENS_DOS_ANEXOS,
   );
   const comRodada = metricasDaDemanda(c.banco, id);
-  assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
+  assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
   assert.deepEqual(comRodada.rodadas[1].custo, m.rodadas[1]?.custo, "o externo não entra no custo interno");
   assert.deepEqual(comRodada.custoExterno, { conhecido: 13.5, incompleto: true, sessoes: 3 });
   assert.equal(atual(c, id, "implementar", 1).titulo, "Corrigir");

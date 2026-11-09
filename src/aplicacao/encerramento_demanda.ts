@@ -35,6 +35,7 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
+import { lerUsoDeclarado } from "../armazenamento/uso_declarado.ts";
 import { logDaOperacao } from "../infra/registro.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao, publicarPRDe } from "../infra/repositorio/pr.ts";
@@ -116,7 +117,13 @@ export async function conduzirEncerramentoDemanda(
         ? [
             {
               tipo: "arvore_prs_criterios_custos" as const,
-              dados: montarArvorePRs(carregarDemanda(banco, demanda_id), sessoes, execucoes, usos),
+              dados: montarArvorePRs(
+                carregarDemanda(banco, demanda_id),
+                sessoes,
+                execucoes,
+                usos,
+                lerUsoDeclarado(banco, demanda_id),
+              ),
             },
           ]
         : []),
