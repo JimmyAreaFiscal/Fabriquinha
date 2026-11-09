@@ -1,9 +1,11 @@
 // Auditor automático: a pergunta que o agente de um ticket autônomo faz com a `perguntar` vai antes a um modelo, numa
 // chamada única do pi sem ferramentas. Ele responde o que é banal pelas regras do Auditor e escala o estratégico, que
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
+import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import { executar } from "../infra/processo.ts";
+import { registrarUsoDaConsulta, type TicketRef } from "./trabalho/processo_do_ticket.ts";
 import { condutor } from "./trabalho/condutor.ts";
 
 export interface PerguntaDoAgente {
@@ -127,19 +129,31 @@ export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): R
   return { resposta: decisao.resposta, justificativa: decisao.justificativa };
 }
 
+/** A execução do ticket que perguntou, onde o Uso da consulta da triagem é gravado. */
+interface ExecucaoQuePerguntou {
+  banco: DatabaseSync;
+  ticket: TicketRef;
+  execucao: string;
+}
+
 /** Tempo máximo da triagem; passado, escala. */
 const LIMITE_TRIAGEM_MS = 3 * 60_000;
 
 /**
  * Triagem da pergunta com o modelo do ticket (`provedor/nome`, ou o padrão do pi). Devolve a resposta para mandar ao
- * agente, ou `undefined` para deixar a pergunta com o Auditor humano.
+ * agente, ou `undefined` para deixar a pergunta com o Auditor humano. O Uso da consulta conta para o ticket que perguntou.
  */
 export async function triarPergunta(
   modelo: Modelo | undefined,
   contexto: ContextoDaPergunta,
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,
+  quemPerguntou?: ExecucaoQuePerguntou,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
   const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
-  return resposta === undefined ? undefined : lerDecisao(resposta.saida, p, contexto.etapa);
+  if (resposta === undefined) return undefined;
+  if (quemPerguntou) {
+    registrarUsoDaConsulta(quemPerguntou.banco, quemPerguntou.ticket, quemPerguntou.execucao, resposta.uso);
+  }
+  return lerDecisao(resposta.saida, p, contexto.etapa);
 }

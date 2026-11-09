@@ -589,3 +589,23 @@ test("foto do retorno ao agente no encerramento da rodada: reabertura", async ()
   await iniciarEncerramentoRodada(banco, REF, 1).fim;
   conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, "encerramento_rodada_reabertura");
 });
+
+test("o Uso da consulta do resumo do PR é somado à última execução do encerrar_rodada, que é da rodada", async () => {
+  const { banco, piFalso } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+  const ticket = { demanda_id: DEMANDA, ticket_id: 8 };
+  await iniciarEncerramentoRodada(banco, REF, 1).fim;
+  const antes = carregarTrabalhosDoTicket(banco, ticket);
+  const entradaDoAgente = antes.usos.reduce((n, u) => n + u.tokens_entrada, 0);
+  assert.ok(entradaDoAgente > 0);
+
+  piFalso.roteirizar([{ chamadaUnica: { saida: "Resumo da I-206.", uso: { input: 3000, output: 40, custo: 0.2 } } }]);
+  await concluirEncerramentoRodada(banco, REF);
+
+  const depois = carregarTrabalhosDoTicket(banco, ticket);
+  assert.equal(depois.usos.length, antes.usos.length);
+  assert.equal(
+    depois.usos.reduce((n, u) => n + u.tokens_entrada, 0),
+    entradaDoAgente + 3000,
+  );
+  assert.equal(depois.usos.at(-1)?.execucao_id, antes.execucoes.at(-1)?.id);
+});

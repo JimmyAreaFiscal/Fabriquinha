@@ -80,8 +80,11 @@ export interface PassoPi {
   listaDeModelos?: { tabela?: string; stderr?: string; codigo?: number };
   /** Processo sem RPC: saída crua, término opcionalmente só depois do EOF do stdin. */
   saidaDoProcesso?: { stdout?: string; stderr?: string; codigo?: number; esperaEof?: boolean };
-  /** `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. */
-  chamadaUnica?: { saida?: string | object; codigo?: number };
+  /**
+   * `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. Com `uso`, grava no
+   * `--session-dir` a sessão com a mensagem do assistente (anthropic/claude-opus-5-5), como o pi sem `--no-session`.
+   */
+  chamadaUnica?: { saida?: string | object; codigo?: number; uso?: { input: number; output: number; custo?: number } };
   /** `--mode json`: grava o relatório em $FABRIQUINHA_SAIDA depois do EOF do stdin. */
   simulacao?: {
     /** Objeto (JSON), texto cru (arquivo inválido) ou null (não entrega). Padrão: um relatório de usabilidade. */
@@ -223,7 +226,15 @@ async function executarPiFalso(): Promise<void> {
 
   if (argumentos.includes("-p")) {
     registrar({ evento: "chamada_unica", argv: argumentos, cwd: process.cwd() });
-    const { saida, codigo } = passoDoInicio.chamadaUnica ?? {};
+    const { saida, codigo, uso } = passoDoInicio.chamadaUnica ?? {};
+    if (uso) {
+      const dir = arg("--session-dir");
+      mkdirSync(dir, { recursive: true });
+      const usage = { input: uso.input, output: uso.output, cacheRead: 0, cacheWrite: 0, cost: { total: uso.custo } };
+      const message = { role: "assistant", provider: "anthropic", model: "claude-opus-5-5", usage };
+      const entrada = { type: "message", timestamp: new Date().toISOString(), message };
+      appendFileSync(join(dir, "consulta.jsonl"), `${JSON.stringify(entrada)}\n`);
+    }
     if (saida !== undefined) process.stdout.write(`${typeof saida === "string" ? saida : JSON.stringify(saida)}\n`);
     process.exit(codigo ?? (saida === undefined ? 1 : 0));
   }
