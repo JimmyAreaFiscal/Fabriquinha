@@ -393,14 +393,14 @@ const Tokens = (campo: string) =>
     .int(`${campo} deve ser inteiro: informe o total de tokens sem fração`)
     .nonnegative(`${campo} não pode ser negativo: informe 0 se não houve tokens`);
 
-/** Texto obrigatório de `custos_realizados`: a mensagem diz o campo e como corrigir. */
+/** Texto obrigatório do Uso declarado: a mensagem diz o campo e como corrigir. */
 const Obrigatorio = (campo: string, como: string) =>
   z
     .string({ error: `${campo} é obrigatório: ${como}` })
     .trim()
     .min(1, `${campo} é obrigatório: ${como}`);
 
-// Custo externo (D10): uma sessão da ferramenta fora da Fabriquinha, com linhas por provedor/modelo. Custo ausente é
+// Uso declarado (D10): uma sessão da ferramenta fora da Fabriquinha, com linhas por provedor/modelo. Custo ausente é
 // desconhecido (null), nunca 0, e não há tabela de preços.
 export const CustosRealizados = z.object({
   sessoes: z
@@ -458,7 +458,7 @@ export const ArvorePRsCriteriosCustos = z.strictObject({
   ),
   // Tickets que não são de rodada (demanda, planejamento, encerramento).
   tickets_sem_rodada: z.array(z.strictObject({ ticket: TextoNaoVazio, etapa: TextoNaoVazio, custo: Custo })),
-  // Dois totais que nunca se somam: o interno vem das execuções da Fabriquinha, o externo de `custos_realizados`.
+  // Dois totais que nunca se somam: o interno vem das execuções da Fabriquinha, o externo do Uso declarado.
   custos: z.strictObject({
     internos: Custo,
     externos: z.strictObject({

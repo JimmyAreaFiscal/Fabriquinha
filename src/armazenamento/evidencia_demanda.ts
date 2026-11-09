@@ -1,4 +1,4 @@
-// Anexos e sessões externas da evidência da demanda (D10): gravados na transação da evidência (`comDemanda`, via
+// Anexos da evidência da demanda (D10): gravados na transação da evidência (`comDemanda`, via
 // `aposGravar`), por cima do armazenamento por SHA-256 de `arquivos.ts`. Nada aqui toca o agregado.
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
@@ -89,37 +89,4 @@ export function lerAnexo(banco: DatabaseSync, chave: ChaveEvidencia, sha256: str
     bytes: Number(linha.bytes),
     conteudo: readFileSync(arquivo),
   };
-}
-
-/**
- * Regrava as sessões externas da demanda a partir de todas as `custos_realizados` dela, de qualquer dono (demanda ou
- * rodada). A sessão que outra demanda já informou não muda de dona e vira aviso: não é contada de novo. Não escreve em
- * `processo_do_trabalho` nem em `uso_modelo_execucao`: custo externo não é execução interna.
- */
-export function registrarSessoesExternas(banco: DatabaseSync, demanda_id: string): { avisos: string[] } {
-  banco.prepare("DELETE FROM trabalho_nao_gerenciado WHERE demanda_id = ?").run(demanda_id);
-  const sessoes = banco
-    .prepare(
-      `SELECT json_extract(s.value, '$.ferramenta') AS ferramenta, json_extract(s.value, '$.sessao') AS sessao
-       FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND json_type(e.dados, '$.sessoes') = 'array'
-       ORDER BY e.rowid, s.key`,
-    )
-    .all(demanda_id) as { ferramenta: string; sessao: string }[];
-  const inserir = banco.prepare(
-    "INSERT INTO trabalho_nao_gerenciado (ferramenta, sessao, demanda_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
-  );
-  const dona = banco.prepare("SELECT demanda_id FROM trabalho_nao_gerenciado WHERE ferramenta = ? AND sessao = ?");
-  const avisos: string[] = [];
-  for (const { ferramenta, sessao } of sessoes) {
-    if (
-      inserir.run(ferramenta, sessao, demanda_id).changes === 0 &&
-      dona.get(ferramenta, sessao)?.demanda_id !== demanda_id
-    ) {
-      avisos.push(
-        `a sessão ${sessao} de ${ferramenta} já consta na demanda ${String(dona.get(ferramenta, sessao)?.demanda_id)} e não é contada de novo para ${demanda_id}`,
-      );
-    }
-  }
-  return { avisos };
 }

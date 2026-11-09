@@ -19,6 +19,7 @@ import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarDemanda } from "../src/armazenamento/demandas.ts";
+import { gravarUsoDeclarado } from "../src/armazenamento/uso_declarado.ts";
 import { type Configuracao, configuracao } from "../src/armazenamento/servico.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
@@ -143,27 +144,30 @@ export async function ciclo(c: Cenario, deps?: DepsDespacho): Promise<void> {
   await Promise.all(despacharDemandas(c.banco, c.config, deps));
 }
 
-// Evidências de uma IA externa que registra a demanda (F3): critérios, desenho com o html e custos.
+// Evidências de uma IA externa que registra a demanda (F3): critérios e desenho com o html.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-export const custos = (sessao: string) => ({
-  sessoes: [
+
+/** O Uso declarado de uma sessão externa (uma linha `x/m`, custo `null` = desconhecido), gravado como o comando de uso o grava. */
+export function declararUso(c: Cenario, demanda_id: string, sessao: string, custo: number | null = null): void {
+  const linhas = [
     {
-      ferramenta: "claude",
-      sessao,
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
+      modelo: "x/m",
+      tokens_entrada: 1,
+      tokens_saida: 1,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo,
+      chamadas: 0,
     },
-  ],
-});
+  ];
+  const { demandaDona } = gravarUsoDeclarado(c.banco, { ferramenta: "claude", sessao, demanda_id, linhas });
+  if (demandaDona === demanda_id) {
+    c.banco
+      .prepare("INSERT OR IGNORE INTO trabalho_nao_gerenciado (ferramenta, sessao, demanda_id) VALUES (?, ?, ?)")
+      .run("claude", sessao, demanda_id);
+  }
+}
 
 export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = c.projeto): string =>
   gestao.registrar(
@@ -173,8 +177,8 @@ export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = 
     CTX,
   ).demanda.id;
 
-/** Submete as três evidências obrigatórias, como a IA externa as enviaria (`custos` com a sessão externa dada). */
-export function submeterObrigatorias(c: Cenario, id: string, sessaoExterna = `ext-${id}`): void {
+/** Submete as evidências obrigatórias, como a IA externa as enviaria. */
+export function submeterObrigatorias(c: Cenario, id: string): void {
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
     gestao.submeterEvidencia(
       c.banco,
@@ -185,7 +189,6 @@ export function submeterObrigatorias(c: Cenario, id: string, sessaoExterna = `ex
     );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [anexoHtml()]);
-  submeter("custos_realizados", custos(sessaoExterna));
 }
 
 /** Demanda registrada, completa e enviada: espera a decisão do Auditor em `gate_demanda`. */

@@ -173,24 +173,6 @@ const escreve = (c: Cenario, ligado: boolean) => {
 // Evidências de uma IA externa que registra a demanda, como em integracao/apoio.ts.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const custos = {
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao: "ext",
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-};
 
 /** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
 async function demandaAprovada(c: Cenario): Promise<string> {
@@ -208,7 +190,6 @@ async function demandaAprovada(c: Cenario): Promise<string> {
     gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  submeter("custos_realizados", custos);
   gestao.enviar(c.banco, id, AUTOR, ctx);
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
   return id;

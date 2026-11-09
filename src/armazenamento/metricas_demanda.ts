@@ -159,29 +159,26 @@ export const rodadasDaDemanda = (banco: DatabaseSync, demandaId: string): number
 interface LinhaExterna {
   ferramenta: string;
   sessao: string;
-  /** Rodada dona da evidência; `null` = a própria demanda. */
+  /** Sempre `null`: o Uso declarado é da demanda, não de uma rodada. */
   rodadaId: number | null;
   /** `null` = desconhecido. */
   custo: number | null;
 }
 
-/** Linhas de `custos_realizados` da demanda e das rodadas dela (evidência sem ticket) das sessões externas cuja dona é a demanda; evidência malformada não conta (o banco já garante JSON válido). */
+/** Linhas do Uso declarado das sessões externas cuja dona é a demanda. */
 export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string): LinhaExterna[] =>
   banco
     .prepare(
-      `SELECT x.ferramenta, x.sessao, e.rodada_id, json_extract(l.value, '$.custo') AS custo
-       FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
-       JOIN trabalho_nao_gerenciado x ON x.demanda_id = e.demanda_id
-         AND x.ferramenta = json_extract(s.value, '$.ferramenta') AND x.sessao = json_extract(s.value, '$.sessao')
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
-         AND json_type(e.dados, '$.sessoes') = 'array'
-         AND json_type(s.value, '$.linhas') = 'array'`,
+      `SELECT u.ferramenta, u.sessao, json_extract(l.value, '$.custo') AS custo
+       FROM uso_declarado u, json_each(u.linhas) l
+       WHERE u.demanda_id = ?
+       ORDER BY u.rowid, l.key`,
     )
     .all(demandaId)
     .map((l) => ({
       ferramenta: l.ferramenta as string,
       sessao: l.sessao as string,
-      rodadaId: rodadaDe(l),
+      rodadaId: null,
       custo: typeof l.custo === "number" ? l.custo : null,
     }));
 
