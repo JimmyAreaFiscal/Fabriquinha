@@ -6,6 +6,7 @@ import {
   encerrarProcesso,
   ProcessoDoTrabalho,
   iniciarProcesso,
+  acumularUso,
   registrarUso,
   retomarTrabalho,
   TrabalhoGerenciado,
@@ -163,4 +164,21 @@ test("controle da execução: campos opcionais e par do modelo", () => {
   assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
   assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, grupo_processo: 0 }).success);
   assert.equal("erro" in ProcessoDoTrabalho.shape, false);
+});
+
+test("acumularUso soma à mesma chave, e o custo desconhecido de qualquer parcela deixa o total desconhecido", () => {
+  const somado = acumularUso([uso("e1", "a", 10, 0.5), uso("e1", "b", 5)], uso("e1", "a", 20, 0.25));
+  assert.deepEqual(
+    somado.find((u) => u.modelo_nome === "a"),
+    {
+      ...uso("e1", "a", 30, 0.75),
+      tokens_saida: 2,
+      tokens_cache_leitura: 4,
+      tokens_cache_escrita: 6,
+    },
+  );
+  assert.equal(somado.length, 2);
+  assert.equal(acumularUso([uso("e1", "b", 5)], uso("e1", "b", 1, 0.5)).at(-1)?.custo, undefined);
+  assert.equal(acumularUso([uso("e1", "a", 1, 0.5)], uso("e1", "a", 1)).at(-1)?.custo, undefined);
+  assert.equal(acumularUso([uso("e1", "a", 1)], uso("e2", "a", 1)).length, 2);
 });

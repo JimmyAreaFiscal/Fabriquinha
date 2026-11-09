@@ -113,3 +113,23 @@ export const registrarUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloE
   const novo = UsoModeloExecucao.parse(uso);
   return [...usos.filter((u) => !mesmaChave(u, novo)), novo];
 };
+
+/**
+ * Soma o uso à mesma chave, em vez de substituí-lo: a consulta gasta tokens na execução que a pediu, e a coleta do fim
+ * da execução não pode apagar o que a consulta já registrou. A parcela sem custo deixa o total sem custo, como na
+ * coleta (parcial fica desconhecido, nunca zero).
+ */
+export const acumularUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloExecucao): UsoModeloExecucao[] => {
+  const novo = UsoModeloExecucao.parse(uso);
+  const anterior = usos.find((u) => mesmaChave(u, novo));
+  if (!anterior) return [...usos, novo];
+  const { custo: custoAnterior, ...tokensAnteriores } = anterior;
+  return registrarUso(usos, {
+    ...tokensAnteriores,
+    tokens_entrada: anterior.tokens_entrada + novo.tokens_entrada,
+    tokens_saida: anterior.tokens_saida + novo.tokens_saida,
+    tokens_cache_leitura: anterior.tokens_cache_leitura + novo.tokens_cache_leitura,
+    tokens_cache_escrita: anterior.tokens_cache_escrita + novo.tokens_cache_escrita,
+    ...(custoAnterior !== undefined && novo.custo !== undefined && { custo: custoAnterior + novo.custo }),
+  });
+};

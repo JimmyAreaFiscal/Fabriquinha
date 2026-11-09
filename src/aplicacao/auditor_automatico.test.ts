@@ -1,6 +1,12 @@
 // Auditor automático: o prompt da triagem, a leitura da decisão e a chamada ao pi, com o `executar` trocado.
 import assert from "node:assert/strict";
+import { writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+import { join } from "node:path";
 import { test } from "node:test";
+import { migrar } from "../armazenamento/banco.ts";
+import { MIGRACOES } from "../armazenamento/migracoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import type { executar } from "../infra/processo.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 
@@ -118,9 +124,10 @@ test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código dife
     resposta: "Sim",
     justificativa: "Sonar se corrige",
   });
-  assert.deepEqual(chamadas[0]?.slice(0, 9), [
+  // O 3º argumento é o diretório temporário da sessão, que muda a cada chamada.
+  assert.deepEqual(chamadas[0]?.toSpliced(2, 1).slice(0, 9), [
     "-p",
-    "--no-session",
+    "--session-dir",
     "--no-tools",
     "--no-skills",
     "--no-context-files",
@@ -133,4 +140,55 @@ test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código dife
   assert.ok(!chamadas[1]?.includes("--model"));
   const quebra = (() => Promise.reject(new Error("spawn pi ENOENT"))) as unknown as typeof executar;
   assert.equal(await triarPergunta(modelo, contexto, comOpcoes, quebra), undefined);
+});
+
+test("o Uso da consulta é somado à execução do ticket que perguntou, e a consulta sem resposta não grava nada", async () => {
+  const T = "'2026-01-01T00:00:00.000Z'";
+  const banco = new DatabaseSync(":memory:");
+  banco.exec("PRAGMA foreign_keys = ON");
+  migrar(banco, MIGRACOES);
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('p', '/repo/p', 'main', 'github', 'k');
+    INSERT INTO demanda VALUES ('I-7', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-7');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+      VALUES ('I-7', 3, 'implementar', 'em_execucao', ${T});`);
+  const ticket = { demanda_id: "I-7", ticket_id: 3 };
+  comTrabalhosDoTicket(banco, ticket, (estado) => ({
+    ...estado,
+    sessoes: [{ ...ticket, id: "s1", modo: "autonomo", conversa_referencia: "s1" }],
+    execucoes: [{ id: "e1", trabalho_id: "s1", inicio: "2026-01-01T00:00:00.000Z", falha: false }],
+  }));
+  const decisao = '{"decisao":"responder","resposta":"Sim","justificativa":"Sonar se corrige"}';
+  // Como o pi real, grava a sessão no `--session-dir` com o `usage` da resposta.
+  const pi =
+    (codigo: number): typeof executar =>
+    (_comando, args) => {
+      const sessao = {
+        role: "assistant",
+        provider: "p",
+        model: "m",
+        usage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0 },
+      };
+      const entrada = { type: "message", timestamp: "2026-01-01T00:00:00.000Z", message: sessao };
+      writeFileSync(join(String(args[args.indexOf("--session-dir") + 1]), "s.jsonl"), `${JSON.stringify(entrada)}\n`);
+      return Promise.resolve({ codigo, saida: decisao, erro: "", limiteEstourado: false });
+    };
+  const execucaoQuePerguntou = { banco, ticket, execucao: "e1" };
+
+  assert.equal(await triarPergunta(undefined, contexto, comOpcoes, pi(1), execucaoQuePerguntou), undefined);
+  assert.deepEqual(carregarTrabalhosDoTicket(banco, ticket).usos, []);
+
+  await triarPergunta(undefined, contexto, comOpcoes, pi(0), execucaoQuePerguntou);
+  await triarPergunta(undefined, contexto, comOpcoes, pi(0), execucaoQuePerguntou);
+  assert.deepEqual(carregarTrabalhosDoTicket(banco, ticket).usos, [
+    {
+      execucao_id: "e1",
+      modelo_provedor: "p",
+      modelo_nome: "m",
+      tokens_entrada: 200,
+      tokens_saida: 20,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+    },
+  ]);
 });
