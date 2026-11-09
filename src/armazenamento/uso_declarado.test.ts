@@ -60,11 +60,25 @@ test("o Uso declarado do período, no mês do registro da demanda e filtrado por
   gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s2", demanda_id: "I-3", linhas: [linha(2)] });
   const janeiro = { inicio: "2026-01-01T00:00:00.000Z", fim: "2026-02-01T00:00:00.000Z", projeto: null };
   assert.deepEqual(usoDeclaradoNoPeriodo(b, janeiro), [
-    { demanda: "I-1", em: "2026-01-01T00:00:00.000Z", linhas: [linha(1)] },
+    {
+      demanda: "I-1",
+      projeto: "p",
+      titulo: "t",
+      estado: "em_execucao",
+      em: "2026-01-01T00:00:00.000Z",
+      linhas: [linha(1)],
+    },
   ]);
   const fevereiro = { inicio: janeiro.fim, fim: "2026-03-01T00:00:00.000Z", projeto: "q" };
   assert.deepEqual(usoDeclaradoNoPeriodo(b, fevereiro), [
-    { demanda: "I-3", em: "2026-02-01T00:00:00.000Z", linhas: [linha(2)] },
+    {
+      demanda: "I-3",
+      projeto: "q",
+      titulo: "t",
+      estado: "em_execucao",
+      em: "2026-02-01T00:00:00.000Z",
+      linhas: [linha(2)],
+    },
   ]);
   assert.deepEqual(usoDeclaradoNoPeriodo(b, { ...fevereiro, projeto: "p" }), []);
 });

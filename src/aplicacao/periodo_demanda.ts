@@ -163,7 +163,7 @@ const mesesEntre = (de: string, ate: string): number => {
   return indice(ate) - indice(de) + 1;
 };
 
-/** Uma linha por demanda com pelo menos uma execução iniciada no período; `estado` é a atual e o resto só conta o período. */
+/** Uma linha por demanda com execução iniciada ou Uso declarado no período; `estado` é a atual e o resto só conta o período. */
 export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): MetricasPorDemanda {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const recorte = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto };
@@ -172,9 +172,17 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
   const execucoes = execucoesNoPeriodo(banco, recorte);
   const declarado = usoDeclaradoNoPeriodo(banco, recorte);
   const declaradoPorDemanda = Map.groupBy(declarado, (d) => d.demanda);
-  const demandas = [...Map.groupBy(execucoes, (e) => e.demanda).values()]
-    .map((execs) => {
-      const [{ demanda, projeto: p, titulo, estado }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
+  const execucoesPorDemanda = Map.groupBy(execucoes, (e) => e.demanda);
+  // A demanda só com Uso declarado no período também é linha, com 0 execuções: a soma das linhas é o rodapé.
+  const cabecalhos = new Map(
+    [...declarado, ...execucoes].map(({ demanda, projeto: p, titulo, estado }) => [
+      demanda,
+      { demanda, projeto: p, titulo, estado },
+    ]),
+  );
+  const demandas = [...cabecalhos.values()]
+    .map(({ demanda, projeto: p, titulo, estado }) => {
+      const execs = execucoesPorDemanda.get(demanda) ?? [];
       const ds = decisoes.get(demanda) ?? [];
       const notas = ds.flatMap((d) =>
         d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],

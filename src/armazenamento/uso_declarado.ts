@@ -55,17 +55,20 @@ export function lerUsoDeclarado(banco: DatabaseSync, demandaId: string): UsoDecl
 export function usoDeclaradoNoPeriodo(
   banco: DatabaseSync,
   recorte: { inicio: string; fim: string; projeto: string | null },
-): { demanda: string; em: string; linhas: LinhaDeUso[] }[] {
+): { demanda: string; projeto: string; titulo: string; estado: string; em: string; linhas: LinhaDeUso[] }[] {
   return banco
     .prepare(
       `SELECT COALESCE(h.criada_em, (SELECT MIN(e.em) FROM evidencia_demanda e WHERE e.demanda_id = d.id),
-         d.estado_alterado_em) AS em, u.demanda_id, u.linhas
+         d.estado_alterado_em) AS em, u.demanda_id, d.projeto, d.titulo, d.estado, u.linhas
        FROM uso_declarado u JOIN demanda d ON d.id = u.demanda_id LEFT JOIN demanda_historico h ON h.demanda_id = d.id
        WHERE em >= $inicio AND em < $fim AND ($projeto IS NULL OR d.projeto = $projeto) ORDER BY u.rowid`,
     )
     .all(recorte)
     .map((l) => ({
       demanda: String(l.demanda_id),
+      projeto: String(l.projeto),
+      titulo: String(l.titulo),
+      estado: String(l.estado),
       em: String(l.em),
       linhas: JSON.parse(String(l.linhas)) as LinhaDeUso[],
     }));
