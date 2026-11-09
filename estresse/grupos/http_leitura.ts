@@ -202,6 +202,7 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
     acao("/api/inicio", "/api/inicio", 151),
     acao("/api/sessoes", "/api/sessoes?escopo=ativas", 52),
     acao("/api/configuracao", "/api/configuracao", 15),
+    acao("/api/ambiente", "/api/ambiente", 15),
     acao("/api/projetos", "/api/projetos", 17),
     acao("/api/projetos/:nome", "/api/projetos/loja", 19),
     acao("/api/modelos", "/api/modelos", 437),

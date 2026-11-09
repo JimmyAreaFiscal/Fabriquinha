@@ -4,15 +4,17 @@
 // corpo. Toda resposta é lida em busca de SQLITE_BUSY / "database is locked" (CA-3), e o status e o efeito gravado são
 // conferidos (CA-2, CA-4). O pi é o falso do ambiente ($FABRIQUINHA_PI): nenhuma rota aqui inicia o `pi` real (CA-6).
 import { Buffer } from "node:buffer";
-import { readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../src/armazenamento/ambientes.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
 import { carregarDemanda } from "../../src/armazenamento/demandas.ts";
 import { buscarProjeto } from "../../src/armazenamento/projetos.ts";
-import { configuracao } from "../../src/armazenamento/servico.ts";
+import { configuracao, configuracaoDoAmbiente } from "../../src/armazenamento/servico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { anexar } from "../../src/armazenamento/simulacao.ts";
+import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
@@ -59,6 +61,13 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     gh,
     readFileSync(gh, "utf8").replace(/\n/, () => '\n[ "$1" = auth ] && exit 0\n'),
   );
+  // O DELETE de ambiente chama o `docker` do serviço: o falso entra à frente no PATH dele, que já traz `bin/`, e o estresse
+  // nunca chama o Docker real.
+  const dockerDir = join(amb.raiz, "docker-falso");
+  const dockerFalso = instalarDockerFalso(dockerDir);
+  const docker = join(amb.raiz, "bin", "docker");
+  writeFileSync(docker, `#!/bin/sh\nFALSO_DOCKER_DIR='${dockerDir}' exec '${join(dockerDir, "bin", "docker")}' "$@"\n`);
+  chmodSync(docker, 0o755);
   const banco = abrir(amb.raiz);
   // Cada chamada que fala com o pi deixa um pi falso vivo até a ociosidade: sem isto, o limite global de paralelismo (D04)
   // recusaria o "executar" com 409, e a medição seria a da fila, não a da rota.
@@ -348,6 +357,47 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         url: "/api/configuracao",
         corpo: atual,
         status: 200,
+      }),
+    ),
+    acao(
+      "POST",
+      "/api/ambiente",
+      30,
+      () => configuracaoDoAmbiente(banco),
+      (atual) => ({
+        url: "/api/ambiente",
+        corpo: atual,
+        status: 200,
+      }),
+    ),
+    acao(
+      "DELETE",
+      "/api/ambiente/:id",
+      250,
+      () => {
+        const id = `amb-estresse-${String(novo())}`;
+        const container = dockerFalso.semearContainer({ rotulos: { "fabriquinha.ambiente": id } });
+        inserirAmbienteAlocado(banco, {
+          id,
+          container_id: container.id,
+          imagem: "alpine",
+          criado_em: new Date().toISOString(),
+          alocado_para: "espaco-estresse",
+        });
+        liberarAmbiente(banco, id, "livre", new Date().toISOString());
+        return { id, container: container.id };
+      },
+      ({ id, container }) => ({
+        url: `/api/ambiente/${id}`,
+        status: 204,
+        efeito: () => {
+          conferir(
+            false,
+            listarAmbientes(banco).some((a) => a.id === id),
+            `ambiente ${id} no banco`,
+          );
+          conferir(false, existsSync(join(dockerDir, "containers", container)), `container de ${id} no docker`);
+        },
       }),
     ),
     acao("POST", "/api/projetos/:nome/usuarios-simulados", 50, novo, (n) => ({

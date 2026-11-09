@@ -14,16 +14,19 @@ const PASTA_DO_GERADOR = "src/infra/ambiente/container/";
 const CHAMADA_PROIBIDA_FORA_DO_GERADOR = /\bdocker\s+(run|create|exec|start)\b|"docker"/;
 // Uma criação de container escrita como texto (`docker run ...`) ou como lista de argumentos (`["run", ...]`).
 const CRIACAO_DE_CONTAINER = /\bdocker\s+(?:run|create)\b[^\n]*|\[\s*"(?:run|create)"[^\]]*\]/g;
-const EXIGIDOS_NA_CRIACAO = ["--memory", "--cpus", "fabriquinha.ambiente"];
+const ROTULO_EXIGIDO = "fabriquinha.ambiente";
+// O gerador escreve o rótulo pela constante; ela dispensa só o rótulo, nunca --memory nem --cpus.
+const CONSTANTE_DO_ROTULO = "ROTULO_DO_AMBIENTE";
+const EXIGIDOS_NA_CRIACAO = ["--memory", "--cpus", ROTULO_EXIGIDO];
 
 /** O que há de errado no arquivo `caminho` (relativo à raiz do repositório); lista vazia se nada. */
 function problemasDoArquivo(caminho: string, texto: string): string[] {
   if (!caminho.startsWith(PASTA_DO_GERADOR))
     return CHAMADA_PROIBIDA_FORA_DO_GERADOR.test(texto) ? [`${caminho}: docker fora de ${PASTA_DO_GERADOR}`] : [];
   return [...texto.matchAll(CRIACAO_DE_CONTAINER)].flatMap(([criacao]) =>
-    EXIGIDOS_NA_CRIACAO.filter((exigido) => !criacao.includes(exigido) && !criacao.includes("ROTULO_DO_AMBIENTE")).map(
-      (faltando) => `${caminho}: criação de container sem ${faltando}`,
-    ),
+    EXIGIDOS_NA_CRIACAO.filter(
+      (exigido) => !criacao.includes(exigido) && !(exigido === ROTULO_EXIGIDO && criacao.includes(CONSTANTE_DO_ROTULO)),
+    ).map((faltando) => `${caminho}: criação de container sem ${faltando}`),
   );
 }
 
@@ -54,6 +57,10 @@ test("autoteste: acusa docker run sem --memory, sem o rótulo e docker fora do g
     `${dentro}: criação de container sem fabriquinha.ambiente`,
   ]);
   assert.deepEqual(problemasDoArquivo(dentro, `["run", "--memory", "1g", "--label", "fabriquinha.ambiente=a"]`), [
+    `${dentro}: criação de container sem --cpus`,
+  ]);
+  assert.deepEqual(problemasDoArquivo(dentro, '["create", `${ROTULO_DO_AMBIENTE}=x`]'), [
+    `${dentro}: criação de container sem --memory`,
     `${dentro}: criação de container sem --cpus`,
   ]);
   assert.deepEqual(problemasDoArquivo("src/outro.ts", completa), [`src/outro.ts: docker fora de ${PASTA_DO_GERADOR}`]);
