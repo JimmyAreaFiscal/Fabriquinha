@@ -45,7 +45,6 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
   );
 }
 
-/** @testes o conjunto de Ambientes o usa na demanda I-286; hoje só o teste */
 export class GeradorDeAmbientes {
   readonly #limiteDoComandoMs: number;
 

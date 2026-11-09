@@ -22,7 +22,6 @@ const MS_POR_MINUTO = 60_000;
 
 const instanteAtual = (): Instante => new Date().toISOString();
 
-/** @testes o ciclo do Espaço o usa na demanda I-286; hoje só o teste */
 export class ConjuntoDeAmbientes {
   readonly #banco: DatabaseSync;
   readonly #gerador: GeradorDeAmbientes;
