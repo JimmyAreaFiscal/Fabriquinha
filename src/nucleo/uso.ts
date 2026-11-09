@@ -83,10 +83,13 @@ export class Uso {
   }
 }
 
+// Instanciar o formatador é caro; `toLocaleString` o recriaria a cada chamada.
+const formatadorDeDolares = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /** O custo de `uso` como as telas o mostram: "US$ 4,20", ou "≥ US$ 4,20 (2 sessões sem custo)" quando falta custo. */
 export function textoDoCusto(uso: Uso): string {
   const { conhecido, trabalhosSemCusto } = uso.custo();
-  const dolares = `US$ ${conhecido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const dolares = `US$ ${formatadorDeDolares.format(conhecido)}`;
   if (trabalhosSemCusto === 0) return dolares;
   return `≥ ${dolares} (${String(trabalhosSemCusto)} ${trabalhosSemCusto === 1 ? "sessão" : "sessões"} sem custo)`;
 }

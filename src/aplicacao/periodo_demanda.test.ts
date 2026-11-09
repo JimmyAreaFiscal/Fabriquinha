@@ -261,3 +261,34 @@ test("o Uso declarado soma ao medido no mês do registro da demanda, por nível 
   assert.equal(ver(demandas[0]).textoDoCusto, "≥ US$ 9,00 (2 sessões sem custo)");
   assert.equal(total.textoDoCusto, "≥ US$ 18,00 (2 sessões sem custo)");
 });
+
+test("por demanda: a demanda só com Uso declarado no período é linha com 0 execuções, e a soma das linhas é o rodapé", () => {
+  const b = banco();
+  b.prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('claude', 'd', 'I-2', ?)").run(
+    JSON.stringify([
+      {
+        modelo: "x/y",
+        tokens_entrada: 1,
+        tokens_saida: 2,
+        tokens_cache_leitura: 3,
+        tokens_cache_escrita: 4,
+        custo: 3,
+        chamadas: 0,
+      },
+    ]),
+  );
+  const { demandas, total } = metricasPorDemanda(b, { de: "2026-03", ate: "2026-03" });
+  const declarada = demandas.find((d) => d.demanda === "I-2");
+  assert.deepEqual(
+    [declarada?.projeto, declarada?.titulo, declarada?.estado, declarada?.execucoes, declarada?.textoDoCusto],
+    ["loja", "Título I-2", "concluida", 0, "US$ 3,00"],
+  );
+  assert.equal(
+    demandas.reduce((s, d) => s + d.custo.conhecido, 0),
+    total.custo.conhecido,
+  );
+  assert.equal(
+    demandas.reduce((s, d) => s + d.tokens.total, 0),
+    total.tokens.total,
+  );
+});

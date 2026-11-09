@@ -13,7 +13,7 @@ import {
   usoNoPeriodo,
 } from "../armazenamento/metricas_demanda.ts";
 import { usoDeclaradoNoPeriodo } from "../armazenamento/uso_declarado.ts";
-import { linhaDeUsoDoBanco } from "./demanda.ts";
+import { usoDeclaradoDe, usoPorExecucao } from "./demanda.ts";
 import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { intervalo, Periodo } from "../nucleo/periodo.ts";
 
@@ -76,12 +76,8 @@ const soma = (ns: number[]) => ns.reduce((s, n) => s + n, 0);
 /** O Uso das execuções, cada uma um Trabalho: cada linha de `uso_modelo_execucao` pertence a uma só execução. */
 const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoNoPeriodo[]>): Uso =>
   execs
-    .map((e) => Uso.de((uso.get(e.execucao) ?? []).map(linhaDeUsoDoBanco), 1))
+    .map((e) => usoPorExecucao(uso.get(e.execucao) ?? []))
     .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
-
-/** O Uso declarado, cada sessão externa um Trabalho. */
-const usoDeclaradoDe = (declarado: { linhas: LinhaDeUso[] }[]): Uso =>
-  declarado.map((d) => Uso.de(d.linhas, 1)).reduce((total, daSessao) => total.somar(daSessao), Uso.vazio());
 
 function resumir(execs: ExecucaoNoPeriodo[], doUso: Uso): Soma {
   const tokens = (campo: Exclude<keyof LinhaDeUso, "modelo" | "custo" | "chamadas">) =>
@@ -167,7 +163,7 @@ const mesesEntre = (de: string, ate: string): number => {
   return indice(ate) - indice(de) + 1;
 };
 
-/** Uma linha por demanda com pelo menos uma execução iniciada no período; `estado` é a atual e o resto só conta o período. */
+/** Uma linha por demanda com execução iniciada ou Uso declarado no período; `estado` é a atual e o resto só conta o período. */
 export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): MetricasPorDemanda {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const recorte = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto };
@@ -176,9 +172,17 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
   const execucoes = execucoesNoPeriodo(banco, recorte);
   const declarado = usoDeclaradoNoPeriodo(banco, recorte);
   const declaradoPorDemanda = Map.groupBy(declarado, (d) => d.demanda);
-  const demandas = [...Map.groupBy(execucoes, (e) => e.demanda).values()]
-    .map((execs) => {
-      const [{ demanda, projeto: p, titulo, estado }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
+  const execucoesPorDemanda = Map.groupBy(execucoes, (e) => e.demanda);
+  // A demanda só com Uso declarado no período também é linha, com 0 execuções: a soma das linhas é o rodapé.
+  const cabecalhos = new Map(
+    [...declarado, ...execucoes].map(({ demanda, projeto: p, titulo, estado }) => [
+      demanda,
+      { demanda, projeto: p, titulo, estado },
+    ]),
+  );
+  const demandas = [...cabecalhos.values()]
+    .map(({ demanda, projeto: p, titulo, estado }) => {
+      const execs = execucoesPorDemanda.get(demanda) ?? [];
       const ds = decisoes.get(demanda) ?? [];
       const notas = ds.flatMap((d) =>
         d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],

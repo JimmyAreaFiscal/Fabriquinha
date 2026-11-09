@@ -63,6 +63,7 @@ export interface DonoDaLinha {
 }
 
 export interface UsoDaExecucao extends DonoDaLinha {
+  execucao: string;
   provedor: string;
   modelo: string;
   entrada: number;
@@ -95,7 +96,7 @@ const NO_TICKET = "JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ti
 export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecucao[] =>
   banco
     .prepare(
-      `SELECT ${DONO}, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
+      `SELECT ${DONO}, u.execucao_id, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
          u.tokens_cache_leitura, u.tokens_cache_escrita, u.custo
        FROM uso_modelo_execucao u
        JOIN processo_do_trabalho e ON e.id = u.execucao_id
@@ -106,6 +107,7 @@ export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecu
     .map((l) => ({
       etapa: l.etapa as string,
       rodadaId: rodadaDe(l),
+      execucao: l.execucao_id as string,
       provedor: l.modelo_provedor as string,
       modelo: l.modelo_nome as string,
       entrada: Number(l.tokens_entrada),
@@ -239,7 +241,7 @@ export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Execu
       duracaoMs: Number(l.duracao_ms),
     }));
 
-export type UsoNoPeriodo = Omit<UsoDaExecucao, keyof DonoDaLinha> & { execucao: string };
+export type UsoNoPeriodo = Omit<UsoDaExecucao, keyof DonoDaLinha>;
 
 export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriodo[] =>
   banco

@@ -12,6 +12,7 @@ import {
   type UsoDaExecucao,
   usoDaDemanda,
 } from "../armazenamento/metricas_demanda.ts";
+import { lerUsoDeclarado } from "../armazenamento/uso_declarado.ts";
 import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
 import { type Conformidade, conformidadeDaRodada } from "./conformidade.ts";
 
@@ -52,7 +53,7 @@ interface MetricasDaDemanda {
 }
 
 /** A linha de `uso_modelo_execucao` como Uso; o banco não guarda as chamadas do uso medido, por isso 0. */
-export const linhaDeUsoDoBanco = (u: Omit<UsoDaExecucao, keyof DonoDaLinha>): LinhaDeUso => ({
+const linhaDeUsoDoBanco = (u: Omit<UsoDaExecucao, keyof DonoDaLinha>): LinhaDeUso => ({
   modelo: `${u.provedor}/${u.modelo}`,
   tokens_entrada: u.entrada,
   tokens_saida: u.saida,
@@ -61,6 +62,16 @@ export const linhaDeUsoDoBanco = (u: Omit<UsoDaExecucao, keyof DonoDaLinha>): Li
   custo: u.custo,
   chamadas: 0,
 });
+
+/** O Uso das execuções, cada uma um Trabalho: o custo desconhecido conta uma sessão sem custo por execução. */
+export const usoPorExecucao = (uso: Omit<UsoDaExecucao, keyof DonoDaLinha>[]): Uso =>
+  [...Map.groupBy(uso, (u) => u.execucao).values()]
+    .map((daExecucao) => Uso.de(daExecucao.map(linhaDeUsoDoBanco), 1))
+    .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
+
+/** O Uso declarado, cada sessão externa um Trabalho. */
+export const usoDeclaradoDe = (declarado: { linhas: LinhaDeUso[] }[]): Uso =>
+  declarado.map((d) => Uso.de(d.linhas, 1)).reduce((total, daSessao) => total.somar(daSessao), Uso.vazio());
 
 // Cada sessão externa é um Trabalho; só o custo é declarado, por isso os tokens vão em 0.
 const custoExterno = (linhas: { ferramenta: string; sessao: string; custo: number | null }[]): CustoExterno => {
@@ -93,9 +104,10 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
   const decisoes = decisoesDaDemanda(banco, demandaId);
   const externas = linhasExternasDaDemanda(banco, demandaId);
 
-  const contagens = (dono: (l: DonoDaLinha) => boolean): Contagens => {
-    // O banco não liga o uso à execução: o recorte todo conta como um Trabalho para o custo desconhecido.
-    const u = Uso.de(uso.filter(dono).map(linhaDeUsoDoBanco), 1);
+  const declarado = usoDeclaradoDe(lerUsoDeclarado(banco, demandaId));
+
+  const contagens = (dono: (l: DonoDaLinha) => boolean, doDeclarado = Uso.vazio()): Contagens => {
+    const u = usoPorExecucao(uso.filter(dono)).somar(doDeclarado);
     return {
       execucoes: execucoes.filter(dono).length,
       falhas: execucoes.filter((e) => dono(e) && e.falha).length,
@@ -106,13 +118,13 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
       textoDoCusto: textoDoCusto(u),
     };
   };
-  const escopo = (dono: (l: DonoDaLinha) => boolean): Escopo => {
+  const escopo = (dono: (l: DonoDaLinha) => boolean, doDeclarado = Uso.vazio()): Escopo => {
     const notas = decisoes.flatMap((d) =>
       dono(d) && d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],
     );
     const soma = notas.reduce((s, n) => s + n, 0);
     return {
-      ...contagens(dono),
+      ...contagens(dono, doDeclarado),
       nota: { soma, quantidade: notas.length, media: notas.length === 0 ? null : soma / notas.length },
       etapas: Object.fromEntries(
         [...new Set(tickets.filter(dono).map((t) => t.etapa))].map((etapa) => [
@@ -124,7 +136,8 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
   };
 
   return {
-    total: escopo(() => true),
+    // O Uso declarado é da demanda, sem rodada nem etapa: entra só no total.
+    total: escopo(() => true, declarado),
     rodadas: rodadasDaDemanda(banco, demandaId).map((rodadaId) => ({
       rodadaId,
       ...escopo((l) => l.rodadaId === rodadaId),

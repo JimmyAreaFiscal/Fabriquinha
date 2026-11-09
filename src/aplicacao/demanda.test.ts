@@ -216,7 +216,7 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   gravarUso(b, "de-outra", "I-2", [linhaDeUso(100)]);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(m.custoExterno, { conhecido: 3, trabalhosSemCusto: 1, sessoes: 1 });
-  assert.deepEqual(m.total.custo, { conhecido: 1, trabalhosSemCusto: 0 });
+  assert.deepEqual(m.total.custo, { conhecido: 4, trabalhosSemCusto: 1 });
 });
 
 test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e das rodadas", () => {
@@ -227,6 +227,20 @@ test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e d
   assert.deepEqual(m.custoExterno, { conhecido: 9, trabalhosSemCusto: 0, sessoes: 2 });
   assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 });
   assert.deepEqual(m.rodadas[0].custo, { conhecido: 0, trabalhosSemCusto: 0 });
+});
+
+test("o total soma o Uso declarado da demanda, e cada execução sem custo conta uma sessão", () => {
+  const b = banco();
+  execucao(b, 2, "e1", 0, [["m1", 1, 1, 0, 0, 4.2]]);
+  execucao(b, 2, "e2", 0, [
+    ["m1", 1, 1, 0, 0, null],
+    ["m2", 1, 1, 0, 0, null],
+  ]);
+  execucao(b, 2, "e3", 0, [["m1", 1, 1, 0, 0, null]]);
+  gravarUso(b, "a", "I-1", [linhaDeUso(3)]);
+  const { total, rodadas } = metricasDaDemanda(b, "I-1");
+  assert.equal(total.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");
+  assert.deepEqual(rodadas[0]?.custo, { conhecido: 4.2, trabalhosSemCusto: 2 });
 });
 
 test("CA-7: sessão declarada sem linhas não conta como sessão externa", () => {
