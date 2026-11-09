@@ -9,21 +9,22 @@ import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
-import { falhaDoErro } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
-import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import {
+  ConducaoDeEncerrarDemanda,
+  type OpcoesDoEncerramentoDaDemanda,
+} from "./etapas/conducao_de_encerrar_demanda.ts";
 import { ConducaoDeEncerrarRodada } from "./etapas/conducao_de_encerrar_rodada.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
 import { ConducaoDePlanejar } from "./etapas/conducao_de_planejar.ts";
 import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
 import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
 import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
-import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { instanteAtual } from "./relogio.ts";
 import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
@@ -36,7 +37,7 @@ export interface DepsDespacho {
   /** Substitui a condução do `implementar` e do `resolver_conflito` nos testes que não sobem pi nem git. */
   conduzirImplementacao?: (banco: DatabaseSync, ticket: Endereco) => Promise<void>;
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
-  verificacao?: DepsEncerramentoDemanda["verificacao"];
+  verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
 }
 
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
@@ -60,32 +61,13 @@ const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco 
     ).ticket_id,
   );
 
-/** Roda `etapa`; se ela recusar sem falhar o ticket (documentação, estado), falha-o para não ficar preso em execução. */
-async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: () => Promise<T>): Promise<T> {
-  try {
-    return await etapa();
-  } catch (erro) {
-    const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
-    if (atual?.estado === "em_execucao") falharTicketDemanda(banco, t, falhaDoErro(erro));
-    throw erro;
-  }
-}
-
 /**
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
 function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
-  const { demanda_id, ticket_id } = t;
-  if (t.etapa === "encerrar_demanda") {
-    const ctx = { agora: new Date().toISOString() };
-    comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
-    return falharSePreso(banco, t, () =>
-      conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
-    );
-  }
   const depsDaConducao = depsDaConducaoDe(banco);
-  const endereco = Endereco.doTicket(demanda_id, ticket_id);
+  const endereco = Endereco.doTicket(t.demanda_id, t.ticket_id);
   if (t.etapa === "planejar") return new ConducaoDePlanejar(depsDaConducao).conduzir(endereco);
   const conduzirImplementacao = (conducao: ConducaoDeImplementar) =>
     deps.conduzirImplementacao?.(banco, endereco) ?? conducao.conduzir(endereco);
@@ -95,9 +77,12 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, deps: DepsDespacho)
   if (t.etapa === "resolver_conflito") {
     return conduzirImplementacao(new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao));
   }
+  if (t.etapa === "encerrar_demanda") {
+    return new ConducaoDeEncerrarDemanda(depsDaConducao, { verificacao: deps.verificacao }).conduzir(endereco);
+  }
   if (t.etapa === "revisar_rodada") return new ConducaoDeRevisarRodada(depsDaConducao).conduzir(endereco);
   if (t.etapa === "revisar_demanda") return new ConducaoDeRevisarDemanda(depsDaConducao).conduzir(endereco);
-  return new ConducaoDeEncerrarRodada(depsDaConducao).conduzir(endereco); // a seleção só devolve as sete etapas acima
+  return new ConducaoDeEncerrarRodada(depsDaConducao).conduzir(endereco); // a seleção só devolve as oito etapas acima
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */

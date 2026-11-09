@@ -43,6 +43,31 @@ abstract class ConducaoDeEtapa {
   }
 
   abstract conduzir(ticket: Endereco): Promise<void>;
+
+  /** Reserva o ticket aberto para a Fabriquinha. */
+  protected reservar(ticket: TicketDemanda): void {
+    const { banco, relogio } = this.deps;
+    comDemanda(banco, ticket.demanda_id, (ag) =>
+      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), true),
+    );
+  }
+
+  protected ticketDe(endereco: Endereco): TicketDemanda {
+    const ticket_id = existe(endereco.ticket_id, `${endereco.toString()} não é um ticket`, "use I-n.Tm, como I-206.T3");
+    return encontrado(
+      carregarDemanda(this.deps.banco, endereco.demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
+      `o ticket ${endereco.toString()} não existe`,
+      "use um ticket da demanda",
+    );
+  }
+
+  protected falhar(ticket: TicketDemanda, falha: FalhaDaTentativa): Promise<void> {
+    const { banco, relogio } = this.deps;
+    comDemanda(banco, ticket.demanda_id, (ag) =>
+      registrarFalhaTicket(ag, { ticket_id: ticket.ticket_id, falha }, relogio()),
+    );
+    return Promise.resolve();
+  }
 }
 
 type EspacoPreparado = NonNullable<OpcoesExecucaoDemanda["espaco"]>;
@@ -106,14 +131,6 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     else await this.falhar(ticket, resultado);
   }
 
-  /** Reserva o ticket aberto para a Fabriquinha. */
-  protected reservar(ticket: TicketDemanda): void {
-    const { banco, relogio } = this.deps;
-    comDemanda(banco, ticket.demanda_id, (ag) =>
-      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), true),
-    );
-  }
-
   /** O Espaço de Trabalho do ticket, criado antes do agente subir; sem preparação (`undefined`), a execução o cria. */
   protected prepararEspaco(ticket: TicketDemanda): Promise<EspacoPreparado> | undefined {
     const { banco } = this.deps;
@@ -151,15 +168,6 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   /** O que a etapa faz depois do resultado bom, além do que a própria Decisão do gate já fez. */
   protected abstract aoConcluir(endereco: Endereco): Promise<void>;
 
-  protected ticketDe(endereco: Endereco): TicketDemanda {
-    const ticket_id = existe(endereco.ticket_id, `${endereco.toString()} não é um ticket`, "use I-n.Tm, como I-206.T3");
-    return encontrado(
-      carregarDemanda(this.deps.banco, endereco.demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
-      `o ticket ${endereco.toString()} não existe`,
-      "use um ticket da demanda",
-    );
-  }
-
   /** A reprovação técnica (D05): o ticket volta ao agente com o relatório ou, no limite das Tentativas, falha com ele. */
   private devolver(ticket: TicketDemanda, instrucao: string): void {
     const { banco, relogio } = this.deps;
@@ -167,28 +175,38 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
       devolverTicket(ag, { ticket_id: ticket.ticket_id, instrucao }, FABRIQUINHA, relogio()),
     );
   }
-
-  protected falhar(ticket: TicketDemanda, falha: FalhaDaTentativa): Promise<void> {
-    const { banco, relogio } = this.deps;
-    comDemanda(banco, ticket.demanda_id, (ag) =>
-      registrarFalhaTicket(ag, { ticket_id: ticket.ticket_id, falha }, relogio()),
-    );
-    return Promise.resolve();
-  }
 }
 
-interface PassoDaEtapa {
+/** `seguir` passa ao próximo passo; `parar` encerra a condução (o passo já deixou o ticket devolvido, falho ou concluído). */
+export type ResultadoDoPasso = "seguir" | "parar";
+
+export interface PassoDaEtapa {
   nome: string;
-  executar(ticket: Endereco): Promise<void>;
+  /** Falso quando o progresso gravado mostra que o passo já foi feito: a retomada pula até o que falhou. */
+  pendente(ticket: Endereco): boolean;
+  executar(ticket: Endereco): Promise<ResultadoDoPasso>;
 }
 
 /**
  * A etapa que a Fabriquinha conduz sozinha, sem agente (Não há Reprovação: CONCEITOS.md §6). A Tentativa retoma pelo
- * passo que falhou, sem refazer os que passaram.
- * @testes a `ConducaoDeEncerrarDemanda` a estende em outro ticket da rodada
+ * passo que falhou, sem refazer os que passaram; o erro que o passo deixar subir falha o ticket que ainda estiver em
+ * execução.
  */
 export abstract class ConducaoDeterministica extends ConducaoDeEtapa {
   protected abstract readonly passos: PassoDaEtapa[];
+
+  async conduzir(endereco: Endereco): Promise<void> {
+    const ticket = this.ticketDe(endereco);
+    this.reservar(ticket);
+    try {
+      for (const passo of this.passos.filter((p) => p.pendente(endereco))) {
+        if ((await passo.executar(endereco)) === "parar") return;
+      }
+    } catch (erro) {
+      if (this.ticketDe(endereco).estado === "em_execucao") await this.falhar(ticket, falhaDoErro(erro));
+      throw erro;
+    }
+  }
 }
 
 /**
