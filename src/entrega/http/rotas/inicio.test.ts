@@ -355,6 +355,6 @@ test("GET /api/inicio: o Uso declarado soma ao medido do mês, e a sessão decla
   assert.equal(comCusto.textoDoCusto, "US$ 6,00");
   assert.equal(comCusto.modelos[0]?.tokens_entrada, 15);
   declarar("d2", "NULL");
-  const semCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
-  assert.equal(semCusto.textoDoCusto, "≥ US$ 6,00 (1 sessão sem custo)");
+  const totalComSessaoSemCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
+  assert.equal(totalComSessaoSemCusto.textoDoCusto, "≥ US$ 6,00 (1 sessão sem custo)");
 });
