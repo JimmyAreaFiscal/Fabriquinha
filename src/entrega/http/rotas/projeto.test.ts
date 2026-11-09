@@ -297,7 +297,7 @@ test("demandas: usa o padrão do agente se a releitura do projeto não o encontr
     const consulta = prepararConsulta(consultaSql);
     if (
       consultaSql.startsWith(
-        "SELECT nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto FROM projeto",
+        "SELECT nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente FROM projeto",
       )
     ) {
       leiturasDoProjeto++;

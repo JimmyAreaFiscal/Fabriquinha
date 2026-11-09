@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ComandosDePreparacao, Projeto, ProjetoConfigurado } from "./projeto.ts";
+import { ComandosDePreparacao, ConfiguracaoDoAmbiente, Projeto, ProjetoConfigurado } from "./projeto.ts";
 
 const cadastro = {
   nome: "fabriquinha",
@@ -154,4 +154,25 @@ test("CA-9: recusa E2E órfão, glob órfão, glob inválido, código fora de 1�
   for (const codigo_falha of [0, 256])
     assert.ok(!aceitaVerificacoes({ e2e: [{ ...configuracaoE2e, codigo_falha }], globs: [globE2e] }));
   assert.ok(aceitaVerificacoes({ e2e: [{ ...configuracaoE2e, codigo_falha: 255 }], globs: [globE2e] }));
+});
+
+test("imagem_do_ambiente é opcional e não pode ser vazia", () => {
+  assert.equal(Object.hasOwn(Projeto.parse(cadastro), "imagem_do_ambiente"), false);
+  assert.equal(Projeto.parse({ ...cadastro, imagem_do_ambiente: "Dockerfile" }).imagem_do_ambiente, "Dockerfile");
+  assert.equal(Projeto.safeParse({ ...cadastro, imagem_do_ambiente: "" }).success, false);
+});
+
+test("ConfiguracaoDoAmbiente: host_local por padrão e limites mínimos do container", () => {
+  assert.deepEqual(ConfiguracaoDoAmbiente.parse({}), {
+    tipo: "host_local",
+    memoria_maxima_mb: 2048,
+    cpus: 2,
+    ociosidade_para_eliminar_min: 60,
+  });
+  assert.equal(
+    ConfiguracaoDoAmbiente.safeParse({ tipo: "container", memoria_maxima_mb: 512, cpus: 0.5 }).success,
+    true,
+  );
+  for (const errada of [{ tipo: "vm" }, { memoria_maxima_mb: 511 }, { cpus: 0 }, { ociosidade_para_eliminar_min: 4 }])
+    assert.equal(ConfiguracaoDoAmbiente.safeParse(errada).success, false, JSON.stringify(errada));
 });
