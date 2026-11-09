@@ -46,3 +46,27 @@ export function lerUsoDeclarado(banco: DatabaseSync, demandaId: string): UsoDecl
       linhas: JSON.parse(String(l.linhas)) as LinhaDeUso[],
     }));
 }
+
+/**
+ * O Uso declarado das sessões cujo mês é o do registro da demanda dona (a sessão externa não grava data própria), no
+ * período `[inicio, fim)`, de um projeto ou de todos (`projeto` `null`).
+ * shortcut: o mês é o do registro da demanda; gravar a data da declaração em `uso_declarado` se isso distorcer a série.
+ */
+export function usoDeclaradoNoPeriodo(
+  banco: DatabaseSync,
+  recorte: { inicio: string; fim: string; projeto: string | null },
+): { demanda: string; em: string; linhas: LinhaDeUso[] }[] {
+  return banco
+    .prepare(
+      `SELECT COALESCE(h.criada_em, (SELECT MIN(e.em) FROM evidencia_demanda e WHERE e.demanda_id = d.id),
+         d.estado_alterado_em) AS em, u.demanda_id, u.linhas
+       FROM uso_declarado u JOIN demanda d ON d.id = u.demanda_id LEFT JOIN demanda_historico h ON h.demanda_id = d.id
+       WHERE em >= $inicio AND em < $fim AND ($projeto IS NULL OR d.projeto = $projeto) ORDER BY u.rowid`,
+    )
+    .all(recorte)
+    .map((l) => ({
+      demanda: String(l.demanda_id),
+      em: String(l.em),
+      linhas: JSON.parse(String(l.linhas)) as LinhaDeUso[],
+    }));
+}

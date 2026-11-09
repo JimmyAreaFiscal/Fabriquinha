@@ -172,7 +172,6 @@ const TIPO_DA_EVIDENCIA: Record<string, string> = {
   criterios_aceite: "Critérios de aceite",
   desenho_solucao: "Desenho da solução",
   relatorio_impactos_arquitetura: "Impactos na arquitetura",
-  custos_realizados: "Custos",
   prototipo: "Protótipo",
   relatorio_complexidade: "Complexidade",
   mensagem_pr: "Mensagem do PR",
