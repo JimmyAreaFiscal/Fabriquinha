@@ -3,7 +3,7 @@
 // `subagents` do Auditor, com `cost` já somado e `turns`.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { somar } from "./uso.ts";
+import { type LinhaDeUso, somar, Uso } from "./uso.ts";
 
 const SESSAO = "019f7639-8a5d-7794-9dd5-03edad5607ab";
 
@@ -221,4 +221,63 @@ test("somar marca semCusto quando alguma parcela do modelo não traz cost.total 
 
   const parcial = somar(texto(usage(1, 1, 0, 0, 0.5), { ...sem, cost: {} }), ...janela);
   assert.deepEqual([parcial[0]?.custo, parcial[0]?.semCusto], [0.5, true]);
+});
+
+const linhaDeUso = (modelo: string, custo: number | null, tokens = 10): LinhaDeUso => ({
+  modelo,
+  tokens_entrada: tokens,
+  tokens_saida: 1,
+  tokens_cache_leitura: 2,
+  tokens_cache_escrita: 3,
+  custo,
+  chamadas: 1,
+});
+
+test("Uso.de soma o custo conhecido como número e agrupa as linhas do mesmo modelo", () => {
+  const uso = Uso.de([linhaDeUso("a/m", 1.5), linhaDeUso("a/m", 2.7, 20)], 1);
+  assert.deepEqual(uso.porModelo(), [
+    {
+      modelo: "a/m",
+      tokens_entrada: 30,
+      tokens_saida: 2,
+      tokens_cache_leitura: 4,
+      tokens_cache_escrita: 6,
+      custo: 4.2,
+      chamadas: 2,
+    },
+  ]);
+  assert.deepEqual(uso.custo(), { conhecido: 4.2, trabalhosSemCusto: 0 });
+});
+
+test("Uso.de deixa o custo desconhecido como null e conta os Trabalhos sem custo", () => {
+  const uso = Uso.de([linhaDeUso("a/m", null), linhaDeUso("b/m", null)], 2);
+  assert.deepEqual(
+    uso.porModelo().map((linha) => linha.custo),
+    [null, null],
+  );
+  assert.deepEqual(uso.custo(), { conhecido: 0, trabalhosSemCusto: 2 });
+});
+
+test("Uso.de rejeita custo negativo", () => {
+  assert.throws(() => Uso.de([linhaDeUso("a/m", -1)], 1), RangeError);
+});
+
+test("Uso.somar agrupa por modelo, mantém o custo conhecido diante do desconhecido e soma os Trabalhos sem custo", () => {
+  const soma = Uso.vazio()
+    .somar(Uso.de([linhaDeUso("b/m", 1)], 1))
+    .somar(Uso.de([linhaDeUso("a/m", null), linhaDeUso("b/m", null)], 1))
+    .somar(Uso.de([linhaDeUso("a/m", null)], 1));
+  assert.deepEqual(
+    soma.porModelo().map(({ modelo, custo, tokens_entrada }) => ({ modelo, custo, tokens_entrada })),
+    [
+      { modelo: "a/m", custo: null, tokens_entrada: 20 },
+      { modelo: "b/m", custo: 1, tokens_entrada: 20 },
+    ],
+  );
+  assert.deepEqual(soma.custo(), { conhecido: 1, trabalhosSemCusto: 2 });
+});
+
+test("Uso.vazio não tem linhas nem Trabalhos sem custo", () => {
+  assert.deepEqual(Uso.vazio().porModelo(), []);
+  assert.deepEqual(Uso.vazio().custo(), { conhecido: 0, trabalhosSemCusto: 0 });
 });
