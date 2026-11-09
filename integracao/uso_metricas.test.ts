@@ -170,7 +170,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
       [2, 0, { conhecido: 4, trabalhosSemCusto: 1 }],
     ],
   );
-  assert.deepEqual(m.total.custo, { conhecido: 5, trabalhosSemCusto: 1 });
+  assert.deepEqual(m.total.custo, { conhecido: 11.5, trabalhosSemCusto: 2 });
   // A única falha é o planejamento interrompido da própria demanda (sem rodada); a execução falha da vizinha não entra.
   assert.deepEqual([m.total.falhas, m.semRodada.falhas, ...m.rodadas.map((r) => r.falhas)], [1, 1, 0, 0]);
   assert.deepEqual(
@@ -178,9 +178,10 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     [
       ["p/a", 30],
       ["p/b", 5],
+      ["x/m", 2],
     ],
   );
-  // O custo externo é um total à parte: não entra no interno de nenhuma rodada nem do total.
+  // O Uso declarado entra no total da demanda, mas não no custo de nenhuma rodada; `custoExterno` continua à parte.
   assert.deepEqual(m.custoExterno, { conhecido: 6.5, trabalhosSemCusto: 1, sessoes: 2 });
   assert.deepEqual(
     m.rodadas.map((r) => r.custoExterno.sessoes),
