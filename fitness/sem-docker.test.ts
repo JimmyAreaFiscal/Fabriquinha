@@ -7,6 +7,8 @@ import { join, resolve } from "node:path";
 import { test } from "node:test";
 
 const PASTAS = ["src", "pacote-pi", "skills"];
+// O único lugar que pode chamar o docker: o GeradorDeAmbientes (CONCEITOS.md §7).
+const PASTA_DO_GERADOR = "src/infra/ambiente/container/";
 
 test("nenhum código da Fabriquinha chama o docker", () => {
   const raiz = resolve(import.meta.dirname, "..");
@@ -14,6 +16,7 @@ test("nenhum código da Fabriquinha chama o docker", () => {
   for (const pasta of PASTAS) {
     for (const arquivo of readdirSync(join(raiz, pasta), { recursive: true, encoding: "utf8" })) {
       if (!/\.(ts|md|sh)$/.test(arquivo) || arquivo.endsWith(".test.ts")) continue;
+      if (`${pasta}/${arquivo}`.startsWith(PASTA_DO_GERADOR)) continue;
       const texto = readFileSync(join(raiz, pasta, arquivo), "utf8");
       if (/\bdocker\s+(run|create|exec|start)\b|"docker"/.test(texto)) achados.push(`${pasta}/${arquivo}`);
     }
