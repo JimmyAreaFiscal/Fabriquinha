@@ -18,6 +18,9 @@ import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste, rodarGit } from "./repositorio_de_teste.ts";
 import { verificacaoDeTeste } from "./verificacoes_de_teste.ts";
+import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 export const DEMANDA = "I-1";
@@ -138,10 +141,10 @@ export async function cenarioDeImplementacao({
       },
     }),
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
   const worktree = conflito
     ? join(c.raiz, "worktrees", "loja", DEMANDA, "demanda")
-    : await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: DEMANDA, rodada_id: 1 }, c.log);
+    : await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: DEMANDA, rodada_id: 1 }, c.log);
   // O agente do cenário escreve um arquivo de duas linhas na pasta de trabalho do ticket.
   const piFalso = instalarPiFalso(c.dir);
   piFalso.roteirizar([{ escreve: { "novo.txt": "x\ny\n" } }]);

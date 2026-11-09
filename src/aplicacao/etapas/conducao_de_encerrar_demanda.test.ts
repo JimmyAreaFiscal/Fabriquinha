@@ -28,6 +28,9 @@ import { anotar } from "../../infra/registro.ts";
 import { instanteAtual } from "../relogio.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-demanda-")));
@@ -128,8 +131,8 @@ async function cenario({
     pull_requests: pullRequests,
     ...(encerramento && { encerramento }),
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
+  const demanda = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, D, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log);
   /** Commita na demanda e, com `ticket`, registra o commit como desse ticket. */
   const commitar = (arquivo: string, ticketId?: number) => {
     const sha = commitarArquivo(demanda, arquivo, `${arquivo}\n`);
@@ -496,7 +499,7 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
   assert.equal(ag.demanda.estado, "concluida");
   assert.equal(c.ticket()?.estado, "concluido");
   assert.equal(existsSync(c.rodada), false);
-  assert.deepEqual(await pendenciasDeLimpeza(c.raiz, c.projeto, ag), []);
+  assert.deepEqual(await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag), []);
   assert.equal(c.noRemoto("develop"), "develop");
   const limpeza = ag.evidencias.findLast((e) => e.tipo === "demonstracao_limpeza")?.dados as {
     removidas: unknown[];

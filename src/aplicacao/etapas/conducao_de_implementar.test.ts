@@ -23,6 +23,7 @@ import { rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { CondutorDeTrabalhos } from "../trabalho/condutor.ts";
 import { commitarTicketDemanda } from "../commit_ticket_demanda.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 
 const conduzir = (
   c: CenarioDeImplementacao,
@@ -199,6 +200,7 @@ test("CA-16: commit sem as evidências devolve o ticket citando o que falta", as
   const c = await cenarioDeImplementacao();
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
   await commitarTicketDemanda(c.banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",
     titulo: "Cachear",

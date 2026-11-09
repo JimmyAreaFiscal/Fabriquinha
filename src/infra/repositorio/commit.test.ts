@@ -15,7 +15,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 import { arquivosDe, commitar } from "./commit.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-commit-")));
 after(() => {
@@ -77,7 +80,7 @@ test("commita com os hooks, sem credenciais, e as listas do git dão cada arquiv
   writeFileSync(join(c.worktree, "tab\tx.txt"), "n\n");
 
   git(c.worktree, "add", "-A");
-  await commitar(c.worktree, "fix: Cache na busca", { emendar: false, semAlteracao: false }, LIMITE_MS);
+  await commitar(ambiente, c.worktree, "fix: Cache na busca", { emendar: false, semAlteracao: false }, LIMITE_MS);
 
   assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes);
   assert.equal(
@@ -109,7 +112,7 @@ test("hook que reprova, ou passa do limite, reprova o ticket com o fim da saída
   const dica = "corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks";
   git(c.worktree, "add", "-A");
   const commitarSemEmendar = (limiteMs: number) =>
-    commitar(c.worktree, "fix: mudou", { emendar: false, semAlteracao: false }, limiteMs);
+    commitar(ambiente, c.worktree, "fix: mudou", { emendar: false, semAlteracao: false }, limiteMs);
   await assert.rejects(commitarSemEmendar(LIMITE_MS), (e) => {
     assert.ok(e instanceof ErroDeReprovacao);
     assert.equal(
@@ -151,9 +154,9 @@ test("listas do git que não casam por caminho: lança em vez de gravar os núme
 test("sem alteração, o commit sai vazio; emendar refaz a HEAD em vez de empilhar", async () => {
   const c = cenario();
   const antes = c.head();
-  await commitar(c.worktree, "fix: vazio", { emendar: false, semAlteracao: true }, LIMITE_MS);
+  await commitar(ambiente, c.worktree, "fix: vazio", { emendar: false, semAlteracao: true }, LIMITE_MS);
   assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes);
-  await commitar(c.worktree, "fix: emendado", { emendar: true, semAlteracao: true }, LIMITE_MS);
+  await commitar(ambiente, c.worktree, "fix: emendado", { emendar: true, semAlteracao: true }, LIMITE_MS);
   assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes);
   assert.equal(git(c.worktree, "show", "-s", "--format=%B", "HEAD").trim(), "fix: emendado");
 });

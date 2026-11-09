@@ -23,13 +23,16 @@ import {
 } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const evidencia = (banco: Parameters<typeof carregarDemanda>[0], tipo: string) =>
   carregarDemanda(banco, "I-1").evidencias.filter((e) => e.ticket_id === 2 && e.tipo === tipo);
 
 /** Cria a worktree da rodada, commita A/M/D nela e avança a branch da demanda depois. */
 async function rodadaComAlteracoes(c: Awaited<ReturnType<typeof cenarioRevisao>>["c"]) {
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   commitarArquivo(rodada, "novo.ts", "a\n");
   writeFileSync(join(rodada, "base.txt"), "base\nmais\n");
   rodarGit(rodada, "commit", "-qam", "m");
@@ -60,7 +63,7 @@ test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e 
 
 test("CA-3: arquivo modificado aparece como M", async () => {
   const { c, banco } = await cenarioRevisao();
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   writeFileSync(join(rodada, "base.txt"), "base\nmais\n");
   rodarGit(rodada, "commit", "-qam", "m");
   await prepararRevisaoRodada(banco, REF_RODADA);
@@ -129,7 +132,7 @@ test("recusa ticket inexistente, global e projeto sem configuração", async () 
 test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
   const { c, banco } = await cenarioRevisao();
   banco.exec("INSERT INTO caminho_ticket VALUES ('I-1', 1, 'base.txt')");
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   rodarGit(rodada, "mv", "base.txt", "nome.txt");
   rodarGit(rodada, "commit", "-qam", "r");
   await prepararRevisaoRodada(banco, REF_RODADA);

@@ -23,10 +23,11 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { carregarTrabalhosDaDemanda } from "../../armazenamento/trabalho_agentico.ts";
 import { logDaOperacao } from "../../infra/registro.ts";
-import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../../infra/repositorio/limpeza_demanda.ts";
+import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../infra/repositorio/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao } from "../../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../../infra/verificacao/conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "../../infra/verificacao/verificacao.ts";
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "../evidencias/encerramento_demanda.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
@@ -91,7 +92,12 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const raiz = raizDo(banco);
     const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
     // O erro até a tentativa registrada sobe e a base falha o ticket.
-    const ciclo = cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log });
+    const ciclo = cicloDoEspaco(
+      espacoDaDemanda(projeto, demanda_id, raiz),
+      projeto,
+      { raiz, log },
+      ambienteDoServico(),
+    );
     await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
     const publicado = await publicarPRFinal(banco, ag, projeto, projeto.branch_base, raiz);
     this.aplicar(endereco, (a) =>
@@ -169,7 +175,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a hospedagem não informou o merge do PR ${pr.url}`,
       "confira o PR na plataforma",
     );
-    const pendentes = await pendenciasDeLimpeza(raizDo(banco), projeto, ag);
+    const pendentes = await pendenciasDeLimpeza(ambienteDoServico(), raizDo(banco), projeto, ag);
     this.aplicar(endereco, (a) =>
       registrarIntegracao(
         a,
@@ -191,8 +197,17 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a demanda ${demanda_id} não tem progresso de encerramento`,
       "registre a tentativa antes",
     ).limpeza_pendente;
-    const feito = await limparDemanda(raizDo(banco), projeto, pendentes);
-    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(projeto, feito.removidos))];
+    const raiz = raizDo(banco);
+    const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
+    // O ciclo limpa e devolve o container ao conjunto quando o Espaço acaba de verdade.
+    const ciclo = cicloDoEspaco(
+      espacoDaDemanda(projeto, demanda_id, raiz),
+      projeto,
+      { raiz, log },
+      ambienteDoServico(),
+    );
+    const feito = await ciclo.limpar(pendentes);
+    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(ciclo.ambiente, projeto, feito.removidos))];
     const demonstracao = montarDemonstracaoLimpeza(feito.removidos, sobras);
     const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda_id);
     // Com sobras só a demonstração é submetida: o Avaliador a recusa e nada é gravado.

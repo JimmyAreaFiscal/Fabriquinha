@@ -1,6 +1,5 @@
 // O harness pi (F4 §6.1): o binário, a linha de comando e o ambiente de cada modo, o lançamento em modo RPC com o
 // framing do stdout e a parada do grupo de processos, a consulta sem ferramentas, a lista de modelos e o arquivo da sessão.
-import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +8,8 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
-import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
+import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
 import { PACOTE, type EventoPi } from "./pi.ts";
 
@@ -67,9 +67,12 @@ function objetoJson(linha: string): EventoPi | undefined {
   }
 }
 
+/** Como a consulta roda o pi: `executar` do host; os testes trocam. */
+export type RodarComando = typeof executar;
+
 interface ProcessoPi {
-  /** O grupo de processos do pi (F4 §7). */
-  readonly pgid: number;
+  /** O grupo de processos do pi no Ambiente (F4 §7). */
+  readonly identificador: IdentificadorDoProcesso;
   /** Um comando RPC, como uma linha JSON no stdin. */
   enviar(comando: object): void;
   /** Resolve com o código de saída quando o pi termina e o stdout fecha, inclusive se ele nem chegou a rodar. */
@@ -146,46 +149,52 @@ export class HarnessPi {
   }
 
   /**
-   * Lança o pi num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
+   * Lança o pi, pelo `ambiente`, num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
    * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
    * e o modo RPC precisa do stdin aberto.
    */
   lancar(
+    ambiente: Ambiente,
     args: readonly string[],
     { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
     aoEvento: (evento: EventoPi) => void,
   ): ProcessoPi {
-    const filho = spawn(this.binarioPi(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
-    const pgid = Number(filho.pid);
+    const processo = ambiente.lancar({
+      programa: this.binarioPi(),
+      argumentos: [...args],
+      cwd: ambiente.caminhoNoAmbiente(cwd),
+      env: Object.fromEntries(
+        Object.entries(env).flatMap(([nome, valor]) => (valor === undefined ? [] : [[nome, valor]])),
+      ),
+    });
+    const { identificador } = processo;
     // Escrever no stdin de um pi que já saiu dá EPIPE; sem ouvinte, o erro derrubaria o serviço.
-    const falhou = (erro: Error) => {
+    processo.aoFalhar((erro) => {
       anotar(log, `pi: ${erro.message}`);
-    };
-    filho.on("error", falhou);
-    filho.stdin.on("error", falhou);
-    if (fecharStdin) filho.stdin.end();
-    filho.stderr.on("data", (parte: Buffer) => {
+    });
+    if (fecharStdin) processo.stdin.end();
+    processo.stderr.on("data", (parte: Buffer) => {
       appendFileSync(log, parte);
     });
     const dividir = divisorJsonl();
-    filho.stdout.setEncoding("utf8").on("data", (parte: string) => {
+    processo.stdout.setEncoding("utf8").on("data", (parte: string) => {
       for (const linha of dividir(parte)) {
         const evento = objetoJson(linha);
         if (evento) aoEvento(evento);
         else anotar(log, `pi, fora do protocolo: ${linha}`);
       }
     });
-    const saiu = new Promise<number | null>((resolve) => filho.on("close", resolve));
+    const { saiu } = processo;
     return {
-      pgid,
+      identificador,
       saiu,
       enviar(comando) {
-        filho.stdin.write(JSON.stringify(comando) + "\n");
+        processo.stdin.write(JSON.stringify(comando) + "\n");
       },
       async parar() {
-        sinalNoGrupo(pgid, "SIGTERM");
+        await ambiente.sinalizar(identificador, "SIGTERM");
         await Promise.race([saiu, dormir(GRACA_MS, undefined, { ref: false })]);
-        sinalNoGrupo(pgid, "SIGKILL");
+        await ambiente.sinalizar(identificador, "SIGKILL");
       },
     };
   }
@@ -200,7 +209,7 @@ export class HarnessPi {
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
-    rodar: typeof executar = executar,
+    rodar: RodarComando = executar,
   ): Promise<string | undefined> {
     const args = [
       "-p",

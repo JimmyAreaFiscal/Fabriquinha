@@ -16,9 +16,11 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
 import { coletarVerificacoes } from "./verificacoes.ts";
 
+const ambiente = new AmbienteHostLocal();
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-verificacoes-")));
 writeFileSync(join(base, "gitconfig"), "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
 process.env.GIT_CONFIG_GLOBAL = join(base, "gitconfig");
@@ -102,7 +104,13 @@ test("devolve as três verificações do catálogo, passando, sem issue nos arqu
   const { worktree, projeto } = cenario();
   issues = [issue("b.ts")];
 
-  const v = await coletarVerificacoes({ projeto, e2e: false, worktree, opcoes: { limiteMs: 60_000, intervaloMs: 1 } });
+  const v = await coletarVerificacoes({
+    ambiente,
+    projeto,
+    e2e: false,
+    worktree,
+    opcoes: { limiteMs: 60_000, intervaloMs: 1 },
+  });
 
   assert.deepEqual(
     v.map((x) => x.tipo),
@@ -125,7 +133,7 @@ test("o Sonar começa quando os testes das linguagens gravaram o lcov e roda jun
     },
   });
 
-  const v = await coletarVerificacoes({ projeto: comE2E, e2e: true, worktree });
+  const v = await coletarVerificacoes({ ambiente, projeto: comE2E, e2e: true, worktree });
 
   assert.deepEqual(quemPassou(v), [true, true, true]);
 });
@@ -134,7 +142,7 @@ test("issue aberta em arquivo alterado reprova o Sonar, tecnicamente (CA-14), e 
   const { worktree, projeto } = cenario("exit 1");
   issues = [issue("a.ts")];
 
-  const v = await coletarVerificacoes({ projeto, e2e: false, worktree });
+  const v = await coletarVerificacoes({ ambiente, projeto, e2e: false, worktree });
 
   assert.deepEqual(quemPassou(v), [false, true, false]);
   assert.deepEqual(v[2]?.falhas, [
@@ -149,7 +157,7 @@ test("o motivo do Sonar traz arquivo, linha, regra, severidade e mensagem de cad
   const { worktree, projeto } = cenario();
   issues = [{ ...issue("a.ts"), line: 7, rule: "typescript:S6328", severity: "CRITICAL", message: "troque o grupo" }];
 
-  const v = await coletarVerificacoes({ projeto, e2e: false, worktree });
+  const v = await coletarVerificacoes({ ambiente, projeto, e2e: false, worktree });
 
   assert.match(v[2]?.falhas[0]?.motivo ?? "", /\n {2}- a\.ts:7 typescript:S6328 \(CRITICAL\): troque o grupo$/);
 });
@@ -158,7 +166,7 @@ test("SonarQube fora do ar é infraestrutura, sem passar nem reprovar (CA-16)", 
   const { worktree, projeto } = cenario();
   status = "DOWN";
 
-  const [, , sonar] = await coletarVerificacoes({ projeto, e2e: false, worktree });
+  const [, , sonar] = await coletarVerificacoes({ ambiente, projeto, e2e: false, worktree });
 
   assert.ok(sonar);
   assert.equal(sonar.passou, undefined);
@@ -169,7 +177,7 @@ test("SonarQube fora do ar é infraestrutura, sem passar nem reprovar (CA-16)", 
 
 test("erro que não é de regra (worktree que não é git) sobe como está", async () => {
   const { projeto } = cenario();
-  await assert.rejects(coletarVerificacoes({ projeto, e2e: false, worktree: base }));
+  await assert.rejects(coletarVerificacoes({ ambiente, projeto, e2e: false, worktree: base }));
 });
 
 test("não grava, não commita e não toca no banco (CA-17)", async () => {
@@ -177,7 +185,7 @@ test("não grava, não commita e não toca no banco (CA-17)", async () => {
   issues = [issue("a.ts")];
   const antes = git(worktree, "rev-parse", "HEAD") + git(worktree, "status", "--porcelain");
 
-  await coletarVerificacoes({ projeto, e2e: false, worktree });
+  await coletarVerificacoes({ ambiente, projeto, e2e: false, worktree });
 
   assert.equal(git(worktree, "rev-parse", "HEAD") + git(worktree, "status", "--porcelain"), antes);
   for (const arquivo of ["verificacoes.ts"]) {
@@ -194,7 +202,7 @@ test("falha que não é de regra (sem como criar a pasta do scanner) sobe como e
   renameSync(worktree, dentro);
   chmodSync(pai, 0o500);
   try {
-    await assert.rejects(coletarVerificacoes({ projeto, e2e: false, worktree: dentro }), /EACCES/);
+    await assert.rejects(coletarVerificacoes({ ambiente, projeto, e2e: false, worktree: dentro }), /EACCES/);
   } finally {
     chmodSync(pai, 0o700);
   }

@@ -17,6 +17,9 @@ import {
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
 import { naFilaDoProjeto } from "./worktree.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
 const bd = branchDemanda(ref.demanda_id);
@@ -24,13 +27,13 @@ const br = branchRodada(ref.demanda_id, ref.rodada_id);
 const chave = `branch.${br}.fabriquinha`;
 type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
 const caminho = (c: Cenario, rodada_id = 1) => caminhoDaWorktreeRodada(c.raiz, c.projeto.nome, { ...ref, rodada_id });
-const garantir = (c: Cenario) => garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
-const atualizar = (c: Cenario) => atualizarWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+const garantir = (c: Cenario) => garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
+const atualizar = (c: Cenario) => atualizarWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
 const metadado = (p: string, nome = "fabriquinha-preparada") =>
   git(p, "rev-parse", "--path-format=absolute", "--git-path", nome);
 async function cenario() {
   const c = criarRepositorioDeTeste();
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
+  const demanda = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "D-1", c.log);
   return { ...c, demanda };
 }
 async function divergente(arquivos = ["base.txt"]) {
@@ -73,11 +76,11 @@ test("identificadores inválidos rejeitados antes de I/O em ambas operações", 
     { ...ref, rodada_id: 0 },
     { ...ref, rodada_id: NaN },
   ]) {
-    await assert.rejects(garantirWorktreeRodada(c.raiz, c.projeto, r, c.log), ErroDeRegra);
-    await assert.rejects(atualizarWorktreeRodada(c.raiz, c.projeto, r, c.log), ErroDeRegra);
+    await assert.rejects(garantirWorktreeRodada(ambiente, c.raiz, c.projeto, r, c.log), ErroDeRegra);
+    await assert.rejects(atualizarWorktreeRodada(ambiente, c.raiz, c.projeto, r, c.log), ErroDeRegra);
   }
   for (const operacao of [garantirWorktreeRodada, atualizarWorktreeRodada]) {
-    await assert.rejects(operacao(c.raiz, { ...c.projeto, nome: "../loja" }, ref, c.log), ErroDeRegra);
+    await assert.rejects(operacao(ambiente, c.raiz, { ...c.projeto, nome: "../loja" }, ref, c.log), ErroDeRegra);
   }
   assert.deepEqual(snapshot(c), antes);
   assert.equal(existsSync(join(c.raiz, "worktrees")), false);
@@ -156,7 +159,7 @@ test("irmãs 1/2 e demanda, ignore compartilhado, ponta local atual e integraç�
   const r1 = await garantir(c);
   const sha = commit(r1, "entrega.txt", "entrega");
   git(c.demanda, "merge", "--no-edit", br);
-  const r2 = await garantirWorktreeRodada(c.raiz, c.projeto, { ...ref, rodada_id: 2 }, c.log);
+  const r2 = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { ...ref, rodada_id: 2 }, c.log);
   assert.equal(git(r2, "rev-parse", "HEAD"), sha);
   assert.equal(r1, join(dirname(c.demanda), "rodadas", "1"));
   assert.equal(r2, join(dirname(c.demanda), "rodadas", "2"));

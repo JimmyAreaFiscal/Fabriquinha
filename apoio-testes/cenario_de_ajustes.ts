@@ -20,6 +20,9 @@ import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { commitarArquivo, criarRepositorioDeTeste, rodarGit } from "./repositorio_de_teste.ts";
+import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ajustes-")));
@@ -65,8 +68,8 @@ export async function cenarioDeAjustes(shell = "") {
     criado_por: { tipo: "fabriquinha" },
     rodada_id: 2,
   });
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log);
   const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   gravarAgregadoPronto(banco, {

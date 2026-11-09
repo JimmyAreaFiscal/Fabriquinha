@@ -313,8 +313,12 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
     })
   ).json() as Record<string, unknown>[];
   assert.deepEqual(
-    { sessao: sessao?.sessao, estado: sessao?.estado, motivo: sessao?.motivo },
-    { sessao: SESSAO, estado: "aguardando_humano", motivo: "falha" },
+    {
+      sessao: sessao?.sessao,
+      estado: sessao?.estado,
+      pendencia: (sessao?.pendencia as { tipo: string } | undefined)?.tipo,
+    },
+    { sessao: SESSAO, estado: "aguardando_humano", pendencia: "item_bloqueado" },
   );
   assert.deepEqual((await pedir("/api/sessoes?escopo=historico", { headers: comCookie() })).json(), []);
 
