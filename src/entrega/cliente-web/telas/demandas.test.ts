@@ -111,6 +111,7 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
   encerramento: { passos: [], limpeza_pendente: [] },
   dependencias: [],
   dependentes: [],
+  uso: { textoDoCusto: "US$ 1,50" },
   ...resto,
 });
 
@@ -144,6 +145,12 @@ test("a página vazia traz o cabeçalho, o trilho e a descrição na lateral, se
     html,
     /Aguarda você|Critérios de aceite|Dependências|Antes das rodadas|Depois das rodadas|Evidências da demanda|Encerramento final|dm-gate-titulo">Aprovação/,
   );
+});
+
+test("o cabeçalho mostra o texto do custo que a rota entrega, com ≥ e o aviso quando falta custo", () => {
+  assert.match(pagina(dadosDaPagina()), /<span class="muted">Custo US\$ 1,50<\/span>/);
+  const semCusto = pagina(dadosDaPagina({ uso: { textoDoCusto: "≥ US$ 4,20 (1 sessão sem custo)" } }));
+  assert.match(semCusto, /Custo ≥ US\$ 4,20 \(1 sessão sem custo\)<\/span>/);
 });
 
 test("o trilho marca os estados feitas, a atual e os gates; concluída completa o trilho e cancelada fica sem ele", () => {

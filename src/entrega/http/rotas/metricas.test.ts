@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { MetricasDemandaPeriodo, MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasMesDemanda, MetricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -102,8 +102,9 @@ test("GET /api/metricas e /api/metricas/demandas: o mesmo texto do custo, com �
     mesAtual.niveis.map((n) => n.total.textoDoCusto),
     mesAtual.niveis.map(() => texto),
   );
-  const [demanda] = (await chamar("/api/metricas/demandas")) as MetricasDemandaPeriodo[];
-  assert.equal(demanda?.textoDoCusto, texto);
+  const { demandas, total } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
+  assert.equal(demandas[0]?.textoDoCusto, texto);
+  assert.equal(total.textoDoCusto, texto);
 });
 
 test("GET /api/metricas: de um projeto, de `de` a `ate`; só `ate` leva `de` 11 meses antes", async () => {
@@ -128,17 +129,17 @@ test("GET /api/metricas: 422 para mês inválido, `de` depois de `ate` ou mais d
 });
 
 test("GET /api/metricas/demandas: as demandas com execução no período", async () => {
-  assert.deepEqual(await chamar("/api/metricas/demandas"), []);
+  assert.deepEqual(((await chamar("/api/metricas/demandas")) as MetricasPorDemanda).demandas, []);
   demandaComExecucao("I-1", "loja");
   demandaComExecucao("I-2", "site");
-  const todas = (await chamar("/api/metricas/demandas")) as MetricasDemandaPeriodo[];
+  const { demandas: todas } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
   assert.deepEqual(
     todas.map((d) => d.demanda),
     ["I-1", "I-2"],
   );
-  const site = (await chamar(
+  const { demandas: site } = (await chamar(
     `/api/metricas/demandas?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
-  )) as MetricasDemandaPeriodo[];
+  )) as MetricasPorDemanda;
   assert.deepEqual(
     site.map((d) => [d.demanda, d.custo.conhecido]),
     [["I-2", 2]],
@@ -153,28 +154,37 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
     execucoes: 1,
     falhas: 0,
     duracaoMs: 0,
-    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0 },
+    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0, total: 11 },
     custo: { conhecido: 2, trabalhosSemCusto: 0 },
     textoDoCusto: "US$ 2,00",
   };
-  assert.deepEqual(corpo, [
-    {
-      demanda: "I-1",
-      projeto: "loja",
-      titulo: "Título",
-      estado: "em_execucao",
-      reprovacoes: 0,
-      nota: null,
+  assert.deepEqual(corpo, {
+    total: {
       ...execucaoDeUmaDemanda,
+      execucoes: 2,
+      tokens: { entrada: 20, saida: 2, cacheLeitura: 0, cacheEscrita: 0, total: 22 },
+      custo: { conhecido: 4, trabalhosSemCusto: 0 },
+      textoDoCusto: "US$ 4,00",
     },
-    {
-      demanda: "I-2",
-      projeto: "site",
-      titulo: "Título",
-      estado: "em_execucao",
-      reprovacoes: 0,
-      nota: null,
-      ...execucaoDeUmaDemanda,
-    },
-  ]);
+    demandas: [
+      {
+        demanda: "I-1",
+        projeto: "loja",
+        titulo: "Título",
+        estado: "em_execucao",
+        reprovacoes: 0,
+        nota: null,
+        ...execucaoDeUmaDemanda,
+      },
+      {
+        demanda: "I-2",
+        projeto: "site",
+        titulo: "Título",
+        estado: "em_execucao",
+        reprovacoes: 0,
+        nota: null,
+        ...execucaoDeUmaDemanda,
+      },
+    ],
+  });
 });
