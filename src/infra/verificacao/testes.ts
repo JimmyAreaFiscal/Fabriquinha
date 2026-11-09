@@ -34,9 +34,9 @@ export class VerificacaoDeTestes extends VerificacaoComRegistro {
     this.#entrada = entrada;
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
     const { projeto, e2e, arquivos, aoTerminarAsLinguagens } = this.#entrada;
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const comandos: Record<string, unknown>[] = [];
       const logs = [];
       const falhas: Falha[] = [];

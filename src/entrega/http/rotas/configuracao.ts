@@ -18,7 +18,17 @@ import {
   registrarProjeto,
   removerProjeto,
 } from "../../../aplicacao/projeto/cadastro.ts";
-import { Configuracao, configuracao, salvarConfiguracao } from "../../../armazenamento/servico.ts";
+import {
+  Configuracao,
+  configuracao,
+  configuracaoDoAmbiente,
+  salvarConfiguracao,
+  salvarConfiguracaoDoAmbiente,
+} from "../../../armazenamento/servico.ts";
+import {
+  eliminarAmbienteDoConjunto,
+  listarAmbientesDoConjunto,
+} from "../../../aplicacao/ambiente/conjunto_da_configuracao.ts";
 import { conferirProjeto } from "../../../infra/repositorio/cadastro.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Agendador, Rota } from "../rotas.ts";
@@ -56,6 +66,12 @@ const etapasDoFormulario = (configuracoes: Configuracoes) =>
     const configuracao_agente = configuracoes[etapa];
     return configuracao_agente?.modelo || configuracao_agente?.effort ? [{ etapa, configuracao_agente }] : [];
   });
+
+/** O Ambiente: o tipo e os limites gravados, e o conjunto de containers da Fabriquinha (só os que ela criou). */
+const estadoDoAmbiente = (banco: DatabaseSync) => ({
+  configuracao: configuracaoDoAmbiente(banco),
+  conjunto: listarAmbientesDoConjunto(banco),
+});
 
 const par = (m: Modelo | undefined): string | undefined => m && `${m.provedor}/${m.nome}`;
 
@@ -141,6 +157,20 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
       salvarConfiguracao(banco, nova);
       return estado(banco, agendador);
     },
+  },
+  { metodo: "GET", caminho: "/api/ambiente", tratar: ({ banco }) => estadoDoAmbiente(banco) },
+  {
+    metodo: "POST",
+    caminho: "/api/ambiente",
+    tratar: ({ banco, corpo }) => {
+      salvarConfiguracaoDoAmbiente(banco, corpo);
+      return estadoDoAmbiente(banco);
+    },
+  },
+  {
+    metodo: "DELETE",
+    caminho: "/api/ambiente/:id",
+    tratar: ({ banco, params }) => eliminarAmbienteDoConjunto(banco, String(params.id)),
   },
   {
     metodo: "GET",

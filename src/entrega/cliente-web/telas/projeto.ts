@@ -17,6 +17,7 @@ import {
 } from "../render.ts";
 import { ROTULO_DA_ETAPA, TITULO_PADRAO_DA_ETAPA, faseDoProcesso } from "../rotulos.ts";
 import type { ProjetoListado } from "./configuracao.ts";
+import { ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 import { cardsDoMes } from "./metricas.ts";
 
 export const caminhoDoProjeto = (nome: string): string => `/projects/${encodeURIComponent(nome)}`;
@@ -100,32 +101,34 @@ const FASES_DO_PROCESSO: readonly (readonly [EtapaTicket, number])[] = [
 /** A cor do marco atual e da borda da linha: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
 type EstadoDaLinha = "falha" | "aguarda" | "rodando" | "cancelada";
 
-const GATES_DA_RODADA: ReadonlySet<EstadoRodada> = new Set(["gate_pr", "ajustar_resultado"]);
-
 /** A demanda que terminou sem satisfazer a dependência de quem a espera: a cancelada. */
 const foiCancelada = (d: Pick<DemandaDoProjeto, "terminal" | "satisfazDependencia">): boolean =>
   d.terminal && !d.satisfazDependencia;
 
-/** O estado da demanda: ticket falho, gate da demanda, do planejamento ou do PR, ou ticket em execução. */
+/** A cor das Pendências do servidor: a do item bloqueado antes das demais; sem elas, a do ticket em execução. */
+function estadoPelasPendencias(
+  pendencias: DemandaDoProjeto["pendencias"],
+  tickets: DemandaDoProjeto["tickets"],
+): EstadoDaLinha | undefined {
+  if (pendencias.some((p) => p.tipo === "item_bloqueado")) return "falha";
+  if (pendencias.length > 0) return "aguarda";
+  return tickets.some((t) => t.estado === "em_execucao") ? "rodando" : undefined;
+}
+
+/** O estado da demanda: as Pendências dela (a regra é do servidor) ou o ticket em execução. */
 /** @testes função pura da tela, testada sem montar o DOM */
 export function estadoDaDemanda(d: DemandaDoProjeto): EstadoDaLinha | undefined {
   if (d.terminal) return foiCancelada(d) ? "cancelada" : undefined;
-  if (d.tickets.some((t) => t.estado === "falhou")) return "falha";
-  const noGate =
-    d.estado === "gate_demanda" ||
-    d.estado === "gate_planejamento" ||
-    (d.estado === "em_execucao" && d.rodadas.some((r) => GATES_DA_RODADA.has(r.estado)));
-  if (noGate) return "aguarda";
-  return d.tickets.some((t) => t.estado === "em_execucao") ? "rodando" : undefined;
+  return estadoPelasPendencias(d.pendencias, d.tickets);
 }
 
-/** O estado da rodada, pelos tickets dela; na demanda cancelada, apagado. */
+/** O estado da rodada, pelas Pendências e pelos tickets dela; na demanda cancelada, apagado. */
 function estadoDaRodada(d: DemandaDoProjeto, rodada: DemandaDoProjeto["rodadas"][number]): EstadoDaLinha | undefined {
   if (foiCancelada(d)) return "cancelada";
-  const tickets = d.tickets.filter((t) => t.rodada === rodada.ref);
-  if (tickets.some((t) => t.estado === "falhou")) return "falha";
-  if (GATES_DA_RODADA.has(rodada.estado)) return "aguarda";
-  return tickets.some((t) => t.estado === "em_execucao") ? "rodando" : undefined;
+  return estadoPelasPendencias(
+    d.pendencias.filter((p) => p.rodada === rodada.ref),
+    d.tickets.filter((t) => t.rodada === rodada.ref),
+  );
 }
 
 /**
@@ -257,8 +260,17 @@ function rodadas(d: DemandaDoProjeto): string {
     .join("");
 }
 
-/** A gaveta: os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
-function gaveta(d: DemandaDoProjeto): string {
+/** Um item por Pendência no alto da gaveta: o tipo, o item, o motivo, há quanto tempo e o chat do diálogo. */
+function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: Date): string {
+  const chat =
+    p.sessao === undefined
+      ? ""
+      : ` <a class="chat" href="${caminhoDaSessao(p.sessao)}"><span class="ir">chat →</span></a>`;
+  return `<li data-pendencia="${p.tipo}" data-item="${escapar(p.item)}"><span class="pill pill-aguarda">${ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo].marca}</span> <span class="id">${escapar(p.item)}</span> ${escapar(p.motivo)} <span class="muted">${ha(p.desde, agora)}</span>${chat}</li>`;
+}
+
+/** A gaveta: as Pendências e os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
+function gaveta(d: DemandaDoProjeto, agora: Date): string {
   const linhas = d.tickets.map((t) => {
     const encerrado = t.terminal;
     // A sessão de ajustes conversa na página da demanda, não no chat.
@@ -275,7 +287,11 @@ function gaveta(d: DemandaDoProjeto): string {
       <td class="sessao-cel">${chat}</td>
     </tr>`;
   });
-  return `<div class="gaveta">${linhas.length > 0 ? `<table>${linhas.join("")}</table>` : '<p class="muted">Nenhum ticket ainda.</p>'}</div>`;
+  const pendencias =
+    d.pendencias.length > 0
+      ? `<ul class="pendencias">${d.pendencias.map((p) => itemDaPendencia(p, agora)).join("")}</ul>`
+      : "";
+  return `<div class="gaveta">${pendencias}${linhas.length > 0 ? `<table>${linhas.join("")}</table>` : '<p class="muted">Nenhum ticket ainda.</p>'}</div>`;
 }
 
 /** Uma linha por demanda: título e marcas, a linha do tempo, o destaque, as rodadas na execução e a gaveta. */
@@ -294,7 +310,7 @@ function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string 
       <div class="pista-estado">${destaque(d, corDaLinha, agora)}</div>
     </div>
     ${estado === "em_execucao" ? rodadas(d) : ""}
-    ${gaveta(d)}
+    ${gaveta(d, agora)}
   </div>`;
 }
 

@@ -21,6 +21,9 @@ import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/rep
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-agendador-")));
@@ -105,8 +108,8 @@ async function cenario() {
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
-  await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
+  const demanda = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, D, c.log);
+  await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 

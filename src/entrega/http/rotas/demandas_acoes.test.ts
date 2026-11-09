@@ -16,6 +16,9 @@ import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../infra/repositorio/worktree-demanda.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
+import { AmbienteHostLocal } from "../../../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-acoes-web-")));
@@ -118,8 +121,8 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   if (gate === "pr") {
-    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-    const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
+    await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+    const head = commitarArquivo(await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
     resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "em_execucao" };
@@ -344,7 +347,7 @@ async function comSessao() {
     id: string;
   };
   // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
-  await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
+  await ate(async () => (await chat(c, sessao)).sessao.pendencia?.tipo === "dialogo_do_agente");
   return { ...c, execucao: r.json<{ sessao: string }>().sessao, sessao };
 }
 
@@ -353,7 +356,7 @@ interface Entrada {
   fabriquinha?: true;
 }
 const chat = async ({ pedir }: Cenario, sessao: string) =>
-  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { motivo?: string }; conversa: Entrada[] }>();
+  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { pendencia?: { tipo: string } }; conversa: Entrada[] }>();
 const conversa = async (c: Cenario, sessao: string) => JSON.stringify((await chat(c, sessao)).conversa);
 async function ate(condicao: () => Promise<boolean>): Promise<void> {
   for (let i = 0; i < 500 && !(await condicao()); i++) await dormir(20);

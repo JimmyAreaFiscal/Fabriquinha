@@ -1,6 +1,7 @@
 // Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, a porta livre que ela
 // mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/pi_falso.ts), e recebe o
-// navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
+// navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`. O docker falso
+// (apoio-testes/docker_falso.ts) vai à frente no PATH, e o registro dele diz se o serviço chamou o docker.
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -8,6 +9,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
+import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
@@ -20,6 +22,8 @@ export interface Fabriquinha {
   base: string;
   /** O link de entrada com o token, lido de `web.url`. */
   link: string;
+  /** O docker que o serviço enxerga no PATH: o registro das chamadas e os containers semeados. */
+  dockerFalso: DockerFalso;
   /** O processo do serviço, para o teste mandar o SIGTERM e ler o código de saída. */
   servico: ChildProcess;
   /** Tudo o que o serviço escreveu no stderr até agora. */
@@ -62,6 +66,9 @@ export const test = base.extend<{
     // O serviço é quem usa o banco: aqui a raiz só nasce migrada, e fechar() a apaga no fim.
     const { raiz, banco, fechar } = abrirBancoTemporario();
     banco.close();
+    // O docker falso muda o PATH e o FALSO_DOCKER_DIR deste processo; o `finally` os devolve ao que eram.
+    const { PATH: pathAnterior, FALSO_DOCKER_DIR: dockerAnterior } = process.env;
+    const dockerFalso = instalarDockerFalso(join(raiz, "docker"));
     // git e pi sem a configuração do usuário da máquina.
     const gitconfig = join(raiz, "gitconfig");
     writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
@@ -123,6 +130,7 @@ export const test = base.extend<{
         raiz,
         base: new URL(link).origin,
         link,
+        dockerFalso,
         servico: inicial.servico,
         stderr: inicial.stderr,
         reiniciar: async () => {
@@ -136,6 +144,9 @@ export const test = base.extend<{
       const log = atuais.map((a) => a.stderr()).join("");
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
       fechar();
+      process.env.PATH = pathAnterior;
+      if (dockerAnterior === undefined) delete process.env.FALSO_DOCKER_DIR;
+      else process.env.FALSO_DOCKER_DIR = dockerAnterior;
     }
   },
   pagina: async ({ page, fabriquinha }, use) => {

@@ -17,7 +17,8 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { projetoExistente } from "../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
-import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
+import { descartarAlteracoes, exigirGitNoAmbiente } from "../infra/repositorio/worktree.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { encerrarPiVivo } from "./etapas/pi_vivo.ts";
 import { instanteAtual } from "./relogio.ts";
@@ -72,8 +73,8 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
     [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz).pasta],
   ];
   for (const [{ branch, sha }, worktree] of pontas) {
-    await exigirGit(worktree, "update-ref", `refs/heads/${branch}`, sha);
-    await descartarAlteracoes(worktree, log);
+    await exigirGitNoAmbiente(ambienteDoServico(), worktree, "update-ref", `refs/heads/${branch}`, sha);
+    await descartarAlteracoes(ambienteDoServico(), worktree, log);
   }
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }
@@ -84,7 +85,8 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
  */
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
   const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
-  const demanda = await exigirGit(
+  const demanda = await exigirGitNoAmbiente(
+    ambienteDoServico(),
     espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco)).pasta,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,

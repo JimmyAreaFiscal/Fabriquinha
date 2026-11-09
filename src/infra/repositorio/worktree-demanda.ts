@@ -5,8 +5,8 @@ import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../nucleo/
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Slug } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
-import { git } from "../processo.ts";
-import { exigirGit, naFilaDoProjeto, preparar } from "./worktree.ts";
+import type { Ambiente } from "../ambiente/ambiente.ts";
+import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto, preparar } from "./worktree.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(
@@ -63,8 +63,8 @@ function verificarDisco(raiz: string, caminho: string): void {
   if (existsSync(caminho)) descendentes(caminho);
 }
 
-async function verificarWorktrees(repo: string, caminho: string, ref: string): Promise<void> {
-  const lista = await exigirGit(repo, "worktree", "list", "--porcelain", "-z");
+async function verificarWorktrees(ambiente: Ambiente, repo: string, caminho: string, ref: string): Promise<void> {
+  const lista = await exigirGitNoAmbiente(ambiente, repo, "worktree", "list", "--porcelain", "-z");
   for (const bloco of lista.split("\0\0")) {
     const campos = bloco.split("\0");
     const campo = campos.find((c) => c.startsWith("worktree "));
@@ -78,6 +78,7 @@ async function verificarWorktrees(repo: string, caminho: string, ref: string): P
 }
 
 async function verificarCheckout(
+  ambiente: Ambiente,
   raiz: string,
   repo: string,
   caminho: string,
@@ -87,24 +88,27 @@ async function verificarCheckout(
 ): Promise<boolean> {
   const ref = `refs/heads/${branch}`;
   verificarDisco(raiz, caminho);
-  await verificarWorktrees(repo, caminho, ref);
-  const refs = await exigirGit(repo, "for-each-ref", "--format=%(refname)", ref);
+  await verificarWorktrees(ambiente, repo, caminho, ref);
+  const refs = await exigirGitNoAmbiente(ambiente, repo, "for-each-ref", "--format=%(refname)", ref);
   const existe = refs.split("\n").includes(ref);
   if (!existe && refs !== "") recusar(`outra branch ocupa o prefixo ${ref}`);
-  const posse = (await exigirGit(repo, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`)).replace(
-    /\n$/,
-    "",
-  );
+  const posse = (
+    await exigirGitNoAmbiente(ambiente, repo, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`)
+  ).replace(/\n$/, "");
   if ((existe || posse !== "") && posse !== dono) recusar(`a branch ${branch} não pertence a esta demanda/rodada`);
   if (obrigatorio && (!existe || !existsSync(caminho))) recusar(`worktree obrigatória ausente em ${caminho}`);
   if (existsSync(caminho)) {
     if (!existe || lstatSync(join(caminho, ".git"), { throwIfNoEntry: false }) === undefined) {
       recusar(`destino ocupado em ${caminho}`);
     }
-    const topo = (await exigirGit(caminho, "rev-parse", "--show-toplevel")).trim();
-    const comum = (await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-common-dir")).trim();
-    const esperado = (await exigirGit(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")).trim();
-    const atual = (await exigirGit(caminho, "symbolic-ref", "HEAD")).trim();
+    const topo = (await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "--show-toplevel")).trim();
+    const comum = (
+      await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    ).trim();
+    const esperado = (
+      await exigirGitNoAmbiente(ambiente, repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    ).trim();
+    const atual = (await exigirGitNoAmbiente(ambiente, caminho, "symbolic-ref", "HEAD")).trim();
     if (
       realpathSync(topo) !== realpathSync(caminho) ||
       realpathSync(comum) !== realpathSync(esperado) ||
@@ -123,6 +127,7 @@ type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "veri
  * a base no origin (só na criação da branch), para quem chama varrer os commits humanos depois, fora da fila.
  */
 export async function garantirWorktreeDemandaDizendoSeBuscouBase(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoWorktree,
   demandaId: string,
@@ -133,12 +138,12 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
   const chave = `branch.${branch}.fabriquinha`;
   const dono = `demanda:${caminho}`;
   const { buscouBase, marca } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
-    const existe = await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, dono);
+    const existe = await verificarCheckout(ambiente, raiz, projeto.raiz_git, caminho, branch, dono);
     if (existsSync(caminho)) {
       // Checkout já validado; conservar o histórico.
     } else if (existe) {
-      await exigirGit(projeto.raiz_git, "worktree", "prune", "--expire", "now");
-      await exigirGit(projeto.raiz_git, "worktree", "add", caminho, branch);
+      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "prune", "--expire", "now");
+      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", caminho, branch);
     } else {
       await exigirGit(
         projeto.raiz_git,
@@ -146,8 +151,9 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
         "origin",
         `+refs/heads/${projeto.branch_base}:refs/remotes/origin/${projeto.branch_base}`,
       );
-      await exigirGit(projeto.raiz_git, "config", chave, dono);
-      await exigirGit(
+      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "config", chave, dono);
+      await exigirGitNoAmbiente(
+        ambiente,
         projeto.raiz_git,
         "worktree",
         "add",
@@ -158,12 +164,19 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
       );
     }
     const marca = (
-      await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", "fabriquinha-preparada")
+      await exigirGitNoAmbiente(
+        ambiente,
+        caminho,
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "fabriquinha-preparada",
+      )
     ).trim();
     return { buscouBase: !existe, marca };
   });
   if (!existsSync(marca)) {
-    await preparar(caminho, projeto.verificacoes.preparacao, log);
+    await preparar(ambiente, caminho, projeto.verificacoes.preparacao, log);
     writeFileSync(marca, "");
   }
   return { caminho, buscouBase };
@@ -171,12 +184,13 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
 
 /** Só a pasta da worktree da demanda; quem precisa saber se buscou a base usa a variante que o diz. */
 export async function garantirWorktreeDemanda(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoWorktree,
   demandaId: string,
   log: string,
 ): Promise<string> {
-  return (await garantirWorktreeDemandaDizendoSeBuscouBase(raiz, projeto, demandaId, log)).caminho;
+  return (await garantirWorktreeDemandaDizendoSeBuscouBase(ambiente, raiz, projeto, demandaId, log)).caminho;
 }
 
 interface RefRodada {
@@ -196,25 +210,44 @@ async function comOrientacao<T>(trabalho: () => Promise<T>): Promise<T> {
   }
 }
 
-async function marcaPreparacao(caminho: string): Promise<string> {
+async function marcaPreparacao(ambiente: Ambiente, caminho: string): Promise<string> {
   return (
-    await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", "fabriquinha-preparada")
+    await exigirGitNoAmbiente(
+      ambiente,
+      caminho,
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-path",
+      "fabriquinha-preparada",
+    )
   ).trim();
 }
 
-async function prepararRodada(caminho: string, projeto: ProjetoWorktree, log: string, marca: string): Promise<void> {
-  await preparar(caminho, projeto.verificacoes.preparacao, log);
+async function prepararRodada(
+  ambiente: Ambiente,
+  caminho: string,
+  projeto: ProjetoWorktree,
+  log: string,
+  marca: string,
+): Promise<void> {
+  await preparar(ambiente, caminho, projeto.verificacoes.preparacao, log);
   writeFileSync(marca, "");
 }
 
-async function validarDemanda(raiz: string, projeto: ProjetoWorktree, ref: RefRodada): Promise<string> {
+async function validarDemanda(
+  ambiente: Ambiente,
+  raiz: string,
+  projeto: ProjetoWorktree,
+  ref: RefRodada,
+): Promise<string> {
   const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ref.demanda_id);
   const branch = branchDemanda(ref.demanda_id);
-  await verificarCheckout(raiz, projeto.raiz_git, demanda, branch, `demanda:${demanda}`, true);
-  return (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();
+  await verificarCheckout(ambiente, raiz, projeto.raiz_git, demanda, branch, `demanda:${demanda}`, true);
+  return (await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();
 }
 
 export async function garantirWorktreeRodada(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoWorktree,
   ref: RefRodada,
@@ -224,31 +257,47 @@ export async function garantirWorktreeRodada(
   const branch = branchRodada(ref.demanda_id, ref.rodada_id);
   return comOrientacao(async () => {
     const marca = await naFilaDoProjeto(raiz, projeto.nome, async () => {
-      const sha = await validarDemanda(raiz, projeto, ref);
-      const existe = await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`);
+      const sha = await validarDemanda(ambiente, raiz, projeto, ref);
+      const existe = await verificarCheckout(ambiente, raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`);
       if (!existsSync(caminho)) {
         if (existe) {
-          await exigirGit(projeto.raiz_git, "worktree", "prune", "--expire", "now");
-          await exigirGit(projeto.raiz_git, "worktree", "add", caminho, branch);
+          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "prune", "--expire", "now");
+          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", caminho, branch);
         } else {
-          await exigirGit(projeto.raiz_git, "config", `branch.${branch}.fabriquinha`, `rodada:${caminho}`);
-          await exigirGit(projeto.raiz_git, "worktree", "add", "-b", branch, caminho, sha);
+          await exigirGitNoAmbiente(
+            ambiente,
+            projeto.raiz_git,
+            "config",
+            `branch.${branch}.fabriquinha`,
+            `rodada:${caminho}`,
+          );
+          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", "-b", branch, caminho, sha);
         }
       }
-      return marcaPreparacao(caminho);
+      return marcaPreparacao(ambiente, caminho);
     });
-    if (!existsSync(marca)) await prepararRodada(caminho, projeto, log, marca);
+    if (!existsSync(marca)) await prepararRodada(ambiente, caminho, projeto, log, marca);
     return caminho;
   });
 }
 
-async function caminhoGit(caminho: string, nome: string): Promise<string> {
-  return (await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", nome)).trim();
+async function caminhoGit(ambiente: Ambiente, caminho: string, nome: string): Promise<string> {
+  return (
+    await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "--path-format=absolute", "--git-path", nome)
+  ).trim();
 }
 
-async function verificarLimpa(caminho: string): Promise<void> {
+async function verificarLimpa(ambiente: Ambiente, caminho: string): Promise<void> {
   if (
-    (await exigirGit(caminho, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all")) !== ""
+    (await exigirGitNoAmbiente(
+      ambiente,
+      caminho,
+      "--no-optional-locks",
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all",
+    )) !== ""
   ) {
     throw new ErroDeRegra(
       `worktree com alterações em ${caminho}`,
@@ -264,7 +313,7 @@ async function verificarLimpa(caminho: string): Promise<void> {
     "BISECT_START",
     "sequencer",
   ]) {
-    if (lstatSync(await caminhoGit(caminho, nome), { throwIfNoEntry: false }) !== undefined) {
+    if (lstatSync(await caminhoGit(ambiente, caminho, nome), { throwIfNoEntry: false }) !== undefined) {
       throw new ErroDeRegra(
         `operação pendente ${nome} em ${caminho}`,
         "inspecione a worktree e conclua ou aborte a operação manualmente",
@@ -273,20 +322,21 @@ async function verificarLimpa(caminho: string): Promise<void> {
   }
 }
 
-async function restaurarMerge(caminho: string, antes: string): Promise<void> {
-  if (lstatSync(await caminhoGit(caminho, "MERGE_HEAD"), { throwIfNoEntry: false }) !== undefined) {
-    await exigirGit(caminho, "merge", "--abort");
+async function restaurarMerge(ambiente: Ambiente, caminho: string, antes: string): Promise<void> {
+  if (lstatSync(await caminhoGit(ambiente, caminho, "MERGE_HEAD"), { throwIfNoEntry: false }) !== undefined) {
+    await exigirGitNoAmbiente(ambiente, caminho, "merge", "--abort");
   }
-  if ((await exigirGit(caminho, "rev-parse", "HEAD")).trim() !== antes) {
+  if ((await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "HEAD")).trim() !== antes) {
     throw new ErroDeRegra(
       "HEAD alterado após merge falho",
       "inspecione o histórico manualmente antes de tentar novamente",
     );
   }
-  await verificarLimpa(caminho);
+  await verificarLimpa(ambiente, caminho);
 }
 
 export async function atualizarWorktreeRodada(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoWorktree,
   ref: RefRodada,
@@ -296,20 +346,20 @@ export async function atualizarWorktreeRodada(
   const branch = branchRodada(ref.demanda_id, ref.rodada_id);
   return comOrientacao(async () => {
     const resultado = await naFilaDoProjeto(raiz, projeto.nome, async (): Promise<ResultadoAtualizacao> => {
-      const sha = await validarDemanda(raiz, projeto, ref);
-      await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`, true);
-      await verificarLimpa(caminho);
-      const antes = (await exigirGit(caminho, "rev-parse", "HEAD")).trim();
-      const merge = await git(caminho, "merge", "--no-edit", sha);
+      const sha = await validarDemanda(ambiente, raiz, projeto, ref);
+      await verificarCheckout(ambiente, raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`, true);
+      await verificarLimpa(ambiente, caminho);
+      const antes = (await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "HEAD")).trim();
+      const merge = await gitNoAmbiente(ambiente, caminho, "merge", "--no-edit", sha);
       if (merge.codigo !== 0) {
         // Ler conflitos antes do abort; mesmo falhando a leitura, restaurar o merge iniciado aqui.
         let arquivos: string[];
         try {
-          arquivos = (await exigirGit(caminho, "diff", "--name-only", "--diff-filter=U", "-z"))
+          arquivos = (await exigirGitNoAmbiente(ambiente, caminho, "diff", "--name-only", "--diff-filter=U", "-z"))
             .split("\0")
             .filter(Boolean);
         } finally {
-          await restaurarMerge(caminho, antes);
+          await restaurarMerge(ambiente, caminho, antes);
         }
         if (arquivos.length === 0) {
           throw new ErroDeRegra(
@@ -319,12 +369,14 @@ export async function atualizarWorktreeRodada(
         }
         return { status: "conflito", arquivos };
       }
-      const mudouHead = (await exigirGit(caminho, "rev-parse", "HEAD")).trim() !== antes;
-      if (mudouHead) rmSync(await marcaPreparacao(caminho), { force: true });
-      await verificarLimpa(caminho);
+      const mudouHead = (await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "HEAD")).trim() !== antes;
+      if (mudouHead) rmSync(await marcaPreparacao(ambiente, caminho), { force: true });
+      await verificarLimpa(ambiente, caminho);
       return { status: mudouHead ? "atualizada" : "sem_alteracao" };
     });
-    if (resultado.status === "atualizada") await prepararRodada(caminho, projeto, log, await marcaPreparacao(caminho));
+    if (resultado.status === "atualizada") {
+      await prepararRodada(ambiente, caminho, projeto, log, await marcaPreparacao(ambiente, caminho));
+    }
     return resultado;
   });
 }

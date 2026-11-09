@@ -1,13 +1,14 @@
 // Rota do Início: o mês, o que aguarda o Auditor, o que roda e o board das demandas em andamento, sobre um banco real.
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { SessaoDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { type DadosDoInicio, esperaDaSessao, inicio } from "./inicio.ts";
+import { type DadosDoInicio, inicio, trabalhoVivoDaSessao } from "./inicio.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -160,63 +161,189 @@ const viva = (atividade?: string) => ({
   ...(atividade && { atividade }),
 });
 
-test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa parada, da espera mais antiga para a mais nova", () => {
+test("aguarda: as Pendências da regra única, da mais antiga para a mais nova", () => {
   const { aguarda } = inicio(cenario(), () => undefined);
   const comum = (id: string) => ({ demanda: id, projeto: "loja", titulo: `demanda ${id}` });
+  const inicioDosTempos = "2026-01-01T00:00:00.000Z";
   assert.deepEqual(aguarda, [
     {
-      motivo: "gate_demanda",
+      tipo: "gate_humano",
+      item: "I-301",
+      motivo: "Aprovação da demanda aguarda decisão",
+      acao_esperada: "decidir_gate",
+      desde: inicioDosTempos,
       ...comum("I-301"),
-      ticket: { ref: "I-301.T1", etapa: "entender_e_desenhar" },
-      desde: "2026-01-01T00:00:00.000Z",
     },
-    { motivo: "gate_planejamento", ...comum("I-302"), desde: "2026-01-01T00:00:00.000Z" },
-    // A R5 aguarda o PR sem o encerramento da rodada: conta desde o estado da demanda.
-    { motivo: "gate_pr", ...comum("I-303"), rodada: "I-303.R5", desde: "2026-01-01T00:00:00.000Z" },
     {
-      motivo: "gate_pr",
+      tipo: "gate_humano",
+      item: "I-302",
+      motivo: "Aprovação do planejamento aguarda decisão",
+      acao_esperada: "decidir_gate",
+      desde: inicioDosTempos,
+      ...comum("I-302"),
+    },
+    {
+      tipo: "gate_humano",
+      item: "I-303.R2",
+      motivo: "PR #7 da rodada aguarda decisão",
+      acao_esperada: "decidir_gate",
+      desde: inicioDosTempos,
       ...comum("I-303"),
       rodada: "I-303.R2",
-      ticket: { ref: "I-303.T2", etapa: "encerrar_rodada" },
-      pr: { id: "7", url: "https://pr/7" },
-      desde: em(2),
     },
     {
-      motivo: "ajustes",
+      tipo: "gate_humano",
+      item: "I-303.R5",
+      motivo: "PR da rodada aguarda decisão",
+      acao_esperada: "decidir_gate",
+      desde: inicioDosTempos,
       ...comum("I-303"),
-      rodada: "I-303.R3",
-      ticket: { ref: "I-303.T3", etapa: "ajustar_resultado", modo: "interativo" },
-      desde: em(3),
+      rodada: "I-303.R5",
     },
     {
-      motivo: "falha",
+      tipo: "item_bloqueado",
+      item: "I-303.T6",
+      motivo: "Tentativas esgotadas: testes falharam",
+      acao_esperada: "reabrir_com_instrucao",
+      desde: em(6),
       ...comum("I-303"),
       rodada: "I-303.R4",
-      ticket: { ref: "I-303.T6", etapa: "implementar", modo: "autonomo" },
-      erro: "testes falharam",
-      desde: em(6),
     },
-    { motivo: "falha", ...comum("I-304"), ticket: { ref: "I-304.T8", etapa: "encerrar_demanda" }, desde: em(8) },
     {
-      motivo: "revisao_parada",
-      ...comum("I-307"),
-      erro: "a revisão integral foi rejeitada: o ticket 9 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
+      tipo: "item_bloqueado",
+      item: "I-304.T8",
+      motivo: "Tentativas esgotadas",
+      acao_esperada: "reabrir_com_instrucao",
+      desde: em(8),
+      ...comum("I-304"),
+    },
+    {
+      tipo: "revisao_parada",
+      item: "I-307",
+      motivo:
+        "A revisão integral foi rejeitada: o ticket 9 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
+      acao_esperada: "reabrir_com_instrucao",
       desde: em(9),
+      ...comum("I-307"),
     },
     {
-      motivo: "revisao_parada",
-      ...comum("I-309"),
-      erro: "a revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)",
+      tipo: "revisao_parada",
+      item: "I-309",
+      motivo: "A revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)",
+      acao_esperada: "reabrir_com_instrucao",
       desde: em(10),
+      ...comum("I-309"),
     },
     {
-      motivo: "conversa",
-      ...comum("I-300"),
-      ticket: { ref: "I-300.T1", etapa: "entender_e_desenhar", modo: "interativo" },
-      sessao: "s-conversa",
+      tipo: "dialogo_do_agente",
+      item: "I-300.T1",
+      motivo: "A conversa da sessão aguarda o Auditor",
+      acao_esperada: "responder",
       desde: em(40),
+      ...comum("I-300"),
+      sessao: "s-conversa",
+    },
+    // A sessão de ajustes da R3 tem a conversa viva, e ela é a Pendência da rodada.
+    {
+      tipo: "dialogo_do_agente",
+      item: "I-303.T3",
+      motivo: "A conversa da sessão aguarda o Auditor",
+      acao_esperada: "responder",
+      desde: em(41),
+      ...comum("I-303"),
+      rodada: "I-303.R3",
+      sessao: "s-ajustes",
     },
   ]);
+});
+
+test("trabalhoVivoDaSessao: o diálogo traz a pergunta do processo vivo; a conversa, não", () => {
+  const sessao: SessaoDeDemanda = {
+    sessao: "s1",
+    projeto: "loja",
+    demanda: "I-303",
+    titulo: "demanda I-303",
+    rodada: "I-303.R4",
+    ticket: "I-303.T5",
+    etapa: "implementar",
+    modo: "interativo",
+    estado: "aguardando_humano",
+    pendencia: {
+      tipo: "dialogo_do_agente",
+      item: "I-303.T5",
+      motivo: "O agente pergunta: Qual ordem?",
+      acao_esperada: "responder",
+      desde: em(9),
+    },
+    desde: em(9),
+    inicio: em(1),
+    resultado: "concluida",
+  };
+  const comPergunta = () => ({
+    ...viva(),
+    dialogos: [{ type: "extension_ui_request", title: "Qual ordem?", em: em(9) }],
+  });
+  assert.deepEqual(trabalhoVivoDaSessao(sessao, comPergunta), {
+    ticket: Endereco.doTicket("I-303", 5),
+    pergunta: "Qual ordem?",
+    desde: em(9),
+  });
+  assert.equal(trabalhoVivoDaSessao(sessao, () => undefined).pergunta, undefined);
+});
+
+test("aguarda: o merge final do PR da demanda e o despacho parado com o agendador desligado", () => {
+  const { banco } = abrirBancoTemporario();
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+    VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
+  gravarAgregadoPronto(
+    banco,
+    montarAgregadoDemanda("I-310", "encerrar_demanda", {
+      tickets: [ticket("I-310", 1, "encerrar_demanda", "aberto")],
+      encerramento: {
+        demanda_id: "I-310",
+        branch: "fabriquinha/I-310",
+        base: "main",
+        limpeza_pendente: [],
+        aguardando_merge_humano: true,
+      },
+      pull_requests: [{ numero: 12, url: "https://pr/12", head: "abc", estado: "aberto", atualizado_em: em(2) }],
+    }),
+  );
+  gravarAgregadoPronto(
+    banco,
+    montarAgregadoDemanda("I-311", "em_execucao", {
+      rodadas: [rodada("I-311", 1, "implementar")],
+      tickets: [ticket("I-311", 5, "implementar", "aberto", { rodada_id: 1 })],
+    }),
+  );
+  const tipos = () => inicio(banco, () => undefined).aguarda.map((p) => [p.tipo, p.item, p.motivo, p.desde]);
+  assert.deepEqual(tipos(), [
+    ["acao_externa", "I-310", "Integrar o PR final #12 na plataforma", em(1)],
+    ["despacho_parado", "I-311.T5", "Ticket aberto e elegível, com o agendador desligado", em(5)],
+  ]);
+  banco.exec("UPDATE configuracao SET agendador_ativo = 1");
+  assert.deepEqual(
+    tipos().map(([tipo]) => tipo),
+    ["acao_externa"],
+  );
+});
+
+test("aguarda: a revisão parada vem da regra pura, com o agora do teste e sem abrir a revisão", () => {
+  const banco = cenario();
+  const aguarda = (agora: Date) => inicio(banco, () => undefined, agora).aguarda.filter((p) => p.demanda === "I-308");
+  // A I-308 concluiu a última rodada agora: dentro da tolerância de 2 min, nada aguarda.
+  assert.deepEqual(aguarda(new Date()), []);
+  const daqui3Minutos = new Date(Date.now() + 3 * 60_000);
+  assert.deepEqual(
+    aguarda(daqui3Minutos).map((p) => [p.tipo, p.motivo]),
+    [["revisao_parada", "A revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)"]],
+  );
+  // Sem sonda: a rota nem conhece a transição que abre a revisão integral (só o agendador a abre).
+  assert.doesNotMatch(readFileSync(new URL("./inicio.ts", import.meta.url), "utf8"), /iniciarRevisaoDemanda/);
+  assert.equal(
+    (banco.prepare("SELECT estado FROM demanda WHERE id = 'I-308'").get() as { estado: string }).estado,
+    "em_execucao",
+  );
 });
 
 test("rodando: as sessões que rodam com o que o agente faz, ou o título do ticket", () => {
@@ -269,46 +396,6 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
     outros: 0,
     bloqueios: [],
   });
-});
-
-test("esperaDaSessao: o diálogo traz a pergunta do processo vivo; a falha e a sessão de ajustes não se repetem", () => {
-  const sessao: SessaoDeDemanda = {
-    sessao: "s1",
-    projeto: "loja",
-    demanda: "I-303",
-    titulo: "demanda I-303",
-    rodada: "I-303.R4",
-    ticket: "I-303.T5",
-    etapa: "implementar",
-    modo: "interativo",
-    estado: "aguardando_humano",
-    motivo: "dialogo",
-    desde: em(9),
-    inicio: em(1),
-    resultado: "concluida",
-  };
-  const comPergunta = () => ({
-    ...viva(),
-    dialogos: [{ type: "extension_ui_request", title: "Qual ordem?", em: em(9) }],
-  });
-  assert.deepEqual(esperaDaSessao(sessao, comPergunta), [
-    {
-      motivo: "dialogo",
-      demanda: "I-303",
-      rodada: "I-303.R4",
-      projeto: "loja",
-      titulo: "demanda I-303",
-      ticket: { ref: "I-303.T5", etapa: "implementar", modo: "interativo" },
-      sessao: "s1",
-      pergunta: "Qual ordem?",
-      desde: em(9),
-    },
-  ]);
-  assert.equal(esperaDaSessao(sessao, () => undefined)[0]?.pergunta, undefined);
-  assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "falha" }, comPergunta), []);
-  assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "conversa", etapa: "ajustar_resultado" }, comPergunta), []);
-  // A pergunta do agente na sessão de ajustes só aparece aqui: a espera da demanda não a mostra.
-  assert.equal(esperaDaSessao({ ...sessao, etapa: "ajustar_resultado" }, comPergunta)[0]?.pergunta, "Qual ordem?");
 });
 
 test("GET /api/inicio responde com o mês corrente de todos os projetos", async () => {

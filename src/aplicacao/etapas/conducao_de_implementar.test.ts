@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { selecionarTrabalho } from "../../nucleo/selecao_trabalho.ts";
 import { commitDoTicketDemanda } from "../../armazenamento/commits_demanda.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,
@@ -199,6 +200,7 @@ test("CA-16: commit sem as evidências devolve o ticket citando o que falta", as
   const c = await cenarioDeImplementacao();
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
   await commitarTicketDemanda(c.banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",
     titulo: "Cachear",

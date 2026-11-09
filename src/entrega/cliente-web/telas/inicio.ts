@@ -6,10 +6,10 @@ import type {
   CartaoDoBoard,
   ColunaDoBoard,
   DadosDoInicio,
-  EsperaDoAuditor,
-  MotivoDaEspera,
+  PendenciaDoInicio,
   SessaoRodando,
 } from "../../http/rotas/inicio.ts";
+import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
@@ -24,20 +24,19 @@ import {
 import { ROTULO_DA_ETAPA, faseDoProcesso } from "../rotulos.ts";
 import { fraseDoMes } from "./metricas.ts";
 
-/** Cada motivo de espera: o título do cartão, a marca no board e o botão que leva aonde se decide. */
-const MOTIVOS: Record<MotivoDaEspera, { titulo: string; marca: string; acao: string }> = {
-  gate_demanda: { titulo: "Gate da demanda", marca: "gate da demanda", acao: "Avaliar a demanda" },
-  gate_planejamento: { titulo: "Gate do planejamento", marca: "gate do plano", acao: "Avaliar o plano" },
-  gate_pr: { titulo: "Gate do PR", marca: "gate do PR", acao: "Ver o PR" },
-  ajustes: { titulo: "Ajustes do PR", marca: "ajustes do PR", acao: "Conversar" },
-  falha: { titulo: "Falhou", marca: "falha", acao: "Reabrir o ticket" },
-  dialogo: { titulo: "Pergunta", marca: "pergunta", acao: "Responder" },
-  conversa: { titulo: "Conversa", marca: "responder", acao: "Responder" },
+/** Cada tipo de Pendência: o título do cartão, a marca no board e o botão que leva aonde se resolve. */
+/** @testes o teste confere os seis tipos; as outras telas das Pendências o importam */
+export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string; marca: string; acao: string }> = {
+  gate_humano: { titulo: "Gate", marca: "gate", acao: "Decidir" },
+  item_bloqueado: { titulo: "Bloqueado", marca: "bloqueado", acao: "Reabrir o ticket" },
+  dialogo_do_agente: { titulo: "Diálogo do agente", marca: "diálogo", acao: "Responder" },
   revisao_parada: { titulo: "Revisão parada", marca: "revisão parada", acao: "Ver a demanda" },
+  acao_externa: { titulo: "Ação externa", marca: "ação externa", acao: "Integrar o PR" },
+  despacho_parado: { titulo: "Despacho parado", marca: "despacho parado", acao: "Executar" },
 };
 
-/** O que aparece em vermelho: o ticket falho e a revisão integral parada. */
-const EM_ALERTA: ReadonlySet<MotivoDaEspera> = new Set(["falha", "revisao_parada"]);
+/** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
+export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
 
 /** As colunas do board, na ordem do processo; as de gate ficam hachuradas e marcadas "gate". */
 const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
@@ -67,48 +66,24 @@ const FASES_DO_PROCESSO: readonly (readonly [EtapaTicket, number])[] = [
 /** A etapa do ticket em minúsculas, no meio da frase. */
 const nomeDaEtapa = (etapa: EtapaTicket): string => ROTULO_DA_ETAPA[etapa].toLowerCase();
 
-/** O endereço do que a espera ou a sessão trata: a rodada, quando é de uma, ou a demanda. */
+/** O endereço do que a Pendência ou a sessão trata: a rodada, quando é de uma, ou a demanda. */
 const enderecoDe = (x: { demanda: string; rodada?: string }): string => x.rodada ?? x.demanda;
 
 /** O texto escapado com cada endereço (I-206, I-206.R1, I-206.T3) inteiro, que não quebra no hífen. */
 const comEnderecosInteiros = (texto: string): string =>
   escapar(texto).replaceAll(/\bI-\d+(?:\.[RT]\d+)?\b/g, '<span class="endereco">$&</span>');
 
-/** A frase do que falta para a espera acabar. */
-function fraseDoQueFalta(e: EsperaDoAuditor): string {
-  const pr = e.pr ? `PR #${e.pr.id}` : "PR";
-  switch (e.motivo) {
-    case "gate_demanda":
-      return "Registro enviado; falta aprovar";
-    case "gate_planejamento":
-      return "Plano enviado; falta aprovar";
-    case "gate_pr":
-      return `${pr} aberto; aguarda a sua revisão no PR`;
-    case "ajustes":
-      return `${pr} reprovado; converse com o agente sobre os ajustes`;
-    case "falha":
-    case "revisao_parada": // sempre traz o erro: a recusa da regra ou o aviso de ver o log
-      return e.erro ?? "o agente falhou";
-    case "dialogo":
-      return e.pergunta === undefined ? "O agente abriu uma pergunta" : `O agente pergunta: ${e.pergunta}`;
-    default:
-      return "O agente respondeu e espera você";
-  }
-}
-
-/** Cartão do que aguarda o Auditor; o cartão inteiro abre o chat da sessão ou a página da demanda, onde se decide. */
-function cartaoDaEspera(e: EsperaDoAuditor, agora: Date): string {
-  const motivo = MOTIVOS[e.motivo];
-  const falhou = EM_ALERTA.has(e.motivo);
-  const destino = e.sessao === undefined ? caminhoDaDemanda(e.demanda) : caminhoDaSessao(e.sessao);
-  const ticket = e.ticket
-    ? `<span class="mono">${escapar(e.ticket.ref)}</span> · ${nomeDaEtapa(e.ticket.etapa)}${e.ticket.modo ? ` · ${MODO_DA_SESSAO[e.ticket.modo]}` : ""} · `
-    : "";
-  return `<a class="decisao superficie${falhou ? " falha" : ""}" href="${destino}">
-    <span class="decisao-motivo">${motivo.titulo}</span><span class="btn${falhou ? "" : " btn-primario"} btn-pequeno">${motivo.acao} →</span>
-    <span class="decisao-titulo"><span class="id">${escapar(enderecoDe(e))}</span> ${escapar(e.titulo)}</span>
-    <p class="decisao-texto">${escapar(fraseDoQueFalta(e))}</p>
-    <div class="decisao-pe"><span class="tag">${escapar(e.projeto)}</span><span>${ticket}${ha(e.desde, agora)}</span></div>
+/** Cartão de uma Pendência; o cartão inteiro abre o chat da sessão ou a página da demanda, onde se resolve. */
+function cartaoDaPendencia(p: PendenciaDoInicio, agora: Date): string {
+  const rotulo = ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo];
+  const emAlerta = EM_ALERTA.has(p.tipo);
+  const destino = p.sessao === undefined ? caminhoDaDemanda(p.demanda) : caminhoDaSessao(p.sessao);
+  const ticket = p.item.includes(".T") ? `<span class="mono">${escapar(p.item)}</span> · ` : "";
+  return `<a class="decisao superficie${emAlerta ? " falha" : ""}" href="${destino}">
+    <span class="decisao-motivo">${rotulo.titulo}</span><span class="btn${emAlerta ? "" : " btn-primario"} btn-pequeno">${rotulo.acao} →</span>
+    <span class="decisao-titulo"><span class="id">${escapar(enderecoDe(p))}</span> ${escapar(p.titulo)}</span>
+    <p class="decisao-texto">${escapar(p.motivo)}</p>
+    <div class="decisao-pe"><span class="tag">${escapar(p.projeto)}</span><span>${ticket}${ha(p.desde, agora)}</span></div>
   </a>`;
 }
 
@@ -133,9 +108,9 @@ function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
     marcas.set(`em execução · ${duracao}`, ["rodando", "pill-rodando"]);
   }
   for (const e of dados.aguarda.filter((x) => enderecoDe(x) === c.ref)) {
-    marcas.set(`aguarda você · ${MOTIVOS[e.motivo].marca}`, [
+    marcas.set(`aguarda você · ${ROTULO_DO_TIPO_DE_PENDENCIA[e.tipo].marca}`, [
       "aguarda",
-      EM_ALERTA.has(e.motivo) ? "pill-falha" : "pill-aguarda",
+      EM_ALERTA.has(e.tipo) ? "pill-falha" : "pill-aguarda",
     ]);
   }
   if (c.bloqueios.length > 0) {
@@ -184,7 +159,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
   ${fraseDoMes(dados.mes)}
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-aguarda">
     <div class="secao-titulo"><h2 id="titulo-aguarda">Aguarda você</h2>${aguarda.length > 0 ? `<span class="contador">${String(aguarda.length)}</span><span class="muted">da mais antiga para a mais nova</span>` : ""}</div>
-    ${aguarda.length > 0 ? `<div class="decisoes">${aguarda.map((e) => cartaoDaEspera(e, agora)).join("")}</div>` : '<p class="muted vazio">Nada aguarda você agora.</p>'}
+    ${aguarda.length > 0 ? `<div class="decisoes">${aguarda.map((p) => cartaoDaPendencia(p, agora)).join("")}</div>` : '<p class="muted vazio">Nada aguarda você agora.</p>'}
   </section>
   <section class="bloco bloco-rodando" aria-labelledby="titulo-rodando">
     <div class="secao-titulo"><h2 id="titulo-rodando">Rodando</h2><span class="muted">${String(rodando.length)}</span></div>

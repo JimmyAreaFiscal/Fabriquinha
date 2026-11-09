@@ -28,6 +28,9 @@ import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
 import { despacharDemandas, type DepsDespacho, executarAgoraDemanda } from "./despacho_demanda.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-despacho-"));
@@ -78,7 +81,7 @@ async function cenario(limite: number, real = false) {
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
   if (real) {
     process.env.FABRIQUINHA_PI = piFalso.caminho;
-    await garantirWorktreeDemanda(c.raiz, c.projeto, "I-2", c.log);
+    await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-2", c.log);
   }
   return { c, banco, config: configuracao(banco) };
 }

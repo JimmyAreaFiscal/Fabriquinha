@@ -21,6 +21,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
 import type { anotar } from "../../infra/registro.ts";
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao_demanda.ts";
 import type { instanteAtual } from "../relogio.ts";
@@ -139,7 +140,12 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const ag = carregarDemanda(banco, ticket.demanda_id);
     const projeto = carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
-    return cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log: `${raiz}/log` }).criar();
+    return cicloDoEspaco(
+      espacoDoTicket(ag, ticket, projeto, raiz),
+      projeto,
+      { raiz, log: `${raiz}/log` },
+      ambienteDoServico(),
+    ).criar();
   }
 
   /**

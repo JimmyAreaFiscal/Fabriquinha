@@ -1,5 +1,6 @@
 // Coleta das verificações de um ticket da demanda (execucao_testes, matriz_fitness, relatorio_sonar), sem banco: devolve
 // o resultado para quem chama gravar as evidências e decidir. Não grava, não conclui, não devolve, não falha, não commita.
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { VerificacaoDeFitness } from "../../infra/verificacao/fitness.ts";
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/verificacao/sonar.ts";
@@ -9,6 +10,8 @@ import { montarVerificacoesDaEtapa, type RegistroDaVerificacao } from "../../inf
 export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
 interface EntradaVerificacoes {
+  /** O Ambiente do ciclo do Espaço, onde os comandos configurados rodam. */
+  ambiente: Ambiente;
   projeto: Projeto;
   /** A rodada está marcada com e2e. */
   e2e: boolean;
@@ -21,9 +24,9 @@ interface EntradaVerificacoes {
  * começa assim que eles terminam e roda junto com o E2E e as fitness functions, que seguem em série como antes.
  */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
-  const { projeto, e2e, worktree, opcoes } = entrada;
-  const arquivos = await arquivosAlterados(worktree);
-  const contexto = { worktree, limiteMs: opcoes?.limiteMs };
+  const { ambiente, projeto, e2e, worktree, opcoes } = entrada;
+  const arquivos = await arquivosAlterados(ambiente, worktree);
+  const contexto = { ambiente, worktree, limiteMs: opcoes?.limiteMs };
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;
   const iniciarSonar = () => (sonarEmAndamento ??= sonar.coletar(contexto));
   // Os hooks ficam com o fechamento; resolver_conflito exige a mesma lista.

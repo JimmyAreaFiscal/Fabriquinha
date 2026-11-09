@@ -34,13 +34,13 @@ import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
-import { anotar, pastasDoProcesso } from "../infra/registro.ts";
+import { anotar, noLog, pastasDoProcesso } from "../infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
-import { sinalNoGrupo } from "../infra/processo.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
@@ -84,7 +84,7 @@ async function worktreeDoEspacoDoTicket(
   log: string,
 ): Promise<string> {
   const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
+  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
   const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
   if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
@@ -283,6 +283,10 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     "só se interrompe uma execução aberta",
   );
   if (condutor.interromper(execucao.id)) return;
-  if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
+  if (execucao.grupo_processo != null) {
+    const ambiente = ambienteDoServico();
+    // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
+    ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
+  }
   encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar);
 }

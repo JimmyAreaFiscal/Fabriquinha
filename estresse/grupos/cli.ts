@@ -15,7 +15,7 @@ import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demanda
 import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
 import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */

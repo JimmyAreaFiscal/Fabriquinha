@@ -33,6 +33,9 @@ import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenament
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const MODELO_DA_ETAPA = { provedor: "anthropic", nome: "claude-etapa" };
@@ -127,7 +130,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  if (!semWorktree) await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
+  if (!semWorktree) await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir).roteirizar([PASSO_PI]);
   return {
     c,

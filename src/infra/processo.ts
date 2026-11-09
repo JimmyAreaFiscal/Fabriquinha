@@ -1,6 +1,8 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
 
 /**
  * `sinal` para o grupo de processos `pgid` inteiro. Grupo que já acabou é ignorado: quem ainda segura o stdout saiu
@@ -75,6 +77,16 @@ export function executar(
 }
 
 /**
+ * Lança o comando solto, em grupo próprio e sem stdio, e volta assim que ele nasce: ele segue vivo depois que o
+ * chamador sai (o navegador do `abrir`). Só lança se o programa nem chega a rodar.
+ */
+export async function lancarSolto(comando: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<void> {
+  const filho = spawn(comando, args, { env, detached: true, stdio: "ignore" });
+  await once(filho, "spawn");
+  filho.unref();
+}
+
+/**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
  * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
  * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução.
@@ -91,29 +103,7 @@ export async function gitComLimite(limiteMs: number, dir: string, ...args: strin
 /** `gitComLimite` com o limite dos comandos configurados (F3 §6, F5 §3.2). */
 export const git = (dir: string, ...args: string[]): Promise<Saida> => gitComLimite(LIMITE_COMANDO_MS, dir, ...args);
 
-/** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
-export const LIMITE_COMANDO_MS = 30 * 60_000;
-/** Variáveis com credencial de hospedagem ou do SonarQube (F4 §6.1, F5 §5.0). */
-const CREDENCIAIS = new Set([
-  "GH_TOKEN",
-  "GITHUB_TOKEN",
-  "GH_ENTERPRISE_TOKEN",
-  "GITHUB_ENTERPRISE_TOKEN",
-  "AZURE_DEVOPS_EXT_PAT",
-  "SYSTEM_ACCESSTOKEN",
-  "SONAR_TOKEN",
-]);
-
-/**
- * `base` sem as credenciais, com `gh` e `az` lendo a configuração de `dirVazio`, onde não há login salvo. Para o que
- * roda código do agente: o pi e os coletores de testes e fitness.
- */
-export function ambienteSemCredenciais(base: NodeJS.ProcessEnv, dirVazio: string): NodeJS.ProcessEnv {
-  const env = Object.entries(base).filter(([nome]) => !CREDENCIAIS.has(nome));
-  return { ...Object.fromEntries(env), GH_CONFIG_DIR: dirVazio, AZURE_CONFIG_DIR: dirVazio };
-}
-
-export interface Resultado {
+interface Resultado {
   /** `null` quando o comando morreu por sinal ou estourou o limite. */
   codigo: number | null;
   estourou: boolean;

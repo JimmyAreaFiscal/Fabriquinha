@@ -20,6 +20,14 @@ const CaminhoRelativo = z
   .refine((c) => !/^([/\\]|[A-Za-z]:)/.test(c), "use caminho relativo à raiz git")
   .refine((c) => !c.split(/[/\\]/).includes(".."), "travessia com .. não é permitida");
 
+/** Onde o trabalho roda (CONCEITOS.md §7): `host_local` por padrão; no container, cada um nasce com estes limites. */
+export const ConfiguracaoDoAmbiente = z.object({
+  tipo: z.enum(["host_local", "container"]).default("host_local"),
+  memoria_maxima_mb: z.number().int().min(512).default(2048),
+  cpus: z.number().positive().default(2),
+  ociosidade_para_eliminar_min: z.number().int().min(5).default(60),
+});
+
 export const Hospedagem = z.enum(["github", "azure-devops"]);
 
 const ConfiguracaoEtapaProjeto = z.strictObject({
@@ -104,6 +112,8 @@ const CAMPOS_DO_PROJETO = {
     })
     .optional(),
   etapas: Etapas,
+  // Dockerfile no repositório ou nome de imagem; sem ela o projeto continua no host local.
+  imagem_do_ambiente: Texto.optional(),
 };
 
 export const Projeto = z.strictObject({
@@ -117,5 +127,6 @@ export const ProjetoConfigurado = z.strictObject({
   verificacoes: verificacoesComSdlc(true),
 });
 
+export type ConfiguracaoDoAmbiente = z.infer<typeof ConfiguracaoDoAmbiente>;
 export type Hospedagem = z.infer<typeof Hospedagem>;
 export type Projeto = z.infer<typeof Projeto>;
