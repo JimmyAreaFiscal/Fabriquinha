@@ -464,3 +464,26 @@ for (const [caso, ticket] of [
     conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, `despacho_${caso}`);
   });
 }
+
+test("o despacho repassa o timeoutMin recebido às conduções", async () => {
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  const limites: (number | undefined)[] = [];
+  await Promise.all(
+    despacharDemandas(
+      banco,
+      { ...config, timeoutMin: 0.5 },
+      {
+        conducoesSubstitutas: (d) => ({
+          implementar: new (class extends ConducaoDeImplementar {
+            override conduzir = () => {
+              limites.push(this.deps.limiteMin);
+              return Promise.resolve();
+            };
+          })(d),
+        }),
+      },
+    ),
+  );
+  assert.deepEqual(limites, [0.5]);
+});

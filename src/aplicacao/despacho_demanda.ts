@@ -48,8 +48,9 @@ export interface DepsDespacho {
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
-const depsDaConducaoDe = (banco: DatabaseSync): DepsDaConducao => ({
+const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao): DepsDaConducao => ({
   banco,
+  limiteMin: timeoutMin,
   relogio: instanteAtual,
   condutor,
   registro: anotar,
@@ -70,9 +71,9 @@ const ticketDoPlanejamento = (banco: DatabaseSync, demandaId: string): Endereco 
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
-function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
+function iniciarEtapa(banco: DatabaseSync, c: Configuracao, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
   exigirEtapaConduzida(t.etapa);
-  const depsDaConducao = depsDaConducaoDe(banco);
+  const depsDaConducao = depsDaConducaoDe(banco, c);
   const CONDUCAO_DA_ETAPA: Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa> = {
     planejar: new ConducaoDePlanejar(depsDaConducao),
     implementar: new ConducaoDeImplementar(depsDaConducao, deps.implementacao),
@@ -121,13 +122,13 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
   const limite = limiteParalelismo(banco);
   const vagas = limite - ocupacaoDoLimite(banco);
   const retomados = retomadasDePlanejamento(banco).slice(0, Math.max(0, vagas));
-  const planejar = new ConducaoDePlanejar(depsDaConducaoDe(banco));
+  const planejar = new ConducaoDePlanejar(depsDaConducaoDe(banco, c));
   const fins = retomados.flatMap((id) => disparar(banco, () => planejar.conduzir(ticketDoPlanejamento(banco, id))));
   const escolhidos = selecionarTrabalhoGlobal(demandasParaDespacho(banco), {
     limite,
     vagasOcupadas: ocupacaoDoLimite(banco),
   });
-  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, deps)))];
+  return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, c, t, deps)))];
 }
 
 /**
@@ -173,6 +174,6 @@ export function executarAgoraDemanda(
       );
       return ag;
     });
-    return acompanhar(iniciarEtapa(banco, ticket, deps));
+    return acompanhar(iniciarEtapa(banco, c, ticket, deps));
   });
 }

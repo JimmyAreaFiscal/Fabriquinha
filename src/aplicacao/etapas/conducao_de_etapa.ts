@@ -31,6 +31,8 @@ export interface DepsDaConducao {
   relogio: typeof instanteAtual;
   condutor: CondutorDeTrabalhos;
   registro: typeof anotar;
+  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
+  limiteMin?: number;
 }
 
 export abstract class ConducaoDeEtapa {
@@ -114,7 +116,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
     // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
     return iniciarExecucaoDemanda(banco, ticket, {
-      limiteMin: configuracao(banco).timeoutMin,
+      limiteMin: this.deps.limiteMin ?? configuracao(banco).timeoutMin,
       modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
       ...this.retomadaDe(ticket),
       espaco,
