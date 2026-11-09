@@ -2,10 +2,11 @@
 import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
 import { OBRIGATORIAS_DEMANDA, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 import type { NomeGate } from "./agregado_demanda.ts";
+import { ErroDeRegra } from "./erros.ts";
 import type { EtapaTicket } from "./primitivos.ts";
 import type { TipoVerificacao } from "./verificacao.ts";
 
-interface DefinicaoDaEtapa {
+export interface DefinicaoDaEtapa {
   nome: EtapaTicket;
   objetivo: string;
   escopo: "demanda" | "rodada";
@@ -169,3 +170,13 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
     instrucao: "resolver_conflito.md",
   },
 };
+
+/** Só `entender_e_desenhar` não tem condução: é externo (CLI de `gestao_demandas.ts`) e existe só no catálogo. */
+export function exigirEtapaConduzida(etapa: EtapaTicket): asserts etapa is Exclude<EtapaTicket, "entender_e_desenhar"> {
+  if (etapa === "entender_e_desenhar") {
+    throw new ErroDeRegra(
+      "a etapa entender_e_desenhar não tem condução",
+      "ela é feita pelo CLI externo, não pelo despacho",
+    );
+  }
+}

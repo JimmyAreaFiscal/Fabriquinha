@@ -56,11 +56,11 @@ Caminhos do plano que a rodada não tocou:
 
 A Fabriquinha rodou cada fitness function na worktree antes desta execução:
 
-(nenhuma)
+- **f** (d): `true` saiu com código 0; log `f.log`
 
 Os logs, em arquivos que você lê:
 
-(nenhum)
+- `f.log`: `<raiz>/arquivos/e3/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 
 ## Verificações já feitas
 

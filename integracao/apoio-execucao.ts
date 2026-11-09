@@ -9,9 +9,11 @@ import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
-import { iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
+import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { ConducaoDePlanejar } from "../src/aplicacao/etapas/conducao_de_planejar.ts";
+import { instanteAtual } from "../src/aplicacao/relogio.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
+import { anotar } from "../src/infra/registro.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
@@ -56,12 +58,7 @@ export const verificacoes = (passou: boolean): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `passaram()` é lido a cada fechamento). */
 export const despacho = (passaram: () => boolean = () => true): DepsDespacho => ({
-  iniciarProcesso: (banco, t, opcoes) =>
-    iniciarExecucaoDemanda(banco, t, {
-      ...opcoes,
-      fechar: (b, ref, r) =>
-        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) }),
-    }),
+  implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) },
 });
 
 export interface RodadaPlano {
@@ -73,7 +70,9 @@ export interface RodadaPlano {
 export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPlano[]): Promise<void> {
   pi.roteirizar([{ uso: null }]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
-  const { fim } = iniciarOuRetomarPlanejamento(c.banco, id, c.config.timeoutMin);
+  const fim = new ConducaoDePlanejar({ banco: c.banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
+    Endereco.doTicket(id, 2),
+  );
   await esperar(() => pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
   interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;

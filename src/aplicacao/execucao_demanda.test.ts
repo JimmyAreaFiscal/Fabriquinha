@@ -20,6 +20,9 @@ import {
   type FalhaDaTentativa,
   falhaInterrompidaPeloAuditor,
 } from "../nucleo/tentativa.ts";
+import { anotar } from "../infra/registro.ts";
+import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
+import { instanteAtual } from "./relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
@@ -137,6 +140,11 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 }
 
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
+/** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
+const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
+  new ConducaoDeImplementar({ banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
+    Endereco.doTicket("I-1", ticket_id),
+  );
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {
@@ -573,8 +581,7 @@ const assertTicket = (banco: DatabaseSync, ticket_id: number) => {
 test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem devolução", async () => {
   const { banco, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
-  emExecucao(banco, 1);
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  await conduzirImplementar(banco, 1);
   const ag = carregarDemanda(banco, "I-1");
   const t = ag.tickets.find((x) => x.ticket_id === 1);
   assert.equal(t?.estado, "falhou");
@@ -731,8 +738,7 @@ async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarTraba
 test("I-246 CA-1: aguardarTodos espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   const grupo = await grupoDoPi(sessoes, 1);
   const espera = condutor.aguardarTodos(10_000);
   process.kill(-grupo, "SIGTERM"); // como o cgroup do systemd
@@ -741,16 +747,15 @@ test("I-246 CA-1: aguardarTodos espera o condutor gravar o fim, e o ticket falha
   assert.notEqual(execucao?.fim, null);
   assert.equal(execucao?.falha, true);
   assert.equal("erro" in execucao, false);
+  await fim;
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
-  await fim;
 });
 
 test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serviço reiniciado'", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   process.kill(-(await grupoDoPi(sessoes, 1)), "SIGTERM");
   await fim;
   assert.equal(Object.hasOwn(sessoes(1).execucoes[0] ?? {}, "erro"), false);
@@ -760,10 +765,10 @@ test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serv
 test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   const grupo = await grupoDoPi(sessoes, 1);
   await condutor.aguardarTodos(50);
+  await fim;
   const [execucao] = sessoes(1).execucoes;
   assert.notEqual(execucao?.fim, null);
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
@@ -783,8 +788,7 @@ test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: agu
 
 test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticket falha com 'serviço reiniciado'", async () => {
   const { banco, sessoes, registro } = await cenario({ preparacao: "sleep 1" });
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   await new Promise((r) => setTimeout(r, 300));
   condutor.marcarParada();
   await fim;
@@ -800,8 +804,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   banco
     .prepare("UPDATE linguagem_projeto SET comando_teste = ? WHERE projeto = 'loja'")
     .run(`sh -c 'echo $$ > ${arquivoComPidDaColeta}; exec sleep 31'`);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   while (!existsSync(arquivoComPidDaColeta) || readFileSync(arquivoComPidDaColeta, "utf8").trim() === "")
     await dormir(50); // a coleta está nos testes
   condutor.marcarParada();
