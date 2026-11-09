@@ -9,8 +9,7 @@ import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
+import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
@@ -56,12 +55,7 @@ export const verificacoes = (passou: boolean): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `passaram()` é lido a cada fechamento). */
 export const despacho = (passaram: () => boolean = () => true): DepsDespacho => ({
-  iniciarProcesso: (banco, t, opcoes) =>
-    iniciarExecucaoDemanda(banco, t, {
-      ...opcoes,
-      fechar: (b, ref, r) =>
-        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) }),
-    }),
+  implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) },
 });
 
 export interface RodadaPlano {

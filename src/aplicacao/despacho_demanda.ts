@@ -9,7 +9,7 @@ import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
-import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
+import { falhaDoErro } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
@@ -18,9 +18,10 @@ import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.t
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import type { DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
+import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./etapas/conducao_de_implementar.ts";
+import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
 import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
 import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
-import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
@@ -30,8 +31,10 @@ import { condutor } from "./trabalho/condutor.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface DepsDespacho {
-  /** Início da execução do `implementar`; injetável nos testes para não subir o pi (padrão: `iniciarExecucaoDemanda`). */
-  iniciarProcesso?: typeof iniciarExecucaoDemanda;
+  /** Coleta das verificações e limite do commit do `implementar` e do `resolver_conflito`; injetáveis nos testes. */
+  implementacao?: OpcoesDaImplementacao;
+  /** Substitui a condução do `implementar` e do `resolver_conflito` nos testes que não sobem pi nem git. */
+  conduzirImplementacao?: (banco: DatabaseSync, ticket: Endereco) => Promise<void>;
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
   verificacao?: DepsEncerramentoDemanda["verificacao"];
 }
@@ -74,20 +77,23 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
   const { demanda_id, ticket_id } = t;
   const limiteMin = c.timeoutMin;
   if (t.etapa === "planejar") return iniciarOuRetomarPlanejamento(banco, demanda_id, limiteMin).fim;
-  if (t.etapa === "implementar" || t.etapa === "resolver_conflito" || t.etapa === "encerrar_demanda") {
+  if (t.etapa === "encerrar_demanda") {
     const ctx = { agora: new Date().toISOString() };
     comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
-    if (t.etapa === "encerrar_demanda") {
-      return falharSePreso(banco, t, () =>
-        conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
-      );
-    }
-    // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
-    const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
-    return (deps.iniciarProcesso ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
+    return falharSePreso(banco, t, () =>
+      conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
+    );
   }
   const depsDaConducao: DepsDaConducao = { banco, relogio: instanteAtual, condutor, registro: anotar };
   const endereco = Endereco.doTicket(demanda_id, ticket_id);
+  const conduzirImplementacao = (conducao: ConducaoDeImplementar) =>
+    deps.conduzirImplementacao?.(banco, endereco) ?? conducao.conduzir(endereco);
+  if (t.etapa === "implementar") {
+    return conduzirImplementacao(new ConducaoDeImplementar(depsDaConducao, deps.implementacao));
+  }
+  if (t.etapa === "resolver_conflito") {
+    return conduzirImplementacao(new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao));
+  }
   if (t.etapa === "revisar_rodada") return new ConducaoDeRevisarRodada(depsDaConducao).conduzir(endereco);
   if (t.etapa === "revisar_demanda") return new ConducaoDeRevisarDemanda(depsDaConducao).conduzir(endereco);
   return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as sete etapas acima

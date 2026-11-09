@@ -1,5 +1,5 @@
 // Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
-// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pelo fechamento (`fechamento_ticket.ts`).
+// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pela condução da etapa (`etapas/`).
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -42,7 +42,7 @@ import {
 } from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
-import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
+import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
@@ -61,8 +61,8 @@ export interface OpcoesExecucaoDemanda {
   iniciarEmSessaoNova?: boolean;
   /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
   mensagem?: string;
-  /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
-  fechar?: typeof fecharTicketDemanda;
+  /** O que fazer com o ticket depois do encerramento do processo; sem ele, quem conduz a etapa o fecha. */
+  fechar?: (banco: DatabaseSync, ref: TicketRef, resultado: { falha?: FalhaDaTentativa }) => Promise<void>;
   /** O Espaço que a condução já criou (e se buscou a base); sem ele, a execução o cria. */
   espaco?: { pasta: string; buscouBase: boolean };
 }
@@ -195,14 +195,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   condutor.deixarDeAcompanhar(execucao.id);
   encerrarProcessoDoTicket(c, falha !== undefined, log);
   try {
-    await (opcoes.fechar ?? fecharTicketDemanda)(
-      c.banco,
-      c.ref,
-      { falha },
-      {
-        parada: () => condutor.emParada(),
-      },
-    );
+    await opcoes.fechar?.(c.banco, c.ref, { falha });
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {

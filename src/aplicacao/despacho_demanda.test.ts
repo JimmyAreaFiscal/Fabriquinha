@@ -1,9 +1,9 @@
 // Despacho das demandas (CA-1 a CA-8, CA-15 a CA-17) contra banco real em raiz temporária. O início do `implementar` é
-// injetável (nada sobe o pi); as demais etapas rodam de verdade, com o repositório inexistente (falham ao preparar) ou
+// injetável (nada sobe o pi nem o git); as demais etapas rodam de verdade, com o repositório inexistente (falham ao preparar) ou
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -13,15 +13,12 @@ import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
-import { carregarDemanda } from "../armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
+import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import {
-  falhaPorServicoReiniciado,
-  type RetornoAoAgente,
-  type ResultadoDaTentativa,
-  type Tentativa,
-} from "../nucleo/tentativa.ts";
+import { falhaPorServicoReiniciado, type ResultadoDaTentativa, type Tentativa } from "../nucleo/tentativa.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
@@ -167,8 +164,12 @@ const aberta = (banco: DatabaseSync, n: number, ticket_id: number) =>
 const execucoes = (banco: DatabaseSync, n: number, ticket_id: number) =>
   carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
 
-/** Abre sessão e execução como o serviço da execução, sem subir o pi. */
-const iniciarFalso: NonNullable<DepsDespacho["iniciarProcesso"]> = (banco, ref) => {
+/** Reserva o ticket e abre sessão e execução como a condução do `implementar`, sem subir o pi nem o git. */
+const conduzirFalso: NonNullable<DepsDespacho["conduzirImplementacao"]> = (banco, endereco) => {
+  const ref = { demanda_id: endereco.demanda_id, ticket_id: Number(endereco.ticket_id) };
+  comDemanda(banco, ref.demanda_id, (ag) =>
+    reservarTicket(ag, { ticket_id: ref.ticket_id }, FABRIQUINHA, { agora: em }, true),
+  );
   const id = randomUUID();
   const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
   comTrabalhosDoTicket(banco, ref, (estado) => {
@@ -179,9 +180,9 @@ const iniciarFalso: NonNullable<DepsDespacho["iniciarProcesso"]> = (banco, ref) 
       execucoes: iniciarProcesso(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
     };
   });
-  return { id, fim: Promise.resolve(undefined) };
+  return Promise.resolve();
 };
-const deps: DepsDespacho = { iniciarProcesso: iniciarFalso };
+const deps: DepsDespacho = { conduzirImplementacao: conduzirFalso };
 const silenciar = (t: TestContext) => t.mock.method(console, "error", () => undefined);
 
 test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta", async () => {
@@ -189,26 +190,6 @@ test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta",
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   await Promise.all(despacharDemandas(banco, config, deps));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
-});
-
-test("a instrução do ticket aberto vai à execução: devolução técnica (D05) ou reabertura do Auditor", async () => {
-  const { banco, config } = await cenario(3);
-  demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "x", reprovacoes: 1 }] });
-  demanda(banco, 3, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "y" }] });
-  demanda(banco, 4, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  const retomadas: (RetornoAoAgente | undefined)[] = [];
-  await Promise.all(
-    despacharDemandas(banco, config, {
-      iniciarProcesso: (b, ref, opcoes) => {
-        retomadas.push(opcoes.retomada);
-        return iniciarFalso(b, ref, opcoes);
-      },
-    }),
-  );
-  assert.deepEqual(
-    retomadas.map((r) => r && [r.titulo, r.texto.split("Motivo: ")[1]]),
-    [["Devolução", "x"], ["Reabertura", "y"], undefined],
-  );
 });
 
 test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte, já em execução", async (t: TestContext) => {
@@ -274,11 +255,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   await Promise.all(despacharDemandas(banco, config));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["falhou", 0]);
-  const [dir] = readdirSync(join(c.raiz, "execucoes"));
-  assert.match(
-    readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"),
-    /preparação falhou: .*\/nao\/existe/,
-  );
+  assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {
@@ -350,9 +327,9 @@ test("falha síncrona ao iniciar desfaz a reserva e vai ao log; fim rejeitado ta
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
   const quebrado: DepsDespacho = {
-    iniciarProcesso: (b, ref, o) => {
-      if (ref.demanda_id === "I-2") throw new Error("sem sessão");
-      return { ...iniciarFalso(b, ref, o), fim: Promise.reject(new Error("pi caiu")) };
+    conduzirImplementacao: (b, endereco) => {
+      if (endereco.demanda_id === "I-2") throw new Error("sem sessão");
+      return conduzirFalso(b, endereco).then(() => Promise.reject(new Error("pi caiu")));
     },
   };
   await Promise.all(despacharDemandas(banco, config, quebrado));

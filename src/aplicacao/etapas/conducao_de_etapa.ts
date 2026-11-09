@@ -6,7 +6,7 @@ import type { TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import { encontrado, existe } from "../../nucleo/erros.ts";
 import type { DefinicaoDaEtapa } from "../../nucleo/etapa.ts";
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
-import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../../nucleo/reserva_ticket.ts";
 import {
   type FalhaDaTentativa,
@@ -15,7 +15,7 @@ import {
   falhaQueExigeOAuditor,
   retornoAoAgenteDoTicket,
 } from "../../nucleo/tentativa.ts";
-import { registrarFalhaTicket } from "../../nucleo/transicoes_demanda.ts";
+import { devolverTicket, registrarFalhaTicket } from "../../nucleo/transicoes_demanda.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
@@ -47,8 +47,8 @@ abstract class ConducaoDeEtapa {
 
 type EspacoPreparado = NonNullable<OpcoesExecucaoDemanda["espaco"]>;
 
-/** O que `conferirResultado` devolve: a etapa deu certo ou falhou; a reprovação (D05) entra com a `ConducaoDeImplementar`. */
-type ResultadoDaConferencia = { tipo: "sucesso" } | FalhaDaTentativa;
+/** O que `conferirResultado` devolve: a etapa deu certo, foi reprovada (D05, o agente corrige) ou falhou. */
+export type ResultadoDaConferencia = { tipo: "sucesso" } | { tipo: "reprovacao"; motivo: string } | FalhaDaTentativa;
 
 export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   /** Reserva o ticket, prepara o Espaço, roda o agente e, no fim, confere: conclui o ticket ou o falha. */
@@ -70,13 +70,22 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     }
     // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
     const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, ticket.demanda_id).tentativas, ticket.ticket_id);
-    const falhaDoAgente = await iniciarExecucaoDemanda(banco, ticket, {
+    // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
+    // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
+    await iniciarExecucaoDemanda(banco, ticket, {
       limiteMin: configuracao(banco).timeoutMin,
       retomada,
       espaco,
+      fechar: (_banco, _ticket, { falha }) => this.fechar(ticket, falha),
     }).fim;
+  }
+
+  /** Da falha do agente ou da conferência ao destino do ticket: concluído, devolvido ou falho. */
+  private async fechar(ticket: TicketDemanda, falhaDoAgente: FalhaDaTentativa | undefined): Promise<void> {
+    const endereco = Endereco.doTicket(ticket.demanda_id, ticket.ticket_id);
     const resultado = falhaDoAgente ?? (await this.conferirResultado(endereco));
     if (resultado.tipo === "sucesso") await this.aoConcluir(endereco);
+    else if (resultado.tipo === "reprovacao") this.devolver(ticket, resultado.motivo);
     else this.falhar(ticket, resultado);
   }
 
@@ -104,12 +113,20 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   /** O que a etapa faz depois do resultado bom, além do que a própria Decisão do gate já fez. */
   protected abstract aoConcluir(endereco: Endereco): Promise<void>;
 
-  private ticketDe(endereco: Endereco): TicketDemanda {
+  protected ticketDe(endereco: Endereco): TicketDemanda {
     const ticket_id = existe(endereco.ticket_id, `${endereco.toString()} não é um ticket`, "use I-n.Tm, como I-206.T3");
     return encontrado(
       carregarDemanda(this.deps.banco, endereco.demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
       `o ticket ${endereco.toString()} não existe`,
       "use um ticket da demanda",
+    );
+  }
+
+  /** A reprovação técnica (D05): o ticket volta ao agente com o relatório ou, no limite das Tentativas, falha com ele. */
+  private devolver(ticket: TicketDemanda, instrucao: string): void {
+    const { banco, relogio } = this.deps;
+    comDemanda(banco, ticket.demanda_id, (ag) =>
+      devolverTicket(ag, { ticket_id: ticket.ticket_id, instrucao }, FABRIQUINHA, relogio()),
     );
   }
 
