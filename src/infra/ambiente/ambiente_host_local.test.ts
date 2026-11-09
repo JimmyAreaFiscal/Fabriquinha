@@ -169,7 +169,7 @@ test("sinalizar: o sinal chega ao grupo inteiro do processo lançado", async () 
 });
 
 test("sinalizar: grupo que já acabou é ignorado", async () => {
-  await ambiente.sinalizar({ ambiente_id: "host_local", grupo_processo: 2 ** 22 + 1 }, "SIGTERM");
+  await assert.doesNotReject(ambiente.sinalizar({ ambiente_id: "host_local", grupo_processo: 2 ** 22 + 1 }, "SIGTERM"));
 });
 
 test("sinalizar: recusa processo de outro ambiente", async () => {
