@@ -970,6 +970,57 @@ const MIGRACAO_44_EVIDENCIA_ACEITA: Migracao = (banco) => {
   );
 };
 
+/** Um número da linha de `custos_realizados` como `LinhaDeUso`: o que não for número vira 0 (tokens) ou `null` (custo). */
+const NUMERO_DA_LINHA_EXTERNA = (campo: string, senao: string) =>
+  `CASE WHEN json_type(l.value, '$.${campo}') IN ('integer', 'real') THEN json_extract(l.value, '$.${campo}') ELSE ${senao} END`;
+
+/**
+ * A 45 cria `uso_declarado`, o Uso que a ferramenta externa declara de uma sessão (`linhas` é uma lista de `LinhaDeUso`),
+ * e tira `custos_realizados` de `evidencia_demanda`. Cada sessão de `trabalho_nao_gerenciado` (a dona pela regra atual:
+ * a primeira demanda que a informou) vira uma linha com todas as linhas que as `custos_realizados` da demanda dona
+ * trazem para ela, a evidência malformada ficando de fora como antes. `modelo` é `provedor/modelo` e `chamadas` é 0, que
+ * a ferramenta externa não informa. `trabalho_nao_gerenciado` passa a apontar para o Uso declarado.
+ */
+const MIGRACAO_45_USO_DECLARADO = `
+CREATE TABLE uso_declarado (
+    ferramenta TEXT NOT NULL,
+    sessao     TEXT NOT NULL,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    linhas     TEXT NOT NULL CHECK (json_valid(linhas) AND json_type(linhas) = 'array'),
+    PRIMARY KEY (ferramenta, sessao)
+  );
+INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas)
+  SELECT x.ferramenta, x.sessao, x.demanda_id, COALESCE((
+    SELECT json_group_array(json(linha)) FROM (
+      SELECT json_object(
+          'modelo', COALESCE(json_extract(l.value, '$.provedor'), '') || '/' || COALESCE(json_extract(l.value, '$.modelo'), ''),
+          'tokens_entrada', ${NUMERO_DA_LINHA_EXTERNA("tokens_entrada", "0")},
+          'tokens_saida', ${NUMERO_DA_LINHA_EXTERNA("tokens_saida", "0")},
+          'tokens_cache_leitura', ${NUMERO_DA_LINHA_EXTERNA("tokens_cache_leitura", "0")},
+          'tokens_cache_escrita', ${NUMERO_DA_LINHA_EXTERNA("tokens_cache_escrita", "0")},
+          'custo', ${NUMERO_DA_LINHA_EXTERNA("custo", "NULL")},
+          'chamadas', 0) AS linha
+      FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
+      WHERE e.demanda_id = x.demanda_id AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
+        AND json_type(e.dados, '$.sessoes') = 'array' AND json_type(s.value, '$.linhas') = 'array'
+        AND json_extract(s.value, '$.ferramenta') = x.ferramenta AND json_extract(s.value, '$.sessao') = x.sessao
+      ORDER BY e.rowid, s.key, l.key)), '[]')
+  FROM trabalho_nao_gerenciado x ORDER BY x.rowid;
+CREATE TABLE trabalho_nao_gerenciado_nova (
+    ferramenta TEXT NOT NULL,
+    sessao     TEXT NOT NULL,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    PRIMARY KEY (ferramenta, sessao),
+    FOREIGN KEY (ferramenta, sessao) REFERENCES uso_declarado(ferramenta, sessao)
+  );
+INSERT INTO trabalho_nao_gerenciado_nova SELECT ferramenta, sessao, demanda_id FROM trabalho_nao_gerenciado ORDER BY rowid;
+DROP TABLE trabalho_nao_gerenciado;
+ALTER TABLE trabalho_nao_gerenciado_nova RENAME TO trabalho_nao_gerenciado;
+DELETE FROM arquivo_evidencia WHERE evidencia_id IN (SELECT id FROM evidencia_demanda WHERE tipo = 'custos_realizados');
+DELETE FROM evidencia_historico WHERE evidencia_id IN (SELECT id FROM evidencia_demanda WHERE tipo = 'custos_realizados');
+DELETE FROM evidencia_demanda WHERE tipo = 'custos_realizados';
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -980,4 +1031,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_42_TRABALHO_AGENTICO,
   MIGRACAO_43_PULL_REQUEST,
   MIGRACAO_44_EVIDENCIA_ACEITA,
+  MIGRACAO_45_USO_DECLARADO,
 ];

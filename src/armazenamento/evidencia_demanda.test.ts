@@ -8,6 +8,7 @@ import { ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
 import { carregarDemanda, comDemanda } from "./demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
+import { lerUsoDeclarado } from "./uso_declarado.ts";
 import { removerProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 
@@ -156,6 +157,45 @@ test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as cu
   for (const tabela of ["processo_do_trabalho", "uso_modelo_execucao"]) {
     assert.equal(b.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);
   }
+});
+
+test("registrarSessoesExternas grava o Uso declarado da sessão, juntando as linhas das evidências da demanda", () => {
+  const b = novoBanco();
+  b.exec(
+    "INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1')",
+  );
+  const linha = (modelo: string, custo: number | null) => ({
+    provedor: "anthropic",
+    modelo,
+    tokens_entrada: 1,
+    tokens_saida: 2,
+    tokens_cache_leitura: 3,
+    tokens_cache_escrita: 4,
+    custo,
+  });
+  custosEm(b, "e1", "I-1", null, [
+    { ...quem, linhas: [linha("opus", 1.5)] },
+    { ferramenta: "pi", sessao: "mal", linhas: 7 },
+  ]);
+  custosEm(b, "e1r", "I-1", 1, [{ ...quem, linhas: [linha("haiku", null)] }]);
+  registrarSessoesExternas(b, "I-1");
+  const uso = (modelo: string, custo: number | null) => ({
+    modelo,
+    tokens_entrada: 1,
+    tokens_saida: 2,
+    tokens_cache_leitura: 3,
+    tokens_cache_escrita: 4,
+    custo,
+    chamadas: 0,
+  });
+  assert.deepEqual(lerUsoDeclarado(b, "I-1"), [
+    { ...quem, demanda_id: "I-1", linhas: [uso("anthropic/opus", 1.5), uso("anthropic/haiku", null)] },
+    { ferramenta: "pi", sessao: "mal", demanda_id: "I-1", linhas: [] },
+  ]);
+  custosEm(b, "e1", "I-1", null, []);
+  custosEm(b, "e1r", "I-1", 1, []);
+  registrarSessoesExternas(b, "I-1");
+  assert.deepEqual(lerUsoDeclarado(b, "I-1"), []);
 });
 
 test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => {

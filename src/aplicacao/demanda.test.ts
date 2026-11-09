@@ -196,7 +196,8 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   b.prepare(
     "INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('c1', 'I-1', 'custos_realizados', ?, ?)",
   ).run(JSON.stringify(dados), "2026-01-01T00:00:00.000Z");
-  b.exec("INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'de-outra', 'I-2')");
+  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]'), ('codex', 'de-outra', 'I-2', '[]');
+    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'de-outra', 'I-2')`);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(m.custoExterno, { conhecido: 3, incompleto: true, sessoes: 1 });
   assert.deepEqual(m.total.custo, { conhecido: 1, incompleto: false });
@@ -212,7 +213,8 @@ test("CA-SDLC-24: custo externo de rodada fica na rodada e soma no total externo
   };
   grava("d", "NULL", { sessoes: [sessao("a", 2)] });
   grava("r1", "1", { sessoes: [sessao("b", 7)] });
-  b.exec("INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'b', 'I-1')");
+  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]'), ('codex', 'b', 'I-1', '[]');
+    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1'), ('codex', 'b', 'I-1')`);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
   assert.deepEqual(m.rodadas[1]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
@@ -222,7 +224,8 @@ test("CA-SDLC-24: custo externo de rodada fica na rodada e soma no total externo
 
 test("CA-7: evidência de custos malformada ou de ticket não conta linhas", () => {
   const b = banco();
-  b.exec("INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1')");
+  b.exec(`INSERT INTO uso_declarado VALUES ('codex', 'a', 'I-1', '[]');
+    INSERT INTO trabalho_nao_gerenciado VALUES ('codex', 'a', 'I-1')`);
   const grava = (id: string, dados: string, rodada: string, ticket: string, tipo = "custos_realizados") => {
     b.exec(`INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em)
       VALUES ('${id}', 'I-1', ${rodada}, ${ticket}, '${tipo}', '${dados}', ${T})`);
