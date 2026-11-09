@@ -176,6 +176,49 @@ test("eliminarOciosos preserva o livre que ainda não passou do limite", async (
   assert.deepEqual(listarAmbientes(banco), []);
 });
 
+test("eliminar de um livre enquanto um alocar o pega nunca entrega um container que sumiu", async () => {
+  const { docker, banco, conjunto } = cenario();
+  const inicial = await conjunto.alocar(espacoA, projeto);
+  await conjunto.liberar(espacoA);
+  const eliminacao = conjunto.eliminar(inicial.id);
+  const alocado = await conjunto.alocar(espacoB, projeto);
+  await eliminacao;
+  assert.notEqual(alocado.container_id, inicial.container_id);
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [alocado.container_id],
+  );
+  assert.deepEqual(listarAmbientes(banco), [alocado]);
+});
+
+test("eliminarOciosos de um livre ocioso enquanto um alocar o pega nunca entrega um container que sumiu", async () => {
+  const { docker, banco, conjunto } = cenario();
+  const inicial = await conjunto.alocar(espacoA, projeto);
+  await conjunto.liberar(espacoA);
+  const eliminacao = conjunto.eliminarOciosos(new Date(Date.now() + 31 * 60_000).toISOString());
+  const alocado = await conjunto.alocar(espacoB, projeto);
+  await eliminacao;
+  assert.notEqual(alocado.container_id, inicial.container_id);
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [alocado.container_id],
+  );
+  assert.deepEqual(listarAmbientes(banco), [alocado]);
+});
+
+test("eliminar com o docker falhando deixa a linha eliminado e o container órfão para a próxima subida", async () => {
+  const { docker, banco, conjunto, pastaDoDocker } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  await conjunto.liberar(espacoA);
+  docker.falharComando("rm", "docker travado");
+  await assert.rejects(conjunto.eliminar(ambiente.id), /docker travado/);
+  assert.deepEqual(listarAmbientes(banco), []);
+  assert.equal(docker.containers().length, 1);
+  rmSync(join(pastaDoDocker, "falhas", "rm"));
+  await conjunto.reconciliarNaSubida();
+  assert.deepEqual(docker.containers(), []);
+});
+
 test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu e nunca toca o que não tem rótulo", async () => {
   const { docker, banco, conjunto, pastaDoDocker } = cenario();
   const mantido = await conjunto.alocar(espacoA, projeto);

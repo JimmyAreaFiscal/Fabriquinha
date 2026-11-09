@@ -8,6 +8,7 @@ import {
   eliminarAmbiente,
   inserirAmbienteAlocado,
   liberarAmbiente,
+  reservarAmbienteParaEliminar,
   listarAmbientes,
 } from "./ambientes.ts";
 import { migrar } from "./banco.ts";
@@ -149,5 +150,21 @@ test("liberar e eliminar um Ambiente inexistente ou já eliminado recusam com or
   ]) {
     assert.throws(operacao, (erro) => erro instanceof ErroDeInexistente && erro.message.includes("o ambiente"));
   }
+  banco.close();
+});
+
+test("reservar para eliminar só vale para o livre ou sujo, uma vez, e devolve o container", () => {
+  const banco = bancoComConjunto();
+  inserirAmbienteAlocado(banco, novo("a1"));
+  inserirAmbienteAlocado(banco, novo("a2"));
+  assert.equal(reservarAmbienteParaEliminar(banco, "a1"), undefined);
+  liberarAmbiente(banco, "a1", "livre", T1);
+  liberarAmbiente(banco, "a2", "sujo", T1);
+
+  assert.equal(reservarAmbienteParaEliminar(banco, "a1")?.container_id, novo("a1").container_id);
+  assert.equal(reservarAmbienteParaEliminar(banco, "a1"), undefined);
+  assert.equal(reservarAmbienteParaEliminar(banco, "a2")?.estado, "eliminado");
+  assert.equal(alocarAmbienteLivreDaImagem(banco, "fabriquinha/loja:abc", "I-2/1"), undefined);
+  assert.equal(reservarAmbienteParaEliminar(banco, "nao-existe"), undefined);
   banco.close();
 });

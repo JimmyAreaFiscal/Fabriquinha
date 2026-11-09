@@ -14,6 +14,7 @@ import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   listarAmbientes,
+  reservarAmbienteParaEliminar,
 } from "../../armazenamento/ambientes.ts";
 import { configuracaoDoAmbiente } from "../../armazenamento/servico.ts";
 import type { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
@@ -71,24 +72,25 @@ export class ConjuntoDeAmbientes {
 
   /** Elimina um container do conjunto; só vale para o `livre` ou `sujo`, nunca para o que um Espaço está usando. */
   async eliminar(id: string): Promise<void> {
+    const reservado = reservarAmbienteParaEliminar(this.#banco, id);
+    if (reservado) return this.#eliminarContainerReservado(reservado);
     const ambiente = listarAmbientes(this.#banco).find((candidato) => candidato.id === id);
     if (!ambiente) throw new ErroDeRegra(`o ambiente ${id} não existe`, "confira o id do ambiente");
-    if (ambiente.estado === "alocado")
-      throw new ErroDeRegra(
-        `o ambiente ${id} está alocado a ${String(ambiente.alocado_para)}`,
-        "espere o Espaço acabar",
-      );
-    await this.#eliminarContainerEGravar(ambiente);
+    throw new ErroDeRegra(`o ambiente ${id} está alocado a ${String(ambiente.alocado_para)}`, "espere o Espaço acabar");
   }
 
   /** Elimina os `livre` e `sujo` parados há mais de `ociosidade_para_eliminar_min`. */
   async eliminarOciosos(agora: Instante): Promise<void> {
     const limiteMs = configuracaoDoAmbiente(this.#banco).ociosidade_para_eliminar_min * MS_POR_MINUTO;
-    const ociosos = listarAmbientes(this.#banco).filter(
-      ({ estado, liberado_em }) =>
-        estado !== "alocado" && liberado_em !== null && Date.parse(agora) - Date.parse(liberado_em) >= limiteMs,
-    );
-    for (const ocioso of ociosos) await this.#eliminarContainerEGravar(ocioso);
+    // Reserva todos de uma vez, sem esperar o docker, para um `alocar` não pegar um ocioso no meio do caminho.
+    const reservados = listarAmbientes(this.#banco)
+      .filter(
+        ({ estado, liberado_em }) =>
+          estado !== "alocado" && liberado_em !== null && Date.parse(agora) - Date.parse(liberado_em) >= limiteMs,
+      )
+      .map(({ id }) => reservarAmbienteParaEliminar(this.#banco, id))
+      .filter((reservado) => reservado !== undefined);
+    for (const reservado of reservados) await this.#eliminarContainerReservado(reservado);
   }
 
   /**
@@ -126,8 +128,9 @@ export class ConjuntoDeAmbientes {
     return alocado;
   }
 
-  async #eliminarContainerEGravar(ambiente: AmbienteGravado): Promise<void> {
-    await this.#gerador.eliminar(ambiente);
-    eliminarAmbiente(this.#banco, ambiente.id);
+  // A linha já está `eliminado` (reservada). Se o docker falhar aqui, o container fica órfão com o rótulo e a
+  // `reconciliarNaSubida` seguinte o elimina.
+  async #eliminarContainerReservado(reservado: AmbienteGravado): Promise<void> {
+    await this.#gerador.eliminar(reservado);
   }
 }
