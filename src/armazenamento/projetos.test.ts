@@ -271,6 +271,16 @@ test("configuração mínima aplica defaults e trim; opcionais ficam ausentes", 
   });
 });
 
+test("imagem_do_ambiente é gravada, lida e removida ao regravar sem ela", () => {
+  comBanco((banco) => {
+    const base = ProjetoConfigurado.parse(minima());
+    gravarProjeto(banco, { ...base, imagem_do_ambiente: "node:22" });
+    assert.equal(buscarProjeto(banco, "a")?.imagem_do_ambiente, "node:22");
+    gravarProjeto(banco, base);
+    assert.equal(Object.hasOwn(projetoExistente(banco, "a"), "imagem_do_ambiente"), false);
+  });
+});
+
 test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", () => {
   comBanco((banco, raiz) => {
     gravarCompleta(banco);
