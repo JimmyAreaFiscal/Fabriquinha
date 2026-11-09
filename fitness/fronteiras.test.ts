@@ -63,6 +63,7 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
+  { arquivo: "entrega/cli/cli.ts", import: "../../infra/processo.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/dependencias_demanda.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "SQL .prepare(", demanda: "21" },
@@ -319,14 +320,15 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
   );
 });
 
-// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`.
+// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
 const ARQUIVO_DO_CONDUTOR = "aplicacao/trabalho/condutor.ts";
+const ARQUIVO_DO_HARNESS = "infra/agente/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
 // shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
 function acharChamadasAoHarnessForaDoCondutor(src: string): string[] {
   return listarArquivosDeProducao(src)
-    .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR)
+    .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR && arquivo !== ARQUIVO_DO_HARNESS)
     .flatMap((arquivo) => {
       const fonte = ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest);
       const chamadas: string[] = [];
@@ -369,6 +371,91 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
   assert.deepEqual(acharChamadasAoHarnessForaDoCondutor(raiz).sort(), [
     "aplicacao/consultor.ts chama .perguntar(",
     "aplicacao/lancador.ts chama .lancar(",
+  ]);
+});
+
+// O processo do Espaço passa pelo `Ambiente`: `node:child_process` só nestes arquivos, e `infra/processo.ts` só nestes chamadores do core.
+const PREFIXO_DO_AMBIENTE = "infra/ambiente/";
+const ARQUIVOS_COM_CHILD_PROCESS = new Set(["infra/processo.ts", ARQUIVO_DO_HARNESS]);
+// Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
+const CHAMADORES_DIRETOS_DO_PROCESSO = [
+  "aplicacao/auditor_automatico.ts",
+  "aplicacao/executor.ts",
+  "aplicacao/retrabalho.ts",
+  "entrega/cli/cli.ts",
+  "infra/agente/harness_pi.ts",
+  "infra/repositorio/cadastro.ts",
+  "infra/repositorio/heatmap.ts",
+  "infra/repositorio/limpeza_demanda.ts",
+  "infra/repositorio/pr.ts",
+  "infra/repositorio/worktree.ts",
+  "infra/verificacao/sonar.ts",
+];
+
+const ehChildProcess = (alvo: string): boolean => /^(node:)?child_process$/.test(alvo);
+const ehProcessoDoServico = (alvo: string): boolean => /(^|\/)processo\.ts$/.test(alvo);
+
+function acharEspecificadoresDe(src: string, arquivo: string): string[] {
+  const fonte = ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest);
+  return fonte.statements.flatMap((declaracao) =>
+    (ts.isImportDeclaration(declaracao) || ts.isExportDeclaration(declaracao)) &&
+    declaracao.moduleSpecifier &&
+    ts.isStringLiteral(declaracao.moduleSpecifier)
+      ? [declaracao.moduleSpecifier.text]
+      : [],
+  );
+}
+
+function acharImportadoresDe(src: string, ehAlvo: (alvo: string) => boolean): string[] {
+  return listarArquivosDeProducao(src).filter((arquivo) => acharEspecificadoresDe(src, arquivo).some(ehAlvo));
+}
+
+function acharViolacoesDoProcesso(src: string, chamadoresDiretos: readonly string[]): string[] {
+  const doAmbiente = (arquivo: string) => arquivo.startsWith(PREFIXO_DO_AMBIENTE);
+  return [
+    ...acharImportadoresDe(src, ehChildProcess)
+      .filter((arquivo) => !doAmbiente(arquivo) && !ARQUIVOS_COM_CHILD_PROCESS.has(arquivo))
+      .map((arquivo) => `${arquivo} importa node:child_process`),
+    ...acharImportadoresDe(src, ehProcessoDoServico)
+      .filter((arquivo) => !doAmbiente(arquivo) && !chamadoresDiretos.includes(arquivo))
+      .map((arquivo) => `${arquivo} importa infra/processo.ts`),
+  ];
+}
+
+test("node:child_process e infra/processo.ts só nos arquivos liberados", () => {
+  assert.deepEqual(acharViolacoesDoProcesso(SRC, CHAMADORES_DIRETOS_DO_PROCESSO), []);
+});
+
+test("todo chamador direto da lista fixa ainda importa infra/processo.ts", () => {
+  const importadores = new Set(acharImportadoresDe(SRC, ehProcessoDoServico));
+  assert.deepEqual(
+    CHAMADORES_DIRETOS_DO_PROCESSO.filter((arquivo) => !importadores.has(arquivo)),
+    [],
+  );
+});
+
+test("a fitness do processo acusa o chamador do Espaço que importa child_process e infra/processo.ts", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-processo-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    "infra/processo.ts": 'import { spawn } from "node:child_process";\n',
+    "infra/ambiente/ambiente_host_local.ts":
+      'import { spawn } from "child_process";\nimport { executar } from "../processo.ts";\n',
+    "infra/repositorio/pr.ts": 'import { executar } from "../processo.ts";\n',
+    "infra/repositorio/commit.ts": 'import { exigirGitNoAmbiente } from "./worktree.ts";\n',
+    "aplicacao/espaco_ruim.ts":
+      'import { spawn } from "node:child_process";\nimport { git } from "../infra/processo.ts";\n',
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["infra/repositorio/pr.ts"]).sort(), [
+    "aplicacao/espaco_ruim.ts importa infra/processo.ts",
+    "aplicacao/espaco_ruim.ts importa node:child_process",
   ]);
 });
 

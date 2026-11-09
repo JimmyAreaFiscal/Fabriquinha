@@ -14,7 +14,7 @@ import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 
 /** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoHttp {

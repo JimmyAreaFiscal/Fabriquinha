@@ -20,6 +20,9 @@ import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts"
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 import { falharTicketDemanda, fecharTicketDemanda } from "./fechamento_ticket.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const D = "I-1";
@@ -129,10 +132,10 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade", reprovacoes
       },
     }),
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, D, c.log);
   const worktree = conflito
     ? join(c.raiz, "worktrees", "loja", D, "demanda")
-    : await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
+    : await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
   writeFileSync(join(worktree, "novo.txt"), "x\ny\n");
   const evidencias = (n: number) =>
     banco
@@ -404,6 +407,7 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
 test("CA-16: commit sem as evidências devolve o ticket citando o que falta", async () => {
   const c = await cenario();
   await commitarTicketDemanda(c.banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",
     titulo: "Cachear",

@@ -8,8 +8,20 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { AgregadoDemanda, type EvidenciaDemanda, type TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import type { ComandoNoAmbiente } from "../../infra/ambiente/ambiente.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 import { faixas, gerarAula, linhasMudadas, type Trecho } from "./aula.ts";
 
+/** O host local registrando cada comando que recebe, para provar que o git passou pelo Ambiente. */
+class AmbienteQueRegistra extends AmbienteHostLocal {
+  readonly argumentosRecebidos: string[][] = [];
+  override executar(comando: ComandoNoAmbiente) {
+    this.argumentosRecebidos.push(comando.argumentos);
+    return super.executar(comando);
+  }
+}
+
+const ambiente = new AmbienteQueRegistra();
 const repo = mkdtempSync(join(tmpdir(), "fabriquinha-aula-"));
 after(() => {
   rmSync(repo, { recursive: true, force: true });
@@ -103,10 +115,13 @@ test("linhasMudadas e faixas: as linhas novas dos cabeçalhos do diff, em faixas
 });
 
 test("a aula: o código do git na ordem dos trechos, a linha alterada marcada e o texto do agente escapado", async () => {
-  const html = await gerarAula(ag(), repo, [
+  const html = await gerarAula(ambiente, ag(), repo, [
     trecho({ alternativaDescartada: "ler do .env" }),
     trecho({ inicio: 4, fim: 4, oQueFaz: "define d" }),
   ]);
+  for (const subcomando of ["show", "diff"]) {
+    assert.ok(ambiente.argumentosRecebidos.some((a) => a.includes(subcomando)));
+  }
   assert.match(html, /^<!doctype html>/);
   assert.match(html, /<title>Aula do código da I-1<\/title>/);
   assert.match(html, /<h1>Aula do código da I-1: Busca &lt;rápida&gt;<\/h1>/);
@@ -127,33 +142,33 @@ test("a aula: o código do git na ordem dos trechos, a linha alterada marcada e 
 
 test("a aula recusa o que não é código alterado pela demanda, dizendo onde procurar", async () => {
   await assert.rejects(
-    gerarAula(ag({ evidencias: [] }), repo, [trecho()]),
+    gerarAula(ambiente, ag({ evidencias: [] }), repo, [trecho()]),
     recusa("a demanda não tem revisão concluída com arquivos_alterados (a aula vem depois da revisão)"),
   );
   for (const arquivo of ["nada.ts", "velho.ts"]) {
     await assert.rejects(
-      gerarAula(ag(), repo, [trecho({ arquivo })]),
+      gerarAula(ambiente, ag(), repo, [trecho({ arquivo })]),
       recusa(
         `${arquivo} não é um arquivo criado ou alterado pela demanda (escolha um da lista: busca.ts, logo.png, velho.ts)`,
       ),
     );
   }
   await assert.rejects(
-    gerarAula(ag(), repo, [trecho({ arquivo: "logo.png" })]),
+    gerarAula(ambiente, ag(), repo, [trecho({ arquivo: "logo.png" })]),
     recusa("logo.png é binário (explique arquivos binários na mensagem do PR)"),
   );
   await assert.rejects(
-    gerarAula(ag(), repo, [trecho({ fim: 5 })]),
+    gerarAula(ambiente, ag(), repo, [trecho({ fim: 5 })]),
     recusa("busca.ts:1-5 passa do fim do arquivo (busca.ts tem 4 linhas)"),
   );
   await assert.rejects(
-    gerarAula(ag(), repo, [trecho(), trecho({ inicio: 1, fim: 1 })]),
+    gerarAula(ambiente, ag(), repo, [trecho(), trecho({ inicio: 1, fim: 1 })]),
     recusa("busca.ts:1-1 não toca nenhuma linha alterada pela demanda (as linhas alteradas de busca.ts são 2, 4)"),
   );
 });
 
 test("a aula confere o trecho contra o diff desde o ancestral comum, como o arquivos_alterados", async () => {
   const avancada = { ...alterados, dados: { ...alterados.dados, base: baseAvancada } };
-  const html = await gerarAula(ag({ evidencias: [avancada] }), repo, [trecho()]);
+  const html = await gerarAula(ambiente, ag({ evidencias: [avancada] }), repo, [trecho()]);
   assert.match(html, /<tr class="mudou"><td class="n">2<\/td>/);
 });

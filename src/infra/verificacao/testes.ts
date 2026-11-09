@@ -34,16 +34,17 @@ export class VerificacaoDeTestes extends Verificacao {
     this.#entrada = entrada;
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
     const { projeto, e2e, arquivos, aoTerminarAsLinguagens } = this.#entrada;
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const comandos: Record<string, unknown>[] = [];
       const logs = [];
       const falhas: Falha[] = [];
       for (const { caminho, comando_teste: comando } of projeto.verificacoes.linguagens) {
         const r = await rodar(comando, join(worktree, caminho));
-        comandos.push({ ...linhaDoComando(comando, r), caminho });
-        logs.push({ nome: `teste-${caminho}.log`, texto: r.log });
+        const log = `teste-${caminho}.log`;
+        comandos.push({ ...linhaDoComando(comando, r, log), caminho });
+        logs.push({ nome: log, texto: r.log });
         const falha = classificarComando(comando, r);
         if (falha) falhas.push(falha);
       }

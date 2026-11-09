@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { Projeto } from "../../nucleo/projeto.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";
 
+const ambiente = new AmbienteHostLocal();
 const worktree = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-comandos-")));
 after(() => {
   rmSync(worktree, { recursive: true, force: true });
@@ -31,7 +33,7 @@ const entrada = (
 ) => ({ projeto: projeto(parcial), e2e: false, arquivos: [], ...resto });
 /** Roda a verificação de testes na worktree de teste e devolve o registro completo. */
 const verificarTestes = ({ limiteMs, ...resto }: ReturnType<typeof entrada>) =>
-  new VerificacaoDeTestes(resto).coletar({ worktree, limiteMs });
+  new VerificacaoDeTestes(resto).coletar({ ambiente, worktree, limiteMs });
 const comE2E = (build: string, execucao: string) => ({
   e2e: [{ caminho_linguagem: "back", comando_build: build, comando_execucao: execucao, codigo_falha: 7 }],
   globs: [{ caminho_linguagem: "back", glob: "back/**/*.ts" }],
@@ -168,7 +170,7 @@ test("executar reduz o registro a uma das três classes: passou, reprovacao ou f
       projeto: projeto({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: comando }] }),
       e2e: false,
       arquivos: [],
-    }).executar({ worktree, limiteMs });
+    }).executar({ ambiente, worktree, limiteMs });
 
   const passou = await executar("echo ok");
   assert.equal(passou.tipo, "passou");

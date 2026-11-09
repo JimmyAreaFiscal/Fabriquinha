@@ -3,6 +3,7 @@
 import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
 import { limparDemanda, pendenciasDoEspaco } from "../../infra/repositorio/limpeza_demanda.ts";
 import { integrarPR } from "../../infra/repositorio/pr.ts";
 import {
@@ -11,7 +12,7 @@ import {
   atualizarWorktreeRodada,
   type ResultadoAtualizacao,
 } from "../../infra/repositorio/worktree-demanda.ts";
-import { exigirGit, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
+import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
 import { anotar } from "../../infra/registro.ts";
 
 type ProjetoDoCiclo = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes" | "hospedagem">;
@@ -26,11 +27,14 @@ abstract class CicloDoEspaco {
   protected readonly espaco: EspacoDeTrabalho;
   protected readonly projeto: ProjetoDoCiclo;
   protected readonly registro: RegistroDoCiclo;
+  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. */
+  readonly ambiente: Ambiente;
 
-  constructor(espaco: EspacoDeTrabalho, projeto: ProjetoDoCiclo, registro: RegistroDoCiclo) {
+  constructor(espaco: EspacoDeTrabalho, projeto: ProjetoDoCiclo, registro: RegistroDoCiclo, ambiente: Ambiente) {
     this.espaco = espaco;
     this.projeto = projeto;
     this.registro = registro;
+    this.ambiente = ambiente;
   }
 
   /**
@@ -48,9 +52,18 @@ abstract class CicloDoEspaco {
     anotar(this.registro.log, `varrerBase falhou: ${mensagem(erro)}`);
   };
 
-  /** Remove a worktree e as branches que a Fabriquinha criou para o Espaço; o que falhar volta em `pendentes`. */
-  async limpar(): Promise<{ removidos: string[]; pendentes: string[] }> {
-    return limparDemanda(this.registro.raiz, this.projeto, await pendenciasDoEspaco(this.projeto, this.espaco));
+  /**
+   * Remove a worktree e as branches que a Fabriquinha criou para o Espaço; o que falhar volta em `pendentes`. Dada a
+   * lista de uma passada anterior (`pendentes`), repete só ela: a posse some junto com a branch local, e uma remota que
+   * falhou só é reconhecida pela lista.
+   */
+  async limpar(pendentes?: readonly string[]): Promise<{ removidos: string[]; pendentes: string[] }> {
+    return limparDemanda(
+      this.ambiente,
+      this.registro.raiz,
+      this.projeto,
+      pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
+    );
   }
 }
 
@@ -62,12 +75,18 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
   }
 
   async criar() {
-    const pasta = await garantirWorktreeRodada(this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
+    const pasta = await garantirWorktreeRodada(
+      this.ambiente,
+      this.registro.raiz,
+      this.projeto,
+      this.#rodada,
+      this.registro.log,
+    );
     return { pasta, buscouBase: false };
   }
 
   async atualizarComBase(): Promise<ResultadoAtualizacao> {
-    return atualizarWorktreeRodada(this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
+    return atualizarWorktreeRodada(this.ambiente, this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
   }
 
   /** Integra o PR na hospedagem e avança a ref local da Demanda: o merge da hospedagem é o único commit novo dela. */
@@ -79,7 +98,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
     const { pasta: demanda, branch } = espacoDaDemanda(this.projeto, demanda_id, raiz);
     await naFilaDoProjeto(raiz, this.projeto.nome, async () => {
       await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-      await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
+      await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
     });
   }
 }
@@ -88,6 +107,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
 export class CicloDoEspacoDaDemanda extends CicloDoEspaco {
   async criar() {
     const { caminho, buscouBase } = await garantirWorktreeDemandaDizendoSeBuscouBase(
+      this.ambiente,
       this.registro.raiz,
       this.projeto,
       this.espaco.dono.demanda_id,
@@ -120,8 +140,9 @@ export function cicloDoEspaco(
   espaco: EspacoDeTrabalho,
   projeto: ProjetoDoCiclo,
   registro: RegistroDoCiclo,
+  ambiente: Ambiente,
 ): CicloDoEspaco {
   return espaco.dono.rodada_id === undefined
-    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro)
-    : new CicloDoEspacoDaRodada(espaco, projeto, registro);
+    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente)
+    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente);
 }

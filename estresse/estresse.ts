@@ -2,7 +2,7 @@
 // tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota ou comando sem medição.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { subirAmbiente } from "./ambiente.ts";
+import { subirAmbiente } from "./instancia_descartavel.ts";
 import { acoesCli, semMedicaoCli } from "./grupos/cli.ts";
 import {
   acoesEtapas,

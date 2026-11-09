@@ -29,6 +29,9 @@ import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerra
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { schemaDoTipo } from "../nucleo/evidencia.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-")));
@@ -186,8 +189,8 @@ async function cenario({
       ...(anterior ? [evidencia(7, "pr_aberto", { id: "1", url: "https://github.com/org/loja/pull/1" })] : []),
     ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log);
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */
   const commitarNaRodada = (arquivo: string, ticket?: number) => {

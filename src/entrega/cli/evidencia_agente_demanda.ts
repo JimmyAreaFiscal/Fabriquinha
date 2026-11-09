@@ -14,6 +14,7 @@ import { agregadoDaRodada, schemaDoTipo, TipoEvidencia } from "../../nucleo/evid
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import type { EsquemaDeEvidencia } from "../../nucleo/schemas.ts";
+import { ambienteDoServico } from "../../aplicacao/espaco/ambiente_do_servico.ts";
 import { gerarAula, type Trecho } from "../../aplicacao/evidencias/aula.ts";
 import { submeterEvidencia } from "../../aplicacao/evidencia/submeter.ts";
 import type { Origens } from "../../aplicacao/evidencias/submissao.ts";
@@ -117,6 +118,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
         // O HTML nasce dos trechos, antes de a submissão ser avaliada; o CLI mostra o ZodError em uma linha com `z.prettifyError`.
         const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
         const html = await gerarAula(
+          ambienteDoServico(),
           agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
           origens.worktree,
           trechos as Trecho[],

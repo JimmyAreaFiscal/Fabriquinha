@@ -3,8 +3,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 import { VerificacaoE2E } from "./e2e.ts";
 
+const ambiente = new AmbienteHostLocal();
 const worktree = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-e2e-")));
 after(() => {
   rmSync(worktree, { recursive: true, force: true });
@@ -15,7 +17,7 @@ const e2e = (build: string, execucao: string) =>
   new VerificacaoE2E({ caminho_linguagem: "back", comando_build: build, comando_execucao: execucao, codigo_falha: 7 });
 
 test("build e execução com saída 0 passam, na pasta da linguagem, com um log para cada", async () => {
-  const resultado = await e2e("pwd", "echo rodou").executar({ worktree });
+  const resultado = await e2e("pwd", "echo rodou").executar({ ambiente, worktree });
 
   assert.equal(resultado.tipo, "passou");
   assert.deepEqual(
@@ -28,12 +30,12 @@ test("build e execução com saída 0 passam, na pasta da linguagem, com um log 
 });
 
 test("só o codigo_falha reprova a execução; outro código é falha de infraestrutura", async () => {
-  assert.deepEqual(await e2e("true", "echo falhou; exit 7").executar({ worktree }), {
+  assert.deepEqual(await e2e("true", "echo falhou; exit 7").executar({ ambiente, worktree }), {
     tipo: "reprovacao",
     motivo: "echo falhou; exit 7 saiu com código 7",
     log: "\nfalhou\n",
   });
-  assert.deepEqual(await e2e("true", "exit 9").executar({ worktree }), {
+  assert.deepEqual(await e2e("true", "exit 9").executar({ ambiente, worktree }), {
     tipo: "falha_infraestrutura",
     causa: "comando_ausente",
     motivo: "exit 9 saiu com código inesperado 9",
@@ -42,7 +44,7 @@ test("só o codigo_falha reprova a execução; outro código é falha de infraes
 
 test("build com saída diferente de 0 reprova e a execução não roda; o tipo é e2e", async () => {
   const verificacao = e2e("exit 2", "echo rodou");
-  const registro = await verificacao.coletar({ worktree });
+  const registro = await verificacao.coletar({ ambiente, worktree });
 
   assert.equal(verificacao.tipo, "e2e");
   assert.equal(registro.tipo, "execucao_testes");

@@ -2,7 +2,8 @@
 // alterado pela demanda e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { exigirGit } from "../../infra/repositorio/worktree.ts";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
+import { exigirGitNoAmbiente } from "../../infra/repositorio/worktree.ts";
 import { daUltimaConcluida } from "../../nucleo/schemas.ts";
 
 export interface Trecho {
@@ -61,7 +62,12 @@ const esc = (texto: string): string =>
     .replaceAll("'", "&#39;");
 
 /** Lê cada trecho na `head` da última revisão e recusa o que não é código alterado pela demanda. */
-async function lerTrechos(ag: AgregadoDemanda, worktree: string, trechos: readonly Trecho[]): Promise<TrechoLido[]> {
+async function lerTrechos(
+  ambiente: Ambiente,
+  ag: AgregadoDemanda,
+  worktree: string,
+  trechos: readonly Trecho[],
+): Promise<TrechoLido[]> {
   const revisao = daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados");
   if (!revisao) {
     throw new ErroDeRegra("a demanda não tem revisão concluída com arquivos_alterados", "a aula vem depois da revisão");
@@ -80,14 +86,18 @@ async function lerTrechos(ag: AgregadoDemanda, worktree: string, trechos: readon
     if (alterado.adicionadas === null) {
       throw new ErroDeRegra(`${trecho.arquivo} é binário`, "explique arquivos binários na mensagem do PR");
     }
-    const linhas = (await exigirGit(worktree, "show", `${head}:${trecho.arquivo}`)).replace(/\n$/, "").split("\n");
+    const linhas = (await exigirGitNoAmbiente(ambiente, worktree, "show", `${head}:${trecho.arquivo}`))
+      .replace(/\n$/, "")
+      .split("\n");
     if (trecho.fim > linhas.length) {
       throw new ErroDeRegra(
         `${local} passa do fim do arquivo`,
         `${trecho.arquivo} tem ${String(linhas.length)} linhas`,
       );
     }
-    const mudadas = linhasMudadas(await exigirGit(worktree, "diff", "-U0", `${base}...${head}`, "--", trecho.arquivo));
+    const mudadas = linhasMudadas(
+      await exigirGitNoAmbiente(ambiente, worktree, "diff", "-U0", `${base}...${head}`, "--", trecho.arquivo),
+    );
     const toca = [...mudadas].some((n) => n >= trecho.inicio && n <= trecho.fim);
     if (!toca) {
       throw new ErroDeRegra(
@@ -170,6 +180,11 @@ ${trechos.map((t, i) => secao(t, i)).join("\n")}
  * F3 §4.5: confere cada trecho contra o diff da última revisão (`base...head` do `arquivos_alterados`, desde o ancestral comum) e devolve o HTML
  * da aula, que vira o anexo da evidência.
  */
-export async function gerarAula(ag: AgregadoDemanda, worktree: string, trechos: readonly Trecho[]): Promise<string> {
-  return html(ag, await lerTrechos(ag, worktree, trechos));
+export async function gerarAula(
+  ambiente: Ambiente,
+  ag: AgregadoDemanda,
+  worktree: string,
+  trechos: readonly Trecho[],
+): Promise<string> {
+  return html(ag, await lerTrechos(ambiente, ag, worktree, trechos));
 }

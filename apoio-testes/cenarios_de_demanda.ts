@@ -13,6 +13,9 @@ import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-deman
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
+import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 export const INSTANTE_DO_CENARIO = "2026-01-01T00:00:00.000Z";
 
@@ -321,7 +324,7 @@ export async function cenarioRevisao({ integral = false } = {}) {
     }),
   );
   gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
-  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir);
   return {
     c,

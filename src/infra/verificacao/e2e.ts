@@ -32,19 +32,19 @@ export class VerificacaoE2E extends Verificacao {
     const comandos = [];
     const logs = [];
     const build = await rodar(comando_build, cwd);
-    comandos.push({ ...linhaDoComando(comando_build, build), caminho });
+    comandos.push({ ...linhaDoComando(comando_build, build, `${nome}-build.log`), caminho });
     logs.push({ nome: `${nome}-build.log`, texto: build.log });
     const falhaDoBuild = classificarComando(comando_build, build);
     if (falhaDoBuild) return { comandos, logs, falhas: [falhaDoBuild] };
     const execucao = await rodar(comando_execucao, cwd);
-    comandos.push({ ...linhaDoComando(comando_execucao, execucao), caminho });
+    comandos.push({ ...linhaDoComando(comando_execucao, execucao, `${nome}.log`), caminho });
     logs.push({ nome: `${nome}.log`, texto: execucao.log });
     const falhaDaExecucao = classificarComando(comando_execucao, execucao, codigo_falha);
     return { comandos, logs, falhas: falhaDaExecucao ? [falhaDaExecucao] : [] };
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const { comandos, logs, falhas } = await this.rodarComandos(rodar, worktree);
       return { tipo: "execucao_testes", passou: aprovacao(falhas), falhas, dados: { comandos }, logs };
     });

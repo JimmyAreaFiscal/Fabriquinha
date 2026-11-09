@@ -9,7 +9,8 @@ import { z } from "zod";
 import { ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
-import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
+import { LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
 /** Um PR da branch da demanda, como a hospedagem o lista. */
