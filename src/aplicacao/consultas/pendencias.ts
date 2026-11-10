@@ -83,16 +83,11 @@ export function pendenciasDasDemandas(
     demandas.map((ag) => ag.demanda.id),
   );
   return demandas
-    .flatMap((ag) =>
-      pendenciasDoInicio(
-        ag,
-        encontrado(predecessoras.get(ag.demanda.id), `a demanda ${ag.demanda.id} não foi lida`, "recarregue"),
-        vivos,
-        sessaoDoTicket,
-        agendadorLigado,
-        agora,
-      ),
-    )
+    .flatMap((ag) => {
+      const { id } = ag.demanda;
+      const doId = encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue");
+      return pendenciasDoInicio(ag, doId, vivos, sessaoDoTicket, agendadorLigado, agora);
+    })
     .toSorted((a, b) => a.desde.localeCompare(b.desde));
 }
 
