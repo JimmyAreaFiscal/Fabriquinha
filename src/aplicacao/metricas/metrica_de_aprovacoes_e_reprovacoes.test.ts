@@ -23,7 +23,7 @@ test("as aprovações e reprovações do Gate da demanda existem só em entender
   assert.deepEqual([...valores.keys()], ["entender_e_desenhar"]);
   assert.deepEqual(new MetricaDeAprovacoesEReprovacoes().definicao, {
     tipo: "aprovacoes_e_reprovacoes",
-    rotulo: "Aprovações e reprovações",
+    rotulo: "Reprovações no Gate",
     fonte: "Gate da demanda",
   });
 });

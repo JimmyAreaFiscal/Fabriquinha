@@ -8,7 +8,7 @@ import { CalculoDeMetrica } from "./calculo_de_metrica.ts";
 export class MetricaDeAprovacoesEReprovacoes extends CalculoDeMetrica<{ aprovacoes: number; reprovacoes: number }> {
   readonly definicao = {
     tipo: "aprovacoes_e_reprovacoes",
-    rotulo: "Aprovações e reprovações",
+    rotulo: "Reprovações no Gate",
     fonte: "Gate da demanda",
   } as const;
 

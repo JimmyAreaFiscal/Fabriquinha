@@ -615,7 +615,7 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
   popularDemanda(banco, "outro", "I-9001");
   const antes = contagensDemanda(banco);
   popularDemanda(banco, "demo", "I-9101");
-  // demanda do outro projeto que depende da do projeto removido, e retrabalho dela sobre o ticket do removido
+  // demanda do outro projeto que depende da do projeto removido, e a linha de commit posterior dela sobre o ticket do removido
   banco.exec(`
     INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
     INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');

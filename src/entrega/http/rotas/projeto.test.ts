@@ -16,7 +16,7 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -363,8 +363,8 @@ test("os cards do mês do projeto vêm de /api/metricas com o mesmo texto do cus
       ('x1', 's-I-1', '${agoraIso}', '${agoraIso}', 0), ('x2', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('x1', 'p', 'm', 10, 1, 0, 0, 4.2), ('x2', 'p', 'm', 3, 1, 0, 0, NULL);`);
   const mes = agoraIso.slice(0, 7);
-  const [loja] = (await chamar("GET", `/api/metricas?projeto=loja&de=${mes}&ate=${mes}`)) as MetricasMesDemanda[];
-  const [site] = (await chamar("GET", `/api/metricas?projeto=site&de=${mes}&ate=${mes}`)) as MetricasMesDemanda[];
+  const [loja] = (await chamar("GET", `/api/metricas?projeto=loja&de=${mes}&ate=${mes}`)) as MetricasDoMes[];
+  const [site] = (await chamar("GET", `/api/metricas?projeto=site&de=${mes}&ate=${mes}`)) as MetricasDoMes[];
   assert.equal(loja?.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
   assert.equal(site?.total.textoDoCusto, "US$ 0,00");
 });

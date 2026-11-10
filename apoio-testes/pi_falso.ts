@@ -513,7 +513,7 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
       [
         "## Oportunidades de melhoria\n\nO prompt do desenvolvimento repete o desenho inteiro.",
         "## Custos\n\nO desenvolvimento levou a maior parte do gasto.",
-        "## Qualidade\n\nHouve retrabalho e correções do Auditor no mês.",
+        "## Qualidade\n\nHouve correções do Auditor no mês.",
         "## Melhorias propostas\n\n1. Resumo por ticket no prompt do desenvolvimento.",
       ].join("\n\n"),
     );

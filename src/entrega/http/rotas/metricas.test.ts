@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { MetricasMesDemanda, MetricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes, MetricasPorDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -68,7 +68,7 @@ const mes = (n: number) => {
 test("GET /api/metricas: padrão nos 11 meses anteriores mais o corrente, de todos os projetos", async () => {
   demandaComExecucao("I-1", "loja");
   demandaComExecucao("I-2", "site");
-  const meses = (await chamar("/api/metricas")) as MetricasMesDemanda[];
+  const meses = (await chamar("/api/metricas")) as MetricasDoMes[];
   assert.deepEqual(
     meses.map((m) => m.mes),
     Array.from({ length: 12 }, (_, i) => mes(i - 11)),
@@ -85,7 +85,7 @@ test("GET /api/metricas e /api/metricas/demandas: o mesmo texto do custo, com �
   banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('y-I-1', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('y-I-1', 'p', 'm', 3, 1, 0, 0, NULL);`);
   const texto = "≥ US$ 2,00 (1 sessão sem custo)";
-  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasMesDemanda];
+  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasDoMes];
   assert.equal(mesAtual.total.textoDoCusto, texto);
   assert.deepEqual(mesAtual.total.modelos, [
     {
@@ -107,12 +107,35 @@ test("GET /api/metricas e /api/metricas/demandas: o mesmo texto do custo, com �
   assert.equal(total.textoDoCusto, texto);
 });
 
+test("GET /api/metricas: cada mês traz as nove Etapas, cada uma com as Métricas que o catálogo declara para ela", async () => {
+  demandaComExecucao("I-1", "loja");
+  const [doMes] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasDoMes];
+  assert.deepEqual(
+    doMes.etapas.map((e) => [e.etapa, e.metricas.map((m) => m.definicao.tipo)]),
+    [
+      ["entender_e_desenhar", ["uso", "aprovacoes_e_reprovacoes"]],
+      ["planejar", ["uso", "conformidade_com_o_plano"]],
+      ["implementar", ["uso", "alteracoes_posteriores"]],
+      ["revisar_rodada", ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"]],
+      ["encerrar_rodada", ["uso", "nota_humana"]],
+      ["ajustar_resultado", ["uso"]],
+      ["revisar_demanda", ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"]],
+      ["encerrar_demanda", ["uso"]],
+      ["resolver_conflito", ["uso"]],
+    ],
+  );
+  const uso = doMes.etapas.find((e) => e.etapa === "planejar")?.metricas[0];
+  assert.ok(uso);
+  assert.deepEqual(uso.definicao, { tipo: "uso", rotulo: "Uso", fonte: "Uso" });
+  assert.equal((uso.valor as { textoDoCusto: string }).textoDoCusto, "US$ 2,00");
+});
+
 test("GET /api/metricas: de um projeto, de `de` a `ate`; só `ate` leva `de` 11 meses antes", async () => {
   demandaComExecucao("I-1", "loja");
-  const [so] = (await chamar(`/api/metricas?projeto=site&de=${mes(0)}&ate=${mes(0)}`)) as MetricasMesDemanda[];
+  const [so] = (await chamar(`/api/metricas?projeto=site&de=${mes(0)}&ate=${mes(0)}`)) as MetricasDoMes[];
   assert.equal(so?.projeto, "site");
   assert.equal(so.demandas.registradas, 0);
-  const meses = (await chamar("/api/metricas?ate=2026-03")) as MetricasMesDemanda[];
+  const meses = (await chamar("/api/metricas?ate=2026-03")) as MetricasDoMes[];
   assert.deepEqual([meses[0]?.mes, meses.at(-1)?.mes, meses.length], ["2025-04", "2026-03", 12]);
 });
 
@@ -165,6 +188,8 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
       tokens: { entrada: 20, saida: 2, cacheLeitura: 0, cacheEscrita: 0, total: 22 },
       custo: { conhecido: 4, trabalhosSemCusto: 0 },
       textoDoCusto: "US$ 4,00",
+      conformidade: null,
+      nota: null,
     },
     demandas: [
       {
@@ -173,6 +198,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
         titulo: "Título",
         estado: "em_execucao",
         reprovacoes: 0,
+        conformidade: null,
         nota: null,
         ...execucaoDeUmaDemanda,
       },
@@ -182,6 +208,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
         titulo: "Título",
         estado: "em_execucao",
         reprovacoes: 0,
+        conformidade: null,
         nota: null,
         ...execucaoDeUmaDemanda,
       },
@@ -195,7 +222,7 @@ test("GET /api/metricas e /api/metricas/demandas: o Uso declarado soma ao medido
     'modelo', 'p/m', 'tokens_entrada', 3, 'tokens_saida', 1, 'tokens_cache_leitura', 0, 'tokens_cache_escrita', 0,
     'custo', NULL, 'chamadas', 0)))`);
   const texto = "≥ US$ 2,00 (1 sessão sem custo)";
-  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasMesDemanda];
+  const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasDoMes];
   assert.equal(mesAtual.total.textoDoCusto, texto);
   const { demandas, total } = (await chamar("/api/metricas/demandas")) as MetricasPorDemanda;
   assert.equal(demandas[0]?.textoDoCusto, texto);

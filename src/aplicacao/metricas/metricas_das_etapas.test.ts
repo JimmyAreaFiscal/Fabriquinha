@@ -23,7 +23,7 @@ test("cada Etapa traz as Métricas que o catálogo declara para ela, com rótulo
   assert.ok(metricas.get("planejar")?.every((m) => m.definicao.rotulo !== "" && m.definicao.fonte !== ""));
 });
 
-test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e retrabalho", () => {
+test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e alterações posteriores", () => {
   const b = bancoDoPeriodo();
   gravarTicket(b, "I-1", 7, "revisar_rodada", 1);
   gravarDecisaoEm(b, ["I-1", 7, 1], ["gate_revisao_rodada", "reprovado", null], em("2026-02"));

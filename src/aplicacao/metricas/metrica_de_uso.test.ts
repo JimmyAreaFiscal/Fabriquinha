@@ -11,7 +11,6 @@ import {
 import { intervalo } from "../../nucleo/periodo.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import type { EtapaTicket } from "../../nucleo/primitivos.ts";
-import { metricasDaDemanda } from "../demanda.ts";
 import { MetricaDeUso } from "./metrica_de_uso.ts";
 
 const calcularUso = (banco: Parameters<MetricaDeUso["calcular"]>[0], recorte: Recorte) =>
@@ -42,7 +41,7 @@ const somarTotais = (a: number[], b: number[]) => a.map((n, i) => n + (b[i] ?? 0
 test("o Uso vale para as nove Etapas, com a definição que a tela mostra", () => {
   const valores = calcularUso(bancoDaDemanda(), { demandaId: "I-1" });
   assert.equal(valores.size, 9);
-  assert.deepEqual(new MetricaDeUso().definicao, { tipo: "uso", rotulo: "Tokens, modelo e custo", fonte: "Uso" });
+  assert.deepEqual(new MetricaDeUso().definicao, { tipo: "uso", rotulo: "Uso", fonte: "Uso" });
 });
 
 test("CA-1 e CA-18: tokens por modelo na demanda e por etapa, com o custo das execuções", () => {
@@ -90,10 +89,7 @@ test("CA-3: rodadas mais o ticket sem rodada somam o total", () => {
   const porEtapa = calcularUso(b, { demandaId: "I-1" });
   assert.equal(daEtapa(porEtapa, "planejar").modelos[0]?.tokens_entrada, 1);
   assert.equal(daEtapa(porEtapa, "implementar").modelos[0]?.tokens_entrada, 6);
-  const { total } = metricasDaDemanda(b, "I-1");
-  assert.equal(total.modelos[0]?.tokens_entrada, 7);
   assert.deepEqual(totalDasEtapas(porEtapa), [3, 1, 3 * 60_000, 28, 7, 0]);
-  assert.equal(total.custo.conhecido, 7);
 });
 
 test("CA-4: execução de sessão retomada aparece uma vez", () => {
@@ -139,7 +135,7 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   assert.deepEqual(desenho.custoExterno, { conhecido: 3, trabalhosSemCusto: 1, sessoes: 1 });
   assert.deepEqual(desenho.custo, { conhecido: 3, trabalhosSemCusto: 1 });
   assert.deepEqual(daEtapa(porEtapa, "implementar").custo, { conhecido: 1, trabalhosSemCusto: 0 });
-  assert.deepEqual(metricasDaDemanda(b, "I-1").total.custo, { conhecido: 4, trabalhosSemCusto: 1 });
+  assert.deepEqual(totalDasEtapas(porEtapa).slice(4), [4, 1]);
 });
 
 test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e das rodadas", () => {
@@ -169,7 +165,7 @@ test("o total soma o Uso declarado da demanda, e cada execução sem custo conta
   gravarExecucao(b, 2, "e3", 0, [["m1", 1, 1, 0, 0, null]]);
   gravarUsoDeclarado(b, "a", "I-1", [linhaDeUsoDeclarado(3)]);
   const porEtapa = calcularUso(b, { demandaId: "I-1" });
-  assert.equal(metricasDaDemanda(b, "I-1").total.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");
+  assert.deepEqual(totalDasEtapas(porEtapa).slice(4), [7.2, 2]);
   assert.deepEqual(daEtapa(porEtapa, "implementar").custo, { conhecido: 4.2, trabalhosSemCusto: 2 });
   assert.equal(daEtapa(porEtapa, "implementar").textoDoCusto, "≥ US$ 4,20 (2 sessões sem custo)");
   assert.equal(daEtapa(porEtapa, "entender_e_desenhar").textoDoCusto, "US$ 3,00");
