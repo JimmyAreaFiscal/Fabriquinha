@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import type { CartaoDoBoard, DadosDoInicio, PendenciaDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
-import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
+import { inicio, type MotivoDeRecusaEmJson, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
 
 const agora = new Date("2026-10-28T12:00:00.000Z");
 const mes = {
@@ -75,7 +75,7 @@ const coluna = (html: string, nome: string): string =>
   html.split(/<div class="coluna(?: coluna-gate)?">/).find((c) => c.includes(`coluna-cabeca">${nome} <`)) ?? "";
 
 test("sem nada em andamento: a frase do mês, nada aguarda, nada roda e as 11 colunas vazias sob as 5 etapas", () => {
-  const html = inicio(dados(), agora);
+  const html = inicio(dados(), agora, []);
   assert.match(html, /<h1>Início<\/h1>/);
   assert.doesNotMatch(html, /Registrar necessidade/);
   assert.match(html, /<p class="frase-mes">Outubro de 2026, todos os projetos:/);
@@ -124,6 +124,7 @@ test("aguarda você: o contador, o título, o botão, o motivo e o rodapé de ca
       ],
     }),
     agora,
+    [],
   );
   assert.match(html, /<span class="contador">7<\/span><span class="muted">da mais antiga para a mais nova<\/span>/);
   const cartoes = html.split('<a class="decisao').slice(1);
@@ -182,6 +183,7 @@ test("rodando: a linha da sessão com o modo, o que o agente faz, o ticket, o mo
       ],
     }),
     agora,
+    [],
   );
   assert.match(html, /Rodando<\/h2><span class="muted">2<\/span>/);
   const [primeira, segunda] = html.split('<a class="rodando-linha"').slice(1);
@@ -194,6 +196,42 @@ test("rodando: a linha da sessão com o modo, o que o agente faz, o ticket, o mo
   assert.match(String(segunda), /pill-rodando">interativa<\/span>/);
   assert.match(String(segunda), /— Implementação<\/span>/);
   assert.match(String(segunda), /title="padrão do pi"/);
+});
+
+const MOTIVOS_E_TEXTOS: [MotivoDeRecusaEmJson, string][] = [
+  [{ tipo: "limite_de_paralelismo", em_uso: 4, limite: 4 }, "Limite de paralelismo cheio: 4 de 4 em uso"],
+  [{ tipo: "dependencia_pendente", aguarda: ["I-1.T1", "I-2.R1"] }, "Aguarda I-1.T1, I-2.R1"],
+  [{ tipo: "gate_aguardando", gate: "gate_pr" }, "Aguarda a aprovação do PR"],
+  [{ tipo: "ocupado", por: "I-3.T2" }, "Ocupado por I-3.T2"],
+  [{ tipo: "bloqueado", motivo: "Tentativas esgotadas" }, "Bloqueado: Tentativas esgotadas"],
+  [{ tipo: "aguarda_acao_externa" }, "Aguarda o merge do PR na plataforma"],
+  [{ tipo: "gate_aguardando", gate: "gate_demanda" }, "Aguarda a aprovação da demanda"],
+  [{ tipo: "gate_aguardando", gate: "gate_planejamento" }, "Aguarda a aprovação do planejamento"],
+  [{ tipo: "gate_aguardando", gate: "gate_revisao_rodada" }, "Aguarda a revisão da rodada"],
+  [{ tipo: "gate_aguardando", gate: "gate_revisao_demanda" }, "Aguarda a revisão da demanda"],
+];
+
+test("o texto de cada motivo de recusa", () => {
+  assert.deepEqual(
+    MOTIVOS_E_TEXTOS.map(([motivo]) => textoDoMotivoDeRecusa(motivo)),
+    MOTIVOS_E_TEXTOS.map(([, texto]) => texto),
+  );
+});
+
+test("rodando: cada item parado mostra o ticket e o motivo, escapado, e leva à demanda", () => {
+  const html = inicio(dados(), agora, [
+    { item: "I-206.T5", motivo: { tipo: "limite_de_paralelismo", em_uso: 2, limite: 2 } },
+    { item: "I-207.T1", motivo: { tipo: "bloqueado", motivo: "falhou <b>" } },
+  ]);
+  const [limite, bloqueado] = html.split('<a class="rodando-linha"').slice(1);
+  assert.match(String(limite), /^ href="\/demandas\/I-206">/);
+  assert.match(String(limite), /pill-neutro">parado<\/span>\s*<span class="id">I-206<\/span>/);
+  assert.match(
+    String(limite),
+    /<span class="mono">I-206\.T5<\/span> — Limite de paralelismo cheio: 2 de 2 em uso<\/span>/,
+  );
+  assert.match(String(bloqueado), /href="\/demandas\/I-207"/);
+  assert.match(String(bloqueado), /— Bloqueado: falhou &#60;b&#62;<\/span>/);
 });
 
 test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de execução, espera e bloqueio", () => {
@@ -223,6 +261,7 @@ test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de
       ],
     }),
     agora,
+    [],
   );
   assert.match(html, /2 demandas em andamento/);
   const desenvolvimento = coluna(html, "Desenvolvimento");
@@ -250,7 +289,7 @@ test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de
   );
   // O endereço no título do cartão não quebra no hífen.
   assert.match(
-    inicio(dados({ board: [cartao({ titulo: "Corrigir I-206.R1 & I-7" })] }), agora),
+    inicio(dados({ board: [cartao({ titulo: "Corrigir I-206.R1 & I-7" })] }), agora, []),
     /cartao-titulo">Corrigir <span class="endereco">I-206\.R1<\/span> &#38; <span class="endereco">I-7<\/span><\/div>/,
   );
   const revisao = coluna(html, "Revisão da demanda");
