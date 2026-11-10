@@ -13,10 +13,11 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 import { Projeto } from "../../../nucleo/projeto.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
@@ -81,6 +82,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
       return await rota.tratar({
         banco,
         agendador: { proximaBusca: () => PROXIMA },
+        relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
         corpo,

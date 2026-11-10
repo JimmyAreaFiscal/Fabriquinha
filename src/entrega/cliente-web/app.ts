@@ -1,6 +1,7 @@
 // Entrada do cliente (F7 §4.4): escolhe a página pelo caminho, troca de página pela History API sem recarregar (os
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda.
-import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
+import type { Parametros } from "../compartilhado/caminhos.ts";
+import { type Pagina, rotear } from "./caminhos.ts";
 import { avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarAvaliacao, montarAvaliacoes } from "./telas/avaliacoes-montar.ts";

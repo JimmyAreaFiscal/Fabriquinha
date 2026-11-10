@@ -2,7 +2,7 @@
 // gráfico de evolução, mostra a dica ao passar o mouse e troca o foco, a métrica, a ordem e a tabela sem reler a API.
 // Não se atualiza sozinha. Os testes de ponta a ponta (e2e/) a exercitam.
 import type { MetricasDoMes, MetricasPorDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {

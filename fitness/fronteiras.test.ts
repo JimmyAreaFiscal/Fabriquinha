@@ -24,12 +24,22 @@ const MATRIZ: Record<string, RegraDoModulo> = {
   nucleo: { modulosPermitidos: [], externoPermitido: SO_ZOD_E_PATH },
   armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  aplicacao: { modulosPermitidos: ["nucleo", "armazenamento", "infra"], externoPermitido: QUALQUER_EXTERNO },
-  "entrega/http": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  aplicacao: {
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", "entrega/contrato"],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  // Puro: importável pelo servidor e pelo navegador.
+  "entrega/compartilhado": { modulosPermitidos: [], externoPermitido: () => false },
+  // Os tipos e schemas da API: só o núcleo e o zod. O cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  "entrega/contrato": { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
+  "entrega/http": {
+    modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
   "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
   // Roda no navegador: de fora de si, só tipos (apagados na execução) e o markdown-it, servido em /static/ pelo import map.
   [MODULO_CLIENTE_WEB]: {
-    modulosPermitidos: [],
+    modulosPermitidos: ["entrega/compartilhado"],
     externoPermitido: (alvo) => alvo === "markdown-it/browser",
     somenteImportDeTipo: true,
   },
@@ -41,6 +51,8 @@ const MATRIZ: Record<string, RegraDoModulo> = {
       "aplicacao",
       "entrega/http",
       "entrega/cli",
+      "entrega/compartilhado",
+      "entrega/contrato",
       MODULO_CLIENTE_WEB,
     ],
     externoPermitido: QUALQUER_EXTERNO,
@@ -59,7 +71,6 @@ interface Excecao extends Achado {
 
 // Cada exceção cita a demanda (04 a 26) que a remove: 20 limpa entrega/http.
 const EXCECOES: Excecao[] = [
-  { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
@@ -92,9 +103,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../../armazenamento/banco.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
 ];
 
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
@@ -281,16 +289,25 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "aplicacao/ok.ts":
       'import { a } from "../armazenamento/ok.ts";\nimport { b } from "../infra/ok.ts";\nconst achou = /a/.exec(texto);\n',
     "infra/ok.ts": 'import { spawn } from "node:child_process";\nimport { z } from "../nucleo/ok.ts";\n',
-    "entrega/http/ok.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
-    "entrega/cliente-web/ok.ts": 'import type { A } from "../../aplicacao/ok.ts";\nimport { b } from "./sub.ts";\n',
+    "entrega/compartilhado/ok.ts": "export const c = 1;\n",
+    "entrega/contrato/ok.ts": 'import { z } from "zod";\nimport { Id } from "../../nucleo/ok.ts";\n',
+    "entrega/http/ok.ts":
+      'import { a } from "../../aplicacao/ok.ts";\nimport { c } from "../compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\n',
+    "entrega/cliente-web/ok.ts":
+      'import type { A } from "../../aplicacao/ok.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "../compartilhado/ok.ts";\n',
     "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
     "entrega/cliente-web/markdown.ts": 'import markdownit from "markdown-it/browser";\n',
     "composicao/ok.ts": 'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\n',
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
+    "entrega/compartilhado/impuro.ts":
+      'import { z } from "../../nucleo/ok.ts";\nimport { readFileSync } from "node:fs";\n',
+    "entrega/contrato/impuro.ts":
+      'import { readFileSync } from "node:fs";\nimport { a } from "../../armazenamento/ok.ts";\n',
     "entrega/cliente-web/aplicacao.ts":
       'import { a } from "../../aplicacao/ok.ts";\nimport type { B } from "../../aplicacao/ok.ts";\n',
+    "entrega/cliente-web/contrato_valor.ts": 'import { Resposta } from "../contrato/ok.ts";\n',
     "entrega/cliente-web/markdown_inteiro.ts": 'import markdownit from "markdown-it";\n',
     "entrega/cliente-web/markdown_subcaminho.ts": 'import x from "markdown-it/browser/x";\n',
     "entrega/cliente-web/lodash.ts": 'import _ from "lodash";\n',
@@ -311,6 +328,11 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
       "entrega/cliente-web/aplicacao.ts importa ../../aplicacao/ok.ts",
+      "entrega/compartilhado/impuro.ts importa ../../nucleo/ok.ts",
+      "entrega/compartilhado/impuro.ts importa node:fs",
+      "entrega/contrato/impuro.ts importa ../../armazenamento/ok.ts",
+      "entrega/contrato/impuro.ts importa node:fs",
+      "entrega/cliente-web/contrato_valor.ts importa ../contrato/ok.ts",
       "entrega/cliente-web/lodash.ts importa lodash",
       "entrega/cliente-web/markdown_inteiro.ts importa markdown-it",
       "entrega/cliente-web/markdown_subcaminho.ts importa markdown-it/browser/x",
