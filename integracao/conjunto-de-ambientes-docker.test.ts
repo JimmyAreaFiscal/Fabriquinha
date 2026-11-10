@@ -47,7 +47,7 @@ test(
     assert.equal(imagem, IMAGEM_MINIMA);
 
     // cria e aloca
-    const criado = await gerador.criar(imagem, LIMITES);
+    const criado = await gerador.criar(imagem, LIMITES, 1);
     containersCriados.push(criado.container_id);
     inserirAmbienteAlocado(banco, {
       ...criado,

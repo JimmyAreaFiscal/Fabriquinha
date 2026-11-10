@@ -87,13 +87,41 @@ export async function lancarSolto(comando: string, args: readonly string[], env:
 }
 
 /**
+ * O git do core roda no host com as credenciais, em repositórios que um container pode escrever (`.git/hooks`,
+ * `.git/config`). Por isso hooks e fsmonitor ficam desligados, e `core.sshCommand` e `credential.helper` valem os do
+ * sistema e do usuário do serviço (lidos fora de qualquer repositório), nunca os do repositório.
+ */
+async function lerConfigsFixasDoServico(): Promise<string[]> {
+  const lerDoServico = async (...args: string[]): Promise<string[]> =>
+    (await executar("git", ["-C", "/", "config", ...args], { limiteMs: LIMITE_COMANDO_MS })).saida
+      .split("\n")
+      .filter((linha) => linha !== "");
+  const [sshCommand] = await lerDoServico("--get", "core.sshCommand");
+  const credenciais = await lerDoServico("--get-all", "credential.helper");
+  return [
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    `core.sshCommand=${sshCommand ?? "ssh"}`,
+    // Valor vazio zera a lista, inclusive a que o repositório definiu.
+    ...["", ...credenciais].flatMap((helper) => ["-c", `credential.helper=${helper}`]),
+  ];
+}
+
+// Lidas uma vez por processo: a configuração do serviço não muda enquanto ele roda, e reler custaria 2 git por git.
+let configsFixasDoServicoLidas: Promise<string[]> | undefined;
+const configsFixasDoServico = (): Promise<string[]> => (configsFixasDoServicoLidas ??= lerConfigsFixasDoServico());
+
+/**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
  * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
  * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
-  const r = await executar("git", ["-C", dir, ...args], {
+  const r = await executar("git", [...(await configsFixasDoServico()), "-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
     limiteMs,
   });

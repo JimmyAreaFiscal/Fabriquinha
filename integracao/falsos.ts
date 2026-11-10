@@ -87,8 +87,9 @@ class GeradorQueLembraOsContainers extends GeradorDeAmbientes {
 /**
  * Liga o Ambiente `container` do serviço: o conjunto de containers do cenário, o `auth.json` do pi que o container
  * recebe e o pi falso na imagem, que devolve. Ao fim do teste, elimina os containers que o cenário criou.
+ * `portaDaApi` é a única porta do host que o container alcança; só o teste da rede põe um servidor nela.
  */
-export function ligarContainerAoCenario(t: TestContext, c: Cenario) {
+export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
   salvarConfiguracaoDoAmbiente(c.banco, {
     tipo: "container",
     memoria_maxima_mb: 1024,
@@ -100,7 +101,7 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario) {
   const gerador = new GeradorQueLembraOsContainers();
   const conjunto = new ConjuntoDeAmbientes(c.banco, gerador, relogioDoSistema, {
     raiz: c.raiz,
-    porta_da_api: 1,
+    porta_da_api: portaDaApi,
   });
   montarConjuntoDoServico(() => conjunto);
   const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git"));

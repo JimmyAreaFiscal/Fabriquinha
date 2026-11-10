@@ -2,12 +2,21 @@
 // que servem de Ambiente. Todo container nasce com o rótulo `fabriquinha.ambiente` e com limite de memória e de CPU, e
 // só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente.ts";
 import { executar } from "../../processo.ts";
-import { pastasDoProcesso } from "../../registro.ts";
 import { dirDoPiDoAmbiente } from "./ambiente_container.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
@@ -15,6 +24,9 @@ const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
 const PASTA_DE_TRABALHO = "/trabalho";
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
+
+/** A imagem só com o `iptables`, que o container da rede usa para travar a saída do Ambiente para o host. */
+const IMAGEM_DAS_REGRAS_DE_REDE = "fabriquinha/regras-de-rede:1";
 
 /** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile>` ou o nome da imagem do projeto. */
 type ImagemDoAmbiente = string;
@@ -30,17 +42,16 @@ interface Limites {
  */
 export interface Montagens {
   /**
-   * A pasta das worktrees da demanda do Espaço (`R/worktrees/<projeto>/<demanda>`), em leitura e escrita. A worktree do
-   * Espaço não é montada sozinha: o git do container a cria, e uma pasta que já existe o core entende como worktree
-   * pronta; montada, a pasta existiria desde a criação do container e não se removeria com a worktree.
+   * A pasta das worktrees do projeto (`R/worktrees/<projeto>`), em leitura e escrita. O container volta ao conjunto e
+   * serve a outra demanda do projeto, então a pasta de uma demanda só não basta. A worktree do Espaço não é montada
+   * sozinha: o git do container a cria, e uma pasta que já existe o core entende como worktree pronta; montada, a
+   * pasta existiria desde a criação do container e não se removeria com a worktree.
    */
-  pastaDaDemanda: string;
+  pastaDasWorktreesDoProjeto: string;
   /** O clone do usuário: só o `.git` entra (objetos e `worktrees/<n>`), em leitura e escrita. */
   raiz_git: string;
-  /** A raiz da Fabriquinha (R): entram `sessoes` e `execucoes/E-<execucao>`, em leitura e escrita. */
+  /** A raiz da Fabriquinha (R): entram `sessoes` e `execucoes`, em leitura e escrita. O container nasce antes dos processos que o usam, então entram as pastas de todos (`E-<id>`). */
   raiz: string;
-  /** O container nasce antes do processo: sem `execucao`, a pasta do processo não entra. */
-  execucao?: string | number;
   /** O `pacote-pi`, só em leitura. */
   pacote: string;
   /** O `auth.json` do pi no host: o container recebe uma cópia dele, num `PI_CODING_AGENT_DIR` próprio. */
@@ -72,25 +83,38 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
 
 /** Cria no host o que o container monta e devolve os `-v`; a cópia do `auth.json` não leva mais nada do `~/.pi/agent`. */
 function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
-  const { pastaDaDemanda, raiz_git, raiz, execucao, pacote, auth_json } = montagens;
+  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote, auth_json } = montagens;
   if (!existsSync(auth_json))
     throw new ErroDeRegra(`não existe o ${auth_json}`, "entre no pi (login) antes de usar um Ambiente em container");
   const dirDoPi = dirDoPiDoAmbiente(raiz, idDoAmbiente);
   const dirDasSessoes = join(raiz, "sessoes");
-  const dirDaExecucao = execucao === undefined ? undefined : pastasDoProcesso(raiz, execucao).dir;
-  for (const dir of [pastaDaDemanda, dirDoPi, dirDasSessoes, dirDaExecucao])
-    if (dir) mkdirSync(dir, { recursive: true });
+  const dirDasExecucoes = join(raiz, "execucoes");
+  for (const dir of [pastaDasWorktreesDoProjeto, dirDoPi, dirDasSessoes, dirDasExecucoes])
+    mkdirSync(dir, { recursive: true });
   copyFileSync(auth_json, join(dirDoPi, "auth.json"));
   chmodSync(join(dirDoPi, "auth.json"), 0o600);
   const montagensComModo: [string, "rw" | "ro"][] = [
-    [pastaDaDemanda, "rw"],
+    [pastaDasWorktreesDoProjeto, "rw"],
     [join(raiz_git, ".git"), "rw"],
     [dirDasSessoes, "rw"],
-    ...(dirDaExecucao ? [[dirDaExecucao, "rw"] as [string, "rw"]] : []),
+    [dirDasExecucoes, "rw"],
     [pacote, "ro"],
     [dirDoPi, "rw"],
   ];
   return montagensComModo.flatMap(([caminho, modo]) => ["-v", `${caminho}:${caminho}:${modo}`]);
+}
+
+/** Constrói a imagem das regras de rede, se ela ainda não está na máquina. */
+async function garantirImagemDasRegrasDeRede(limiteMs: number): Promise<void> {
+  const { codigo } = await executar("docker", ["image", "inspect", IMAGEM_DAS_REGRAS_DE_REDE], { limiteMs });
+  if (codigo === 0) return;
+  const contexto = mkdtempSync(join(tmpdir(), "fabriquinha-regras-de-rede-"));
+  try {
+    writeFileSync(join(contexto, "Dockerfile"), "FROM alpine\nRUN apk add --no-cache iptables\n");
+    await rodarDocker(["build", "-t", IMAGEM_DAS_REGRAS_DE_REDE, contexto], LIMITE_COMANDO_MS);
+  } finally {
+    rmSync(contexto, { recursive: true, force: true });
+  }
 }
 
 export class GeradorDeAmbientes {
@@ -118,11 +142,15 @@ export class GeradorDeAmbientes {
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o
   // `kill -9 -1` da `limpar` derruba o `tail` e o tini sai junto. Trocar por um PID 1 que colha, se os zumbis pesarem.
   /**
-   * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e para o host
-   * pelo `host-gateway` (a API do agente). Sem `montagens`, o container nasce sem pasta do host.
-   * shortcut: o `host-gateway` abre todas as portas do host; limitar à porta do serviço pede regra de firewall.
+   * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
+   * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host.
    */
-  async criar(imagem: ImagemDoAmbiente, limites: Limites, montagens?: Montagens): Promise<ContainerCriado> {
+  async criar(
+    imagem: ImagemDoAmbiente,
+    limites: Limites,
+    portaDaApi: number,
+    montagens?: Montagens,
+  ): Promise<ContainerCriado> {
     const id = randomUUID();
     const containerId = await rodarDocker(
       [
@@ -146,7 +174,51 @@ export class GeradorDeAmbientes {
       ],
       this.#limiteDoComandoMs,
     );
+    try {
+      await this.#restringirSaidaParaOHost(id, containerId, portaDaApi);
+    } catch (erro) {
+      await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
+      throw erro;
+    }
     return { id, container_id: containerId };
+  }
+
+  /**
+   * Põe no namespace de rede do container as regras que deixam passar para o host só a porta da API. O `iptables` roda
+   * num container à parte (`--net container:`), porque o do Ambiente não tem `NET_ADMIN`: o agente não as desfaz.
+   * shortcut: só o IP do `host-gateway` é travado, não os outros IPs do host (a LAN, por exemplo); travar esses pede
+   * regra no firewall do host.
+   */
+  async #restringirSaidaParaOHost(id: string, containerId: string, portaDaApi: number): Promise<void> {
+    const hosts = await rodarDocker(["exec", containerId, "cat", "/etc/hosts"], this.#limiteDoComandoMs);
+    const ipDoHost = /^(\d+\.\d+\.\d+\.\d+)\s+host\.docker\.internal\b/m.exec(hosts)?.[1];
+    if (!ipDoHost)
+      throw new ErroDeRegra(
+        "o container não conhece o host.docker.internal",
+        "confira a versão do Docker (host-gateway)",
+      );
+    await garantirImagemDasRegrasDeRede(this.#limiteDoComandoMs);
+    await rodarDocker(
+      [
+        "run",
+        "--rm",
+        "--label",
+        `${ROTULO_DO_AMBIENTE}=${id}-regras-de-rede`,
+        "--memory",
+        "64m",
+        "--cpus",
+        "0.5",
+        "--net",
+        `container:${containerId}`,
+        "--cap-add",
+        "NET_ADMIN",
+        IMAGEM_DAS_REGRAS_DE_REDE,
+        "sh",
+        "-c",
+        `iptables -A OUTPUT -d ${ipDoHost} -p tcp --dport ${String(portaDaApi)} -j ACCEPT && iptables -A OUTPUT -d ${ipDoHost} -j REJECT`,
+      ],
+      LIMITE_COMANDO_MS,
+    );
   }
 
   /** Mata todos os processos do container (menos o primeiro, que o mantém vivo) e esvazia `/tmp` e a pasta de trabalho. */

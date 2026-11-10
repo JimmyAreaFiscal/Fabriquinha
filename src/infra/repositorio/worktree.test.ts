@@ -117,6 +117,29 @@ test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
   );
 });
 
+test("git do core não executa hook nem comando de execução que o repositório (escrito pelo container) define", async () => {
+  const c = cenario();
+  const marca = join(c.raiz, "executou");
+  const gravaMarca = `#!/bin/sh\necho $0 >> ${marca}\n`;
+  mkdirSync(join(c.repo, ".git", "hooks"), { recursive: true });
+  const prePush = join(c.repo, ".git", "hooks", "pre-push");
+  writeFileSync(prePush, gravaMarca);
+  chmodSync(prePush, 0o755);
+  const comando = join(c.raiz, "comando.sh");
+  writeFileSync(comando, gravaMarca);
+  chmodSync(comando, 0o755);
+  git(c.repo, "config", "core.fsmonitor", comando);
+  git(c.repo, "config", "core.sshCommand", comando);
+  git(c.repo, "remote", "add", "remoto-ssh", "ssh://exemplo.invalido/repo.git");
+
+  await exigirGit(c.repo, "push", "origin", "main");
+  await exigirGit(c.repo, "fetch", "origin");
+  await exigirGit(c.repo, "status");
+  await assert.rejects(exigirGit(c.repo, "ls-remote", "remoto-ssh"), ErroDeRegra);
+
+  assert.equal(existsSync(marca), false);
+});
+
 test("descarte: reset --hard + clean -fd mantém ignorados, remove o novo e anota no log o que removeu", async () => {
   const c = cenario();
   const caminho = c.worktree;

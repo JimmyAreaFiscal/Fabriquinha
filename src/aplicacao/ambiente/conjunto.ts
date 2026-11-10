@@ -2,7 +2,7 @@
 // Trabalho (exclusivo enquanto roda), limpa e devolve ao conjunto quando o Espaço acaba e elimina os que ficam ociosos.
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que mexe nos containers.
 import type { DatabaseSync } from "node:sqlite";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, pastaDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
@@ -99,13 +99,17 @@ export class ConjuntoDeAmbientes {
     const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
     if (livreReaproveitado) return comoAmbienteContainer(livreReaproveitado, servico);
     const montagens = {
-      pastaDaDemanda: pastaDaDemanda(servico.raiz, projeto.nome, espaco.dono.demanda_id),
+      // O container volta ao conjunto e serve a outra demanda do projeto: monta a pasta do projeto, não a de uma demanda.
+      pastaDasWorktreesDoProjeto: dirname(pastaDaDemanda(servico.raiz, projeto.nome, espaco.dono.demanda_id)),
       raiz_git: projeto.raiz_git,
       raiz: servico.raiz,
       pacote: PACOTE,
       auth_json: join(dirDoPiDoAuditor(), "auth.json"),
     };
-    return comoAmbienteContainer(await this.#criarAlocado(imagem, alocadoPara, montagens), servico);
+    return comoAmbienteContainer(
+      await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens),
+      servico,
+    );
   }
 
   /** Limpa o container do Espaço e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
@@ -178,8 +182,13 @@ export class ConjuntoDeAmbientes {
     );
   }
 
-  async #criarAlocado(imagem: string, alocadoPara: string, montagens: Montagens): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), montagens);
+  async #criarAlocado(
+    imagem: string,
+    alocadoPara: string,
+    portaDaApi: number,
+    montagens: Montagens,
+  ): Promise<AmbienteGravado> {
+    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), portaDaApi, montagens);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,
