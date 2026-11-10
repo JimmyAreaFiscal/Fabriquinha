@@ -18,7 +18,8 @@ import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_dema
 import { sessaoDeCadaTicketDaDemanda, ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
-import { type PendenciaDoInicio, pendenciasDasDemandas } from "./inicio.ts";
+import { pendenciasDasDemandas } from "../../../aplicacao/consultas/pendencias.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 
 /** Uma linha da página do projeto: a demanda, as rodadas com o PR e os tickets com o modelo efetivo e a sessão. */
 export interface DemandaDoProjeto {
@@ -49,7 +50,7 @@ export interface DemandaDoProjeto {
     modelo?: string;
     sessao?: string;
     /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
-    piAtivo?: true;
+    pi_ativo?: true;
   }[];
 }
 
@@ -145,7 +146,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
         ...(t.titulo !== undefined && { titulo: t.titulo }),
         ...(modelo && { modelo: `${modelo.provedor} / ${modelo.nome}` }),
         ...(sessao !== undefined && { sessao }),
-        ...(comPiAtivo.has(ticketRef) && { piAtivo: true as const }),
+        ...(comPiAtivo.has(ticketRef) && { pi_ativo: true as const }),
       };
     }),
   };

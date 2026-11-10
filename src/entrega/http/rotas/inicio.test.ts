@@ -10,7 +10,9 @@ import type { SessaoDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { configuracao } from "../../../armazenamento/servico.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { type DadosDoInicio, inicio, trabalhoVivoDaSessao } from "./inicio.ts";
+import { trabalhoVivoDaSessao } from "../../../aplicacao/consultas/pendencias.ts";
+import { RecusasDoDespacho } from "../../contrato/despacho.ts";
+import { type DadosDoInicio, inicio } from "./inicio.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -383,9 +385,9 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
       ["implementar", "I-309", undefined, undefined, undefined, 0, []],
     ],
   );
-  // Só o ticket com o pi no ar (execução aberta e grupo gravado) marca `piAtivo`.
+  // Só o ticket com o pi no ar (execução aberta e grupo gravado) marca `pi_ativo`.
   assert.deepEqual(
-    dados.board.filter((c) => c.ticket?.piAtivo).map((c) => c.ticket?.ref),
+    dados.board.filter((c) => c.ticket?.pi_ativo).map((c) => c.ticket?.ref),
     ["I-303.T5"],
   );
   assert.deepEqual(dados.board[0], {
@@ -415,9 +417,9 @@ test("GET /api/inicio responde com o mês corrente de todos os projetos", async 
 test("GET /api/despacho devolve as recusas do último ciclo, com os endereços em texto", async () => {
   const banco = cenario();
   const { pedir } = await servir(banco);
-  assert.deepEqual((await pedir("/api/despacho")).json(), { recusas: [] });
+  assert.deepEqual(RecusasDoDespacho.parse((await pedir("/api/despacho")).json()), { recusas: [] });
   await Promise.all(cicloDoDespacho(banco, configuracao(banco)));
-  const { recusas } = (await pedir("/api/despacho")).json<{ recusas: { item: string; motivo: unknown }[] }>();
+  const { recusas } = RecusasDoDespacho.parse((await pedir("/api/despacho")).json());
   assert.deepEqual(
     recusas.find((r) => r.item === "I-303.T4"),
     { item: "I-303.T4", motivo: { tipo: "ocupado", por: "I-303.T5" } },

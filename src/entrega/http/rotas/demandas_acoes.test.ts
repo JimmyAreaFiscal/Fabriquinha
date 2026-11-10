@@ -18,6 +18,7 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../infra/
 import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
+import { TicketReaberto } from "../../contrato/demanda.ts";
 import { AmbienteHostLocal } from "../../../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -497,7 +498,7 @@ test("CA-28: reabrir o ticket falho grava a instrução e o ticket volta a abert
   assert.equal(r.status, 200);
   const t = ag().tickets[0];
   assert.deepEqual([t?.estado, t?.instrucao], ["aberto", "trate a lista vazia"]);
-  assert.equal(r.json<{ ticket: { instrucao: string } }>().ticket.instrucao, "trate a lista vazia");
+  assert.equal(TicketReaberto.parse(r.json()).ticket.instrucao, "trate a lista vazia");
 });
 
 test("CA-29: reabrir sem instrução pede a instrução e o ticket continua falho", async () => {

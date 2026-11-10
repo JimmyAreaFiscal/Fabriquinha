@@ -17,3 +17,6 @@ export const inicioDoMes = (ano: number, mes: number): Instante => new Date(ano,
 /** O `instante` recuado em `ms` milissegundos. */
 export const instanteAntes = (instante: Instante, ms: number): Instante =>
   new Date(Date.parse(instante) - ms).toISOString();
+
+/** O `instante` como `Date`, para a conta que ainda pede um. */
+export const dataDoInstante = (instante: Instante): Date => new Date(instante);

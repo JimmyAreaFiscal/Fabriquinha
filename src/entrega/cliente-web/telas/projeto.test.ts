@@ -336,7 +336,7 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
       bloqueadaPor: ["I-5", "I-6"],
       tickets: [
         ticket("I-7.T1", "entender_e_desenhar", "concluido"),
-        ticket("I-7.T2", "planejar", "em_execucao", { piAtivo: true }),
+        ticket("I-7.T2", "planejar", "em_execucao", { pi_ativo: true }),
       ],
     }),
   ]);

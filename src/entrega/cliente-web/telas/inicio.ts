@@ -2,17 +2,11 @@
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
 import type { NomeGate } from "../../../nucleo/agregado_demanda.ts";
-import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
-import type { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type {
-  CartaoDoBoard,
-  ColunaDoBoard,
-  DadosDoInicio,
-  PendenciaDoInicio,
-  SessaoRodando,
-} from "../../http/rotas/inicio.ts";
+import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
+import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../contrato/despacho.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
@@ -40,24 +34,6 @@ export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string
 
 /** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
 export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
-
-/** O JSON de uma resposta do servidor: os Endereços saem pelo texto público (`I-1.T2`). */
-type EmJson<T> = T extends Endereco
-  ? string
-  : T extends readonly (infer Item)[]
-    ? EmJson<Item>[]
-    : T extends object
-      ? { [Chave in keyof T]: EmJson<T[Chave]> }
-      : T;
-
-/** O `MotivoDeRecusa` como `GET /api/despacho` e `POST .../executar` o devolvem. */
-export type MotivoDeRecusaEmJson = EmJson<MotivoDeRecusa>;
-
-/** Um item parado do último ciclo do Despacho, como `GET /api/despacho` o devolve. */
-export interface RecusaDoDespacho {
-  item: string;
-  motivo: MotivoDeRecusaEmJson;
-}
 
 const ROTULO_DO_GATE: Record<NomeGate, string> = {
   gate_demanda: "aprovação da demanda",
@@ -184,7 +160,7 @@ function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): str
   return `<a class="${classes}" href="${caminhoDaDemanda(c.demanda)}">
     <div class="cartao-topo"><span class="id">${escapar(c.ref)}</span><span class="tag">${escapar(c.projeto)}</span></div>
     <div class="cartao-titulo">${comEnderecosInteiros(c.titulo)}</div>
-    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}${mais}</div>` : ""}
+    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${nomeDoEstadoDoTicket(t.estado, t.pi_ativo)}${mais}</div>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
 }

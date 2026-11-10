@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
-import type { CartaoDoBoard, DadosDoInicio, PendenciaDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
-import { inicio, type MotivoDeRecusaEmJson, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
+import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
+import type { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
+import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
 
 const agora = new Date("2026-10-28T12:00:00.000Z");
 const mes = {
@@ -246,7 +248,7 @@ test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de
       rodando: [sessao()],
       board: [
         cartao({
-          ticket: { ref: "I-206.T3", etapa: "implementar", estado: "em_execucao", modo: "autonomo", piAtivo: true },
+          ticket: { ref: "I-206.T3", etapa: "implementar", estado: "em_execucao", modo: "autonomo", pi_ativo: true },
           outros: 1,
         }),
         cartao({ coluna: "gate_pr", ref: "I-206.R1" }),
