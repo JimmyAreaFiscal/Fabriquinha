@@ -888,7 +888,14 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
 test("I-287: o pi recebe o token do processo e a URL da API; o token vale até o fim e nunca vai a log, prompt, evidência ou saída", async () => {
   const { c, banco, piFalso, sessoes } = await cenario();
   condutor.urlDaApi = "http://127.0.0.1:9";
-  piFalso.roteirizar([{ ...PASSO_PI, shell: "printenv > ambiente-do-pi.txt", termina: "nunca" }]);
+  // Escrita atômica: o laço abaixo só vê o arquivo já completo, nunca o vazio que o `>` cria antes do printenv.
+  piFalso.roteirizar([
+    {
+      ...PASSO_PI,
+      shell: "printenv > ambiente-do-pi.tmp && mv ambiente-do-pi.tmp ambiente-do-pi.txt",
+      termina: "nunca",
+    },
+  ]);
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.05 });
   const arquivoDoAmbiente = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2", "ambiente-do-pi.txt");
   while (!existsSync(arquivoDoAmbiente)) await dormir(20);

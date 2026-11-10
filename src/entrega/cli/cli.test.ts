@@ -206,8 +206,8 @@ test("abrir lê web.url e abre o navegador; sem o arquivo, diz que o serviço n�
   const url = "http://127.0.0.1:8123/entrar?token=abc";
   writeFileSync(join(raiz, "web.url"), `${url}\n`);
   assert.deepEqual(json(await cli(env, ["abrir"])), { url });
-  while (!existsSync(aberto)) await dormir(10);
-  await dormir(10);
+  // O `>` cria o arquivo vazio antes do printf: espera o conteúdo, que o printf escreve de uma vez.
+  while (!existsSync(aberto) || readFileSync(aberto, "utf8") === "") await dormir(10);
   assert.equal(readFileSync(aberto, "utf8"), url);
 
   falha(
