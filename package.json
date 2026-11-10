@@ -30,7 +30,7 @@
     "typescript-eslint": "^8.71.1"
   },
   "scripts": {
-    "empacotar-cli-agente": "esbuild src/entrega/cli-agente/principal.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"#!/usr/bin/env node\" --outfile=pacote-pi/bin/fabriquinha --log-level=warning && chmod +x pacote-pi/bin/fabriquinha",
+    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/infra/agente/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
     "types": "tsc",
     "lint": "eslint --max-warnings=0 .",
     "format:check": "prettier --check .",
