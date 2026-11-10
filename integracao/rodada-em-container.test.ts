@@ -444,6 +444,7 @@ test(
   COM_DOCKER,
   async (t) => {
     const { c } = cenarioEmContainer(t);
+    writeFileSync(join(c.repo, ".env"), "VARIAVEL_DO_ENV_DO_PROJETO=valor-do-projeto\n");
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
     const doHost = {
@@ -487,21 +488,28 @@ test(
       [],
     );
     assert.notEqual(variaveis.HOME, process.env.HOME);
+    assert.equal(variaveis.VARIAVEL_DO_ENV_DO_PROJETO, "valor-do-projeto");
     assert.doesNotMatch(saida, /segredo-/);
-    // Fora as da imagem e as do docker, só entram as da Fabriquinha e as chaves de provedor do LLM.
+    // Fora as da imagem e as do docker, só entram as da Fabriquinha, as chaves de provedor do LLM e as do .env do projeto.
     const doDocker = ["HOSTNAME", "HOME", "PWD", "PATH"];
     const permitidas = [
       ...nomesDoEnvDaImagem(ambiente.container_id),
       ...doDocker,
       "FABRIQUINHA_API",
       "PI_CODING_AGENT_DIR",
+      "VARIAVEL_DO_ENV_DO_PROJETO",
       ...Object.keys(daFabriquinha),
     ];
     assert.deepEqual(
       nomes.filter((nome) => !permitidas.includes(nome)),
       [],
     );
-    for (const nome of ["FABRIQUINHA_API", "PI_CODING_AGENT_DIR", ...Object.keys(daFabriquinha)])
+    for (const nome of [
+      "FABRIQUINHA_API",
+      "PI_CODING_AGENT_DIR",
+      "VARIAVEL_DO_ENV_DO_PROJETO",
+      ...Object.keys(daFabriquinha),
+    ])
       assert.ok(nomes.includes(nome), `o env do container tem ${nome}`);
     assert.ok(variaveis.PATH?.startsWith(`${join(PACOTE, "bin")}:`), "pacote-pi/bin vem à frente no PATH");
   },

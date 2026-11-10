@@ -3,9 +3,10 @@
 // hospedagem ou do SonarQube: o container não as tem, e o git que precisa delas fica no core.
 import { spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { parseEnv } from "node:util";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { executar } from "../../processo.ts";
 import { abrigarNoAmbiente } from "./pastas_do_ambiente.ts";
@@ -76,6 +77,20 @@ export class AmbienteContainer implements Ambiente {
     this.#binDoPacote = bin_do_pacote;
     this.#raiz = raiz;
     this.#urlDaApi = url_da_api;
+  }
+
+  /** Onde o `.env` do projeto do Espaço fica para os `docker exec`; fora das pastas que o container monta. */
+  get #arquivoDoEnvDoProjeto(): string {
+    return join(this.#raiz, "ambientes", this.id, "env-do-projeto");
+  }
+
+  /** Guarda o `.env` do clone `raizGit` para os próximos comandos; o container serve a outro projeto depois, então sem `.env` limpa o anterior. */
+  levarEnvDoProjeto(raizGit: string): void {
+    const origem = join(raizGit, ".env");
+    if (existsSync(origem)) {
+      mkdirSync(dirname(this.#arquivoDoEnvDoProjeto), { recursive: true });
+      copyFileSync(origem, this.#arquivoDoEnvDoProjeto);
+    } else rmSync(this.#arquivoDoEnvDoProjeto, { force: true });
   }
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
@@ -161,6 +176,14 @@ export class AmbienteContainer implements Ambiente {
     abrigarNoAmbiente(this.#raiz, this.id, "sessoes", sessao);
   }
 
+  #variaveisDoEnvDoProjeto(): Record<string, string> {
+    if (!existsSync(this.#arquivoDoEnvDoProjeto)) return {};
+    const variaveis = parseEnv(readFileSync(this.#arquivoDoEnvDoProjeto, "utf8"));
+    return Object.fromEntries(
+      Object.entries(variaveis).filter((entrada): entrada is [string, string] => entrada[1] !== undefined),
+    );
+  }
+
   // shortcut: sem `setsid`, porque o `docker exec` já faz do comando líder do próprio grupo, e o `setsid` faria um fork
   // que perde o código de saída; o arquivo de pid de cada comando fica em PASTA_DOS_PIDS até o container ser eliminado.
   /**
@@ -175,6 +198,7 @@ export class AmbienteContainer implements Ambiente {
     const identificador = { ambiente_id: this.id, grupo_processo: randomInt(1, 2 ** 31) };
     const programaEArgumentos = noShell ? ["sh", "-c", `exec 2>&1; ${programa}`] : [programa, ...argumentos];
     const variaveis = Object.entries({
+      ...this.#variaveisDoEnvDoProjeto(),
       ...variaveisPermitidas(env),
       FABRIQUINHA_API: this.#urlDaApi,
     });

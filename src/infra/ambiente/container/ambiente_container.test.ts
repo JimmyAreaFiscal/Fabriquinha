@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -119,6 +128,28 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
     "ssh-do-host",
   ])
     assert.ok(!saida.saida.includes(segredo), segredo);
+});
+
+test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as da Fabriquinha, e o resto do host continua fora", async () => {
+  const raizGit = join(base, "clone");
+  mkdirSync(raizGit, { recursive: true });
+  writeFileSync(
+    join(raizGit, ".env"),
+    'DATABASE_URL=postgres://localhost/loja\n# comentário\nCOM_ASPAS="a b"\nFABRIQUINHA_TOKEN=do-env\n',
+  );
+  ambiente.levarEnvDoProjeto(raizGit);
+  const saida = await ambiente.executar(comando("env", []));
+  assert.match(saida.saida, /^DATABASE_URL=postgres:\/\/localhost\/loja$/m);
+  assert.match(saida.saida, /^COM_ASPAS=a b$/m);
+  assert.match(saida.saida, /^FABRIQUINHA_TOKEN=token-do-ticket$/m);
+  assert.ok(!saida.saida.includes("sonar-segredo"));
+  assert.ok(!saida.saida.includes("ssh-do-host"));
+  writeFileSync(join(raizGit, ".env"), 'COM_QUEBRA="a\nSONAR_TOKEN=x"\n');
+  ambiente.levarEnvDoProjeto(raizGit);
+  await assert.rejects(ambiente.executar(comando("true", [])), /quebra de linha/);
+  rmSync(join(raizGit, ".env"));
+  ambiente.levarEnvDoProjeto(raizGit); // sem .env, as variáveis do projeto anterior somem
+  assert.doesNotMatch((await ambiente.executar(comando("env", []))).saida, /DATABASE_URL|COM_ASPAS/);
 });
 
 test("executar: o docker exec leva -w, --env-file e o container, e o env-file some depois", async () => {
