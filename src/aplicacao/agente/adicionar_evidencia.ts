@@ -13,7 +13,7 @@ import { projetoExistente } from "../../armazenamento/projetos.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
 import { gerarAula, type Trecho } from "../evidencias/aula.ts";
-import type { Origens } from "../evidencias/submissao.ts";
+import type { AnexoEnviado, Origens } from "../evidencias/submissao.ts";
 import {
   enderecoDoTicketDoAgente,
   type EscopoDoAgente,
@@ -63,16 +63,45 @@ function origensDosAnexos(
   };
 }
 
+/** Como `PedidoDeEvidencia`, mas os anexos chegam com os bytes e o SHA-256, e o caminho vale no Ambiente do agente. */
+interface PedidoDeEvidenciaComAnexosEnviados extends Omit<PedidoDeEvidencia, "anexos"> {
+  readonly anexos: readonly AnexoEnviado[];
+}
+
 /**
  * Submete a evidência do próprio ticket do agente (sobre `submeterEvidencia`). Valida o ticket, o tipo, o schema e os
  * anexos antes de gravar, e reconfere a execução dentro da transação. A recusa é erro síncrono ao agente, sem Tentativa
  * nem Reprovação (D10-1).
  */
-export async function adicionarEvidencia(
+export function adicionarEvidencia(
   banco: DatabaseSync,
   processo: ProcessoDoAgente,
   pedido: PedidoDeEvidencia,
   lerJson: LeitorDeJson,
+) {
+  return submeterDoAgente(banco, processo, pedido, lerJson);
+}
+
+/**
+ * O mesmo que `adicionarEvidencia`, para o agente que roda em outro Ambiente: o core inverte o caminho declarado de
+ * cada anexo para o host e confere que o arquivo ali tem o SHA-256 enviado.
+ */
+export function adicionarEvidenciaComAnexosEnviados(
+  banco: DatabaseSync,
+  processo: ProcessoDoAgente,
+  pedido: PedidoDeEvidenciaComAnexosEnviados,
+  lerJson: LeitorDeJson,
+) {
+  const caminhos = pedido.anexos.map((anexo) => anexo.caminho);
+  return submeterDoAgente(banco, processo, { ...pedido, anexos: caminhos }, lerJson, pedido.anexos);
+}
+
+async function submeterDoAgente(
+  banco: DatabaseSync,
+  processo: ProcessoDoAgente,
+  pedido: PedidoDeEvidencia,
+  lerJson: LeitorDeJson,
+  anexosEnviados?: readonly AnexoEnviado[],
 ) {
   const agente = escopoDoProcessoAberto(banco, processo);
   exigirTicketProprio(agente, pedido.ticket, true);
@@ -100,12 +129,15 @@ export async function adicionarEvidencia(
     const aula = join(origens.saida, "aula.html");
     writeFileSync(aula, html);
     anexos = [aula];
+    // O HTML da aula está no host: não passa pela inversão de caminho dos anexos enviados.
+    anexosEnviados = undefined;
   }
   const avaliacao = submeterEvidencia(
     banco,
     { tipo, dono: Endereco.doTicket(demanda_id, ticket_id), produtor: agente.ator, dados, anexos },
     {
       origens,
+      enviados: anexosEnviados && { anexos: anexosEnviados, ambiente: ambienteDoServico() },
       conferirAntesDeGravar(agregado) {
         reconferirExecucao(banco, agente);
         exigirTicketAberto(agregado, agente);

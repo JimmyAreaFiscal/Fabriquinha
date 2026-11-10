@@ -45,7 +45,7 @@ const MATRIZ: Record<string, RegraDoModulo> = {
     modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
     externoPermitido: QUALQUER_EXTERNO,
   },
-  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo", "entrega/contrato"], externoPermitido: QUALQUER_EXTERNO },
   // Roda no navegador: de valor, só o `entrega/compartilhado` (o `casar`); do contrato e do núcleo, só `import type`;
   // de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes, que a matriz não lê).
   [MODULO_CLIENTE_WEB]: {
@@ -241,6 +241,21 @@ test("a lista de exceções está vazia: entrega/http não importa armazenamento
   assert.deepEqual(EXCECOES, []);
   const daHttp = acharViolacoes(SRC, []).filter(({ arquivo }) => arquivo.startsWith("entrega/http/"));
   assert.deepEqual(daHttp.map(descrever), []);
+});
+
+// A matriz libera `aplicacao` inteira a entrega/http; a API do agente só alcança os casos de uso do agente.
+test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
+  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("entrega/http/agente/"));
+  assert.ok(daApiDoAgente.length > 0);
+  const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
+    const caminho = join(SRC, arquivo);
+    return ts
+      .preProcessFile(readFileSync(caminho, "utf8"), true, true)
+      .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
+      .filter((alvo) => alvo.startsWith("aplicacao/") && !alvo.startsWith("aplicacao/agente/"))
+      .map((alvo) => `${arquivo} importa ${alvo}`);
+  });
+  assert.deepEqual(deAplicacaoFora, []);
 });
 
 test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {

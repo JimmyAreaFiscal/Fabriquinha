@@ -20,7 +20,8 @@ import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporar
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
-import { guardarAnexos } from "./submissao.ts";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
+import { type AnexoEnviado, guardarAnexos, guardarAnexosEnviados } from "./submissao.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -328,5 +329,115 @@ test("prototipo precisa de pelo menos um vídeo ou print entre os anexos", async
     "protótipo precisa de pelo menos um vídeo ou print (anexe também um arquivo video ou imagem)",
   );
   assert.equal((await submeter(c, "prototipo", [pagina, c.arquivo(c.saida, "tela.png", PNG)])).length, 2);
+  c.banco.close();
+});
+
+/** Um Ambiente onde a raiz do host aparece como `/espaco`, como num container com a raiz montada. */
+const ambienteMontadoEmEspaco = (c: Cenario) =>
+  ({ caminhoNoAmbiente: (caminhoNoHost: string) => caminhoNoHost.replace(c.raiz, "/espaco") }) as unknown as Ambiente;
+
+/** O anexo que o cliente do agente enviaria para o arquivo do host `caminhoNoHost`, com o caminho no Ambiente. */
+const enviado = (
+  c: Cenario,
+  caminhoNoHost: string,
+  conteudo: string | Buffer,
+  sha256 = sha(conteudo),
+): AnexoEnviado => ({
+  caminho: caminhoNoHost.replace(c.raiz, "/espaco"),
+  conteudo: Buffer.from(conteudo),
+  sha256,
+});
+
+const submeterEnviados = (c: Cenario, anexos: AnexoEnviado[]) =>
+  Promise.resolve().then(() =>
+    guardarAnexosEnviados(
+      c.banco,
+      { anexos, ambiente: ambienteMontadoEmEspaco(c) },
+      "comportamento",
+      schemaDoTipo("comportamento").arquivos,
+      {
+        worktree: c.worktree,
+        saida: c.saida,
+        fora: "da worktree do ticket e do diretório de saída",
+        copie: `$FABRIQUINHA_SAIDA (${c.saida})`,
+      },
+    ),
+  );
+
+test("enviados: anexo da worktree e da saída, pelo caminho do Ambiente, são guardados pelo arquivo do host", async () => {
+  const c = cenario();
+  const daSaida = c.arquivo(c.saida, "estresse.log", "tudo certo\n");
+  const daWorktree = c.arquivo(c.worktree, "erro.log", "Error: timeout\n");
+  assert.deepEqual(
+    await submeterEnviados(c, [enviado(c, daSaida, "tudo certo\n"), enviado(c, daWorktree, "Error: timeout\n")]),
+    [
+      { nome: "estresse.log", mime: TEXTO, sha256: sha("tudo certo\n"), bytes: 11 },
+      { nome: "erro.log", mime: TEXTO, sha256: sha("Error: timeout\n"), bytes: 15 },
+    ],
+  );
+  assert.equal(readFileSync(caminhoArquivo(c.banco, sha("tudo certo\n")), "utf8"), "tudo certo\n");
+  c.banco.close();
+});
+
+test("enviados: fora da worktree e da saída, em caminho relativo ou com .., é recusado sem guardar", async () => {
+  const c = cenario();
+  const fora = c.arquivo(c.raiz, "segredo.txt", "senha");
+  const mensagemFora = (caminho: string) =>
+    `${caminho} está fora da worktree do ticket e do diretório de saída (copie-o para $FABRIQUINHA_SAIDA (${c.saida}))`;
+  for (const anexo of [enviado(c, fora, "senha"), { ...enviado(c, fora, "senha"), caminho: "/etc/passwd" }]) {
+    await recusa(c, () => submeterEnviados(c, [anexo]), ErroDeRegra, mensagemFora(anexo.caminho));
+  }
+  const subindo = { ...enviado(c, fora, "senha"), caminho: `${enviado(c, c.worktree, "").caminho}/../segredo.txt` };
+  await recusa(c, () => submeterEnviados(c, [subindo]), ErroDeRegra, mensagemFora(subindo.caminho));
+  await recusa(
+    c,
+    () => submeterEnviados(c, [{ ...enviado(c, fora, "senha"), caminho: "segredo.txt" }]),
+    ErroDeRegra,
+    "segredo.txt não é um caminho absoluto (informe o caminho completo do arquivo)",
+  );
+  c.banco.close();
+});
+
+test("enviados: link simbólico no último componente é recusado, aponte para fora ou para dentro", async () => {
+  const c = cenario();
+  const fora = c.arquivo(c.raiz, "segredo.txt", "senha");
+  symlinkSync(fora, join(c.worktree, "atalho.txt"));
+  const atalho = enviado(c, join(c.worktree, "atalho.txt"), "senha");
+  await recusa(
+    c,
+    () => submeterEnviados(c, [atalho]),
+    ErroDeRegra,
+    `${atalho.caminho} é um link simbólico (anexe o próprio arquivo, não um link para ele)`,
+  );
+  c.banco.close();
+});
+
+test("enviados: arquivo trocado entre a leitura e o envio, ou bytes que não batem com o SHA-256, são recusados sem guardar", async () => {
+  const c = cenario();
+  const caminho = c.arquivo(c.worktree, "x.txt", "lido\n");
+  const lido = enviado(c, caminho, "lido\n");
+  writeFileSync(caminho, "trocado\n");
+  await recusa(
+    c,
+    () => submeterEnviados(c, [lido]),
+    ErroDeRegra,
+    `${lido.caminho} não tem o SHA-256 enviado (o arquivo mudou depois de lido; envie-o de novo)`,
+  );
+  const adulterado = enviado(c, caminho, "trocado\n", sha("outro"));
+  await recusa(
+    c,
+    () => submeterEnviados(c, [adulterado]),
+    ErroDeRegra,
+    `os bytes enviados de ${adulterado.caminho} não têm o SHA-256 declarado (envie o arquivo de novo)`,
+  );
+  c.banco.close();
+});
+
+test("enviados: o SHA-256 do arquivo grande é conferido em blocos", async () => {
+  const c = cenario();
+  const grande = Buffer.alloc(MiB + 5, "a");
+  const caminho = c.arquivo(c.worktree, "grande.log", grande);
+  const [guardado] = await submeterEnviados(c, [enviado(c, caminho, grande)]);
+  assert.equal(guardado?.sha256, sha(grande));
   c.banco.close();
 });

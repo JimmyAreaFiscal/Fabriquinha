@@ -2,6 +2,7 @@
 // processo e protocolo nos modos autônomo e interativo, guarda os processos vivos com os diálogos de extensão pendentes
 // (F4 §5.4), repassa os eventos a quem assina a sessão, espera os condutores na parada do serviço e, na subida, mata
 // os grupos de processos que a instância anterior deixou.
+import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, type Ator } from "../../nucleo/ator.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
@@ -17,7 +18,7 @@ import {
 } from "../../nucleo/tentativa.ts";
 import { recolherGruposDasAvaliacoes } from "../../armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../armazenamento/simulacao.ts";
-import { processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
+import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
 import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/agente/harness_pi.ts";
 import type { EventoPi } from "../../infra/agente/pi.ts";
 import type { IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
@@ -156,6 +157,8 @@ export interface PedidoDeProcesso {
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /** Com o banco, o processo é de um ticket e recebe o token com que o agente fala com a API (`FABRIQUINHA_TOKEN`). */
+  banco?: DatabaseSync;
   log: string;
   prompt: string | undefined;
   limiteMin: number;
@@ -192,6 +195,23 @@ export class CondutorDeTrabalhos {
   private readonly sessoesEmCurso = new Set<string>();
   /** Desde o início do `parar`, o pi que sai é efeito da parada do serviço. */
   private parando = false;
+  /** O endereço da API do agente (`FABRIQUINHA_API`): o serviço o informa depois do listen e o retira ao parar. */
+  urlDaApi: string | undefined;
+
+  /**
+   * O ambiente do pi com o token novo do processo: só o hash vai ao banco, e o token vale até o `fim` do processo, que o
+   * invalida. Sem banco (consulta, simulação), o ambiente segue como veio.
+   */
+  private ambienteComToken(r: PedidoDeProcesso): NodeJS.ProcessEnv {
+    if (r.banco === undefined) return r.env;
+    const token = randomBytes(32).toString("hex");
+    gravarTokenDoProcesso(r.banco, String(r.execucao.id), token);
+    return {
+      ...r.env,
+      FABRIQUINHA_TOKEN: token,
+      ...(this.urlDaApi !== undefined && { FABRIQUINHA_API: this.urlDaApi }),
+    };
+  }
 
   private vivaDaSessao(sessao: string): Viva | undefined {
     return [...this.vivas.values()].find((v) => v.sessaoPi === sessao);
@@ -407,6 +427,7 @@ export class CondutorDeTrabalhos {
     return new Promise((resolve) => {
       const agoraEmMs = () => Date.parse(relogio.agora());
       const { id, sessaoPi } = r.execucao;
+      const env = this.ambienteComToken(r);
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
       const expiracoes = new Map<string, NodeJS.Timeout>();
@@ -598,7 +619,7 @@ export class CondutorDeTrabalhos {
       const pi = this.harness.lancar(
         ambienteDoServico(),
         r.args,
-        { cwd: r.cwd, env: r.env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
+        { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {
           // O `--mode json` não fala o protocolo RPC: o resultado do trabalho é o que ele grava em disco.
           if (r.terminaSozinho) return;

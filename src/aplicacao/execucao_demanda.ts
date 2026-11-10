@@ -139,14 +139,16 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
     const worktree = await worktreeDoEspacoDoTicket(c, log);
+    // O agente enxerga o Espaço pelo Ambiente: no host local os caminhos são os do host.
+    const caminhoNoAmbiente = (caminhoNoHost: string): string => ambienteDoServico().caminhoNoAmbiente(caminhoNoHost);
     const prompt =
       opcoes.mensagem ??
       montarPromptDemanda({
         ag: c.ag,
         ticket: c.ticket,
         projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
-        worktree,
-        saida: join(dir, "saida"),
+        worktree: caminhoNoAmbiente(worktree),
+        saida: caminhoNoAmbiente(join(dir, "saida")),
         retomada: opcoes.retomada,
         ...(c.ticket.etapa === "revisar_rodada" && {
           perguntasDasRevisoesAnteriores: perguntasDosTicketsReprovadosDaRodada(c),
@@ -154,7 +156,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         commitsDosTickets: commitsDosTickets(c), // só as revisões leem
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,
-          caminho: caminhoArquivo(c.banco, a.sha256),
+          caminho: caminhoNoAmbiente(caminhoArquivo(c.banco, a.sha256)),
         })),
       });
     writeFileSync(join(dir, "prompt.md"), prompt);
@@ -174,6 +176,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       args,
       cwd: worktree,
       env: new HarnessPi().ambiente(raiz, dir, execucao.id),
+      banco: c.banco,
       log,
       prompt,
       limiteMin: opcoes.limiteMin,

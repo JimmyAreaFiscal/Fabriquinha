@@ -1,5 +1,6 @@
 // Repositório dos trabalhos agênticos, seus processos e usos por modelo (comparacao-sdlc §7.3). As funções puras de nucleo/trabalho_agentico.ts
 // operam sobre o que foi lido; `comTrabalhosDoTicket` é a única forma de mutar e grava por upsert, nunca apaga.
+import { createHash } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
 import { formatarTicketRef, type TicketRef } from "../nucleo/demanda.ts";
@@ -167,6 +168,24 @@ export const ticketDoProcesso = (banco: DatabaseSync, execucao: string): z.infer
       "SELECT s.demanda_id, s.ticket_id FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.id = ?",
     )
     .get(execucao) as z.infer<typeof TicketRef> | undefined;
+
+const hashDoToken = (token: string): string => createHash("sha256").update(token).digest("hex");
+
+/** @testes o consumidor de produção (a API do agente) entra num ticket seguinte da I-287; grava só o hash do token do processo aberto; processo inexistente ou já encerrado não recebe token. */
+export function gravarTokenDoProcesso(banco: DatabaseSync, processoId: string, token: string): void {
+  const { changes } = banco
+    .prepare("UPDATE processo_do_trabalho SET hash_do_token = ? WHERE id = ? AND fim IS NULL")
+    .run(hashDoToken(token), processoId);
+  if (changes === 0) throw new ErroDeRegra(`processo ${processoId} não existe ou já terminou, e não recebe token`);
+}
+
+/** O id do processo dono do token, ou `undefined` se o token é desconhecido ou o processo já terminou (`fim` preenchido). */
+export const processoVivoDoToken = (banco: DatabaseSync, token: string): string | undefined =>
+  (
+    banco
+      .prepare("SELECT id FROM processo_do_trabalho WHERE hash_do_token = ? AND fim IS NULL")
+      .get(hashDoToken(token)) as { id: string } | undefined
+  )?.id;
 
 /** O ticket dono do trabalho; `undefined` se o id não é de um trabalho agêntico. */
 export const ticketDoTrabalho = (banco: DatabaseSync, trabalhoId: string): z.infer<typeof TicketRef> | undefined =>

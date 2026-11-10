@@ -20,6 +20,7 @@ import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { Configuracao, salvarConfiguracao } from "../armazenamento/servico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../aplicacao/configuracao/configuracao_do_ambiente.ts";
 import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
+import { condutor } from "../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -93,7 +94,9 @@ test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida"
   const link = new URL(readFileSync(join(raiz, "web.url"), "utf8"));
   assert.notEqual(link.port, "0");
   assert.equal((await fetch(link, { redirect: "manual" })).status, 303, "o link de entrada responde nela");
+  assert.equal(condutor.urlDaApi, `http://127.0.0.1:${link.port}`, "o condutor leva a URL da API ao pi");
   await s.parar();
+  assert.equal(condutor.urlDaApi, undefined);
 });
 
 test("instância única: a porta é a trava, e a segunda instância sai com erro antes de abrir o banco", async () => {

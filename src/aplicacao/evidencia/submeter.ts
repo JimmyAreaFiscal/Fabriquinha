@@ -15,13 +15,15 @@ import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import { validarPlano } from "../../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
-import { guardarAnexos, type Origens } from "../evidencias/submissao.ts";
+import { type AnexosEnviados, guardarAnexos, guardarAnexosEnviados, type Origens } from "../evidencias/submissao.ts";
 
 const AVALIADOR = new AvaliadorDeEvidencia(CATALOGO_ETAPAS, validarPlano);
 
 interface ContextoDaSubmissao {
   /** De onde os anexos podem vir. */
   origens: Origens;
+  /** Os anexos que o agente enviou de dentro do Ambiente; sem eles, `anexos` são caminhos que o host abre. */
+  enviados?: AnexosEnviados;
   /** Dentro da transação, antes de gravar: o que só quem submete sabe conferir, como a execução ainda estar aberta. */
   conferirAntesDeGravar?: (ag: AgregadoDemanda) => void;
 }
@@ -43,7 +45,10 @@ export function submeterEvidencia(
   // Fora da transação: se ela falhar, sobra só arquivo sem referência (F2 §5.2).
   let guardados;
   try {
-    guardados = guardarAnexos(banco, anexos, tipo, schemaDoTipo(tipo).arquivos, contexto.origens);
+    const regra = schemaDoTipo(tipo).arquivos;
+    guardados = contexto.enviados
+      ? guardarAnexosEnviados(banco, contexto.enviados, tipo, regra, contexto.origens)
+      : guardarAnexos(banco, anexos, tipo, regra, contexto.origens);
   } catch (erro) {
     if (erro instanceof ErroDeRegra) return { resultado: "recusada", motivo: erro.message };
     throw erro;

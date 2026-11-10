@@ -17,7 +17,8 @@ import {
   montarTicket,
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
-import { adicionarEvidencia } from "./adicionar_evidencia.ts";
+import { createHash } from "node:crypto";
+import { adicionarEvidencia, adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -170,6 +171,34 @@ test("anexo fora da worktree e da saída é recusado sem gravar", async () => {
     /está fora da worktree do ticket e do diretório de saída/,
   );
   assert.deepEqual(gravadas(banco), []);
+});
+
+test("anexos enviados: o da saída é aceito pelo caminho do host (Ambiente local) e o de fora é recusado sem gravar", async () => {
+  const { raiz, banco, processo, saida, lerJson } = cenario();
+  const enviar = (caminho: string, conteudo: string) =>
+    adicionarEvidenciaComAnexosEnviados(
+      banco,
+      processo(5),
+      {
+        ticket: "I-206.T5",
+        tipo: "testes_estresse",
+        dados: JSON.stringify(ESTRESSE),
+        anexos: [
+          { caminho, conteudo: Buffer.from(conteudo), sha256: createHash("sha256").update(conteudo).digest("hex") },
+        ],
+      },
+      lerJson,
+    );
+  const fora = join(raiz, "fora.log");
+  writeFileSync(fora, "x");
+  await assert.rejects(enviar(fora, "x"), /está fora da worktree do ticket e do diretório de saída/);
+  assert.deepEqual(gravadas(banco), []);
+  assert.deepEqual(await enviar(saida(5, "estresse.log", "tudo certo\n"), "tudo certo\n"), {
+    ticket: "I-206.T5",
+    tipo: "testes_estresse",
+    veredito: "atende",
+  });
+  assert.deepEqual(gravadas(banco), [{ ticket_id: 5, tipo: "testes_estresse" }]);
 });
 
 test("ticket alheio, T-5 e rodada não gravam nada e mostram a forma certa", async () => {
