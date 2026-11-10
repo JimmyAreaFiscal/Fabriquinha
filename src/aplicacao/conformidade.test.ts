@@ -4,13 +4,17 @@ import { test } from "node:test";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { migrar } from "../armazenamento/banco.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
-import { conformidadeDaRodada } from "./conformidade.ts";
+import { planoDaDemanda } from "../armazenamento/metricas_demanda.ts";
+import { conformidadeDaRodada as conformidadeDoPlano } from "./conformidade.ts";
+
+const conformidadeDaRodada = (b: DatabaseSync, demandaId: string, rodadaId: number) =>
+  conformidadeDoPlano(b, demandaId, rodadaId, planoDaDemanda(b, demandaId));
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (n: number) => String(n).padStart(40, "0");
 
-/** Demanda I-1 com planejar (T1), rodada 1 com a implementação T2, e T3 corretivo (fora do plano) na rodada 1. */
-const banco = (planejado: string[] | null = ["a", "b", "c", "d"]) => {
+/** Demanda I-1 com planejar (T1), rodada 1 com a implementação T2, e T3 corretivo (fora do plano) na rodada 1; o Plano vem de `versao_plano`. */
+const banco = (planejado: string[] | null = ["a", "b", "c", "d"], correcoes: string[][] = []) => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
@@ -34,18 +38,41 @@ const banco = (planejado: string[] | null = ["a", "b", "c", "d"]) => {
     b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada})`);
   if (planejado) {
+    const rodada = (rodada_id: number) => ({
+      demanda_id: "I-1",
+      rodada_id,
+      titulo: "r",
+      e2e: false,
+      arquivos_previstos: planejado,
+    });
     const plano = {
       demanda_id: "I-1",
       criterios: [],
-      rodadas: [1, 2].map((r) => ({ demanda_id: "I-1", rodada_id: r, titulo: "r", e2e: false })),
+      arquivos_previstos: planejado,
+      rodadas: [rodada(1)],
       tickets: [
         { demanda_id: "I-1", ticket_id: 2, rodada_id: 1, titulo: "t", descricao: "d", arquivos_previstos: planejado },
       ],
     };
-    plano.rodadas.length = 1;
-    b.prepare(
-      "INSERT INTO evidencia_demanda (id, demanda_id, ticket_id, tipo, dados, em) VALUES ('ev', 'I-1', 1, 'plano', ?, ?)",
-    ).run(JSON.stringify(plano), "2026-01-01T00:00:00.000Z");
+    const gravaVersao = (numero: number, origem: string, dados: object) =>
+      b
+        .prepare(
+          `INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
+           VALUES ('I-1', ?, ?, 'fabriquinha', ${T}, ?)`,
+        )
+        .run(numero, origem, JSON.stringify(dados));
+    gravaVersao(1, "aprovacao_do_planejamento", plano);
+    for (const [i, arquivos] of correcoes.entries())
+      gravaVersao(i + 2, "revisao_rodada", {
+        origem: "revisao_rodada",
+        autor: { tipo: "fabriquinha" },
+        rodada: 1,
+        rodadas_novas: [],
+        tickets_novos: [
+          { demanda_id: "I-1", ticket_id: 3, rodada_id: 1, titulo: "c", descricao: "d", arquivos_previstos: arquivos },
+        ],
+        arquivos_acrescentados: arquivos,
+      });
   }
   return b;
 };
@@ -78,7 +105,7 @@ test("CA-9 e CA-10: 3 comuns em 5 da união dão 60 %, com ausentes e extras", (
 });
 
 test("CA-11: caminho do ticket corretivo aparece como extra e o plano não muda", () => {
-  const b = banco(["a"]);
+  const b = banco(["a"], [["z"]]);
   commit(b, 2, [["a", "M"]]);
   commit(b, 3, [["z", "A"]]);
   const r = conformidadeDaRodada(b, "I-1", 1);

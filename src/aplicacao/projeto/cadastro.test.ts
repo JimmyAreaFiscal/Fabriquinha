@@ -551,6 +551,9 @@ const TABELAS_DEMANDA = [
   "encerramento_demanda",
   "dependencia_ticket",
   "caminho_ticket",
+  "arquivo_previsto_rodada",
+  "arquivo_previsto_demanda",
+  "versao_plano",
   "ticket_demanda",
   "criterio_citado_rodada",
   "dependencia_rodada",
@@ -580,6 +583,10 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
       VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
     INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
     INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
+    INSERT INTO arquivo_previsto_rodada VALUES ('${d}', 1, 'src');
+    INSERT INTO arquivo_previsto_demanda VALUES ('${d}', 'src');
+    INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, rodada_id, criada_em, dados)
+      VALUES ('${d}', 1, 'aprovacao_do_planejamento', 'fabriquinha', NULL, 't', '{}');
     INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
     INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');

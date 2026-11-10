@@ -241,6 +241,9 @@ test("sem critérios, citações, título, descrição, dependências nem caminh
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
   };
   const p = montarPromptDemanda({
     ...base,

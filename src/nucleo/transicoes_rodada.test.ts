@@ -167,6 +167,10 @@ test("CA-4: conflito, check falho ou ambos exigem correções e voltam a desenvo
     const novo = conferirPullRequestRodada(ag, conferencia({ ...fatos, correcoes: [correcao()] }), FABRIQUINHA, ctx);
     assert.deepEqual(ag, antes);
     assert.deepEqual(
+      novo.versoes_plano.map((v) => [v.numero, v.origem, v.autor, v.rodada_id]),
+      [[1, "conferencia_do_pr", FABRIQUINHA, ref.rodada_id]],
+    );
+    assert.deepEqual(
       novo.rodadas.map((r) => r.estado),
       ["implementar", "implementar"],
     );
@@ -259,6 +263,10 @@ test("sessão: Auditor e agente da sessão registram correções sem executar ne
     const novo = registrarCorrecoesSessao(ag, entrada, ator, ctx);
     assert.deepEqual(estado(novo), ["ajustar_resultado", "implementar"]);
     assert.deepEqual(novo.tickets.at(-1)?.criado_por, ator);
+    assert.deepEqual(
+      novo.versoes_plano.map((v) => [v.numero, v.origem, v.autor, v.rodada_id]),
+      [[1, "ajustar_resultado", ator, ref.rodada_id]],
+    );
     assert.deepEqual(
       novo.tickets.slice(5).map((t) => [t.ticket_id, t.etapa, t.estado]),
       [[6, "implementar", "aberto"]],

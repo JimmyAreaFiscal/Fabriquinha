@@ -4,10 +4,10 @@ import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "./ciclos.ts";
-import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
+import { correcaoDosTicketsDaRodada, materializar } from "./plano.ts";
 import { type EtapaTicket, type EstadoRodada, Id, type Instante, palavras } from "./primitivos.ts";
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
@@ -176,7 +176,11 @@ export function conferirPullRequestRodada(
     }
     return { ...ag, rodadas: rodadasComEstadoMudado(ag, rodada, "gate_pr", ctx.agora) };
   }
-  const base = materializarCorrecoesRodada(ag, e, e.correcoes ?? [], ator, ctx.agora);
+  const base = materializar(
+    ag,
+    correcaoDosTicketsDaRodada("conferencia_do_pr", ator, e.rodada_id, e.correcoes ?? []),
+    ctx,
+  );
   return {
     ...base,
     ...comTicketConcluido(base, ticket, ctx.agora),
@@ -197,7 +201,7 @@ export function registrarCorrecoesSessao(
   if (ator.tipo !== "agente" && ator.tipo !== "auditor") {
     throw new ErroDeEscopo("só o Auditor ou o agente da sessão registram correções", "peça ao Auditor pelo web");
   }
-  return materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
+  return materializar(ag, correcaoDosTicketsDaRodada("ajustar_resultado", ator, e.rodada_id, e.correcoes), ctx);
 }
 
 /** CA-8 e CA-9: só o Auditor, com implementar aberto criado depois da sessão e nenhuma implementação em execução. */

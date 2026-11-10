@@ -1,6 +1,6 @@
 // Leituras de só leitura para as métricas do SDLC por demandas (comparacao-sdlc-implementacao.md §8).
 import type { DatabaseSync } from "node:sqlite";
-import { lerPlanoGravado } from "../nucleo/plano.ts";
+import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../nucleo/plano.ts";
 
 export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =>
   banco.prepare("SELECT 1 FROM demanda WHERE id = ?").get(demandaId) !== undefined;
@@ -8,22 +8,17 @@ export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =
 export const rodadaExiste = (banco: DatabaseSync, demandaId: string, rodadaId: number): boolean =>
   banco.prepare("SELECT 1 FROM rodada WHERE demanda_id = ? AND rodada_id = ?").get(demandaId, rodadaId) !== undefined;
 
-/** Caminhos que o plano original (evidência `plano` do ticket `planejar`) previu para a rodada; `undefined` sem plano. */
-export function caminhosPlanejadosDaRodada(
-  banco: DatabaseSync,
-  demandaId: string,
-  rodadaId: number,
-): string[] | undefined {
-  const l = banco
-    .prepare(
-      `SELECT e.dados FROM evidencia_demanda e
-       JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
-       WHERE e.demanda_id = ? AND e.tipo = 'plano' AND t.etapa = 'planejar'`,
-    )
-    .get(demandaId) as { dados: string } | undefined;
-  if (!l) return undefined;
-  const plano = lerPlanoGravado(JSON.parse(l.dados));
-  return plano.tickets.filter((t) => t.rodada_id === rodadaId).flatMap((t) => t.arquivos_previstos);
+/** O Plano montado das versões gravadas (a 1 é o original aprovado, as outras são as correções); `undefined` sem plano materializado. */
+export function planoDaDemanda(banco: DatabaseSync, demandaId: string): Plano | undefined {
+  const [original, ...correcoes] = banco
+    .prepare("SELECT dados FROM versao_plano WHERE demanda_id = ? ORDER BY numero")
+    .all(demandaId)
+    .map((l) => JSON.parse(l.dados as string) as unknown);
+  if (original === undefined) return undefined;
+  return new Plano(
+    lerPlanoGravado(original),
+    correcoes.map((c) => CorrecaoDoPlano.parse(c)),
+  );
 }
 
 export interface ArquivoDaRodada {
