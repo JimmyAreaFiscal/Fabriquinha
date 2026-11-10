@@ -28,7 +28,6 @@ export type LeitorDeJson = (valor: string, opcao?: string) => Promise<unknown>;
 
 /**
  * O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo.
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só os casos de uso e o teste o chamam
  */
 export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
   const linha = carregarEscopoDoProcesso(banco, execucao);

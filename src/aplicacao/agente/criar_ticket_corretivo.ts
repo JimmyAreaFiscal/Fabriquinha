@@ -9,7 +9,6 @@ import { escopoDoProcessoAberto, exigirTicket, type ProcessoDoAgente, reconferir
 /**
  * Registra um ticket corretivo na rodada do agente, `rodada` como o `I-<n>.R<m>` dela, e devolve os tickets que nasceram.
  * A descrição repete o título: o agente só dá o título; o Auditor detalha no web.
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export function criarTicketCorretivo(
   banco: DatabaseSync,

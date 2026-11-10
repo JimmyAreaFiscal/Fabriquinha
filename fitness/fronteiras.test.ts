@@ -53,16 +53,9 @@ interface Excecao extends Achado {
   demanda: string;
 }
 
-// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
+// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 22 o resto.
 const EXCECOES: Excecao[] = [
   { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
-  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../infra/processo.ts", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/projetos.ts", demanda: "21" },
   { arquivo: "entrega/cliente-web/markdown.ts", import: "markdown-it/browser", demanda: "22" },
   { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
@@ -374,7 +367,7 @@ const CHAMADORES_DIRETOS_DO_PROCESSO = [
   "aplicacao/auditor_automatico.ts",
   "aplicacao/executor.ts",
   "aplicacao/retrabalho.ts",
-  "entrega/cli/cli.ts",
+  "composicao/cli.ts",
   "infra/agente/harness_pi.ts",
   "infra/repositorio/cadastro.ts",
   "infra/repositorio/heatmap.ts",

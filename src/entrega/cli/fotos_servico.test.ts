@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
-import { comandoDoNavegador, principal } from "./cli.ts";
+import { comandoDoNavegador, executarFabriquinha as principal } from "../../composicao/cli.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-fotos-servico-"));
 after(() => {

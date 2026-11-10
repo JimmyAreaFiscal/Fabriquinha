@@ -8,12 +8,13 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
+import { caminhoArquivo, lerLinha, lerLinhas } from "../../../apoio-testes/acesso_ao_banco.ts";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../nucleo/erros.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
-import { principal } from "./cli.ts";
-import { COMANDOS_DEMANDA_EXTERNA, ErroDeUso } from "./demanda_externa.ts";
+import { executarFabriquinha } from "../../composicao/cli.ts";
+import { ErroDeUso } from "./comando.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-demanda-externa-"));
@@ -70,7 +71,7 @@ const novaRaiz = (): NodeJS.ProcessEnv => {
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = "") {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([stdin]),
     stdout: { write: (t: string) => (out += t) },
@@ -245,8 +246,10 @@ const EVIDENCIA = (id: string, tipo: string, dados: string, arquivo: string) => 
   "--arquivo",
   arquivo,
 ];
-const anexosGuardados = (env: NodeJS.ProcessEnv) =>
-  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT caminho, mime, sha256 FROM arquivo_evidencia").all() ?? [];
+const anexosGuardados = (env: NodeJS.ProcessEnv) => {
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  return b ? lerLinhas(b, "SELECT caminho, mime, sha256 FROM arquivo_evidencia") : [];
+};
 
 test("anexo que é link simbólico para fora da pasta é recusado e nada é guardado (O_NOFOLLOW)", async () => {
   const env = novaRaiz();
@@ -324,7 +327,7 @@ test("CA-11: custos depois do envio, sem custo informado", async () => {
   assert.equal(r.evidencias.filter((e: { tipo: string }) => e.tipo === "custos_realizados").length, 1);
   const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
   assert.ok(b);
-  const linha = b.prepare("SELECT dados FROM evidencia_demanda WHERE tipo = 'custos_realizados'").get();
+  const linha = lerLinha(b, "SELECT dados FROM evidencia_demanda WHERE tipo = 'custos_realizados'");
   assert.equal(
     (JSON.parse(String(linha?.dados)) as { sessoes: { linhas: { custo: null }[] }[] }).sessoes[0]?.linhas[0]?.custo,
     null,
@@ -414,7 +417,7 @@ test("a ajuda lista a seção externa", async () => {
 test("CA-19: a skill traz um exemplo de cada comando e cada comando citado existe", () => {
   const skill = readFileSync(join(cwd, "pacote-pi", "skills", "demanda-externa", "SKILL.md"), "utf8");
   const citados = [...skill.matchAll(/^fabriquinha demanda (\S+)/gm)].map((m) => m[1]);
-  const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.palavras[1]);
+  const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.nome.split(" ")[1]);
   assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "ver"]);
   for (const c of citados) assert.ok(existentes.includes(c), c);
   for (const c of existentes) assert.ok(citados.includes(c), c);

@@ -1,31 +1,54 @@
-// O contrato de um comando do CLI e o apoio que os comandos dividem: ler o JSON de uma opção, o schema JSON de um tipo
-// de evidência e o ticket do agregado. O comando só traduz os argumentos; a regra é da aplicação.
+// O contrato de um comando do CLI e o apoio que os comandos dividem: ler o JSON de uma opção e o schema JSON de um tipo
+// de evidência. O comando só traduz os argumentos; a regra é da aplicação.
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsConfig } from "node:util";
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
-import { formatarTicketRef } from "../../nucleo/demanda.ts";
-import { encontrado, ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
 
-/** Os argumentos de um comando já lidos por `parseArgs`: as posições e as opções. @testes a troca dos comandos o usa; hoje só o teste o monta */
+/** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
+export class ErroDeUso extends Error {}
+
+/** Os argumentos de um comando já lidos por `parseArgs`: as posições e as opções. */
 export interface EntradaDoComando {
   readonly posicionais: readonly string[];
   readonly opcoes: Readonly<Record<string, string | string[] | undefined>>;
 }
 
-/** O que o processo entrega a um comando: o banco aberto pela composição, o ambiente e o stdin. @testes a troca dos comandos o usa; hoje só o teste o monta */
-export interface DepsDoCli {
-  readonly banco: DatabaseSync;
-  readonly env: NodeJS.ProcessEnv;
-  readonly stdin: NodeJS.ReadableStream;
+/** O serviço que o `servidor` sobe: a porta em que atende e como pará-lo. */
+interface ServicoEmExecucao {
+  readonly porta: number;
+  parar(): Promise<void>;
 }
 
-/** @testes a troca dos comandos pelas listas de `Comando` o usa; hoje só o teste o monta */
+/** O que o processo entrega a um comando: o ambiente, os fluxos e o que só a composição sabe abrir (banco, serviço, navegador). */
+export interface DepsDoCli {
+  readonly env: NodeJS.ProcessEnv;
+  readonly stdin: NodeJS.ReadableStream;
+  readonly stdout: { write(texto: string): unknown };
+  readonly stderr: { write(texto: string): unknown };
+  /** A raiz da Fabriquinha (`$FABRIQUINHA_ROOT` ou a padrão). */
+  readonly raiz: string;
+  /** O banco da raiz para um comando, desligado no fim. */
+  comBanco<T>(usar: (banco: DatabaseSync) => T | Promise<T>): Promise<T>;
+  iniciarServico(): Promise<ServicoEmExecucao>;
+  abrirNoNavegador(url: string): Promise<void>;
+  /** Resolve quando o `servidor` deve parar (SIGINT ou SIGTERM). */
+  parada(): Promise<unknown>;
+  /** Encerra o processo depois da parada do `servidor`: o que sobrar vivo (timers, filhos) não o segura. */
+  sair?(): void;
+}
+
+/**
+ * Um comando do CLI: `nome` são as palavras que o chamam (`demanda ver`), `posicionais` os nomes dos argumentos de posição
+ * (para o "falta" e o uso), `opcoesDeUso` o trecho de opções do uso e `argumentos` o que o `parseArgs` lê.
+ */
 export interface Comando {
   readonly nome: string;
+  readonly posicionais: readonly string[];
+  readonly opcoesDeUso?: string;
   readonly argumentos: ParseArgsConfig;
   executar(entrada: EntradaDoComando, deps: DepsDoCli): Promise<unknown>;
 }
@@ -48,13 +71,4 @@ export async function lerJsonDoArquivo(valor: string, stdin: NodeJS.ReadableStre
 export function schemaJsonDoTipo(tipo: TipoEvidencia) {
   const { dados, arquivos } = schemaDoTipo(tipo);
   return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
-}
-
-/** O ticket `ticket_id` do agregado; o que não existe é ErroDeInexistente com o endereço público dele. */
-export function exigirTicket(agregado: AgregadoDemanda, ticket_id: number): TicketDemanda {
-  return encontrado(
-    agregado.tickets.find((t) => t.ticket_id === ticket_id),
-    `o ticket ${formatarTicketRef({ demanda_id: agregado.demanda.id, ticket_id })} não existe`,
-    "confira a execução",
-  );
 }

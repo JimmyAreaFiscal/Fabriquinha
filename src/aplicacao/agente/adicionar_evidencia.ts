@@ -67,7 +67,6 @@ function origensDosAnexos(
  * Submete a evidência do próprio ticket do agente (sobre `submeterEvidencia`). Valida o ticket, o tipo, o schema e os
  * anexos antes de gravar, e reconfere a execução dentro da transação. A recusa é erro síncrono ao agente, sem Tentativa
  * nem Reprovação (D10-1).
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export async function adicionarEvidencia(
   banco: DatabaseSync,

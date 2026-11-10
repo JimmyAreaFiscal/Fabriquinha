@@ -7,13 +7,17 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { test } from "node:test";
+import {
+  carregarDemanda,
+  comTrabalhosDoTicket,
+  executarSql,
+  lerLinhas,
+} from "../../../apoio-testes/acesso_ao_banco.ts";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../nucleo/trabalho_agentico.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarDemanda } from "../../armazenamento/demandas.ts";
-import { comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
-import { principal } from "./cli.ts";
+import { executarFabriquinha } from "../../composicao/cli.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -68,12 +72,11 @@ function worktreeDaRodada(raiz: string): void {
 function cenario() {
   const { raiz, banco } = abrirBancoTemporario();
   worktreeDaRodada(raiz);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+  executarSql(
+    banco,
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
-    )
-    .run();
+  );
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({
     demanda_id: "I-206",
     ticket_id,
@@ -179,7 +182,7 @@ function abrirExecucao(banco: DatabaseSync, id: string, ticket_id: number): void
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = "") {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([stdin]),
     stdout: { write: (t: string) => (out += t) },
@@ -190,10 +193,7 @@ async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = "") {
 }
 
 const gravadas = (banco: DatabaseSync) =>
-  banco
-    .prepare("SELECT ticket_id, tipo FROM evidencia_demanda WHERE em <> ?")
-    .all(em)
-    .map((l) => ({ ...l }));
+  lerLinhas(banco, "SELECT ticket_id, tipo FROM evidencia_demanda WHERE em <> ?", em).map((l) => ({ ...l }));
 
 function json(raiz: string, dados: unknown): string {
   const arquivo = join(raiz, `dados-${String(Math.random())}.json`);
@@ -267,10 +267,7 @@ test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída,
     { tipo: "agente", trabalho_id: "exec-5" },
   );
   assert.deepEqual(
-    banco
-      .prepare("SELECT caminho, mime FROM arquivo_evidencia")
-      .all()
-      .map((a) => ({ ...a })),
+    lerLinhas(banco, "SELECT caminho, mime FROM arquivo_evidencia").map((a) => ({ ...a })),
     [{ caminho: "estresse.log", mime: "text/plain; charset=utf-8" }],
   );
   const lida = JSON.parse((await cli(env(5), ["demanda", "ver", "I-206"])).out) as {
@@ -308,10 +305,10 @@ test("CA-5: execução terminada, ticket já concluído e execução inexistente
   const { raiz, banco, env } = cenario();
   const dados = json(raiz, ESTRESSE);
   const args = ["evidencia", "add", "I-206.T5", "testes_estresse", "--dados", dados];
-  banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id = 5").run();
+  executarSql(banco, "UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id = 5");
   const concluido = await cli(env(5), args);
   assert.equal(concluido.err, "o ticket I-206.T5 está concluido e não recebe evidência (siga com o seu ticket)\n");
-  banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-5'").run(em);
+  executarSql(banco, "UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-5'", em);
   const s = await cli(env(5), args);
   assert.deepEqual([s.codigo, s.out], [1, ""]);
   assert.equal(s.err, "a execução exec-5 já terminou (peça ao Auditor uma nova execução)\n");
@@ -382,10 +379,7 @@ const rodar = (env: NodeJS.ProcessEnv, t: number, tipo: string, dados: object, .
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
 
 const anexos = (banco: DatabaseSync) =>
-  banco
-    .prepare("SELECT caminho FROM arquivo_evidencia ORDER BY caminho")
-    .all()
-    .map((a) => a.caminho);
+  lerLinhas(banco, "SELECT caminho FROM arquivo_evidencia ORDER BY caminho").map((a) => a.caminho);
 
 function arquivoNaSaida(raiz: string, exec: number, nome: string, conteudo: string | Buffer): string {
   const saida = join(raiz, "execucoes", `E-exec-${String(exec)}`, "saida");

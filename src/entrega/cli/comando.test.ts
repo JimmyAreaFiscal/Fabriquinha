@@ -2,20 +2,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
-import { montarAgregadoDemanda, montarTicket } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../../nucleo/erros.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { schemaDoTipo } from "../../nucleo/evidencia.ts";
-import {
-  type Comando,
-  type DepsDoCli,
-  type EntradaDoComando,
-  exigirTicket,
-  lerJsonDoArquivo,
-  schemaJsonDoTipo,
-} from "./comando.ts";
+import { type Comando, type DepsDoCli, type EntradaDoComando, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 
 const pasta = mkdtempSync(join(tmpdir(), "fabriquinha-comando-"));
 after(() => {
@@ -66,31 +59,27 @@ test("schemaJsonDoTipo traz o schema JSON dos dados e a regra dos arquivos do ti
   assert.deepEqual(schema.arquivos, schemaDoTipo("comportamento").arquivos);
 });
 
-test("exigirTicket devolve o ticket e, sem ele, diz o endereço público que não existe", () => {
-  const agregado = montarAgregadoDemanda("I-206", "em_execucao", {
-    tickets: [montarTicket("I-206", 3, "implementar")],
-  });
-  assert.equal(exigirTicket(agregado, 3).etapa, "implementar");
-  assert.throws(
-    () => exigirTicket(agregado, 4),
-    (erro: ErroDeInexistente) =>
-      erro instanceof ErroDeInexistente && erro.message === "o ticket I-206.T4 não existe (confira a execução)",
-  );
-});
-
 test("um Comando recebe a entrada já lida e as dependências do processo", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   after(fechar);
   const comando: Comando = {
     nome: "demanda ver",
-    argumentos: { options: { ferramenta: { type: "string" } }, allowPositionals: true },
+    posicionais: ["I-<n>"],
+    argumentos: { options: { ferramenta: { type: "string" } } },
     executar: ({ posicionais, opcoes }: EntradaDoComando, deps: DepsDoCli) =>
-      Promise.resolve({ posicionais, opcoes, banco: deps.banco === banco, env: deps.env.X }),
+      deps.comBanco((bancoAberto) => ({ posicionais, opcoes, banco: bancoAberto === banco, env: deps.env.X })),
   };
   const entrada = { posicionais: ["I-1"], opcoes: { ferramenta: "claude" } };
-  assert.deepEqual(await comando.executar(entrada, { banco, env: { X: "1" }, stdin: stdin("") }), {
-    ...entrada,
-    banco: true,
-    env: "1",
-  });
+  const deps = {
+    env: { X: "1" },
+    stdin: stdin(""),
+    stdout: { write: () => true },
+    stderr: { write: () => true },
+    raiz: "/raiz",
+    comBanco: <T>(usar: (aberto: DatabaseSync) => T | Promise<T>) => Promise.resolve(usar(banco)),
+    iniciarServico: () => Promise.reject(new Error("não sobe")),
+    abrirNoNavegador: () => Promise.resolve(),
+    parada: () => Promise.resolve(),
+  };
+  assert.deepEqual(await comando.executar(entrada, deps), { ...entrada, banco: true, env: "1" });
 });

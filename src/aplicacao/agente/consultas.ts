@@ -30,7 +30,6 @@ const ticketParaAgente = (ticket: TicketDemanda, agregado: AgregadoDemanda) => {
 
 /**
  * O projeto da demanda do agente.
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export function verProjeto(banco: DatabaseSync, processo: ProcessoDoAgente) {
   const agente = escopoDoProcessoAberto(banco, processo);
@@ -40,7 +39,6 @@ export function verProjeto(banco: DatabaseSync, processo: ProcessoDoAgente) {
 /**
  * A própria demanda do agente (`demanda`, como o `I-<n>` dela): a demanda, as rodadas, as decisões e os tickets; só o
  * próprio ticket mostra evidências, com o nome, quando foi e o `veredito` que o schema do tipo deriva.
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export function verDemanda(banco: DatabaseSync, processo: ProcessoDoAgente, demanda: string) {
   const agente = escopoDoProcessoAberto(banco, processo);
@@ -75,7 +73,6 @@ export function verDemanda(banco: DatabaseSync, processo: ProcessoDoAgente, dema
 
 /**
  * O próprio ticket do agente (`ticket`, como o `I-<n>.T<m>` dele).
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export function verTicket(banco: DatabaseSync, processo: ProcessoDoAgente, ticket: string) {
   const agente = escopoDoProcessoAberto(banco, processo);

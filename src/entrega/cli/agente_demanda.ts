@@ -1,267 +1,96 @@
-// CLI do agente de uma execução da demanda (comparacao-sdlc-implementacao.md §6): resolve `FABRIQUINHA_EXECUCAO` em
-// `processo_do_trabalho` e lê a própria demanda e o próprio ticket, sempre pelo endereço público (`I-206.T3`). Nenhuma regra
-// mora aqui: o escopo é conferido na fronteira e o resto é do domínio e da persistência.
+// CLI do agente de uma execução da demanda (comparacao-sdlc-implementacao.md §6): traduz os argumentos para os casos de
+// uso de `aplicacao/agente`, que confere o escopo (a própria demanda, o próprio ticket) e reconfere a execução.
+// Nenhuma regra mora aqui.
 import type { DatabaseSync } from "node:sqlite";
-import type { ParseArgsOptionsConfig } from "node:util";
-import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
-import type { Ator } from "../../nucleo/ator.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../nucleo/erros.ts";
-import { schemaDoTipo } from "../../nucleo/evidencia.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
-import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
-import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
-import { decidirGate } from "../../aplicacao/gates/decidir_gate.ts";
-import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
-import { carregarDemanda, carregarEscopoDoProcesso, comDemanda } from "../../armazenamento/demandas.ts";
-import { projetoExistente } from "../../aplicacao/projeto/cadastro.ts";
-import { exigirTicket, lerJsonDoArquivo } from "./comando.ts";
+import { encontrado } from "../../nucleo/erros.ts";
+import { decidirRevisao } from "../../aplicacao/agente/decidir_revisao.ts";
+import { criarTicketCorretivo } from "../../aplicacao/agente/criar_ticket_corretivo.ts";
+import { verDemanda, verProjeto, verTicket } from "../../aplicacao/agente/consultas.ts";
+import { type ProcessoDoAgente, resolverEscopoDoAgente } from "../../aplicacao/agente/escopo.ts";
+import { type Comando, type DepsDoCli, lerJsonDoArquivo } from "./comando.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
-/** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `processo_do_trabalho`), a sessão e o ticket composto que ele roda. */
-export interface EscopoDoAgente {
-  readonly ator: Extract<Ator, { tipo: "agente" }>;
-  readonly sessao: string;
-  readonly demanda_id: string;
-  readonly ticket_id: number;
-  readonly projeto: string;
-}
-
-export interface ChamadaDemanda {
-  readonly banco: DatabaseSync;
-  readonly agente: EscopoDoAgente;
-  readonly stdin: NodeJS.ReadableStream;
-  readonly pos: readonly string[];
-  readonly op: Readonly<Record<string, string | string[] | undefined>>;
-}
-
-export interface ComandoDemanda {
-  readonly palavras: readonly string[];
-  readonly argumentos: readonly string[];
-  readonly opcoesDeUso?: string;
-  readonly opcoes?: ParseArgsOptionsConfig;
-  rodar(c: ChamadaDemanda): unknown;
-}
-
-/** O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo. */
-export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
-  const linha = carregarEscopoDoProcesso(banco, execucao);
-  if (!linha) return undefined;
-  if (linha.fim !== null) {
-    throw new ErroDeEscopo(`a execução ${execucao} já terminou`, "peça ao Auditor uma nova execução");
-  }
-  return {
-    ator: { tipo: "agente", trabalho_id: execucao },
-    sessao: linha.sessao,
-    demanda_id: linha.demanda_id,
-    ticket_id: linha.ticket_id,
-    projeto: linha.projeto,
-  };
-}
-
-export const proprio = (a: EscopoDoAgente): string => formatarTicketRef(a);
-
-/** O ticket de `texto`, que só pode ser o do agente; `T-3` e outras formas erram mostrando o endereço certo. */
-export function ticketProprio(a: EscopoDoAgente, texto: string, agir = false): void {
-  const forma = `use o endereço do seu ticket, ${proprio(a)}`;
-  let endereco;
-  try {
-    endereco = Endereco.ler(texto);
-  } catch {
-    throw new ErroDeRegra(`${texto} não é um endereço de ticket`, forma);
-  }
-  if (endereco.ticket_id === undefined) throw new ErroDeRegra(`${texto} não é um ticket`, forma);
-  if (endereco.toString() !== proprio(a)) {
-    throw agir
-      ? new ErroDeEscopo("o agente só age no próprio ticket", `aja em ${proprio(a)}`)
-      : new ErroDeEscopo("o agente só lê o próprio ticket", `leia ${proprio(a)}`);
-  }
-}
-
-function demandaPropria(a: EscopoDoAgente, texto: string): void {
-  if (texto !== a.demanda_id) {
-    throw new ErroDeEscopo("o agente só lê a própria demanda", `leia ${a.demanda_id}, a do seu ticket ${proprio(a)}`);
-  }
-}
-
-// O CLI segue mostrando o ticket sem `criado_por` e a decisão com `por` em texto (o tipo do Ator), como antes do Ator único.
-// O motivo do ticket que falhou vem da última Tentativa dele.
-const publico = (ticket: TicketDemanda, ag: AgregadoDemanda) => {
-  const { demanda_id, ticket_id, rodada_id, criado_por: _, ...resto } = ticket;
-  const motivo = motivoDaFalhaDoTicket(ag.tentativas, ticket);
-  return {
-    ticket: formatarTicketRef({ demanda_id, ticket_id }),
-    ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
-    ...resto,
-    ...(motivo !== undefined && { motivo }),
-  };
-};
-
-/** Grava `transicao` na demanda do agente, reconferindo dentro da transação que a execução segue aberta. */
-const gravar = (banco: DatabaseSync, a: EscopoDoAgente, transicao: (ag: AgregadoDemanda) => AgregadoDemanda) =>
-  comDemanda(banco, a.demanda_id, (ag) => {
-    resolverEscopoDoAgente(banco, a.ator.trabalho_id);
-    exigirTrabalhoDoTicket(banco, a.ator, a);
-    return transicao(ag);
+/**
+ * Roda `usar` com o banco e o processo de `FABRIQUINHA_EXECUCAO`; a execução que não existe (ou que já terminou) recusa
+ * o comando antes de ele agir.
+ */
+export function comProcessoDoAgente<T>(
+  deps: DepsDoCli,
+  usar: (banco: DatabaseSync, processo: ProcessoDoAgente) => T | Promise<T>,
+): Promise<T> {
+  const execucao = String(deps.env.FABRIQUINHA_EXECUCAO);
+  return deps.comBanco((banco) => {
+    encontrado(
+      resolverEscopoDoAgente(banco, execucao),
+      `a execução ${execucao} não existe`,
+      "confira FABRIQUINHA_EXECUCAO",
+    );
+    return usar(banco, { id: execucao });
   });
+}
 
-/** A lista {titulo, descricao} do agente, completada com a demanda, a rodada e o ticket local (1, 2, ...). */
-const completar = (lista: unknown, demanda_id: string, rodada_id: number | undefined): unknown =>
-  Array.isArray(lista) ? lista.map((c: object, i) => ({ ...c, demanda_id, rodada_id, ticket_id: i + 1 })) : lista;
-
-const exigir = (valor: unknown, opcao: string, veredito: string): void => {
-  if (valor === undefined) throw new ErroDeRegra(`${veredito} exige ${opcao}`, `passe ${opcao}`);
-};
-
-export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
+export const COMANDOS_DEMANDA: readonly Comando[] = [
   {
-    palavras: ["projeto", "ver"],
-    argumentos: [],
-    rodar: ({ banco, agente }) => projetoExistente(banco, agente.projeto, "confira a execução"),
+    nome: "projeto ver",
+    posicionais: [],
+    argumentos: {},
+    executar: (_, deps) => comProcessoDoAgente(deps, verProjeto),
   },
   {
-    palavras: ["demanda", "ver"],
-    argumentos: ["I-<n>"],
-    rodar({ banco, agente, pos }) {
-      demandaPropria(agente, String(pos[0]));
-      const { agregado: ag } = visaoDaDemanda(banco, agente.demanda_id);
-      return {
-        demanda: demandaParaCli(ag.demanda),
-        rodadas: ag.rodadas.map(({ demanda_id, rodada_id, ...r }) => ({
-          rodada: formatarRodadaRef({ demanda_id, rodada_id }),
-          ...r,
-        })),
-        // A rodada vem do ticket decidido: a decisão não a guarda.
-        decisoes: ag.decisoes.map(({ demanda_id, ticket_id, decisao_id, por, ...d }) => {
-          const rodada_id = ag.tickets.find((t) => t.ticket_id === ticket_id)?.rodada_id;
-          return {
-            ticket: formatarTicketRef({ demanda_id, ticket_id }),
-            ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
-            ...d,
-            por: por.tipo,
-          };
-        }),
-        tickets: ag.tickets.map((t) => ({
-          ...publico(t, ag),
-          // Só o próprio ticket mostra evidências: o nome, quando foi e o `veredito` que o schema do tipo deriva.
-          ...(t.ticket_id === agente.ticket_id && {
-            evidencias: ag.evidencias
-              .filter((e) => e.ticket_id === t.ticket_id)
-              .map((e) => ({ tipo: e.tipo, em: e.em, veredito: schemaDoTipo(e.tipo).veredito?.(e.dados) })),
-          }),
-        })),
-      };
-    },
+    nome: "demanda ver",
+    posicionais: ["I-<n>"],
+    argumentos: {},
+    executar: ({ posicionais }, deps) =>
+      comProcessoDoAgente(deps, (banco, processo) => {
+        const visao = verDemanda(banco, processo, String(posicionais[0]));
+        return { ...visao, demanda: demandaParaCli(visao.demanda) };
+      }),
   },
   {
-    palavras: ["ticket", "ver"],
-    argumentos: ["I-<n>.T<m>"],
-    rodar({ banco, agente, pos }) {
-      ticketProprio(agente, String(pos[0]));
-      const ag = carregarDemanda(banco, agente.demanda_id);
-      return publico(exigirTicket(ag, agente.ticket_id), ag);
-    },
+    nome: "ticket ver",
+    posicionais: ["I-<n>.T<m>"],
+    argumentos: {},
+    executar: ({ posicionais }, deps) =>
+      comProcessoDoAgente(deps, (banco, processo) => verTicket(banco, processo, String(posicionais[0]))),
   },
   {
-    palavras: ["ticket", "criar"],
-    argumentos: ["I-<n>.R<m>"],
+    nome: "ticket criar",
+    posicionais: ["I-<n>.R<m>"],
     opcoesDeUso: "--titulo <texto>",
-    opcoes: { titulo: { type: "string" } },
-    rodar({ banco, agente, pos, op }) {
-      const texto = String(pos[0]);
-      const { demanda_id } = agente;
-      const proprioTicket = exigirTicket(carregarDemanda(banco, demanda_id), agente.ticket_id);
-      const forma = `use a rodada do seu ticket, ${formatarRodadaRef({ demanda_id, rodada_id: Number(proprioTicket.rodada_id) })}`;
-      let ref;
-      try {
-        ref = Endereco.ler(texto);
-      } catch {
-        throw new ErroDeRegra(`${texto} não é um endereço de rodada`, forma);
-      }
-      if (ref.rodada_id === undefined) throw new ErroDeRegra(`${texto} não é uma rodada`, forma);
-      if (ref.demanda_id !== demanda_id) throw new ErroDeEscopo(`${texto} é de outra demanda`, forma);
-      const titulo = op.titulo as string | undefined;
-      if (titulo === undefined) throw new ErroDeRegra("falta o título do ticket corretivo", "passe --titulo <texto>");
-      const antes = new Set(carregarDemanda(banco, demanda_id).tickets.map((t) => t.ticket_id));
-      const depois = gravar(banco, agente, (ag) =>
-        registrarCorrecoesSessao(
-          ag,
-          {
-            demanda_id,
-            rodada_id: ref.rodada_id,
-            ticket_id: agente.ticket_id,
-            // A descrição repete o título: o agente só dá o título; o Auditor detalha no web.
-            correcoes: [{ demanda_id, rodada_id: ref.rodada_id, ticket_id: 1, titulo, descricao: titulo }],
-          },
-          agente.ator,
-          { agora: new Date().toISOString() },
-        ),
-      );
-      const novo = depois.tickets.filter((t) => !antes.has(t.ticket_id));
-      return { rodada: texto, tickets: novo.map((t) => formatarTicketRef(t)) };
-    },
+    argumentos: { options: { titulo: { type: "string" } } },
+    executar: ({ posicionais, opcoes }, deps) =>
+      comProcessoDoAgente(deps, (banco, processo) =>
+        criarTicketCorretivo(banco, processo, {
+          rodada: String(posicionais[0]),
+          titulo: opcoes.titulo as string | undefined,
+        }),
+      ),
   },
   {
-    palavras: ["revisao", "decidir"],
-    argumentos: ["I-<n>.T<m>", "aprovar|reprovar"],
+    nome: "revisao decidir",
+    posicionais: ["I-<n>.T<m>", "aprovar|reprovar"],
     opcoesDeUso: "[--motivo <texto>] [--correcoes <json|->] [--plano <json|->]",
-    opcoes: {
-      motivo: { type: "string" },
-      correcoes: { type: "string" },
-      plano: { type: "string" },
+    argumentos: {
+      options: {
+        motivo: { type: "string" },
+        correcoes: { type: "string" },
+        plano: { type: "string" },
+      },
     },
-    async rodar({ banco, agente, pos, op, stdin }) {
-      const veredito = String(pos[1]);
-      if (veredito !== "aprovar" && veredito !== "reprovar") {
-        throw new ErroDeRegra(`veredito ${JSON.stringify(veredito)} inválido`, "use aprovar ou reprovar");
-      }
-      ticketProprio(agente, String(pos[0]), true);
-      const resultado = veredito === "aprovar" ? "aprovado" : "reprovado";
-      const { demanda_id, ticket_id } = agente;
-      const ticket = exigirTicket(carregarDemanda(banco, demanda_id), ticket_id);
-      const rodada = ticket.rodada_id;
-      const campo = ticket.etapa === "revisar_rodada" ? "correcoes" : "plano";
-      if (ticket.etapa !== "revisar_rodada" && ticket.etapa !== "revisar_demanda") {
-        throw new ErroDeRegra(
-          `o ticket ${proprio(agente)} é de ${ticket.etapa}, não de revisão`,
-          "só ticket de revisão decide",
-        );
-      }
-      let extra: object = {};
-      if (resultado === "aprovado") {
-        const sobra = [op.motivo, op.correcoes, op.plano].some((v) => v !== undefined);
-        if (sobra) throw new ErroDeRegra("aprovar não leva --motivo, --correcoes nem --plano", "omita as opções");
-      } else {
-        exigir(op.motivo, "--motivo", "reprovar");
-        exigir(op[campo], `--${campo}`, "reprovar");
-        const valor = await lerJsonDoArquivo(op[campo] as string, stdin, `--${campo}`);
-        extra = {
-          motivo: op.motivo,
-          correcoes: campo === "correcoes" ? completar(valor, demanda_id, rodada) : valor,
-        };
-      }
-      resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
-      await (rodada === undefined
-        ? decidirGate(
-            banco,
-            "gate_revisao_demanda",
-            Endereco.daDemanda(demanda_id),
-            { resultado, ...extra },
-            agente.ator,
-          )
-        : decidirGate(
-            banco,
-            "gate_revisao_rodada",
-            Endereco.daRodada(demanda_id, rodada),
-            { resultado, ...extra },
-            agente.ator,
-          ));
-      return {
-        ticket: proprio(agente),
-        ...(rodada !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id: rodada }) }),
-        resultado,
-      };
-    },
+    executar: ({ posicionais, opcoes }, deps) =>
+      comProcessoDoAgente(deps, (banco, processo) =>
+        decidirRevisao(
+          banco,
+          processo,
+          {
+            ticket: String(posicionais[0]),
+            veredito: String(posicionais[1]),
+            motivo: opcoes.motivo as string | undefined,
+            correcoes: opcoes.correcoes as string | undefined,
+            plano: opcoes.plano as string | undefined,
+          },
+          (valor, opcao) => lerJsonDoArquivo(valor, deps.stdin, opcao),
+        ),
+      ),
   },
 ];

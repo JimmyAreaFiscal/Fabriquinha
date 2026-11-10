@@ -35,7 +35,6 @@ const exigirOpcao = (valor: string | undefined, opcao: string, veredito: string)
 /**
  * Aprova ou reprova o gate de revisão do próprio ticket do agente (sobre `decidirGate`): a revisão de rodada reprova com
  * `correcoes`, a da demanda com `plano`. Recusa o que não é veredito, ticket de revisão nem a opção certa antes de ler o JSON.
- * @testes o CLI do agente passa a usá-lo ao trocar os comandos; hoje só o teste o chama
  */
 export async function decidirRevisao(
   banco: DatabaseSync,

@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
-import { principal } from "./cli.ts";
+import { executarFabriquinha as principal } from "../../composicao/cli.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

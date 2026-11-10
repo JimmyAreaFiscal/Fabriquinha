@@ -1,5 +1,5 @@
 // CLI do agente da demanda contra banco real numa raiz temporária (CA-1, CA-2, CA-3, CA-15): demanda I-206 com três
-// tickets, o T3 em execução; os comandos rodam pelo `principal`, como o agente os chama.
+// tickets, o T3 em execução; os comandos rodam pelo `executarFabriquinha`, como o agente os chama.
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
@@ -7,12 +7,11 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../nucleo/trabalho_agentico.ts";
-import { comDemanda } from "../../armazenamento/demandas.ts";
+import { comDemanda, comTrabalhosDoTicket, executarSql, lerLinha } from "../../../apoio-testes/acesso_ao_banco.ts";
 import { gravarAgregadoPronto, comEvidencia } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
-import { resolverEscopoDoAgente } from "./agente_demanda.ts";
+import { resolverEscopoDoAgente } from "../../aplicacao/agente/escopo.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { principal } from "./cli.ts";
+import { executarFabriquinha } from "../../composicao/cli.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -21,12 +20,11 @@ const em = "2026-01-01T00:00:00.000Z";
 /** Projeto `loja`, demanda I-206 com T1 (planejar), T3 e T4 (implementar, rodada 2) e a execução `exec-3` aberta no T3. */
 function cenario() {
   const { raiz, banco } = abrirBancoTemporario();
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+  executarSql(
+    banco,
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
-    )
-    .run();
+  );
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({
     demanda_id: "I-206",
     ticket_id,
@@ -106,7 +104,7 @@ function abrirExecucao(banco: DatabaseSync, id: string, ticket_id: number): void
 async function cli(env: NodeJS.ProcessEnv, args: string[]) {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([""]),
     stdout: { write: (t: string) => (out += t) },
@@ -185,11 +183,12 @@ test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, 
 
 test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem veredito", async () => {
   const { banco, env } = cenario();
-  banco
-    .prepare(
-      "INSERT INTO evidencia_demanda (demanda_id, ticket_id, tipo, dados, em) VALUES ('I-206', 3, 'custos_realizados', '{}', ?), ('I-206', 3, 'plano', '{}', ?)",
-    )
-    .run(em, em);
+  executarSql(
+    banco,
+    "INSERT INTO evidencia_demanda (demanda_id, ticket_id, tipo, dados, em) VALUES ('I-206', 3, 'custos_realizados', '{}', ?), ('I-206', 3, 'plano', '{}', ?)",
+    em,
+    em,
+  );
   const lida = JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
     tickets: { evidencias?: { tipo: string; veredito?: string }[] }[];
   };
@@ -238,7 +237,7 @@ test("projeto ver devolve o projeto da demanda do agente", async () => {
 
 test("execução terminada: ErroDeEscopo já terminou; comando legado da demanda é desconhecido", async () => {
   const { banco, env } = cenario();
-  banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-3'").run(em);
+  executarSql(banco, "UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-3'", em);
   const s = await cli(env, ["ticket", "ver", "I-206.T3"]);
   assert.deepEqual([s.codigo, s.out], [1, ""]);
   assert.equal(s.err, "a execução exec-3 já terminou (peça ao Auditor uma nova execução)\n");
@@ -260,15 +259,17 @@ test("agente da demanda: comando fora da tabela da demanda é uso inválido; a a
 /** Demanda I-206 em `estado`, rodada 2 em `faseRodada`, e a execução `exec-9` aberta no ticket 9 (de `etapa`, da rodada 2 se `naRodada`). */
 function cenarioDeRevisao(estado: string, faseRodada: string, etapa: string, naRodada = true) {
   const { banco, env } = cenario();
-  banco.prepare("UPDATE demanda SET estado = ?").run(estado);
-  banco.prepare("UPDATE rodada SET estado = ?").run(faseRodada);
-  banco
-    .prepare(
-      `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, estado, estado_alterado_em)
+  executarSql(banco, "UPDATE demanda SET estado = ?", estado);
+  executarSql(banco, "UPDATE rodada SET estado = ?", faseRodada);
+  executarSql(
+    banco,
+    `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, estado, estado_alterado_em)
        VALUES ('I-206', 9, ?, ?, 'aberto', ?)`,
-    )
-    .run(naRodada ? 2 : null, etapa, em);
-  banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id IN (1, 3, 4)").run();
+    naRodada ? 2 : null,
+    etapa,
+    em,
+  );
+  executarSql(banco, "UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id IN (1, 3, 4)");
   abrirExecucao(banco, "exec-9", 9);
   return { banco, env: { ...env, FABRIQUINHA_EXECUCAO: "exec-9" } };
 }
@@ -329,7 +330,7 @@ test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leit
   const lida = await lerDemanda(env);
   assert.equal(lida.rodadas[0]?.estado, "encerrar_rodada");
   assert.equal(lida.tickets.find((t) => t.ticket === "I-206.T9")?.estado, "concluido");
-  assert.equal(banco.prepare("SELECT resultado FROM decisao_ticket WHERE ticket_id = 9").get()?.resultado, "aprovado");
+  assert.equal(lerLinha(banco, "SELECT resultado FROM decisao_ticket WHERE ticket_id = 9")?.resultado, "aprovado");
   const decisao = lida.decisoes[0];
   assert.deepEqual(
     [decisao?.ticket, decisao?.rodada, decisao?.resultado, decisao?.por],
@@ -355,7 +356,7 @@ test("CA-9 e CA-11: a revisão integral exige as três evidências e, com elas, 
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "aprovado" });
-  assert.equal(banco.prepare("SELECT estado FROM demanda").get()?.estado, "encerrar_demanda");
+  assert.equal(lerLinha(banco, "SELECT estado FROM demanda")?.estado, "encerrar_demanda");
 });
 
 test("revisão de rodada reprovada completa as correções com demanda, rodada e ticket local", async () => {
@@ -398,7 +399,7 @@ test("CA-11: reprovar a revisão integral registra a decisão com o motivo", asy
   ]);
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "reprovado" });
-  assert.equal(banco.prepare("SELECT motivo FROM decisao_ticket WHERE ticket_id = 9").get()?.motivo, "falta");
+  assert.equal(lerLinha(banco, "SELECT motivo FROM decisao_ticket WHERE ticket_id = 9")?.motivo, "falta");
   const lida = await lerDemanda(env);
   assert.equal(lida.rodadas.length, 2);
   const decisao = lida.decisoes[0];
@@ -413,7 +414,7 @@ test("CA-12: veredito fora de aprovar|reprovar diz as duas formas e não grava",
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "talvez"]);
   assert.deepEqual([s.codigo, s.out], [1, ""]);
   assert.match(s.err, /aprovar ou reprovar/);
-  assert.equal(banco.prepare("SELECT count(*) AS n FROM decisao_ticket").get()?.n, 0);
+  assert.equal(lerLinha(banco, "SELECT count(*) AS n FROM decisao_ticket")?.n, 0);
 });
 
 test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e ticket que não é de revisão", async () => {
@@ -438,19 +439,22 @@ test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e t
 test("revisão: correções por stdin com -", async () => {
   const { env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   let out = "";
-  const codigo = await principal(["revisao", "decidir", "I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "-"], {
-    env,
-    stdin: Readable.from([JSON.stringify([{ titulo: "a", descricao: "b" }])]),
-    stdout: { write: (t: string) => (out += t) },
-    stderr: { write: () => true },
-    parada: () => Promise.resolve(),
-  });
+  const codigo = await executarFabriquinha(
+    ["revisao", "decidir", "I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "-"],
+    {
+      env,
+      stdin: Readable.from([JSON.stringify([{ titulo: "a", descricao: "b" }])]),
+      stdout: { write: (t: string) => (out += t) },
+      stderr: { write: () => true },
+      parada: () => Promise.resolve(),
+    },
+  );
   assert.equal(codigo, 0, out);
 });
 
 test("revisão com a execução terminada não grava", async () => {
   const { banco, env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
-  banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-9'").run(em);
+  executarSql(banco, "UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-9'", em);
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.match(s.err, /já terminou/);
 });
