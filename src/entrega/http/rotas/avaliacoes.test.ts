@@ -8,6 +8,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { z } from "zod";
+import {
+  AchadoEncaminhado,
+  AvaliacaoCriada,
+  AvaliacaoNaLista,
+  DadosDaAvaliacao,
+  DemandaDoPeriodo,
+} from "../../contrato/avaliacoes.ts";
 import { estadoDaAvaliacao } from "../../../aplicacao/avaliacao.ts";
 import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
@@ -113,7 +121,7 @@ const AV = "/api/avaliacoes";
 async function disparar(corpo: object): Promise<string> {
   const r = await pedir(AV, { projeto: "loja", ...periodo, ...corpo });
   assert.equal(r.status, 200, r.texto);
-  const { id } = r.corpo as unknown as { id: string };
+  const { id } = AvaliacaoCriada.parse(r.corpo);
   ids.push(id);
   return id;
 }
@@ -143,7 +151,7 @@ test("recusas do disparo: período sem demanda, demanda de outro projeto, entrad
 
 test("demandas do período: só as com sessão, e `demandas` não é lido como :id (CA-4)", async () => {
   const r = await pedir(`${AV}/demandas?projeto=loja&de=2026-10-01&ate=2026-10-31`);
-  assert.deepEqual(r.corpo, [
+  assert.deepEqual(z.array(DemandaDoPeriodo).parse(r.corpo), [
     { id: "I-10", titulo: "Título I-10" },
     { id: "I-11", titulo: "Título I-11" },
   ]);
@@ -157,12 +165,7 @@ test("dispara com pedido em branco, lista com estado e achados, abre o detalhe e
   await ate(() => condutor.situacao(id)?.ocupado === false, "a resposta do agente");
   await ate(() => nAchados(id) === 2, "os achados");
 
-  const lista = (await pedir(AV)).corpo as unknown as {
-    id: string;
-    projeto: string;
-    achados: number;
-    estado: string;
-  }[];
+  const lista = z.array(AvaliacaoNaLista).parse((await pedir(AV)).corpo);
   assert.equal(lista.length, 1);
   assert.deepEqual(
     { id: lista[0]?.id, projeto: lista[0]?.projeto, achados: lista[0]?.achados },
@@ -170,10 +173,7 @@ test("dispara com pedido em branco, lista com estado e achados, abre o detalhe e
   );
   assert.equal(lista[0]?.estado, estadoDaAvaliacao(id));
 
-  const detalhe = (await pedir(`${AV}/${id}`)).corpo as unknown as {
-    demandas: string[];
-    achados: { titulo: string }[];
-  };
+  const detalhe = DadosDaAvaliacao.parse((await pedir(`${AV}/${id}`)).corpo);
   assert.deepEqual(detalhe.demandas, ["I-10"]);
   assert.deepEqual(
     detalhe.achados.map((a) => a.titulo),
@@ -224,7 +224,7 @@ test("conversa, aborto, encaminhar, reencaminhar e a origem da demanda (CA-9, 10
 
   const enc = await pedir(`${AV}/${id}/achados/1/encaminhar`, {});
   assert.equal(enc.status, 200, enc.texto);
-  const { demanda } = enc.corpo as unknown as { demanda: string };
+  const { demanda } = AchadoEncaminhado.parse(enc.corpo);
   const pagina = await pedir(`/api/demandas/${demanda}`);
   assert.deepEqual(pagina.corpo.origem, { avaliacao: id, achado: 1, titulo: "Achado 1" });
   assert.equal(pagina.corpo.demanda.titulo, "Achado 1");

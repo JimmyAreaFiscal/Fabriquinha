@@ -488,7 +488,7 @@ export function enviarDemanda(
   id: string,
   texto: string,
   modo: ModoEnvio,
-  limiteMin: number,
+  limiteMin = configuracao(banco).ociosidadeMin,
 ): boolean {
   const ref = ticketDoTrabalho(banco, id);
   if (!ref) return false;

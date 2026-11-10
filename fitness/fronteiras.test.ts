@@ -71,10 +71,6 @@ interface Excecao extends Achado {
 
 // Cada exceção cita a demanda (04 a 26) que a remove: 20 limpa entrega/http.
 const EXCECOES: Excecao[] = [
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/chat.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/harness_pi.ts", demanda: "20" },

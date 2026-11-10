@@ -24,6 +24,7 @@ import {
   vincularAchado,
 } from "../armazenamento/avaliacoes.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
+import { configuracao } from "../armazenamento/servico.ts";
 import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import {
@@ -182,6 +183,12 @@ function promptDaAvaliacao(dir: string, e: EscopoDaAvaliacao): string {
   ].join("\n");
 }
 
+/** A ociosidade e o modelo das avaliações da Configuração de agora. */
+const opcoesDaConfiguracao = (banco: DatabaseSync): OpcoesDaAuditoria => {
+  const { ociosidadeMin, modeloAuditoria } = configuracao(banco);
+  return { ociosidadeMin, modelo: modeloAuditoria };
+};
+
 /**
  * Valida o escopo, grava a avaliação, prepara `<raiz>/avaliacoes/<id>/` e sobe o pi; resolve com o id no primeiro
  * `agent_start`. Se o pi não sobe, não sobra avaliação, pasta nem JSONL, e o erro leva a causa (CA-17).
@@ -189,7 +196,7 @@ function promptDaAvaliacao(dir: string, e: EscopoDaAvaliacao): string {
 export async function iniciarAvaliacao(
   banco: DatabaseSync,
   escopo: EscopoDaAvaliacao,
-  opcoes: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria = opcoesDaConfiguracao(banco),
 ): Promise<string> {
   const demandas = demandasDoEscopo(banco, escopo);
   const raiz = raizDo(banco);
@@ -265,7 +272,12 @@ export function abrir(banco: DatabaseSync, id: string) {
 }
 
 /** A pergunta do Auditor: ao pi vivo e ocioso, ou a um pi novo na mesma sessão e pasta. */
-export function enviarNaAvaliacao(banco: DatabaseSync, id: string, mensagem: string, opcoes: OpcoesDaAuditoria): void {
+export function enviarNaAvaliacao(
+  banco: DatabaseSync,
+  id: string,
+  mensagem: string,
+  opcoes: OpcoesDaAuditoria = opcoesDaConfiguracao(banco),
+): void {
   abrirAvaliacao(banco, id);
   const raiz = raizDo(banco);
   enviarNaConversa(id, mensagem, (prompt) => void subir(raiz, id, prompt, opcoes, conducao(banco, raiz, id)));
