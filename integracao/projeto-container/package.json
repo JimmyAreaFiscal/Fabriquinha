@@ -1,0 +1,10 @@
+{
+  "name": "projeto-container",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/*.test.ts",
+    "e2e": "node --test e2e/*.e2e.test.ts"
+  }
+}
