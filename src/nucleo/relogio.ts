@@ -17,3 +17,10 @@ export const inicioDoMes = (ano: number, mes: number): Instante => new Date(ano,
 /** O `instante` recuado em `ms` milissegundos. */
 export const instanteAntes = (instante: Instante, ms: number): Instante =>
   new Date(Date.parse(instante) - ms).toISOString();
+
+/** O `instante` adiantado em `ms` milissegundos. */
+export const instanteDepois = (instante: Instante, ms: number): Instante =>
+  new Date(Date.parse(instante) + ms).toISOString();
+
+/** A `data` (ISO ou qualquer texto que o `Date` entenda) como Instante. */
+export const comoInstante = (data: string): Instante => new Date(data).toISOString();
