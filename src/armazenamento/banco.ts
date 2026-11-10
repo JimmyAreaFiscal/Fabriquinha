@@ -107,7 +107,7 @@ const versao = (banco: DatabaseSync): number =>
   (banco.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
 
 const emTransacao = (banco: DatabaseSync): boolean => banco.isTransaction; // fora do narrowing do TS
-let profundidade = 0; // escritas aninhadas em andamento; dá o nome único do SAVEPOINT
+const profundidadePorConexao = new WeakMap<DatabaseSync, number>(); // escritas aninhadas em andamento; dá o nome do SAVEPOINT
 
 /**
  * Roda `trabalho` numa transação de escrita. `BEGIN IMMEDIATE` pega o lock no início, então duas escritas
@@ -117,8 +117,10 @@ let profundidade = 0; // escritas aninhadas em andamento; dá o nome único do S
  */
 export function escrever<T>(banco: DatabaseSync, trabalho: () => T): T {
   if (banco.isTransaction) {
-    const ponto = `sp_${String(++profundidade)}`;
+    const profundidade = (profundidadePorConexao.get(banco) ?? 0) + 1;
+    const ponto = `sp_${String(profundidade)}`;
     banco.exec(`SAVEPOINT ${ponto}`);
+    profundidadePorConexao.set(banco, profundidade);
     try {
       const resultado = trabalho();
       banco.exec(`RELEASE ${ponto}`);
@@ -127,7 +129,7 @@ export function escrever<T>(banco: DatabaseSync, trabalho: () => T): T {
       banco.exec(`ROLLBACK TO ${ponto}; RELEASE ${ponto}`);
       throw error_;
     } finally {
-      profundidade--;
+      profundidadePorConexao.set(banco, profundidade - 1);
     }
   }
   banco.exec("BEGIN IMMEDIATE");

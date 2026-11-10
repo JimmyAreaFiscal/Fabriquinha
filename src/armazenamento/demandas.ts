@@ -9,6 +9,7 @@ import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import { escrever, novoId } from "./banco.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, SQLInputValue>;
@@ -321,13 +322,7 @@ const existente = (banco: DatabaseSync, id: string): AgregadoDemanda =>
 
 /** O agregado da demanda, lido num snapshot só; demanda inexistente dá `ErroDeInexistente`. */
 export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemanda {
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
-  if (propria) banco.exec("BEGIN");
-  try {
-    return existente(banco, id);
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+  return lerEmSnapshot(banco, () => existente(banco, id));
 }
 
 /**
@@ -338,9 +333,7 @@ export function listarDemandas(
   banco: DatabaseSync,
   { arquivadas = false, soNaoTerminadas = false }: { arquivadas?: boolean; soNaoTerminadas?: boolean } = {},
 ): AgregadoDemanda[] {
-  const propria = !banco.isTransaction;
-  if (propria) banco.exec("BEGIN");
-  try {
+  return lerEmSnapshot(banco, () => {
     const filtro = soNaoTerminadas
       ? `WHERE NOT ${CICLO_DA_DEMANDA.sqlDosTerminais("estado")}`
       : arquivadas
@@ -348,9 +341,7 @@ export function listarDemandas(
         : "WHERE estado <> 'arquivada'";
     const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
     return ids.map((l) => existente(banco, String(l.id)));
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+  });
 }
 
 /**

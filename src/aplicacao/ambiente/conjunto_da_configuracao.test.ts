@@ -7,7 +7,7 @@ import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { migrar } from "../../armazenamento/banco.ts";
 import { MIGRACOES } from "../../armazenamento/migracoes.ts";
-import { salvarConfiguracaoDoAmbiente } from "../../armazenamento/servico.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configuracao_do_ambiente.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
@@ -38,7 +38,7 @@ async function conjuntoComUmAlocado() {
   const docker = instalarDockerFalso(join(base, `docker-${String(++cenarios)}`));
   const banco = new DatabaseSync(":memory:");
   migrar(banco, MIGRACOES);
-  salvarConfiguracaoDoAmbiente(banco, { tipo: "container" });
+  validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container" });
   const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes());
   const ambiente = await conjunto.alocar(espaco, projeto);
   return { docker, banco, conjunto, ambiente };

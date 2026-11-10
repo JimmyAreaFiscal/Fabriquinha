@@ -10,7 +10,7 @@ import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
-import { registrarDependenciaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
+import { registrarDependenciaDemanda } from "../src/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,

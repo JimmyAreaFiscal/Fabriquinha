@@ -29,6 +29,7 @@ export const NovaTarefa = z.strictObject({
   usuarios: z.array(Id).min(1, "Aloque ao menos um usuário simulado"),
 });
 
+export type NovaTarefa = z.infer<typeof NovaTarefa>;
 export type NovoUsuarioSimulado = z.infer<typeof NovoUsuarioSimulado>;
 
 /** Onde está uma execução simulada (F8 §4): `na_fila` e `em_andamento` são as pendentes. */

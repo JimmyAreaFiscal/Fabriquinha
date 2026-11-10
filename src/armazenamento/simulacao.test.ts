@@ -46,7 +46,7 @@ const sha = (conteudo: string) => createHash("sha256").update(conteudo).digest("
 test("criarUsuarioSimulado grava e usuariosSimulados lista só os do projeto, na ordem de criação", () => {
   const banco = novoBanco();
   assert.deepEqual(usuariosSimulados(banco, "fabriquinha"), []);
-  const maria = criarUsuarioSimulado(banco, "fabriquinha", { nome: " Dona Maria ", descricao: MARIA.descricao });
+  const maria = criarUsuarioSimulado(banco, "fabriquinha", MARIA);
   const joao = criarUsuarioSimulado(banco, "fabriquinha", { nome: "Seu João", descricao: "Gerente" });
   criarUsuarioSimulado(banco, "outro", MARIA);
 
@@ -57,13 +57,9 @@ test("criarUsuarioSimulado grava e usuariosSimulados lista só os do projeto, na
   banco.close();
 });
 
-test("criarUsuarioSimulado recusa campo vazio, nome repetido no projeto e projeto inexistente, sem gravar", () => {
+test("criarUsuarioSimulado recusa nome repetido no projeto e projeto inexistente, sem gravar", () => {
   const banco = novoBanco();
   criarUsuarioSimulado(banco, "fabriquinha", MARIA);
-  assert.throws(
-    () => criarUsuarioSimulado(banco, "fabriquinha", { nome: "Seu João", descricao: "" }),
-    (erro) => erro instanceof ZodError && erro.issues[0]?.message === "Descrição obrigatória",
-  );
   assert.throws(
     () => criarUsuarioSimulado(banco, "fabriquinha", MARIA),
     (erro) =>
@@ -156,7 +152,7 @@ test("criarTarefa grava e tarefas lista só as do projeto, com os usuários aloc
   const dona = criarUsuarioSimulado(banco, "outro", MARIA);
 
   const primeira = criarTarefa(banco, "fabriquinha", {
-    texto: " Registrar uma necessidade ",
+    texto: "Registrar uma necessidade",
     n: 3,
     usuarios: [joao.id, maria.id, maria.id],
   });
@@ -181,18 +177,10 @@ test("criarTarefa grava e tarefas lista só as do projeto, com os usuários aloc
   banco.close();
 });
 
-test("criarTarefa recusa N e alocação inválidos, usuário de outro projeto e projeto inexistente, sem gravar", () => {
+test("criarTarefa recusa usuário de outro projeto e projeto inexistente, sem gravar", () => {
   const banco = novoBanco();
   const maria = criarUsuarioSimulado(banco, "fabriquinha", MARIA);
   const alheio = criarUsuarioSimulado(banco, "outro", MARIA);
-  assert.throws(
-    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 0, usuarios: [maria.id] }),
-    (erro) => erro instanceof ZodError && erro.issues[0]?.message === "N deve ser um inteiro maior que zero",
-  );
-  assert.throws(
-    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [] }),
-    (erro) => erro instanceof ZodError && erro.issues[0]?.message === "Aloque ao menos um usuário simulado",
-  );
   assert.throws(
     () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [maria.id, alheio.id] }),
     (erro) =>

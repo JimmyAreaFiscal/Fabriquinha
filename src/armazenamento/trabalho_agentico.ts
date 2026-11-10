@@ -7,6 +7,7 @@ import { ErroDeRegra } from "../nucleo/erros.ts";
 import { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { escrever } from "./banco.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 
 interface EstadoTrabalhos {
   sessoes: TrabalhoGerenciado[];
@@ -25,34 +26,28 @@ function carregar(banco: DatabaseSync, demandaId: string, ticketId: number | nul
   const filtro = { demanda_id: demandaId, ticket_id: ticketId };
   const dasSessoes = `trabalho_id IN (SELECT id FROM trabalho_agentico WHERE demanda_id = $demanda_id AND ($ticket_id IS NULL OR ticket_id = $ticket_id))`;
   const ler = (sql: string) => banco.prepare(sql).all(filtro);
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
-  if (propria) banco.exec("BEGIN");
-  try {
-    return {
-      sessoes: z
-        .array(TrabalhoGerenciado)
-        .parse(
-          ler(
-            "SELECT * FROM trabalho_agentico WHERE demanda_id = $demanda_id AND ($ticket_id IS NULL OR ticket_id = $ticket_id) ORDER BY rowid",
-          ),
-        ),
-      execucoes: z.array(ProcessoDoTrabalho).parse(
-        ler(`SELECT * FROM processo_do_trabalho WHERE ${dasSessoes} ORDER BY rowid`).map((e) => ({
-          ...semNulos(linhaComConfiguracaoAgente(e)),
-          fim: e.fim, // fim NULL segue como null: é execução aberta
-          falha: e.falha === 1,
-        })),
-      ),
-      usos: z.array(UsoModeloExecucao).parse(
-        // custo NULL é desconhecido: volta sem a chave, nunca como zero.
+  return lerEmSnapshot(banco, () => ({
+    sessoes: z
+      .array(TrabalhoGerenciado)
+      .parse(
         ler(
-          `SELECT * FROM uso_modelo_execucao WHERE execucao_id IN (SELECT id FROM processo_do_trabalho WHERE ${dasSessoes}) ORDER BY rowid`,
-        ).map(({ custo, ...u }) => (custo === null ? u : { ...u, custo })),
+          "SELECT * FROM trabalho_agentico WHERE demanda_id = $demanda_id AND ($ticket_id IS NULL OR ticket_id = $ticket_id) ORDER BY rowid",
+        ),
       ),
-    };
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+    execucoes: z.array(ProcessoDoTrabalho).parse(
+      ler(`SELECT * FROM processo_do_trabalho WHERE ${dasSessoes} ORDER BY rowid`).map((e) => ({
+        ...semNulos(linhaComConfiguracaoAgente(e)),
+        fim: e.fim, // fim NULL segue como null: é execução aberta
+        falha: e.falha === 1,
+      })),
+    ),
+    usos: z.array(UsoModeloExecucao).parse(
+      // custo NULL é desconhecido: volta sem a chave, nunca como zero.
+      ler(
+        `SELECT * FROM uso_modelo_execucao WHERE execucao_id IN (SELECT id FROM processo_do_trabalho WHERE ${dasSessoes}) ORDER BY rowid`,
+      ).map(({ custo, ...u }) => (custo === null ? u : { ...u, custo })),
+    ),
+  }));
 }
 
 export const carregarTrabalhosDoTicket = (banco: DatabaseSync, ref: z.infer<typeof TicketRef>): EstadoTrabalhos =>
@@ -172,3 +167,33 @@ export const ticketDoProcesso = (banco: DatabaseSync, execucao: string): z.infer
       "SELECT s.demanda_id, s.ticket_id FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.id = ?",
     )
     .get(execucao) as z.infer<typeof TicketRef> | undefined;
+
+/** O ticket dono do trabalho; `undefined` se o id não é de um trabalho agêntico. */
+export const ticketDoTrabalho = (banco: DatabaseSync, trabalhoId: string): z.infer<typeof TicketRef> | undefined =>
+  banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(trabalhoId) as
+    z.infer<typeof TicketRef> | undefined;
+
+/** Os trabalhos da demanda, cada um com o ticket dono. */
+export const trabalhosComTicketDaDemanda = (
+  banco: DatabaseSync,
+  demandaId: string,
+): (z.infer<typeof TicketRef> & { id: string })[] =>
+  banco
+    .prepare("SELECT id, demanda_id, ticket_id FROM trabalho_agentico WHERE demanda_id = ?")
+    .all(demandaId)
+    .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef> & { id: string });
+
+/**
+ * Os tickets `em_execucao` que nenhuma execução aberta segura: etapas cujo fechamento roda depois que a execução fecha
+ * (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também).
+ */
+export const ticketsEmExecucaoSemProcesso = (banco: DatabaseSync): z.infer<typeof TicketRef>[] =>
+  banco
+    .prepare(
+      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
+         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
+         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
+           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
+    )
+    .all()
+    .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef>);
