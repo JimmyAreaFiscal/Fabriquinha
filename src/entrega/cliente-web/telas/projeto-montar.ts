@@ -1,7 +1,7 @@
 // Página do projeto (F7 §4.4) no DOM: escolhe o projeto, lê as demandas com os filtros e o mês corrente dele, desenha
 // com as funções puras de projeto.ts, abre e fecha as gavetas e arquiva as concluídas. O app.ts a redesenha a cada 5 s.
 // Os testes de ponta a ponta (e2e/) a exercitam.
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { ListaDoProjeto } from "../../http/rotas/projeto.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, elemento, irPara, mostrarErro } from "../dom.ts";
@@ -75,7 +75,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   const atual = mesDe(new Date());
   const [lista, [mes]] = await Promise.all([
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/demandas?${filtro.toString()}`, { signal }),
-    api<[MetricasMesDemanda]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
+    api<[MetricasDoMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
   ]);
   // Com o seletor ou a confirmação abertos, o redesenho de 5 s os fecharia nas mãos do Auditor: espera ele sair. Se ele
   // mudou um filtro enquanto este pedido ia, a resposta é velha: desenha o pedido do filtro novo.

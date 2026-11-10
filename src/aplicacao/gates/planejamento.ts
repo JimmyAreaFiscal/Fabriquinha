@@ -16,7 +16,7 @@ import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../etapas/pi_vivo.ts";
 import { instanteAtual } from "../relogio.ts";
-import { varrerBase } from "../retrabalho.ts";
+import { varrerCommitsHumanos } from "../metricas/varrer_commits_humanos.ts";
 
 const gate = GATES.gate_planejamento;
 
@@ -65,7 +65,7 @@ export async function aprovarGateDoPlanejamento(
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
     const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico());
     const { buscouBase } = await ciclo.criar();
-    if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [

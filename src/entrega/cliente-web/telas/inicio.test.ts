@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import type { CartaoDoBoard, DadosDoInicio, PendenciaDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
 import { inicio, type MotivoDeRecusaEmJson, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
@@ -21,7 +21,7 @@ const mes = {
   demandas: { registradas: 0, concluidas: 0 },
   tickets: { criados: 0, concluidos: 0 },
   prs: { abertos: 0, mergeados: 0 },
-} as unknown as MetricasMesDemanda;
+} as unknown as MetricasDoMes;
 
 const dados = (resto: Partial<DadosDoInicio> = {}): DadosDoInicio => ({
   mes,

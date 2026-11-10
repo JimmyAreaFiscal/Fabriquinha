@@ -1,7 +1,7 @@
 // Métricas (F7 §4.4) no DOM: lê os projetos e o período, desenha com as funções puras de metricas.ts, mede a área do
 // gráfico de evolução, mostra a dica ao passar o mouse e troca o foco, a métrica, a ordem e a tabela sem reler a API.
 // Não se atualiza sozinha. Os testes de ponta a ponta (e2e/) a exercitam.
-import type { MetricasMesDemanda, MetricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes, MetricasPorDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
@@ -59,7 +59,7 @@ export function montarMetricas(main: HTMLElement, _params: Parametros, signal: A
     projetos ??= api<ProjetoListado[]>("/api/projetos", { signal });
     const [lista, meses, { demandas, total: totalDasDemandas }] = await Promise.all([
       projetos,
-      api<MetricasMesDemanda[]>(`/api/metricas?${q.toString()}`, { signal }),
+      api<MetricasDoMes[]>(`/api/metricas?${q.toString()}`, { signal }),
       api<MetricasPorDemanda>(`/api/metricas/demandas?${q.toString()}`, { signal }),
     ]);
     if (meu !== pedido) return;

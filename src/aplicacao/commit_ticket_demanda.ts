@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeReprovacao } from "../nucleo/erros.ts";
-import { registrarRetrabalhoDemanda } from "./retrabalho.ts";
+import { registrarCommitsHumanosDoTicket } from "./metricas/varrer_commits_humanos.ts";
 import { noLog } from "../infra/registro.ts";
 import type { Commit } from "../nucleo/commits.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
@@ -91,7 +91,7 @@ export async function commitarTicketDemanda(
     );
   }
   gravarCommitDemanda(banco, ref.demanda_id, ref.ticket_id, commit);
-  // O retrabalho do commit do ticket (F6 §4.2); a falha só vai para o log.
-  await registrarRetrabalhoDemanda(banco, ref.demanda_id, ref.ticket_id, commit.sha).catch(noLog);
+  // Os commits posteriores do commit do ticket (F6 §4.2); a falha só vai para o log.
+  await registrarCommitsHumanosDoTicket(banco, ref.demanda_id, ref.ticket_id, commit.sha).catch(noLog);
   return commit;
 }

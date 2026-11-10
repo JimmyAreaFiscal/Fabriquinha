@@ -7,8 +7,8 @@ import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
 import {
   commitDoTicketDemanda,
   gravarCommitDemanda,
-  gravarRetrabalhoDoTicket,
-  gravarRetrabalhoExterno,
+  gravarCommitsPosterioresDoTicket,
+  gravarCommitHumanoPosterior,
 } from "./commits_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -39,11 +39,11 @@ const banco = () => {
   }
   return b;
 };
-/** Lê o que a gravação deixou em `retrabalho_demanda` para o ticket de origem; a produção só lê isso por agregação. */
-const retrabalhoDoTicket = (b: DatabaseSync, demandaId: string, origem: number) =>
+/** Lê o que a gravação deixou em `commit_humano_posterior` para o ticket de origem; a produção só lê isso por agregação. */
+const commitsPosterioresDoTicket = (b: DatabaseSync, demandaId: string, origem: number) =>
   b
     .prepare(
-      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM retrabalho_demanda
+      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM commit_humano_posterior
        WHERE demanda_id = ? AND ticket_origem_id = ? ORDER BY rowid`,
     )
     .all(demandaId, origem)
@@ -138,41 +138,47 @@ test("commit de ticket inexistente é rejeitado", () => {
   }, ErroDeRegra);
 });
 
-test("CA-8: regravar o retrabalho do ticket troca as linhas", () => {
+test("CA-8: regravar os commits posteriores do ticket troca as linhas", () => {
   const b = banco();
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[3, 2]]));
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 1), []);
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [{ commitAlterador: sha("a"), ticketAlterador: 2, linhas: 2 }]);
+  gravarCommitsPosterioresDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
+  gravarCommitsPosterioresDoTicket(b, "D", 2, sha("a"), em("D", [[3, 2]]));
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 1), []);
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 3), [
+    { commitAlterador: sha("a"), ticketAlterador: 2, linhas: 2 },
+  ]);
 });
 
-test("CA-9: o retrabalho traz o ticket alterador", () => {
+test("CA-9: os commits posteriores trazem o ticket alterador", () => {
   const b = banco();
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), ticketAlterador: 2, linhas: 5 }]);
+  gravarCommitsPosterioresDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 1), [
+    { commitAlterador: sha("a"), ticketAlterador: 2, linhas: 5 },
+  ]);
 });
 
 test("o alterador de outra demanda aparece em demandaAlteradora e a regravação não apaga o dele", () => {
   const b = banco();
-  b.exec(`INSERT INTO retrabalho_demanda VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
-  gravarRetrabalhoDoTicket(b, "D", 1, sha("a"), em("D", [[2, 1]]));
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [
+  b.exec(`INSERT INTO commit_humano_posterior VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
+  gravarCommitsPosterioresDoTicket(b, "D", 1, sha("a"), em("D", [[2, 1]]));
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 3), [
     { commitAlterador: sha("b"), ticketAlterador: 1, demandaAlteradora: "E", linhas: 4 },
   ]);
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 2), [{ commitAlterador: sha("a"), ticketAlterador: 1, linhas: 1 }]);
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 2), [
+    { commitAlterador: sha("a"), ticketAlterador: 1, linhas: 1 },
+  ]);
 });
 
-test("CA-10: o retrabalho externo traz o autor, e regravar não duplica", () => {
+test("CA-10: o commit humano posterior traz o autor, e regravar não duplica", () => {
   const b = banco();
-  gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[1, 3]]));
-  gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[1, 3]]));
-  assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), autor: "Ana", linhas: 3 }]);
+  gravarCommitHumanoPosterior(b, sha("a"), "Ana", em("D", [[1, 3]]));
+  gravarCommitHumanoPosterior(b, sha("a"), "Ana", em("D", [[1, 3]]));
+  assert.deepEqual(commitsPosterioresDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), autor: "Ana", linhas: 3 }]);
 });
 
 test("CA-11: origem de outra demanda é rejeitada e nada fica gravado", () => {
   const b = banco();
   assert.throws(() => {
-    gravarRetrabalhoDoTicket(
+    gravarCommitsPosterioresDoTicket(
       b,
       "D",
       2,
@@ -184,7 +190,7 @@ test("CA-11: origem de outra demanda é rejeitada e nada fica gravado", () => {
     );
   }, ErroDeRegra);
   assert.throws(() => {
-    gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[9, 4]]));
+    gravarCommitHumanoPosterior(b, sha("a"), "Ana", em("D", [[9, 4]]));
   }, ErroDeRegra);
-  assert.equal(b.prepare("SELECT 1 FROM retrabalho_demanda").all().length, 0);
+  assert.equal(b.prepare("SELECT 1 FROM commit_humano_posterior").all().length, 0);
 });

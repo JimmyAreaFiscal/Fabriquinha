@@ -157,6 +157,22 @@ export const test = base.extend<{
 
 export { expect } from "@playwright/test";
 
+/**
+ * A tela de Métricas por Etapa: o título da seção de cada uma das nove Etapas, na ordem da tela, e o rótulo das Métricas
+ * dela (CONCEITOS.md §16): o Uso em todas, mais as que o catálogo declara para a Etapa.
+ */
+export const SECOES_DE_ETAPA: readonly (readonly [titulo: string, rotulos: string[]])[] = [
+  ["Entender e desenhar", ["Reprovações no Gate", "Uso"]],
+  ["Planejar", ["Conformidade do PR com o plano", "Uso"]],
+  ["Implementar", ["Alterações posteriores no código", "Uso"]],
+  ["Revisar rodada", ["Exigências de alteração", "Bugs nos arquivos revisados", "Uso"]],
+  ["Encerrar rodada", ["Nota humana", "Uso"]],
+  ["Revisar demanda", ["Exigências de alteração", "Bugs nos arquivos revisados", "Uso"]],
+  ["Encerrar demanda", ["Uso"]],
+  ["Resolver conflito", ["Uso"]],
+  ["Ajustar Resultado", ["Uso"]],
+];
+
 /** O print da página inteira, gravado na saída do teste (o `outputDir` do playwright.config.ts) e anexado ao relatório. */
 export async function fotografar(pagina: Page, info: TestInfo, nome: string): Promise<void> {
   const path = info.outputPath(`${nome}.png`);

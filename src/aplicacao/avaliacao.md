@@ -5,13 +5,13 @@
 **O que você recebe:** a pasta da avaliação é o seu diretório de trabalho, só para leitura.
 
 - `indice.md`: o escopo (projeto, período, demandas) e o pedido do Auditor.
-- `demandas/<id>/demanda.md`: a definição da demanda. `demandas/<id>/metricas.json`: custo, chamadas, etapas, exigências de alteração (`exigenciasDeAlteracao`, as Tentativas reprovadas) e reprovações.
+- `demandas/<id>/demanda.md`: a definição da demanda. `demandas/<id>/metricas.json`: as Métricas de Sucesso de cada Etapa (uso: tokens, modelo e custo; aprovações e reprovações; conformidade com o plano; alterações posteriores; exigências de alteração; bugs nos arquivos revisados; nota humana), cada uma com o rótulo e a fonte de onde deriva.
 - `sessoes/<demanda>-<sessao>.md`: a conversa de cada sessão da demanda no período.
 
 **Passos:**
 
 1. Leia o `indice.md` e, de cada demanda, o `demanda.md` e o `metricas.json`.
-2. Leia as sessões que o pedido e os números indicam: retrabalho, devoluções, reprovações, erros de ferramenta e custo alto.
+2. Leia as sessões que o pedido e os números indicam: alterações posteriores, exigências de alteração, reprovações, erros de ferramenta e custo alto.
 3. Registre cada achado com a ferramenta `registrar_achado`, uma chamada por achado, com título (uma linha, até 120 caracteres), descrição e a evidência citada (demanda, sessão e o trecho ou número).
 4. Termine com um resumo dos achados registrados.
 

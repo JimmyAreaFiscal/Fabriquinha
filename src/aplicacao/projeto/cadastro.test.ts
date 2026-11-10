@@ -277,7 +277,7 @@ const TABELAS = [
   "usuario_simulado_anexo",
   "usuario_simulado",
   "uso_modelo_execucao",
-  "retrabalho_demanda",
+  "commit_humano_posterior",
   "arquivo_commit_demanda",
   "commit_ticket_demanda",
   "arquivo_evidencia",
@@ -345,7 +345,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
       INSERT INTO commit_ticket_demanda VALUES ('${n.padStart(40, "b")}', '${d}', 1, 'm', 't');
       INSERT INTO arquivo_commit_demanda (sha, caminho, status) VALUES ('${n.padStart(40, "b")}', 'f', 'A');
-      INSERT INTO retrabalho_demanda VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
+      INSERT INTO commit_humano_posterior VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
     `);
     mkdirSync(pastaDe(raiz, execucao), { recursive: true });
     writeFileSync(join(pastaDe(raiz, execucao), "log"), "x");
@@ -535,7 +535,7 @@ const TABELAS_DEMANDA = [
   "avaliacao_demanda",
   "achado_avaliacao",
   "uso_avaliacao",
-  "retrabalho_demanda",
+  "commit_humano_posterior",
   "arquivo_commit_demanda",
   "commit_ticket_demanda",
   "uso_modelo_historico",
@@ -602,7 +602,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
     INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);
-    INSERT INTO retrabalho_demanda VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
+    INSERT INTO commit_humano_posterior VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
     INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
     INSERT INTO avaliacao_demanda VALUES ('${d}av', '${d}');
     INSERT INTO achado_avaliacao VALUES ('${d}av', 1, 't', 'd', 'e', '${d}');
@@ -615,7 +615,7 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
   popularDemanda(banco, "outro", "I-9001");
   const antes = contagensDemanda(banco);
   popularDemanda(banco, "demo", "I-9101");
-  // demanda do outro projeto que depende da do projeto removido, e retrabalho dela sobre o ticket do removido
+  // demanda do outro projeto que depende da do projeto removido, e a linha de commit posterior dela sobre o ticket do removido
   banco.exec(`
     INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
     INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');

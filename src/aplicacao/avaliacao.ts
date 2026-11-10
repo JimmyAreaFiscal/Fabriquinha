@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
-import { metricasDaDemanda } from "./demanda.ts";
+import { metricasDasEtapas } from "./metricas/metricas_das_etapas.ts";
 import { colunasDoModelo, lerUsoDoPi } from "../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo, escrever } from "../armazenamento/banco.ts";
 import {
@@ -132,7 +132,7 @@ function prepararPasta(banco: DatabaseSync, dir: string, e: EscopoDaAvaliacao, d
     );
     writeFileSync(
       join(dir, "demandas", id, "metricas.json"),
-      JSON.stringify(metricasDaDemanda(banco, id), null, 2) + "\n",
+      JSON.stringify(Object.fromEntries(metricasDasEtapas(banco, { demandaId: id })), null, 2) + "\n",
     );
     mkdirSync(join(dir, "sessoes"), { recursive: true });
     for (const sessao of sessoesDaDemandaNoPeriodo(banco, id, e.de, e.ate)) {

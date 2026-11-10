@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { ProjetoConfigurado } from "../../../nucleo/projeto.ts";
 import { gravarConfiguracaoSdlc, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
-import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
+import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Troca a mensagem do zod por uma orientação; as regras do domínio (`custom`) já vêm em português e ficam. */

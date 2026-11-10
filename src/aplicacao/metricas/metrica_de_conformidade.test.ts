@@ -1,23 +1,22 @@
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { ErroDeInexistente } from "../nucleo/erros.ts";
-import { migrar } from "../armazenamento/banco.ts";
-import { MIGRACOES } from "../armazenamento/migracoes.ts";
-import { planoDaDemanda } from "../armazenamento/metricas_demanda.ts";
-import { conformidadeDaRodada as conformidadeDoPlano } from "./conformidade.ts";
-
-const conformidadeDaRodada = (b: DatabaseSync, demandaId: string, rodadaId: number) =>
-  conformidadeDoPlano(b, demandaId, rodadaId, planoDaDemanda(b, demandaId));
+import { bancoMigrado, sha } from "../../../apoio-testes/banco_de_metricas.ts";
+import { ErroDeInexistente } from "../../nucleo/erros.ts";
+import type { Recorte } from "../../nucleo/metrica.ts";
+import { MetricaDeConformidade } from "./metrica_de_conformidade.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
-const sha = (n: number) => String(n).padStart(40, "0");
+
+const conformidadeDoRecorte = (b: DatabaseSync, recorte: Recorte) =>
+  new MetricaDeConformidade().calcular(b, recorte).get("planejar");
+
+const conformidadeDaRodada = (b: DatabaseSync, demandaId: string, rodadaId: number) =>
+  conformidadeDoRecorte(b, { demandaId })?.rodadas.find((r) => r.rodadaId === rodadaId) ?? null;
 
 /** Demanda I-1 com planejar (T1), rodada 1 com a implementação T2, e T3 corretivo (fora do plano) na rodada 1; o Plano vem de `versao_plano`. */
 const banco = (planejado: string[] | null = ["a", "b", "c", "d"], correcoes: string[][] = []) => {
-  const b = new DatabaseSync(":memory:");
-  b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  const b = bancoMigrado();
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   b.exec(
@@ -38,18 +37,18 @@ const banco = (planejado: string[] | null = ["a", "b", "c", "d"], correcoes: str
     b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada})`);
   if (planejado) {
-    const rodada = (rodada_id: number) => ({
+    const rodada = (rodada_id: number, arquivos: string[]) => ({
       demanda_id: "I-1",
       rodada_id,
       titulo: "r",
       e2e: false,
-      arquivos_previstos: planejado,
+      arquivos_previstos: arquivos,
     });
     const plano = {
       demanda_id: "I-1",
       criterios: [],
       arquivos_previstos: planejado,
-      rodadas: [rodada(1)],
+      rodadas: [rodada(1, planejado)],
       tickets: [
         { demanda_id: "I-1", ticket_id: 2, rodada_id: 1, titulo: "t", descricao: "d", arquivos_previstos: planejado },
       ],
@@ -96,6 +95,8 @@ test("CA-9 e CA-10: 3 comuns em 5 da união dão 60 %, com ausentes e extras", (
     ["e", "A"],
   ]);
   assert.deepEqual(conformidadeDaRodada(b, "I-1", 1), {
+    demandaId: "I-1",
+    rodadaId: 1,
     percentual: 60,
     comuns: 3,
     uniao: 5,
@@ -141,6 +142,12 @@ test("sem plano original, sem caminhos planejados ou sem commit: null", () => {
   const sem = banco(null);
   commit(sem, 2, [["a", "M"]]);
   assert.equal(conformidadeDaRodada(sem, "I-1", 1), null);
+  assert.deepEqual(conformidadeDoRecorte(sem, { demandaId: "I-1" }), {
+    percentual: null,
+    comuns: 0,
+    uniao: 0,
+    rodadas: [],
+  });
   // A correção sem plano aprovado antes (demanda antiga sem evidência `plano`) não é lida como o original.
   sem.exec(`INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
     VALUES ('I-1', 1, 'ajustar_resultado', 'auditor', ${T}, '{}')`);
@@ -154,8 +161,64 @@ test("sem plano original, sem caminhos planejados ou sem commit: null", () => {
   assert.equal(conformidadeDaRodada(banco(), "I-1", 1), null);
 });
 
+test("a rodada traz a conformidade (null sem plano ou commit)", () => {
+  assert.deepEqual(conformidadeDoRecorte(banco(), { demandaId: "I-1" }), {
+    percentual: null,
+    comuns: 0,
+    uniao: 0,
+    rodadas: [],
+  });
+});
+
 test("demanda ou rodada inexistente lança ErroDeInexistente", () => {
   const b = banco();
+  commit(b, 2, [["a", "M"]]);
   assert.throws(() => conformidadeDaRodada(b, "I-9", 1), ErroDeInexistente);
-  assert.throws(() => conformidadeDaRodada(b, "I-1", 9), ErroDeInexistente);
+  assert.equal(conformidadeDaRodada(b, "I-1", 9), null, "a rodada que não existe não aparece");
+});
+
+test("o recorte de Demanda, de Projeto e de período juntam as rodadas com plano, pelo último commit", () => {
+  const b = banco(["a", "b"]);
+  // A rodada 2 entra no plano original com 2 arquivos; o commit dela acerta 1.
+  const gravado = b.prepare("SELECT dados FROM versao_plano WHERE numero = 1").get();
+  const plano = JSON.parse(String(gravado?.dados)) as {
+    arquivos_previstos: string[];
+    rodadas: object[];
+    tickets: object[];
+  };
+  plano.arquivos_previstos.push("x", "y");
+  plano.rodadas.push({ demanda_id: "I-1", rodada_id: 2, titulo: "r", e2e: false, arquivos_previstos: ["x", "y"] });
+  plano.tickets.push({
+    demanda_id: "I-1",
+    ticket_id: 4,
+    rodada_id: 2,
+    titulo: "t",
+    descricao: "d",
+    arquivos_previstos: ["x", "y"],
+  });
+  b.prepare("UPDATE versao_plano SET dados = ? WHERE numero = 1").run(JSON.stringify(plano));
+  commit(b, 2, [
+    ["a", "M"],
+    ["b", "M"],
+  ]);
+  commit(b, 4, [["x", "M"]]);
+  const daDemanda = conformidadeDoRecorte(b, { demandaId: "I-1" });
+  assert.deepEqual(
+    daDemanda?.rodadas.map((r) => [r.rodadaId, r.percentual]),
+    [
+      [1, 100],
+      [2, 50],
+    ],
+  );
+  assert.deepEqual([daDemanda.comuns, daDemanda.uniao, daDemanda.percentual], [3, 4, 75]);
+  assert.deepEqual(conformidadeDoRecorte(b, { projeto: "p" }), daDemanda);
+  assert.deepEqual(conformidadeDoRecorte(b, { projeto: "outro" })?.rodadas, []);
+  const noPeriodo = { inicio: "2026-01-01T00:00:00.000Z", fim: "2026-02-01T00:00:00.000Z" };
+  assert.deepEqual(conformidadeDoRecorte(b, noPeriodo), daDemanda);
+  assert.deepEqual(conformidadeDoRecorte(b, { inicio: noPeriodo.fim, fim: "2026-03-01T00:00:00.000Z" })?.rodadas, []);
+  assert.deepEqual(new MetricaDeConformidade().definicao, {
+    tipo: "conformidade_com_o_plano",
+    rotulo: "Conformidade do PR com o plano",
+    fonte: "Plano × arquivos alterados",
+  });
 });

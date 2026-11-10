@@ -14,7 +14,7 @@ import { visaoDaDemanda } from "../../../aplicacao/consultas/visao_da_demanda.ts
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { carregarDemanda, listarDemandas, sessaoDeCadaTicketDaDemanda } from "../../../armazenamento/demandas.ts";
-import { metricasDaDemanda } from "../../../aplicacao/demanda.ts";
+import { usoDaDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
@@ -109,7 +109,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   const achado = achadoDaDemanda(banco, id);
   const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
   const comPiAtivo = ticketsComPiAtivo(banco);
-  const { modelos, custo, textoDoCusto } = metricasDaDemanda(banco, id).total;
+  const { modelos, custo, textoDoCusto } = usoDaDemanda(banco, id);
   const elegiveis = new Set(
     prontosParaExecutarAgora(
       new Despacho().selecionar({

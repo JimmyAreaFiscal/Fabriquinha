@@ -96,9 +96,16 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   })),
   {
     arquivo: "textos/src/execucao/avaliacao.md.txt",
-    de: "etapas, devoluções e reprovações.",
-    para: "etapas, exigências de alteração (`exigenciasDeAlteracao`, as Tentativas reprovadas) e reprovações.",
-    motivo: "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido",
+    de: "custo, chamadas, etapas, devoluções e reprovações.",
+    para: "as Métricas de Sucesso de cada Etapa (uso: tokens, modelo e custo; aprovações e reprovações; conformidade com o plano; alterações posteriores; exigências de alteração; bugs nos arquivos revisados; nota humana), cada uma com o rótulo e a fonte de onde deriva.",
+    motivo:
+      "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido; I-284: ele traz as Métricas de Sucesso de cada Etapa",
+  },
+  {
+    arquivo: "textos/src/execucao/avaliacao.md.txt",
+    de: "retrabalho, devoluções, reprovações,",
+    para: "alterações posteriores, exigências de alteração, reprovações,",
+    motivo: "I-284: retrabalho deixa de ser conceito e o vocabulário é o das Métricas de Sucesso",
   },
   ...PROMPTS_DA_BASE.map((arquivo) => ({
     arquivo,

@@ -1,6 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasDemandaPeriodo, MetricasMesDemanda, Nivel, Soma } from "../../../aplicacao/periodo_demanda.ts";
+import { MetricaDeAlteracoesPosteriores } from "../../../aplicacao/metricas/metrica_de_alteracoes_posteriores.ts";
+import { MetricaDeAprovacoesEReprovacoes } from "../../../aplicacao/metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
+import { MetricaDeBugsNosArquivosRevisados } from "../../../aplicacao/metricas/metrica_de_bugs_nos_arquivos_revisados.ts";
+import { MetricaDeConformidade } from "../../../aplicacao/metricas/metrica_de_conformidade.ts";
+import { MetricaDeExigenciasDeAlteracao } from "../../../aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts";
+import { MetricaDeNotaHumana } from "../../../aplicacao/metricas/metrica_de_nota_humana.ts";
+import { MetricaDeUso } from "../../../aplicacao/metricas/metrica_de_uso.ts";
+import type {
+  MetricasDaDemandaNoPeriodo,
+  MetricasDaEtapa,
+  MetricasDoMes,
+  Nivel,
+} from "../../../aplicacao/metricas/metricas_do_periodo.ts";
+import { CATALOGO_DE_ETAPAS } from "../../../nucleo/etapa.ts";
+import type { TipoMetrica } from "../../../nucleo/metrica.ts";
+import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import {
   cardsDoMes,
   contarMeses,
@@ -29,17 +44,8 @@ const texto = (html: string) =>
     .replaceAll(/\s+/g, " ")
     .trim();
 
-const ETAPAS = [
-  "entender_e_desenhar",
-  "planejar",
-  "implementar",
-  "revisar_rodada",
-  "encerrar_rodada",
-  "ajustar_resultado",
-  "revisar_demanda",
-  "encerrar_demanda",
-  "resolver_conflito",
-] as const;
+type Soma = Omit<MetricasDoMes["total"], "modelos">;
+
 const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheEscrita = 0, execucoes = 0): Soma => ({
   execucoes,
   falhas: 0,
@@ -49,31 +55,74 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   textoDoCusto: `US$ ${custo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
 });
 
+const DEFINICOES = Object.fromEntries(
+  [
+    new MetricaDeUso(),
+    new MetricaDeAprovacoesEReprovacoes(),
+    new MetricaDeConformidade(),
+    new MetricaDeAlteracoesPosteriores(),
+    new MetricaDeExigenciasDeAlteracao(),
+    new MetricaDeBugsNosArquivosRevisados(),
+    new MetricaDeNotaHumana(),
+  ].map((calculo) => [calculo.tipo, calculo.definicao]),
+) as Record<TipoMetrica, MetricasDaEtapa["metricas"][number]["definicao"]>;
+
+/** O valor de cada Métrica quando a Etapa não tem nada a mostrar. */
+const USO_VAZIO = { ...consumo(0), modelos: [], custoExterno: { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 } };
+const VALORES_VAZIOS: Record<TipoMetrica, unknown> = {
+  uso: USO_VAZIO,
+  aprovacoes_e_reprovacoes: { aprovacoes: 0, reprovacoes: 0 },
+  conformidade_com_o_plano: { percentual: null, comuns: 0, uniao: 0, rodadas: [] },
+  alteracoes_posteriores: { adicionadas: 0, alteradasPorHumanos: 0 },
+  exigencias_de_alteracao: { reprovacoes: 0 },
+  bugs_nos_arquivos_revisados: { alteradasPorHumanos: 0 },
+  nota_humana: { soma: 0, quantidade: 0, media: null },
+};
+
+/** O Uso de uma Etapa com o custo, as execuções e os tokens de entrada dados; o resto é zero. */
+const uso = (custo: number, execucoes = 0, entrada = 0, resto: Record<string, unknown> = {}) => ({
+  ...USO_VAZIO,
+  ...consumo(custo, entrada, 0, 0, 0, execucoes),
+  ...resto,
+});
+
+type ValoresDasEtapas = Partial<Record<EtapaTicket, Partial<Record<TipoMetrica, unknown>>>>;
+
+/** As nove Etapas, cada uma com as Métricas que o catálogo declara para ela, com os `valores` dados e zero no resto. */
+const etapas = (valores: ValoresDasEtapas = {}): MetricasDaEtapa[] =>
+  EtapaTicket.options.map((etapa) => ({
+    etapa,
+    metricas: CATALOGO_DE_ETAPAS[etapa].metricas.map((tipo) => ({
+      definicao: DEFINICOES[tipo],
+      valor: valores[etapa]?.[tipo] ?? VALORES_VAZIOS[tipo],
+    })),
+  }));
+
 /** Um mês com custo, contagens e nota; a implementação concentra o custo e os tokens, como o total do mês. */
 function mes(
   m: string,
   custo: number,
   n = 0,
   nota: number | null = null,
-  outros: Partial<MetricasMesDemanda> = {},
-): MetricasMesDemanda {
+  outros: Partial<MetricasDoMes> = {},
+): MetricasDoMes {
   return {
     mes: m,
     projeto: null,
+    etapas: etapas({
+      implementar: {
+        uso: uso(custo, n, 1000 * custo, { duracaoMs: n * 60_000 }),
+        alteracoes_posteriores: { adicionadas: 100, alteradasPorHumanos: n },
+      },
+      encerrar_rodada: {
+        nota_humana: { soma: nota === null ? 0 : 2 * nota, quantidade: nota === null ? 0 : 2, media: nota },
+      },
+    }),
     total: { ...consumo(custo, 1000 * custo), modelos: [] },
     niveis: [],
     demandas: { registradas: n + 1, concluidas: n },
     tickets: { criados: n + 2, concluidos: n },
     prs: { abertos: n + 1, mergeados: n },
-    nota: { media: nota, notas: nota === null ? 0 : 2 },
-    retrabalho: { adicionadas: 100, alteradas: 10 * n, porHumanos: n },
-    etapas: ETAPAS.map((etapa) => ({
-      etapa,
-      ...consumo(etapa === "implementar" ? custo : 0, etapa === "implementar" ? 1000 * custo : 0),
-      execucoes: etapa === "implementar" ? n : 0,
-      reprovacoes: 0,
-      duracaoMs: etapa === "implementar" ? n * 60_000 : 0,
-    })),
     ...outros,
   };
 }
@@ -91,14 +140,15 @@ const ESTADO: EstadoDasMetricas = {
 };
 
 const demanda = (
-  d: Partial<MetricasDemandaPeriodo> & Pick<MetricasDemandaPeriodo, "demanda">,
-): MetricasDemandaPeriodo => ({
+  d: Partial<MetricasDaDemandaNoPeriodo> & Pick<MetricasDaDemandaNoPeriodo, "demanda">,
+): MetricasDaDemandaNoPeriodo => ({
   projeto: "loja",
   titulo: `Demanda ${d.demanda}`,
   estado: "em_execucao",
   ...consumo(1, 0, 0, 0, 0, 1),
   duracaoMs: 60_000,
   reprovacoes: 0,
+  conformidade: null,
   nota: null,
   ...d,
 });
@@ -107,7 +157,7 @@ const DADOS: DadosDasMetricas = {
   projetos: ["loja", "site <x>"],
   meses: MESES,
   demandas: [],
-  totalDasDemandas: consumo(0),
+  totalDasDemandas: { ...consumo(0), conformidade: null, nota: null },
   atual: "2026-10",
 };
 
@@ -180,20 +230,20 @@ test("cards: valor, média dos anteriores e variação; mês sem nota mostra —
     cards(ESTADO),
     "Custo US$ 60,00 média US$ 15,00 ▲ 300% Tokens 60,0 mil média 15,0 mil ▲ 300% " +
       "Demandas concluídas 2 de 3 registradas média 2 = 0% Tickets concluídos 2 de 4 criados média 2 = 0% " +
-      "PRs mergeados 2 de 3 abertos média 2 = 0% Nota média dos PRs 5,0 de 5 · 2 notas média 4,0 ▲ 25% " +
-      "Retrabalho (linhas) 20 de 100 adicionadas média 20 = 0%",
+      "PRs mergeados 2 de 3 abertos média 2 = 0% Nota humana média 5,0 de 5 · 2 notas média 4,0 ▲ 25% " +
+      "Alterações posteriores (linhas) 2 de 100 adicionadas média 2 = 0%",
   );
   // Foco em set/26: a média é só de ago/26, e o mês sem nota mostra —.
   assert.match(
     cards({ ...ESTADO, foco: "2026-09" }),
-    /Custo US\$ 20,00 média US\$ 10,00 ▲ 100%.*Nota média dos PRs — de 5 · 0 notas média 4,0 Retrabalho/,
+    /Custo US\$ 20,00 média US\$ 10,00 ▲ 100%.*Nota humana média — de 5 · 0 notas média 4,0 Alterações posteriores/,
   );
   assert.match(cards({ ...ESTADO, foco: "2026-08" }), /^Custo US\$ 10,00 sem meses anteriores Tokens/);
   const semNotas = paginaDeMetricas(
     { ...DADOS, meses: [mes("2026-09", 1), mes("2026-10", 1, 1, 3)] },
     { ...ESTADO, de: "2026-09" },
   );
-  assert.match(texto(semNotas), /Nota média dos PRs 3,0 de 5 · 2 notas média — Retrabalho/);
+  assert.match(texto(semNotas), /Nota humana média 3,0 de 5 · 2 notas média — Alterações posteriores/);
   assert.match(paginaDeMetricas(DADOS, { ...ESTADO, metrica: "nota" }), /data-metrica="nota" aria-pressed="true"/);
   // Média de contagens com uma casa.
   const meia = paginaDeMetricas(
@@ -207,7 +257,9 @@ test("cards: valor, média dos anteriores e variação; mês sem nota mostra —
       ...DADOS,
       meses: [
         mes("2026-10", 1, 24_929, null, {
-          retrabalho: { adicionadas: 289_424, alteradas: 24_929, porHumanos: 0 },
+          etapas: etapas({
+            implementar: { alteracoes_posteriores: { adicionadas: 289_424, alteradasPorHumanos: 24_929 } },
+          }),
         }),
       ],
     },
@@ -263,7 +315,7 @@ test("dica: o valor, o par e, no foco, a média dos anteriores; mês fora do per
   assert.deepEqual(dica(MESES, { ...ESTADO, metrica: "nota" }, "2026-09"), {
     titulo: "set/26 · clique para focar",
     linhas: [
-      ["var(--foco)", "—", "nota média dos prs"],
+      ["var(--foco)", "—", "nota humana média"],
       ["var(--muted)", "0", "notas dadas"],
     ],
   });
@@ -284,10 +336,10 @@ test("ver tabela: os números do gráfico mês a mês, com o par quando há", ()
     texto(tabelaDaEvolucao(MESES, { ...ESTADO, metrica: "tickets" })),
     /^Mês Tickets concluídos criados ago\/26 1 3/,
   );
-  assert.equal(texto(tabelaDaEvolucao(MESES, { ...ESTADO, metrica: "nota" })).split(" ")[11], "—");
+  assert.match(texto(tabelaDaEvolucao(MESES, { ...ESTADO, metrica: "nota" })), /set\/26 — 0 out\/26/);
   assert.match(
-    texto(tabelaDaEvolucao(MESES, { ...ESTADO, metrica: "retrabalho" })),
-    /^Mês Retrabalho \(linhas\) linhas adicionadas ago\/26 10 100/,
+    texto(tabelaDaEvolucao(MESES, { ...ESTADO, metrica: "alteracoes" })),
+    /^Mês Alterações posteriores \(linhas\) linhas adicionadas ago\/26 1 100/,
   );
   assert.equal(
     texto(tabelaDaEvolucao(MESES, ESTADO)),
@@ -298,52 +350,201 @@ test("ver tabela: os números do gráfico mês a mês, com o par quando há", ()
   assert.match(paginaDeMetricas(DADOS, ESTADO), /data-tabela>ver tabela<\/button>[\s\S]*data-evolucao><\/div>/);
 });
 
-test("por etapa: o mês em foco contra a média, com barras duplas e duração média por execução", () => {
+/** As seções de Etapa da página, com o texto de cada uma. */
+const secoesDaPagina = (html: string) =>
+  [
+    ...html.matchAll(/<section class="grafico superficie etapa-metricas" aria-label="([^"]+)">([\s\S]*?)<\/section>/g),
+  ].map((m) => ({ titulo: m[1] ?? "", html: m[2] ?? "", texto: texto(m[2] ?? "") }));
+
+test("por etapa: uma seção para cada uma das nove Etapas, com o título, o modo e as Métricas que o catálogo declara", () => {
+  const secoes = secoesDaPagina(paginaDeMetricas(DADOS, ESTADO));
+  const rotulos = (html: string) => [...html.matchAll(/<span class="rotulo">([^<]*)<\/span>/g)].map((m) => m[1]);
+  const revisao = ["Exigências de alteração", "Bugs nos arquivos revisados", "Uso"];
+  assert.deepEqual(
+    secoes.map((s) => [s.titulo, rotulos(s.html)]),
+    [
+      ["Entender e desenhar", ["Reprovações no Gate", "Uso"]],
+      ["Planejar", ["Conformidade do PR com o plano", "Uso"]],
+      ["Implementar", ["Alterações posteriores no código", "Uso"]],
+      ["Revisar rodada", revisao],
+      ["Encerrar rodada", ["Nota humana", "Uso"]],
+      ["Revisar demanda", revisao],
+      ["Encerrar demanda", ["Uso"]],
+      ["Resolver conflito", ["Uso"]],
+      ["Ajustar Resultado", ["Uso"]],
+    ],
+  );
+  assert.deepEqual(
+    secoes.map((s) => /<span class="sub">([^<]*)<\/span>/.exec(s.html)?.[1]),
+    [
+      "Não Gerenciado · por Demanda",
+      "Gerenciado · por Demanda",
+      "Gerenciado · por Rodada",
+      "Gerenciado · por Rodada",
+      "Gerenciado · por Rodada",
+      "Gerenciado · por Demanda",
+      "Fabriquinha · por Demanda",
+      "Gerenciado · por Demanda",
+      "Gerenciado (interativo) · por Rodada",
+    ],
+  );
+  // A Etapa que só tem Uso diz isso, e a fonte de cada Métrica vem do servidor.
+  assert.equal((secoes[6]?.html.match(/Só Uso: o catálogo não declara outra Métrica\./g) ?? []).length, 1);
+  assert.match(secoes[1]?.texto ?? "", /Plano × arquivos alterados/);
+  assert.match(secoes[4]?.texto ?? "", /Gate do PR/);
   const html = paginaDeMetricas(DADOS, ESTADO);
-  const secao = /<h3>out\/26 × média[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
-  const linhas = [...secao.matchAll(/<tr><td>([\s\S]*?)<\/tr>/g)].map((m) => texto(m[1] ?? ""));
-  assert.equal(linhas.length, 10);
-  assert.equal(linhas[0], "Demanda US$ 0,00 US$ 0,00 0 / 0 0 / 0,0 0 / 0,0 0 / 0,0 — / —");
-  assert.equal(
-    linhas[2],
-    "Implementar US$ 60,00 US$ 15,00 ▲ 300% 60,0 mil / 15,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min",
+  assert.match(
+    html,
+    /<h2>Por etapa<\/h2><span class="muted">out\/26 · as Métricas de Sucesso de cada Etapa e o Uso, contra a média dos meses anteriores<\/span>/,
   );
-  // Total: custo com média e Δ, contagens somadas (mês / soma das médias) e duração ponderada pelas execuções.
-  assert.equal(linhas[9], "Total US$ 60,00 US$ 15,00 ▲ 300% 60,0 mil / 15,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min");
-  assert.match(secao, /width:100.0%;background:var\(--foco\)"><\/i><i style="width:25.0%;background:var\(--base\)/);
-  assert.equal(linhas[5]?.split(" ").slice(0, 3).join(" "), "Sessão em aberto");
-  // Primeiro mês: sem média, e o Total também mostra —.
-  const primeiro = paginaDeMetricas(DADOS, { ...ESTADO, foco: "2026-08" });
-  assert.match(texto(primeiro), /Implementar US\$ 10,00 — 10,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
-  assert.match(texto(primeiro), /Total US\$ 10,00 — 10,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
-  // A duração da média é ponderada pelas execuções: (1 min + 6 min) / 4 = 1 min 45 s, não a média simples de 1 e 2 min.
-  const comDuracao = (m: string, execucoes: number, duracaoMs: number) =>
-    mes(m, 1, 0, null, {
-      etapas: mes(m, 1).etapas.map((x) => (x.etapa === "implementar" ? { ...x, execucoes, duracaoMs } : x)),
-    });
-  const pesada = paginaDeMetricas(
-    {
-      ...DADOS,
-      meses: [comDuracao("2026-08", 1, 60_000), comDuracao("2026-09", 3, 360_000), comDuracao("2026-10", 0, 0)],
-    },
-    ESTADO,
-  );
-  assert.match(texto(/<tfoot>[\s\S]*?<\/tfoot>/.exec(pesada)?.[0] ?? ""), /— \/ 1 min 45 s$/);
-  // Sem custo em alguma sessão, o texto do custo que a rota entrega aparece com ≥ e o aviso, sem somar nada.
-  const incompleto = mes("2026-10", 1, 1, null, {
-    total: { ...consumo(1), textoDoCusto: "≥ US$ 1,00 (1 sessão sem custo)", modelos: [] },
-    etapas: mes("2026-10", 1, 1).etapas.map((x) =>
-      x.etapa === "implementar" ? { ...x, textoDoCusto: "≥ US$ 0,50 (1 sessão sem custo)" } : x,
-    ),
-  });
-  const parcial = paginaDeMetricas({ ...DADOS, meses: [incompleto] }, { ...ESTADO, de: "2026-10" });
-  assert.match(texto(parcial), /Implementar ≥ US\$ 0,50 \(1 sessão sem custo\) /);
-  assert.match(texto(parcial), /Total ≥ US\$ 1,00 \(1 sessão sem custo\) /);
-  assert.match(texto(parcial), /Custo ≥ US\$ 1,00 \(1 sessão sem custo\)/);
-  assert.doesNotMatch(texto(parcial), /\*/);
 });
 
-test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho do mês", () => {
+test("por etapa: o valor de cada Métrica de Sucesso contra a média dos meses anteriores, e — onde não há o que medir", () => {
+  const anterior: ValoresDasEtapas = {
+    entender_e_desenhar: { aprovacoes_e_reprovacoes: { aprovacoes: 1, reprovacoes: 1 } },
+    planejar: { conformidade_com_o_plano: { percentual: 71, comuns: 1, uniao: 1, rodadas: [] } },
+    implementar: { alteracoes_posteriores: { adicionadas: 1000, alteradasPorHumanos: 600 } },
+    revisar_rodada: {
+      exigencias_de_alteracao: { reprovacoes: 3 },
+      bugs_nos_arquivos_revisados: { alteradasPorHumanos: 4 },
+    },
+    encerrar_rodada: { nota_humana: { soma: 8, quantidade: 2, media: 4 } },
+  };
+  const atual: ValoresDasEtapas = {
+    entender_e_desenhar: { aprovacoes_e_reprovacoes: { aprovacoes: 5, reprovacoes: 2 } },
+    planejar: {
+      conformidade_com_o_plano: {
+        percentual: 78,
+        comuns: 7,
+        uniao: 9,
+        rodadas: Array.from({ length: 9 }, () => ({}) as never),
+      },
+    },
+    implementar: { alteracoes_posteriores: { adicionadas: 13_904, alteradasPorHumanos: 312 } },
+    revisar_rodada: {
+      exigencias_de_alteracao: { reprovacoes: 1 },
+      bugs_nos_arquivos_revisados: { alteradasPorHumanos: 0 },
+    },
+    encerrar_rodada: { nota_humana: { soma: 9, quantidade: 2, media: 4.5 } },
+  };
+  const pagina = (m: ValoresDasEtapas, anteriores: ValoresDasEtapas[] = [anterior]) =>
+    secoesDaPagina(
+      paginaDeMetricas(
+        {
+          ...DADOS,
+          meses: [
+            ...anteriores.map((v, i) => mes(`2026-0${String(i + 1)}`, 0, 0, null, { etapas: etapas(v) })),
+            mes("2026-10", 0, 0, null, { etapas: etapas(m) }),
+          ],
+        },
+        { ...ESTADO, de: "2026-01" },
+      ),
+    );
+  const secoes = pagina(atual);
+  assert.match(
+    secoes[0]?.texto ?? "",
+    /^Entender e desenhar .* Reprovações no Gate 2 de 7 Gates · 5 aprovações média 1 ▲ 100% Gate da demanda/,
+  );
+  assert.match(
+    secoes[1]?.texto ?? "",
+    /Conformidade do PR com o plano 0,78 Jaccard médio · 9 PRs média 0,71 ▲ 10% Plano × arquivos alterados/,
+  );
+  assert.match(
+    secoes[2]?.texto ?? "",
+    /Alterações posteriores no código 312 de 13\.904 linhas adicionadas média 600 ▼ 48% Commits humanos posteriores na base/,
+  );
+  assert.match(
+    secoes[3]?.texto ?? "",
+    /Exigências de alteração 1 reprovação média 3 ▼ 67% .* Bugs nos arquivos revisados 0 linhas alteradas por humanos média 4 ▼ 100%/,
+  );
+  assert.match(secoes[4]?.texto ?? "", /Nota humana 4,5 de 5 · 2 notas média 4,0 ▲ 13% Gate do PR/);
+  // Sem nota e sem conformidade o valor é —; sem meses anteriores, a média não existe; média só dos meses com valor.
+  const vazio = pagina({}, []);
+  assert.match(vazio[4]?.texto ?? "", /Nota humana — de 5 · 0 notas sem meses anteriores/);
+  assert.match(vazio[1]?.texto ?? "", /Conformidade do PR com o plano — Jaccard médio · 0 PRs sem meses anteriores/);
+  assert.match(pagina({}, [{}])[4]?.texto ?? "", /Nota humana — de 5 · 0 notas média —/);
+  assert.match(pagina(atual, [{}, anterior])[4]?.texto ?? "", /Nota humana 4,5 de 5 · 2 notas média 4,0 ▲ 13%/);
+  assert.match(
+    pagina({}, [{}])[0]?.texto ?? "",
+    /Reprovações no Gate 0 de 0 Gates · 0 aprovações média 0 Gate da demanda/,
+  );
+});
+
+test("por etapa: o Uso de cada Etapa com o custo, a média, a fonte e os modelos na escala do maior deles", () => {
+  const modelo = (nome: string, custo: number | null, entrada: number, cache = 0) => ({
+    modelo: nome,
+    tokens_entrada: entrada,
+    tokens_saida: 0,
+    tokens_cache_leitura: cache,
+    tokens_cache_escrita: 0,
+    custo,
+    chamadas: 0,
+  });
+  const externo = { conhecido: 0, trabalhosSemCusto: 0, sessoes: 5 };
+  const anterior = mes("2026-09", 0, 0, null, {
+    etapas: etapas({
+      implementar: { uso: uso(10, 2) },
+      planejar: { uso: uso(4, 1) },
+      entender_e_desenhar: { uso: uso(2) },
+    }),
+  });
+  const atual = mes("2026-10", 0, 0, null, {
+    etapas: etapas({
+      entender_e_desenhar: {
+        uso: uso(4.2, 0, 9_800_000, {
+          textoDoCusto: "≥ US$ 4,20 (2 sessões sem custo)",
+          custoExterno: externo,
+          modelos: [modelo("claude-bridge/claude-opus-5-5", 4.2, 100, 6_000_000), modelo("local", null, 50)],
+        }),
+      },
+      implementar: {
+        uso: uso(15, 3, 0, {
+          falhas: 1,
+          duracaoMs: 3 * 60_000 + 30_000,
+          modelos: [
+            modelo("openai-codex/gpt-6.1-sol", 0, 1_000_000),
+            modelo("claude-bridge/claude-sonnet-5-5", 15, 2_000_000),
+          ],
+        }),
+      },
+      encerrar_demanda: { uso: uso(0, 3, 0, { duracaoMs: 126_000 }) },
+    }),
+  });
+  const secoes = secoesDaPagina(paginaDeMetricas({ ...DADOS, meses: [anterior, atual] }, { ...ESTADO, de: "2026-09" }));
+  const [entender, planejar, implementar] = [secoes[0], secoes[1], secoes[2]];
+  // O custo com o aviso em destaque, a média dos meses anteriores e a variação.
+  assert.match(
+    entender?.html ?? "",
+    /<span class="kpi-valor">≥ US\$ 4,20 <small class="sem-custo">\(2 sessões sem custo\)<\/small><\/span>/,
+  );
+  assert.match(
+    entender?.texto ?? "",
+    /Uso ≥ US\$ 4,20 \(2 sessões sem custo\) média US\$ 2,00 ▲ 110% 9,8 M tokens · 5 sessões declaradas pelo produtor /,
+  );
+  assert.match(
+    implementar?.texto ?? "",
+    /Uso US\$ 15,00 média US\$ 10,00 ▲ 50% 0 tokens · 3 execuções · 1 falha · 1 min 10 s por execução /,
+  );
+  assert.match(
+    planejar?.texto ?? "",
+    /Uso US\$ 0,00 média US\$ 4,00 ▼ 100% 0 tokens · 0 execuções · 0 falhas Nenhum modelo usado em out\/26\./,
+  );
+  assert.match(secoes[6]?.texto ?? "", /0 tokens · 3 execuções · 0 falhas · 42 s por execução/);
+  // Os modelos: o nome, o provedor, o custo e os tokens, do mais caro ao mais barato; sem custo informado, "sem custo".
+  assert.match(
+    implementar?.texto ?? "",
+    /claude-sonnet-5-5 claude-bridge US\$ 15,00 2,0 M gpt-6\.1-sol openai-codex US\$ 0,00 1,0 M/,
+  );
+  assert.match(entender?.texto ?? "", /claude-opus-5-5 claude-bridge US\$ 4,20 6,0 M local sem custo 50/);
+  // A largura de cada trilha é relativa ao maior modelo de todas as Etapas do mês (6,0 M tokens).
+  assert.match(entender?.html ?? "", /<div class="trilha" style="width:100.0%">/);
+  assert.match(implementar?.html ?? "", /<div class="trilha" style="width:33.3%">/);
+  assert.match(implementar?.html ?? "", /<div class="trilha" style="width:16.7%">/);
+  // Sem execução e sem sessão declarada, a Etapa vazia não tem média nem aviso.
+  assert.match(secoes[7]?.texto ?? "", /Uso US\$ 0,00 média US\$ 0,00 0 tokens/);
+});
+
+test("por nível: cada nível do agrupamento com a soma do mês, e o aviso quando há sessão sem custo", () => {
   const nivel = (n: Nivel, grupos: number, textoDoCusto: string) => ({
     nivel: n,
     grupos,
@@ -359,7 +560,15 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
     nivel("projeto", 1, textoComSessaoSemCusto),
   ];
   const html = paginaDeMetricas(
-    { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis })] },
+    {
+      ...DADOS,
+      meses: [
+        mes("2026-10", 2, 1, null, {
+          niveis,
+          total: { ...consumo(2), custo: { conhecido: 2, trabalhosSemCusto: 2 }, modelos: [] },
+        }),
+      ],
+    },
     { ...ESTADO, de: "2026-10" },
   );
   const secao = /<h2>Por nível<\/h2>[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
@@ -369,7 +578,22 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
       "Nível Grupos Execuções Tokens Custo Execução 5 5 190 US$ 2,00 " +
       `Sessão 3 5 190 ${textoComSessaoSemCusto} Ticket 3 5 190 ${textoComSessaoSemCusto} Rodada 2 5 190 ${textoComSessaoSemCusto} ` +
       `Demanda 1 5 190 ${textoComSessaoSemCusto} Projeto 1 5 190 ${textoComSessaoSemCusto} ` +
-      "Retrabalho: 10 de 100 linhas escritas no mês foram alteradas depois (1 por humanos).",
+      "≥: 2 sessões sem custo informado; o custo delas fica fora da soma.",
+  );
+  const completo = paginaDeMetricas(
+    { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis })] },
+    { ...ESTADO, de: "2026-10" },
+  );
+  assert.doesNotMatch(texto(/<h2>Por nível<\/h2>[\s\S]*?<\/section>/.exec(completo)?.[0] ?? ""), /≥:/);
+  const uma = { ...consumo(2), custo: { conhecido: 2, trabalhosSemCusto: 1 }, modelos: [] };
+  assert.match(
+    texto(
+      paginaDeMetricas(
+        { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis, total: uma })] },
+        { ...ESTADO, de: "2026-10" },
+      ),
+    ),
+    /≥: 1 sessão sem custo informado;/,
   );
 });
 
@@ -389,6 +613,7 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
     uso("claude-haiku", "anthropic", 0, 200),
     uso("local", "llamacpp", null, 50),
     uso("local-2", "llamacpp", null, 40),
+    { ...uso("", "", null, 30), modelo: "sem-provedor" },
   ];
   const html = paginaDeMetricas(
     { ...DADOS, meses: [mes("2026-10", 9, 0, null, { total: { ...consumo(9), modelos } })] },
@@ -397,7 +622,7 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
   const secao = /<h3>out\/26<\/h3><span class="sub">tokens por tipo[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
   assert.equal(
     texto(secao),
-    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída anthropic/claude-opus-5-5 US$ 9,00 8,7 M anthropic/claude-haiku US$ 0,00 200 llamacpp/qwen &#60;3&#62; US$ 0,00 100 llamacpp/local custo desconhecido 50 llamacpp/local-2 custo desconhecido 40",
+    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída claude-opus-5-5 anthropic US$ 9,00 8,7 M claude-haiku anthropic US$ 0,00 200 qwen &#60;3&#62; llamacpp US$ 0,00 100 local llamacpp sem custo 50 local-2 llamacpp sem custo 40 sem-provedor sem custo 30",
   );
   assert.match(
     secao,
@@ -426,13 +651,19 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
       projeto: "site",
       estado: "gate_demanda",
       nota: 4,
+      conformidade: 78,
       falhas: 1,
       reprovacoes: 2,
       textoDoCusto: "≥ US$ 1,00 (1 sessão sem custo)",
     }),
     demanda({ demanda: "I-7", titulo: "Cache", estado: "concluida" }),
   ];
-  const totalDasDemandas = { ...consumo(7, 1000), textoDoCusto: "≥ US$ 7,00 (1 sessão sem custo)" };
+  const totalDasDemandas = {
+    ...consumo(7, 1000),
+    textoDoCusto: "≥ US$ 7,00 (1 sessão sem custo)",
+    conformidade: 79,
+    nota: 4.25,
+  };
   const ids = (e: Partial<EstadoDasMetricas>) =>
     [
       ...paginaDeMetricas({ ...DADOS, demandas, totalDasDemandas }, { ...ESTADO, ...e }).matchAll(
@@ -448,6 +679,7 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
   assert.deepEqual(ids({ ordem: ["duracao", -1] }), ["I-3", "I-12", "I-7"]);
   assert.deepEqual(ids({ ordem: ["nota", 1] }), ["I-3", "I-7", "I-12"]);
   assert.deepEqual(ids({ ordem: ["falhas", -1] }), ["I-12", "I-3", "I-7"]);
+  assert.deepEqual(ids({ ordem: ["conformidade", -1] }), ["I-12", "I-3", "I-7"]);
 
   const html = paginaDeMetricas({ ...DADOS, demandas, totalDasDemandas }, ESTADO);
   assert.match(
@@ -459,15 +691,20 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
     /<a class="id" href="\/demandas\/I-12">I-12<\/a><\/td>\s*<td>Demanda I-12<\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill pill-aguarda">Aprovação da demanda<\/span>/,
   );
   assert.match(html, /<td class="num">≥ US\$ 1,00 \(1 sessão sem custo\)<\/td>/);
-  assert.match(html, /<td class="num">4,0<\/td>/);
+  assert.match(html, /<td class="num">0,78<\/td><td class="num">4,0<\/td>/);
+  assert.match(html, /<td class="num">—<\/td><td class="num">—<\/td><\/tr>/);
+  assert.match(html, /data-ordem="conformidade">Conformidade<\/button>[\s\S]*data-ordem="nota">Nota humana<\/button>/);
   assert.match(html, /Busca &#60;b&#62;/);
   assert.match(html, /<span class="pill pill-ok">Concluída<\/span>/);
   assert.doesNotMatch(html, /Iterações/);
   assert.equal(
     texto(/<tfoot>(?:(?!<tfoot>)[\s\S])*?<\/tfoot>(?![\s\S]*<tfoot>)/.exec(html)?.[0] ?? ""),
-    "3 demandas ≥ US$ 7,00 (1 sessão sem custo) 1,0 mil 6 1 2 1 h 2 min",
+    "3 demandas ≥ US$ 7,00 (1 sessão sem custo) 1,0 mil 6 1 2 1 h 2 min 0,79 4,3",
   );
-  assert.match(html, /a out\/26 · todos os projetos · clique/);
+  assert.match(
+    html,
+    /a out\/26 · todos os projetos · clique no cabeçalho para ordenar · ≥ há sessão sem custo informado · conformidade: Jaccard do plano × arquivos alterados · nota: média do Gate do PR/,
+  );
 
   const loja = paginaDeMetricas(
     { ...DADOS, demandas, totalDasDemandas },
@@ -495,7 +732,7 @@ test("Projeto: os 6 cards do mês corrente", () => {
   });
   assert.equal(
     texto(cardsDoMes(m)),
-    "Custo · outubro US$ 38,42 902 execuções Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,0 M cache lido · 300,0 mil cache escrito Demandas 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Retrabalho 70 / 100 linhas alteradas / adicionadas",
+    "Custo · outubro US$ 38,42 902 execuções Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,0 M cache lido · 300,0 mil cache escrito Demandas 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Alterações posteriores 7 / 100 linhas alteradas / adicionadas",
   );
   assert.match(
     cardsDoMes(mes("2026-01", 0, 0, null, { total: { ...consumo(0, 0, 0, 0, 0, 1), modelos: [] } })),
@@ -527,22 +764,21 @@ test("Início: a frase do mês corrente de todos os projetos, com o link para as
 });
 
 test("milhares: as contagens das tabelas e dos cards do Projeto com o separador de milhar", () => {
-  const grande = { ...consumo(1, 0, 0, 0, 0, 24_929), falhas: 1_234, reprovacoes: 5_678 };
+  const grande = { ...consumo(1, 0, 0, 0, 0, 24_929), falhas: 1_234 };
   const m = mes("2026-10", 1, 24_929, null, {
     niveis: [{ nivel: "execucao", grupos: 12_345, total: grande }],
-    etapas: ETAPAS.map((etapa) => ({ etapa, reprovacoes: 0, ...(etapa === "implementar" ? grande : consumo(0)) })),
-    retrabalho: { adicionadas: 289_424, alteradas: 24_929, porHumanos: 0 },
+    etapas: etapas({ implementar: { alteracoes_posteriores: { adicionadas: 289_424, alteradasPorHumanos: 24_929 } } }),
   });
   const html = texto(
     paginaDeMetricas(
-      { ...DADOS, meses: [m], demandas: [demanda({ demanda: "I-1", ...grande })], totalDasDemandas: grande },
+      {
+        ...DADOS,
+        meses: [m],
+        demandas: [demanda({ demanda: "I-1", ...grande, reprovacoes: 5_678 })],
+        totalDasDemandas: { ...grande, conformidade: null, nota: null },
+      },
       { ...ESTADO, de: "2026-10" },
     ),
-  );
-  // Por etapa: a linha da implementação e o Total.
-  assert.match(
-    html,
-    /Implementar .* 24\.929 \/ — 1\.234 \/ — 5\.678 \/ — .*Total .* 24\.929 \/ — 1\.234 \/ — 5\.678 \/ —/,
   );
   // Por nível: grupos e execuções.
   assert.match(html, /Execução 12\.345 24\.929 /);
@@ -550,6 +786,6 @@ test("milhares: as contagens das tabelas e dos cards do Projeto com o separador 
   assert.match(html, /I-1 Demanda I-1 .* 24\.929 1\.234 5\.678 .* 1 demanda .* 24\.929 1\.234 5\.678 /);
   assert.match(
     texto(cardsDoMes(m)),
-    /Demandas 24\.930 \/ 24\.929 .* Tickets 24\.931 \/ 24\.929 .* PRs 24\.930 \/ 24\.929 .* Retrabalho 24\.929 \/ 289\.424 /,
+    /Demandas 24\.930 \/ 24\.929 .* Tickets 24\.931 \/ 24\.929 .* PRs 24\.930 \/ 24\.929 .* Alterações posteriores 24\.929 \/ 289\.424 /,
   );
 });

@@ -226,14 +226,14 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   ).map((a) => a.sha256);
 
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
-  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, retrabalho, achado) saem ou
+  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, commit humano posterior, achado) saem ou
   // são soltas, para não deixar FK pendurada.
   banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
   apagar("uso_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
   apagar("avaliacao_demanda", `avaliacao_id IN (${DAS_AVALIACOES}) OR demanda_id IN (${DAS_DEMANDAS})`);
   apagar("achado_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
   apagar("avaliacao", "projeto = $p");
-  apagar("retrabalho_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("commit_humano_posterior", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
   apagar(
     "arquivo_commit_demanda",
     `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,

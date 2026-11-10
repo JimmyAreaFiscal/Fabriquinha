@@ -3,7 +3,6 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { migrar } from "./banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
-import { ticketsDaDemanda } from "./metricas_demanda.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 3;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -202,10 +201,12 @@ test("a migração 40 deixa a métrica de exigências de alteração igual", () 
     Number(l.devolucoes),
   );
   migrar(banco, MIGRACOES.slice(0, 4));
-  assert.deepEqual(
-    ticketsDaDemanda(banco, "I-1").map((t) => t.exigenciasDeAlteracao),
-    antes,
-  );
+  const depois = linhas(
+    banco,
+    `SELECT (SELECT COUNT(*) FROM tentativa x WHERE x.demanda_id = t.demanda_id AND x.ticket_id = t.ticket_id
+       AND x.resultado_tipo = 'reprovacao') AS reprovacoes FROM ticket_demanda t ORDER BY t.ticket_id`,
+  ).map((l) => Number(l.reprovacoes));
+  assert.deepEqual(depois, antes);
 });
 
 test("a migração 40 num banco sem ticket só cria a tabela", () => {

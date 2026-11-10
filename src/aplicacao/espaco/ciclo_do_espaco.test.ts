@@ -73,7 +73,7 @@ test("a fila git do projeto fica livre depois do criar(), e a falha da varredura
   });
   assert.equal(entrouNaFila, true);
   await Promise.reject(new Error("varredura indisponível")).catch(ciclo.anotarFalhaDaVarredura);
-  assert.match(readFileSync(c.log, "utf8"), /varrerBase falhou: varredura indisponível\n/);
+  assert.match(readFileSync(c.log, "utf8"), /varrerCommitsHumanos falhou: varredura indisponível\n/);
 });
 
 test("criar da rodada nasce da ponta da demanda e nunca busca a base; atualizar traz o que a demanda avançou", async () => {
