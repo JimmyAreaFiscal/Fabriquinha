@@ -4,14 +4,15 @@
 import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
+import type { MotivoDeRecusa } from "../../nucleo/despacho.ts";
 import { Id } from "../../nucleo/primitivos.ts";
 import type { Parametros } from "../cliente-web/caminhos.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
   proximaBusca(): Date;
-  /** O "Executar agora" (F4 §4) do ticket de uma demanda, que só o serviço sabe iniciar; opcional para os testes das outras rotas. */
-  executarAgoraDemanda?(ref: { demanda_id: string; ticket_id: number }): Promise<void>;
+  /** O "Executar agora" (F4 §4) do ticket de uma demanda, que só o serviço sabe iniciar; devolve o motivo quando o Despacho o recusa. Opcional para os testes das outras rotas. */
+  executarAgora?(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined>;
 }
 export interface Pedido {
   banco: DatabaseSync;

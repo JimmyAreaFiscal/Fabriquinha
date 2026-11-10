@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { selecionarTrabalho } from "../../nucleo/selecao_trabalho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../nucleo/despacho.ts";
 import { commitDoTicketDemanda } from "../../armazenamento/commits_demanda.ts";
 import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 import {
@@ -123,7 +123,7 @@ test("CA-7 e CA-8: na terceira reprovação o ticket falha e bloqueia a rodada a
   await conduzir(c, 1, coletor([verif("matriz_fitness", false, "f reprovou"), ...todas(true).slice(0, 1)]));
   assert.equal(c.status(1)?.estado, "falhou");
   assert.match(c.motivo(1) ?? "", /^- matriz_fitness: f reprovou/);
-  assert.deepEqual(selecionarTrabalho(c.ag(), true), []);
+  assert.deepEqual(new Despacho().selecionar(situacaoDeUmaDemanda(c.ag(), true)).prontos, []);
 });
 
 const MOTIVO_SEM_ALTERACAO = "o ticket I-1.T1 terminou sem alteração na worktree e não gera commit vazio";

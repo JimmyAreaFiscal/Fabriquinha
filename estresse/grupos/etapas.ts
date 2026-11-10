@@ -24,7 +24,7 @@ import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
-import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
+import { type DepsDespacho, cicloDoDespacho } from "../../src/aplicacao/despacho.ts";
 import { interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
 import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
@@ -220,14 +220,14 @@ const deps: DepsDespacho = {
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(despacharDemandas(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = despacharDemandas(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps);
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -318,7 +318,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = despacharDemandas(c.banco, c.config, deps);
+  const [fim] = cicloDoDespacho(c.banco, c.config, deps);
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

@@ -2,9 +2,16 @@
 // as demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada; prints a 1440 e
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { fotografar, projeto } from "./apoio.ts";
-import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
+import {
+  semearDemandaConcluida,
+  semearDemandaOciosa,
+  semearDemandas,
+  semearPlanejamentoComPi,
+  semearTicketAberto,
+} from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
@@ -180,4 +187,31 @@ test("o Início lista uma Pendência de cada tipo, inclusive o merge final, e a 
   await expect(aguarda.locator(".decisao", { hasText: "Ação externa" })).toContainText(
     "Integrar o PR final #12 na plataforma",
   );
+});
+
+// Um pi que não termina, para o planejamento seguir ocupando a única vaga enquanto o ciclo recusa o outro ticket.
+const roteiroDoPiParado: PassoPi[] = [{ termina: "trava" }];
+
+test.describe("I-281 CA-3", () => {
+  test.use({ roteiroDoPi: roteiroDoPiParado });
+  test("a seção Rodando do Início mostra por que o ticket parado não foi despachado", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    // O agendador a cada minuto: o 1º ciclo (em ~60 s) recusa o I-216.T1 porque o planejamento da I-230 ocupa a vaga.
+    test.setTimeout(120_000);
+    projeto(fabriquinha.raiz, "UPDATE configuracao SET limite_paralelismo = 1, agendador_ativo = 1, intervalo_min = 1");
+    semearTicketAberto(fabriquinha.raiz);
+    semearPlanejamentoComPi(fabriquinha.raiz, "Exportar pedidos em CSV");
+    await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-230.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
+
+    await pagina.goto(`${fabriquinha.base}/home`);
+    const parado = pagina.getByRole("region", { name: "Rodando" }).locator(".rodando-linha", { hasText: "parado" });
+    await expect(parado).toContainText("I-216.T1", { timeout: 90_000 });
+    await expect(parado).toContainText("Limite de paralelismo cheio: 1 de 1 em uso");
+  });
 });

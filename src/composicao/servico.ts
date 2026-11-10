@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import type { MotivoDeRecusa } from "../nucleo/despacho.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { varrerBase } from "../aplicacao/retrabalho.ts";
 import { abrir } from "../armazenamento/banco.ts";
@@ -12,7 +13,7 @@ import { noLog } from "../infra/registro.ts";
 import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
 import { configuracao, configuracaoDoAmbiente } from "../armazenamento/servico.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
-import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho, executarAgora } from "../aplicacao/despacho.ts";
 import { condutor } from "../aplicacao/trabalho/condutor.ts";
 import { montarAmbienteDoServico, montarConjuntoDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
@@ -27,8 +28,8 @@ export interface Servico {
   banco: DatabaseSync;
   /** A porta em que o serviço escuta: a pedida, ou a que ele escolheu na porta 0. */
   porta: number;
-  /** O "Executar agora" do ticket de uma demanda: mesma elegibilidade e limite do ciclo; recusa com o motivo. */
-  executarAgoraDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<void>;
+  /** O "Executar agora" do ticket de uma demanda: mesma seleção e limite do ciclo; o Despacho que recusa devolve o motivo. */
+  executarAgora(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined>;
   /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
   proximaBusca(): Date;
   parar(): Promise<void>;
@@ -85,7 +86,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       servirWeb({
         banco: aberto,
         porta,
-        agendador: { proximaBusca, executarAgoraDemanda: executarAgoraDaDemanda },
+        agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
       }),
     );
   } catch (error_) {
@@ -145,8 +146,8 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
         .finally(() => {
           varredura = undefined;
         });
-      // As etapas nunca rejeitam (`despacharDemandas`).
-      for (const fim of despacharDemandas(banco, c))
+      // As etapas nunca rejeitam (`cicloDoDespacho`).
+      for (const fim of cicloDoDespacho(banco, c))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -156,11 +157,11 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   }
   const relogio = setInterval(ciclo, 60_000);
 
-  // Síncrono até a reserva: a recusa vira rejeição e a etapa segue em segundo plano.
-  function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<void> {
+  // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
+  function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      void executarAgoraDemanda(banco, ref, configuracao(banco));
-      return Promise.resolve();
+      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco));
+      return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
       return Promise.reject(erro);
@@ -170,7 +171,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   return {
     banco,
     porta,
-    executarAgoraDemanda: executarAgoraDaDemanda,
+    executarAgora: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
       condutor.marcarParada();

@@ -16,7 +16,7 @@ import {
   tentativasDoTicket,
 } from "./tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { selecionarTrabalho } from "./selecao_trabalho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "./despacho.ts";
 import {
   editarDemanda,
   enviarDemanda,
@@ -543,13 +543,13 @@ test("CA-1, CA-2: primeira e segunda reprovações voltam a aberto com instruç�
 test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
   const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
   assert.deepEqual([tk3(ag).estado, motivoDaFalhaDoTicket(ag.tentativas, tk3(ag))], ["falhou", "corrija os testes"]);
-  assert.deepEqual(selecionarTrabalho(ag, true), []);
+  assert.deepEqual(new Despacho().selecionar(situacaoDeUmaDemanda(ag, true)).prontos, []);
   const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
   assert.deepEqual(
     [tk3(global).estado, motivoDaFalhaDoTicket(global.tentativas, tk3(global))],
     ["falhou", "corrija os testes"],
   );
-  assert.deepEqual(selecionarTrabalho(global, true), []);
+  assert.deepEqual(new Despacho().selecionar(situacaoDeUmaDemanda(global, true)).prontos, []);
 });
 
 test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação; sem motivo é reprovada", () => {

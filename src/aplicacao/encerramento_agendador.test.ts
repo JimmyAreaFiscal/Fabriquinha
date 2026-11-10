@@ -1,4 +1,4 @@
-// Encerramento final pelo agendador (CA-15 e CA-16): git real e hospedagem falsa; só o `despacharDemandas` conduz as
+// Encerramento final pelo agendador (CA-15 e CA-16): git real e hospedagem falsa; só o `cicloDoDespacho` conduz as
 // etapas, e o merge do PR final é do humano, que o teste faz na plataforma falsa. O agente do `resolver_conflito` é o pi falso: escreve na worktree da demanda, e a condução fecha o ticket com verificações que passaram.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -20,7 +20,7 @@ import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts"
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
-import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
+import { cicloDoDespacho, type DepsDespacho } from "./despacho.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -126,7 +126,7 @@ async function cenario() {
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () => Promise.all(despacharDemandas(banco, config, deps)),
+    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps)),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

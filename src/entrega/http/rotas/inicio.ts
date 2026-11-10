@@ -8,9 +8,11 @@ import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../../../nucleo/dependencia_demanda.ts";
+import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { type Pendencia, pendenciasDaDemanda, type TrabalhoVivo } from "../../../nucleo/pendencia.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
+import { ultimasRecusas } from "../../../aplicacao/despacho.ts";
 import { condutor, type Situacao } from "../../../aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { mesDe } from "../../../nucleo/periodo.ts";
@@ -261,6 +263,18 @@ export function inicio(banco: DatabaseSync, situacaoDa = situacaoDoCondutor, ago
   };
 }
 
+/** Um motivo de recusa como JSON: os Endereços saem pelo texto público (`I-1.T2`). */
+export const recusaEmJson = (motivo: MotivoDeRecusa): unknown =>
+  JSON.parse(
+    JSON.stringify(motivo, (_chave, valor: unknown) => (valor instanceof Endereco ? valor.toString() : valor)),
+  );
+
+/** `GET /api/despacho`: por que cada item parado no último ciclo do Despacho não foi despachado. */
+const recusasDoDespacho = () => ({
+  recusas: [...ultimasRecusas()].map(([item, motivo]) => ({ item: item.toString(), motivo: recusaEmJson(motivo) })),
+});
+
 export const ROTAS_DO_INICIO: Rota[] = [
   { metodo: "GET", caminho: "/api/inicio", tratar: ({ banco }) => inicio(banco) },
+  { metodo: "GET", caminho: "/api/despacho", tratar: recusasDoDespacho },
 ];

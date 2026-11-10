@@ -1,8 +1,8 @@
 // A Pendência (CONCEITOS.md §11): tudo o que está parado esperando o Auditor. É sempre derivada do estado dos outros
 // conceitos, nunca gravada; esta é a única regra que decide o que aguarda o Auditor. Esperar uma Dependência não é Pendência.
 import type { AgregadoDemanda, PullRequestDoEspaco } from "./agregado_demanda.ts";
+import { Despacho, prontosParaExecutarAgora, situacaoDeUmaDemanda } from "./despacho.ts";
 import { Endereco, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
-import { selecionarTrabalho } from "./selecao_trabalho.ts";
 import type { Instante } from "./primitivos.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "./tentativa.ts";
 import { exigirSemPendencias } from "./transicoes_demanda.ts";
@@ -178,9 +178,8 @@ export function pendenciasDaDemanda(
     });
   }
   if (!agendadorLigado) {
-    for (const t of selecionarTrabalho(ag, predecessorasSatisfeitas)) {
-      // O encerrar_demanda à espera do merge pede o merge na plataforma, não a execução.
-      if (t.etapa === "encerrar_demanda" && aguardandoMerge) continue;
+    const selecao = new Despacho().selecionar(situacaoDeUmaDemanda(ag, predecessorasSatisfeitas));
+    for (const t of prontosParaExecutarAgora(selecao)) {
       pendencias.push({
         tipo: "despacho_parado",
         item: Endereco.doTicket(demandaId, t.ticket_id),
