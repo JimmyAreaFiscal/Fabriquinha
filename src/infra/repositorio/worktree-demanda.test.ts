@@ -244,3 +244,23 @@ test("erro Git operacional vira ErroDeRegra sem posse nem ref", async () => {
   assert.equal(git(c.repo, "config", "--default", "", "--get", chave), "");
   assert.equal(existsSync(caminho(c)), false);
 });
+
+test("o git local da worktree roda no Ambiente e o fetch, que precisa de credenciais, roda no core", async () => {
+  const c = criarRepositorioDeTeste();
+  const argumentosNoAmbiente: string[][] = [];
+  const ambienteQueRegistra = Object.create(ambiente) as AmbienteHostLocal;
+  ambienteQueRegistra.executar = (comando) => {
+    if (comando.programa === "git") argumentosNoAmbiente.push(comando.argumentos);
+    return ambiente.executar(comando);
+  };
+  const pasta = await garantirWorktreeDemanda(ambienteQueRegistra, c.raiz, c.projeto, "D-1", c.log);
+  const subcomandosNoAmbiente = argumentosNoAmbiente.map((argumentos) => argumentos[2]);
+  assert.ok(subcomandosNoAmbiente.includes("worktree"));
+  assert.ok(argumentosNoAmbiente.some((argumentos) => argumentos.includes("add") && argumentos.includes(pasta)));
+  assert.ok(subcomandosNoAmbiente.includes("rev-parse"));
+  for (const subcomandoDeRede of ["fetch", "push", "ls-remote"]) {
+    assert.ok(!argumentosNoAmbiente.some((argumentos) => argumentos.includes(subcomandoDeRede)));
+  }
+  // O fetch no core atualizou a ref da base no clone do usuário.
+  assert.equal(git(pasta, "rev-parse", "HEAD"), git(c.repo, "rev-parse", "origin/integracao"));
+});
