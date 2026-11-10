@@ -101,21 +101,21 @@ test("consumo por mês: cada execução uma vez, retomada somada, custo desconhe
   assert.equal(fev.total.execucoes, 2);
   assert.equal(fev.total.falhas, 1);
   assert.equal(fev.total.duracaoMs, 3 * 60_000);
-  assert.deepEqual(fev.total.tokens, { entrada: 35, saida: 3, cacheLeitura: 6, cacheEscrita: 9 });
-  assert.deepEqual(fev.total.custo, { conhecido: 3, incompleto: true });
+  assert.deepEqual(fev.total.tokens, { entrada: 35, saida: 3, cacheLeitura: 6, cacheEscrita: 9, total: 53 });
+  assert.deepEqual(fev.total.custo, { conhecido: 3, trabalhosSemCusto: 1 });
   assert.deepEqual(
-    fev.total.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    fev.total.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
     [
-      ["a", 30, 3],
-      ["b", 5, null],
+      ["p/a", 30, 3],
+      ["p/b", 5, null],
     ],
   );
   const mar = ver(meses[MAR]);
   assert.equal(mar.total.execucoes, 2);
-  assert.deepEqual(mar.total.custo, { conhecido: 12, incompleto: false });
+  assert.deepEqual(mar.total.custo, { conhecido: 12, trabalhosSemCusto: 0 });
   assert.equal(mar.total.duracaoMs, 30_000, "execução em andamento não tem duração");
   assert.equal(ver(meses[0]).total.execucoes, 0);
-  assert.deepEqual(ver(meses[0]).total.custo, { conhecido: 0, incompleto: false });
+  assert.deepEqual(ver(meses[0]).total.custo, { conhecido: 0, trabalhosSemCusto: 0 });
 });
 
 test("a soma de cada nível, da execução ao projeto, bate com o total", () => {
@@ -192,7 +192,7 @@ test("o projeto filtra tudo", () => {
 
 test("por demanda: só quem teve execução no período, com o estado atual e a nota do período", () => {
   const b = banco();
-  const todas = metricasPorDemanda(b, { de: "2026-01", ate: "2026-03" });
+  const { demandas: todas, total } = metricasPorDemanda(b, { de: "2026-01", ate: "2026-03" });
   assert.deepEqual(
     todas.map((d) => [d.demanda, d.projeto, d.titulo, d.estado, d.execucoes, d.reprovacoes, d.nota]),
     [
@@ -200,12 +200,14 @@ test("por demanda: só quem teve execução no período, com o estado atual e a 
       ["I-3", "site", "Título I-3", "em_execucao", 1, 0, null],
     ],
   );
-  assert.deepEqual(ver(todas[0]).custo, { conhecido: 7, incompleto: true });
+  assert.deepEqual(ver(todas[0]).custo, { conhecido: 7, trabalhosSemCusto: 1 });
+  assert.equal(total.execucoes, 4);
+  assert.equal(total.textoDoCusto, "≥ US$ 15,00 (1 sessão sem custo)");
   assert.deepEqual(
-    metricasPorDemanda(b, { projeto: "site", de: "2026-03", ate: "2026-03" }).map((d) => d.demanda),
+    metricasPorDemanda(b, { projeto: "site", de: "2026-03", ate: "2026-03" }).demandas.map((d) => d.demanda),
     ["I-3"],
   );
-  assert.deepEqual(metricasPorDemanda(b, { de: "2026-01", ate: "2026-01" }), []);
+  assert.deepEqual(metricasPorDemanda(b, { de: "2026-01", ate: "2026-01" }).demandas, []);
 });
 
 test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovado sem nota conta sem entrar na média", () => {
@@ -218,7 +220,75 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   ).run(em("2026-04"));
   const abr = ver(metricasDemandaPorMes(b, { de: "2026-04", ate: "2026-04" })[0]);
   assert.equal(abr.total.execucoes, 1);
-  assert.deepEqual(abr.total.custo, { conhecido: 0, incompleto: false });
+  assert.deepEqual(abr.total.custo, { conhecido: 0, trabalhosSemCusto: 0 });
   assert.deepEqual(abr.prs, { abertos: 0, mergeados: 0 }); // o PR é da coorte de fevereiro
   assert.deepEqual(abr.nota, { media: null, notas: 0 });
+});
+
+test("o Uso declarado soma ao medido no mês do registro da demanda, por nível e por demanda, com ≥ quando falta custo", () => {
+  const b = banco();
+  const declarar = (demanda: string, sessao: string, custo: number | null) =>
+    b.prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('claude', ?, ?, ?)").run(
+      sessao,
+      demanda,
+      JSON.stringify([
+        {
+          modelo: "x/y",
+          tokens_entrada: 1,
+          tokens_saida: 2,
+          tokens_cache_leitura: 3,
+          tokens_cache_escrita: 4,
+          custo,
+          chamadas: 0,
+        },
+      ]),
+    );
+  declarar("I-1", "d1", 2);
+  declarar("I-1", "d2", null);
+  declarar("I-3", "d3", 1);
+  const [jan, fev, mar] = metricasDemandaPorMes(b, { de: "2026-01", ate: "2026-03" }) as [
+    ReturnType<typeof metricasDemandaPorMes>[number],
+    ReturnType<typeof metricasDemandaPorMes>[number],
+    ReturnType<typeof metricasDemandaPorMes>[number],
+  ];
+  assert.deepEqual(jan.total.tokens, { entrada: 2, saida: 4, cacheLeitura: 6, cacheEscrita: 8, total: 20 });
+  assert.equal(jan.total.textoDoCusto, "≥ US$ 2,00 (1 sessão sem custo)");
+  assert.equal(fev.total.textoDoCusto, "≥ US$ 3,00 (1 sessão sem custo)", "fevereiro segue só o medido");
+  assert.equal(mar.total.textoDoCusto, "US$ 13,00");
+  for (const m of [jan, mar])
+    for (const n of m.niveis) assert.equal(n.total.textoDoCusto, m.total.textoDoCusto, `${m.mes} ${n.nivel}`);
+  const { demandas, total } = metricasPorDemanda(b, { de: "2026-01", ate: "2026-03" });
+  assert.equal(ver(demandas[0]).textoDoCusto, "≥ US$ 9,00 (2 sessões sem custo)");
+  assert.equal(total.textoDoCusto, "≥ US$ 18,00 (2 sessões sem custo)");
+});
+
+test("por demanda: a demanda só com Uso declarado no período é linha com 0 execuções, e a soma das linhas é o rodapé", () => {
+  const b = banco();
+  b.prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('claude', 'd', 'I-2', ?)").run(
+    JSON.stringify([
+      {
+        modelo: "x/y",
+        tokens_entrada: 1,
+        tokens_saida: 2,
+        tokens_cache_leitura: 3,
+        tokens_cache_escrita: 4,
+        custo: 3,
+        chamadas: 0,
+      },
+    ]),
+  );
+  const { demandas, total } = metricasPorDemanda(b, { de: "2026-03", ate: "2026-03" });
+  const declarada = demandas.find((d) => d.demanda === "I-2");
+  assert.deepEqual(
+    [declarada?.projeto, declarada?.titulo, declarada?.estado, declarada?.execucoes, declarada?.textoDoCusto],
+    ["loja", "Título I-2", "concluida", 0, "US$ 3,00"],
+  );
+  assert.equal(
+    demandas.reduce((s, d) => s + d.custo.conhecido, 0),
+    total.custo.conhecido,
+  );
+  assert.equal(
+    demandas.reduce((s, d) => s + d.tokens.total, 0),
+    total.tokens.total,
+  );
 });

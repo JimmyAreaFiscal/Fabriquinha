@@ -264,7 +264,7 @@ test("evidenciasPendentes lista só as obrigatórias ausentes da Etapa do ticket
   // Na Etapa da demanda o dono é a própria demanda: a evidência do ticket 2 não conta, a dos critérios sim.
   assert.deepEqual(
     evidenciasPendentes(comEvidencias, { ticket_id: 1, etapa: "entender_e_desenhar" }, CATALOGO_ETAPAS),
-    ["desenho_solucao", "custos_realizados"],
+    ["desenho_solucao"],
   );
   assert.deepEqual(evidenciasPendentes(ag, { ticket_id: 4, etapa: "ajustar_resultado" }, CATALOGO_ETAPAS), []);
 });
@@ -296,25 +296,6 @@ const naoEnviada = () => {
   const ag = agregado();
   return { ...ag, demanda: { ...ag.demanda, enviada: false } };
 };
-const custos = {
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao: "s1",
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-};
-
 test("exigirAutoria recusa não-externos e externos de outra sessão ou ferramenta", () => {
   const { demanda } = agregado();
   const rejeitados: Ator[] = [
@@ -351,19 +332,13 @@ test("autoria: antes do envio só a ferramenta e a sessão autoras submetem evid
   assert.equal(avaliador.avaliar(ag, submissao("criterios_aceite", dono, CRITERIOS, EXTERNO)).resultado, "aceita");
 });
 
-test("definição congelada: depois do envio a autora também é recusada, e custos e evidências de ticket seguem livres", () => {
+test("definição congelada: depois do envio a autora também é recusada", () => {
   const ag = agregado();
   const dono = Endereco.daDemanda("I-1");
   assert.equal(
     motivo(avaliador.avaliar(ag, submissao("criterios_aceite", dono, CRITERIOS, EXTERNO))),
-    "a demanda I-1 já foi enviada e a evidência criterios_aceite da definição está congelada (só custos_realizados e evidências de rodada ou ticket entram depois do envio)",
+    "a demanda I-1 já foi enviada e a evidência criterios_aceite da definição está congelada (só evidências de ticket entram depois do envio)",
   );
-  for (const livre of [dono, Endereco.daRodada("I-1", 1)]) {
-    assert.equal(
-      avaliador.avaliar(ag, submissao("custos_realizados", livre, custos, OUTRA_SESSAO)).resultado,
-      "aceita",
-    );
-  }
   assert.equal(
     avaliador.avaliar(ag, submissao("execucao_testes", ticket(2), { comandos: [] }, FABRIQUINHA)).resultado,
     "recusada",

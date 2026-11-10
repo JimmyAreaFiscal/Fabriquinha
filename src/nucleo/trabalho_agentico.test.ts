@@ -6,11 +6,10 @@ import {
   encerrarProcesso,
   ProcessoDoTrabalho,
   iniciarProcesso,
+  acumularUso,
   registrarUso,
   retomarTrabalho,
   TrabalhoGerenciado,
-  totalDeTrabalhos,
-  totalDoTicket,
   UsoModeloExecucao,
 } from "./trabalho_agentico.ts";
 
@@ -137,39 +136,6 @@ test("CA-7: dois modelos e registro idempotente", () => {
   assert.throws(() => registrarUso(usos, uso("e1", "a", -1)));
 });
 
-test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
-  const sessoes = [sessao("s1"), sessao("s2", 2), sessao("s3", 1, "D-2")];
-  const execucoes = [exec("e1", "s1"), exec("e2", "s1"), exec("e3", "s2"), exec("e4", "s3")];
-  const usos = [
-    uso("e1", "a", 10, 1),
-    uso("e1", "a", 10, 1), // repetido: conta uma vez
-    uso("e2", "a", 20, 2),
-    uso("e2", "b", 30), // custo ausente
-    uso("e3", "a", 100, 4),
-    uso("e4", "a", 1000, 8),
-    uso("fantasma", "a", 5000, 16),
-  ];
-  const s1 = totalDoTicket(sessoes, execucoes, usos, { demanda_id: "D-1", ticket_id: 1 });
-  assert.deepEqual(s1, {
-    tokens_entrada: 60,
-    tokens_saida: 3,
-    tokens_cache_leitura: 6,
-    tokens_cache_escrita: 9,
-    custo_conhecido: 3,
-    custo_incompleto: true,
-  });
-  const demanda = totalDeTrabalhos(
-    sessoes.filter((s) => s.demanda_id === "D-1"),
-    execucoes,
-    usos,
-  );
-  assert.equal(demanda.tokens_entrada, 160);
-  assert.equal(demanda.custo_conhecido, 7);
-  assert.equal(demanda.custo_incompleto, true);
-  const completo = totalDoTicket(sessoes, execucoes, usos, { demanda_id: "D-1", ticket_id: 2 });
-  assert.deepEqual([completo.custo_conhecido, completo.custo_incompleto], [4, false]);
-});
-
 test("CA-9: tokens e custo não são campos da sessão", () => {
   assert.deepEqual(Object.keys(TrabalhoGerenciado.shape).sort(), [
     "conversa_referencia",
@@ -198,4 +164,21 @@ test("controle da execução: campos opcionais e par do modelo", () => {
   assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
   assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, grupo_processo: 0 }).success);
   assert.equal("erro" in ProcessoDoTrabalho.shape, false);
+});
+
+test("acumularUso soma à mesma chave, e o custo desconhecido de qualquer parcela deixa o total desconhecido", () => {
+  const somado = acumularUso([uso("e1", "a", 10, 0.5), uso("e1", "b", 5)], uso("e1", "a", 20, 0.25));
+  assert.deepEqual(
+    somado.find((u) => u.modelo_nome === "a"),
+    {
+      ...uso("e1", "a", 30, 0.75),
+      tokens_saida: 2,
+      tokens_cache_leitura: 4,
+      tokens_cache_escrita: 6,
+    },
+  );
+  assert.equal(somado.length, 2);
+  assert.equal(acumularUso([uso("e1", "b", 5)], uso("e1", "b", 1, 0.5)).at(-1)?.custo, undefined);
+  assert.equal(acumularUso([uso("e1", "a", 1, 0.5)], uso("e1", "a", 1)).at(-1)?.custo, undefined);
+  assert.equal(acumularUso([uso("e1", "a", 1)], uso("e2", "a", 1)).length, 2);
 });

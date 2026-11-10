@@ -57,6 +57,26 @@ test("concluir: reserva o ticket aberto, roda o pi na worktree da rodada, public
   conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, "encerramento_rodada_reabertura");
 });
 
+test("o Uso da consulta do resumo do PR é somado à última execução do encerrar_rodada, que é da rodada", async () => {
+  const { banco, piFalso } = await cenario({
+    statusEncerrar: "aberto",
+    descricao: `longa${"x".repeat(75)} `.repeat(900),
+  });
+  piFalso.roteirizar([
+    { uso: { input: 100 } },
+    { chamadaUnica: { saida: "Resumo da I-206.", uso: { input: 3000, output: 40, custo: 0.2 } } },
+  ]);
+
+  await conduzir(banco);
+
+  const { usos, execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 8 });
+  assert.equal(
+    usos.reduce((n, u) => n + u.tokens_entrada, 0),
+    100 + 3000,
+  );
+  assert.equal(usos.at(-1)?.execucao_id, execucoes.at(-1)?.id);
+});
+
 test("reprovar: check falho no PR conclui o ticket e devolve a rodada a implementar com a correção", async () => {
   const { banco, ticket, estado, ag } = await cenario({ statusEncerrar: "aberto" });
   hospedagem.abrirPr({

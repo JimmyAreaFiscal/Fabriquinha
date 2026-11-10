@@ -9,7 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { metricasDaDemanda } from "./demanda.ts";
-import { somar } from "../nucleo/uso.ts";
+import { colunasDoModelo, lerUsoDoPi } from "../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo, escrever } from "../armazenamento/banco.ts";
 import {
   abrirAvaliacao,
@@ -65,19 +65,18 @@ function sincronizar(banco: DatabaseSync, raiz: string, id: string): void {
     })),
   );
   const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
-  const somas = jsonl ? somar(readFileSync(jsonl, "utf8"), 0, Number.POSITIVE_INFINITY) : [];
+  const linhasDeUso = jsonl ? lerUsoDoPi(readFileSync(jsonl, "utf8"), 0, Number.POSITIVE_INFINITY) : [];
   regravarUso(
     banco,
     id,
-    somas.map((s) => ({
-      modelo_provedor: s.provedor,
-      modelo_nome: s.modelo,
-      chamadas: s.chamadas,
-      tokens_entrada: s.input,
-      tokens_saida: s.output,
-      tokens_cache_leitura: s.cacheRead,
-      tokens_cache_escrita: s.cacheWrite,
-      custo: s.semCusto ? null : s.custo,
+    linhasDeUso.map((l) => ({
+      ...colunasDoModelo(l.modelo),
+      chamadas: l.chamadas,
+      tokens_entrada: l.tokens_entrada,
+      tokens_saida: l.tokens_saida,
+      tokens_cache_leitura: l.tokens_cache_leitura,
+      tokens_cache_escrita: l.tokens_cache_escrita,
+      custo: l.custo,
     })),
   );
 }

@@ -40,10 +40,7 @@ const ev = (tipo: string, extra = {}) => ({ tipo: tipo as never, dados: { v: 1 }
 
 const registrada = () => registrarDemanda(reg, autora, { agora: t0 });
 const completa = (): AgregadoDemanda =>
-  ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
-    (ag, tipo) => comEvidencia(ag, ev(tipo), autora, t0),
-    registrada(),
-  );
+  ["criterios_aceite", "desenho_solucao"].reduce((ag, tipo) => comEvidencia(ag, ev(tipo), autora, t0), registrada());
 const enviada = () => enviarDemanda(completa(), autora, { agora: t1 });
 
 test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
@@ -85,7 +82,7 @@ test("CA-2: envio incompleto lista todas as pendências e não muda nada", () =>
   const antes = structuredClone(ag);
   assert.throws(
     () => enviarDemanda(ag, autora, { agora: t1 }),
-    (e: Error) => e instanceof ErroDeRegra && e.message.includes("criterios_aceite, custos_realizados"),
+    (e: Error) => e instanceof ErroDeRegra && e.message.includes("criterios_aceite"),
   );
   assert.deepEqual(ag, antes);
 });
@@ -105,7 +102,7 @@ test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e env
   assert.equal(ag.demanda.criada_por.ferramenta, "codex");
   assert.equal(ag.demanda.criada_por.sessao, " sessao-demo-197 ");
   ag = editarDemanda(ag, { titulo: "novo" }, autor);
-  for (const tipo of ["criterios_aceite", "desenho_solucao", "custos_realizados"]) {
+  for (const tipo of ["criterios_aceite", "desenho_solucao"]) {
     ag = comEvidencia(ag, ev(tipo), autor, t0);
   }
   assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
@@ -143,7 +140,7 @@ const planoV = (m: Record<string, unknown> = {}) => ({
   ...m,
 });
 const emPlanejamento = (): AgregadoDemanda => {
-  const definida = ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
+  const definida = ["criterios_aceite", "desenho_solucao"].reduce(
     (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );

@@ -15,11 +15,11 @@ import {
   AUTOR,
   base,
   criarCenario,
-  custos,
   demanda,
   demandaAprovada,
   ORIGENS_DOS_ANEXOS,
   proporPlanoDoAgente,
+  registrarExterna,
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
@@ -30,28 +30,23 @@ const harness = new HarnessPi();
 const PLANEJAR = 2;
 const agente: Ator = { tipo: "agente", trabalho_id: "execucao-1" };
 
-test("CA-SDLC-18: a nova evidência do mesmo tipo e dono substitui só a anterior", async (t) => {
+test("CA-SDLC-18: a nova evidência do mesmo tipo e dono substitui só a anterior", (t) => {
   const c = criarCenario(t);
-  const id = await demandaAprovada(c);
-  const submeterCustos = (sessao: string) =>
+  const id = registrarExterna(c);
+  const submeterCriterio = (criterio: string) =>
     gestao.submeterEvidencia(
       c.banco,
       id,
-      { tipo: "custos_realizados", dados: custos(sessao) },
+      { tipo: "criterios_aceite", dados: { criterios: [{ id: criterio, dado: "d", quando: "q", entao: "e" }] } },
       AUTOR,
       ORIGENS_DOS_ANEXOS,
     );
-  const evidencias = () => demanda(c, id).evidencias.map((e) => [e.tipo, e.rodada_id, e.ticket_id]);
-  const antes = evidencias();
 
-  submeterCustos("a");
-  submeterCustos("b");
-  assert.deepEqual(evidencias().toSorted(), antes.toSorted());
+  submeterCriterio("CA-1");
+  submeterCriterio("CA-2");
   assert.deepEqual(
-    demanda(c, id)
-      .evidencias.filter((e) => e.tipo === "custos_realizados")
-      .map((e) => (e.dados.sessoes as { sessao: string }[]).map((s) => s.sessao)),
-    [["b"]],
+    demanda(c, id).evidencias.map((e) => [e.tipo, (e.dados.criterios as { id: string }[]).map((x) => x.id)]),
+    [["criterios_aceite", ["CA-2"]]],
   );
 });
 

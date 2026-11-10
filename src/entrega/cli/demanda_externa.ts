@@ -11,7 +11,7 @@ import type { Ator } from "../../nucleo/ator.ts";
 import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
+import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
@@ -64,6 +64,15 @@ const agora = () => ({ agora: new Date().toISOString() });
 /** Texto longo de um arquivo, ou do stdin com `-`. */
 const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
   arquivo === "-" ? text(stdin) : Promise.resolve(readFileSync(arquivo, "utf8"));
+
+/** O JSON de um arquivo, ou do stdin com `-`. */
+async function lerJson(arquivo: string, stdin: NodeJS.ReadableStream): Promise<unknown> {
+  try {
+    return JSON.parse(await ler(arquivo, stdin));
+  } catch (error_) {
+    throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
+  }
+}
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
 function visao(banco: DatabaseSync, id: string) {
@@ -148,12 +157,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
       const autor = autorDe(c);
       const arquivo = c.op.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
-      let dados: unknown;
-      try {
-        dados = JSON.parse(await ler(arquivo, c.stdin));
-      } catch (error_) {
-        throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
-      }
+      const dados = await lerJson(arquivo, c.stdin);
       // A pasta do comando é a única origem dos anexos.
       const pasta = realpathSync(process.cwd());
       const origens = {
@@ -164,6 +168,20 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
       };
       const arquivos = (c.op.arquivo ?? []) as string[];
       const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, origens);
+      return { ...visao(c.banco, id), avisos };
+    },
+  },
+  {
+    palavras: ["demanda", "uso"],
+    argumentos: ["I-<n>"],
+    opcoesDeUso: `--dados <arquivo.json|-> ${USO_IDENTIDADE}`,
+    opcoes: { ...IDENTIDADE, dados: { type: "string" } },
+    async rodar(c) {
+      const id = idDe(String(c.pos[0]));
+      const autor = autorDe(c);
+      const arquivo = c.op.dados as string | undefined;
+      if (arquivo === undefined) throw new ErroDeUso("falta --dados");
+      const { avisos } = declararUso(c.banco, id, await lerJson(arquivo, c.stdin), autor);
       return { ...visao(c.banco, id), avisos };
     },
   },
