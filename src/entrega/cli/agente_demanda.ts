@@ -8,7 +8,7 @@ import { criarTicketCorretivo } from "../../aplicacao/agente/criar_ticket_corret
 import { verDemanda, verProjeto, verTicket } from "../../aplicacao/agente/consultas.ts";
 import { type ProcessoDoAgente, resolverEscopoDoAgente } from "../../aplicacao/agente/escopo.ts";
 import { type Comando, type DepsDoCli, lerJsonDoArquivo } from "./comando.ts";
-import { demandaParaCli } from "./demanda_para_cli.ts";
+import { demandaParaCli } from "../contrato/demanda_para_cli.ts";
 
 /**
  * Roda `usar` com o banco e o processo de `FABRIQUINHA_EXECUCAO`; a execução que não existe (ou que já terminou) recusa

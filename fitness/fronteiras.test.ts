@@ -45,7 +45,7 @@ const MATRIZ: Record<string, RegraDoModulo> = {
     modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
     externoPermitido: QUALQUER_EXTERNO,
   },
-  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo", "entrega/contrato"], externoPermitido: QUALQUER_EXTERNO },
   // Roda no navegador: de valor, só o `entrega/compartilhado` (o `casar`); do contrato e do núcleo, só `import type`;
   // de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes, que a matriz não lê).
   [MODULO_CLIENTE_WEB]: {

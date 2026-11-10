@@ -19,7 +19,7 @@ import {
   lerJsonDoArquivo,
   schemaJsonDoTipo,
 } from "./comando.ts";
-import { demandaParaCli } from "./demanda_para_cli.ts";
+import { demandaParaCli } from "../contrato/demanda_para_cli.ts";
 
 const IDENTIDADE: ParseArgsOptionsConfig = { ferramenta: { type: "string" }, sessao: { type: "string" } };
 const USO_IDENTIDADE = "[--ferramenta <f>] [--sessao <s>]";
