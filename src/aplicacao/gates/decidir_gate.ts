@@ -5,9 +5,9 @@ import type { AgregadoDemanda, NomeGate } from "../../nucleo/agregado_demanda.ts
 import type { Ator } from "../../nucleo/ator.ts";
 import { GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { conferirAprovacao } from "../revisao_pendencias.ts";
-import { instanteAtual } from "../relogio.ts";
 import { exigirTrabalhoDoTicket } from "../trabalho_do_ticket.ts";
 import { cancelandoEmCascata } from "./cancelamento_em_cascata.ts";
 import { aprovarGateDoPlanejamento, reprovarGateDoPlanejamento } from "./planejamento.ts";
@@ -21,8 +21,14 @@ interface ResultadoDoGate {
 }
 
 /** CA-16 a CA-20: aprovar não cascateia, reprovar cancela a demanda e as dependentes. */
-function decidirGateDaDemanda(banco: DatabaseSync, endereco: Endereco, entrada: unknown, ator: Ator): ResultadoDoGate {
-  const ctx = instanteAtual();
+function decidirGateDaDemanda(
+  banco: DatabaseSync,
+  endereco: Endereco,
+  entrada: unknown,
+  ator: Ator,
+  relogio: Relogio,
+): ResultadoDoGate {
+  const ctx = { agora: relogio.agora() };
   return cancelandoEmCascata(banco, endereco.demanda_id, ator, ctx, (ag) =>
     GATES.gate_demanda.decidir(ag, endereco, entrada, ator, ctx),
   );
@@ -33,12 +39,13 @@ async function decidirGateDoPlanejamento(
   endereco: Endereco,
   entrada: unknown,
   ator: Ator,
+  relogio: Relogio,
 ): Promise<ResultadoDoGate> {
   const e = GATES.gate_planejamento.validarEntrada(entrada, ator);
   const demanda =
     e.resultado === "aprovado"
-      ? await aprovarGateDoPlanejamento(banco, endereco, e, ator)
-      : reprovarGateDoPlanejamento(banco, endereco, e, ator, e.motivo);
+      ? await aprovarGateDoPlanejamento(banco, endereco, e, ator, relogio)
+      : reprovarGateDoPlanejamento(banco, endereco, e, ator, e.motivo, relogio);
   return { demanda, canceladas: [] };
 }
 
@@ -47,23 +54,25 @@ async function decidirGateDoPR(
   endereco: Endereco,
   entrada: unknown,
   ator: Ator,
+  relogio: Relogio,
 ): Promise<ResultadoDoGate> {
   const e = GATES.gate_pr.validarEntrada(entrada, ator);
-  if (e.resultado === "aprovado") return { demanda: await aprovarPR(banco, endereco, e, ator), canceladas: [] };
-  return { ...(await reprovarPR(banco, endereco, e, ator)), canceladas: [] };
+  if (e.resultado === "aprovado")
+    return { demanda: await aprovarPR(banco, endereco, e, ator, relogio), canceladas: [] };
+  return { ...(await reprovarPR(banco, endereco, e, ator, relogio)), canceladas: [] };
 }
 
 /** A aprovação só passa com as evidências em ordem; a recusa desfaz tudo. O agente só decide o gate do próprio ticket. */
 function decidirGateDeRevisao(
   nome: "gate_revisao_rodada" | "gate_revisao_demanda",
-): (banco: DatabaseSync, endereco: Endereco, entrada: unknown, ator: Ator) => ResultadoDoGate {
-  return (banco, endereco, entrada, ator) => {
+): (banco: DatabaseSync, endereco: Endereco, entrada: unknown, ator: Ator, relogio: Relogio) => ResultadoDoGate {
+  return (banco, endereco, entrada, ator, relogio) => {
     const gate = GATES[nome];
     const { resultado } = gate.validarEntrada(entrada, ator);
     const demanda = comDemanda(banco, endereco.demanda_id, (ag) => {
       const ticket = gate.ancora(ag, endereco);
       exigirTrabalhoDoTicket(banco, ator, ticket);
-      const decidida = gate.decidir(ag, endereco, entrada, ator, instanteAtual());
+      const decidida = gate.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() });
       if (resultado === "aprovado") conferirAprovacao(ag, ticket.ticket_id);
       return decidida;
     });
@@ -73,7 +82,13 @@ function decidirGateDeRevisao(
 
 const EFEITOS_DO_GATE: Record<
   NomeGate,
-  (banco: DatabaseSync, endereco: Endereco, entrada: unknown, ator: Ator) => ResultadoDoGate | Promise<ResultadoDoGate>
+  (
+    banco: DatabaseSync,
+    endereco: Endereco,
+    entrada: unknown,
+    ator: Ator,
+    relogio: Relogio,
+  ) => ResultadoDoGate | Promise<ResultadoDoGate>
 > = {
   gate_demanda: decidirGateDaDemanda,
   gate_planejamento: decidirGateDoPlanejamento,
@@ -92,6 +107,7 @@ export async function decidirGate(
   endereco: Endereco,
   entrada: unknown,
   ator: Ator,
+  relogio: Relogio = relogioDoSistema,
 ): Promise<ResultadoDoGate> {
-  return await EFEITOS_DO_GATE[nome](banco, endereco, entrada, ator);
+  return await EFEITOS_DO_GATE[nome](banco, endereco, entrada, ator, relogio);
 }

@@ -5,15 +5,20 @@ import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import type { FalhaDaTentativa } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";
-import { instanteAtual } from "./relogio.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
 
 /** Falha o ticket em execução, de qualquer etapa, com a falha tipada, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
-export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, falha: FalhaDaTentativa): void {
+export function falharTicketDemanda(
+  banco: DatabaseSync,
+  ref: Ref,
+  falha: FalhaDaTentativa,
+  relogio: Relogio = relogioDoSistema,
+): void {
   comDemanda(banco, ref.demanda_id, (ag) =>
     ag.tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado === "em_execucao"
-      ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, falha }, instanteAtual())
+      ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, falha }, { agora: relogio.agora() })
       : ag,
   );
 }

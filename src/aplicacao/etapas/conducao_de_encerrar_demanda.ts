@@ -114,7 +114,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
           sha: publicado.head,
         },
         FABRIQUINHA,
-        relogio(),
+        { agora: relogio.agora() },
       ),
     );
 
@@ -124,7 +124,9 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       });
       const problemas = await conferenciaDoPR.conferir();
       if (problemas.conflito) {
-        this.aplicar(endereco, (a) => registrarConflitoEncerramento(a, { demanda_id }, FABRIQUINHA, relogio()));
+        this.aplicar(endereco, (a) =>
+          registrarConflitoEncerramento(a, { demanda_id }, FABRIQUINHA, { agora: relogio.agora() }),
+        );
         return "parar";
       }
       if (problemas.checksFalhos.length > 0) {
@@ -141,7 +143,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       return "parar";
     }
 
-    this.aplicar(endereco, (a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, relogio()));
+    this.aplicar(endereco, (a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, { agora: relogio.agora() }));
     return "seguir";
   }
 
@@ -153,7 +155,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const projeto = carregarProjeto(banco, ag.demanda.projeto);
     const pr = existe(prDaDemanda(ag), `a demanda ${demanda_id} não tem PR final`, "registre a tentativa antes");
     const devolverParaEspera = () => {
-      this.aplicar(endereco, (a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, relogio()));
+      this.aplicar(endereco, (a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, { agora: relogio.agora() }));
     };
     let leitura;
     try {
@@ -182,12 +184,9 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const ambiente = this.cicloDoEspacoDaDemanda(projeto, demanda_id).ambiente;
     const pendentes = await pendenciasDeLimpeza(ambiente, raizDo(banco), projeto, ag);
     this.aplicar(endereco, (a) =>
-      registrarIntegracao(
-        a,
-        { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes },
-        FABRIQUINHA,
-        relogio(),
-      ),
+      registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA, {
+        agora: relogio.agora(),
+      }),
     );
     return "seguir";
   }
@@ -244,13 +243,17 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
         // A falha de limpeza exige pendências; a evidência inválida falha só o ticket, e reaberto ele submete de novo.
         const { ticket_id } = this.ticketDe(endereco);
         this.aplicar(endereco, (a) =>
-          registrarFalhaTicket(a, { ticket_id, falha: falhaQueExigeOAuditor(avaliacao.motivo) }, relogio()),
+          registrarFalhaTicket(
+            a,
+            { ticket_id, falha: falhaQueExigeOAuditor(avaliacao.motivo) },
+            { agora: relogio.agora() },
+          ),
         );
         return "parar";
       }
     }
     this.aplicar(endereco, (a) =>
-      concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, relogio()),
+      concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, { agora: relogio.agora() }),
     );
     return "seguir";
   }
@@ -282,7 +285,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
           limpeza_pendente,
         },
         FABRIQUINHA,
-        relogio(),
+        { agora: relogio.agora() },
       ),
     );
   }

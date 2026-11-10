@@ -22,7 +22,7 @@ import {
 } from "../nucleo/tentativa.ts";
 import { anotar } from "../infra/registro.ts";
 import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
-import { instanteAtual } from "./relogio.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
@@ -148,9 +148,12 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 /** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
 const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
-  new ConducaoDeImplementar({ banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
-    Endereco.doTicket("I-1", ticket_id),
-  );
+  new ConducaoDeImplementar({
+    banco,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  }).conduzir(Endereco.doTicket("I-1", ticket_id));
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {

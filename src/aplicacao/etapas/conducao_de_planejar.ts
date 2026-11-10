@@ -27,7 +27,7 @@ export class ConducaoDePlanejar extends ConducaoInterativa {
     if (ticket.estado === "aberto") {
       const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ticket.demanda_id)).length === 0;
       comDemanda(banco, ticket.demanda_id, (ag) =>
-        reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), satisfeitas),
+        reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, { agora: relogio.agora() }, satisfeitas),
       );
     } else if (ticket.estado !== "em_execucao") {
       throw new ErroDeRegra(

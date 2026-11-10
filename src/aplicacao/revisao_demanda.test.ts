@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import {
   abrirTrabalhoDoAgente,
@@ -68,6 +69,20 @@ test("CA-10: com todas as rodadas concluídas a demanda vai a revisar_demanda co
   }));
   assert.equal(iniciarRevisaoIntegral(banco, "I-1").demanda.estado, "revisar_demanda");
   assert.equal(estado(banco).tickets.find((t) => t.etapa === "revisar_demanda")?.estado, "aberto");
+});
+
+test("CA-4: a revisão integral grava o instante do Relogio injetado", async () => {
+  const { banco } = await cenarioRevisao();
+  comDemanda(banco, "I-1", (ag) => ({
+    ...ag,
+    rodadas: ag.rodadas.map((r) => ({ ...r, estado: "concluida" as const })),
+    tickets: ag.tickets
+      .filter((t) => t.etapa !== "revisar_demanda")
+      .map((t) => ({ ...t, estado: "concluido" as const })),
+  }));
+  const instante = "2030-03-04T05:06:07.000Z";
+  const { demanda } = iniciarRevisaoIntegral(banco, "I-1", relogioFixo(instante));
+  assert.equal(demanda.estado_alterado_em, instante);
 });
 
 test("CA-13: achado alto ou crítico recusa a aprovação", async () => {

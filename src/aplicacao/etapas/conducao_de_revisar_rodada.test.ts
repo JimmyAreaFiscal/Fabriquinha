@@ -11,7 +11,9 @@ import { caminhoDaWorktreeRodada } from "../../infra/repositorio/worktree-demand
 import { anotar } from "../../infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { conferirPromptComFoto } from "../fotos_retorno/conferir_foto.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
+
+const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
 import { CondutorDeTrabalhos, condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 
@@ -20,7 +22,7 @@ const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
 const conducao = (banco: Banco, condutorDeTeste: CondutorDeTrabalhos = condutor) =>
-  new ConducaoDeRevisarRodada({ banco, relogio: instanteAtual, condutor: condutorDeTeste, registro: anotar });
+  new ConducaoDeRevisarRodada({ banco, relogio: RELOGIO, condutor: condutorDeTeste, registro: anotar });
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
@@ -101,7 +103,7 @@ test("ticket reaberto leva a instrução ao prompt como reabertura", async () =>
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   await conducao(banco).conduzir(REVISOR);
   comDemanda(banco, "I-1", (ag) =>
-    reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, instanteAtual()),
+    reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, { agora: RELOGIO.agora() }),
   );
   piFalso.roteirizar([{}]);
   await conducao(banco).conduzir(REVISOR);

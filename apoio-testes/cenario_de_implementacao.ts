@@ -7,7 +7,7 @@ import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../src/nucleo/tentativa.ts";
 import type { DepsDaConducao } from "../src/aplicacao/etapas/conducao_de_etapa.ts";
 import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
-import { instanteAtual } from "../src/aplicacao/relogio.ts";
+import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { condutor as condutorDoServico, type CondutorDeTrabalhos } from "../src/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/infra/registro.ts";
 import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
@@ -180,7 +180,7 @@ export async function cenarioDeImplementacao({
   /** As dependências da condução; `condutor` troca o do serviço (a parada do serviço, por exemplo). */
   const deps = (condutor: CondutorDeTrabalhos = condutorDoServico): DepsDaConducao => ({
     banco,
-    relogio: instanteAtual,
+    relogio: relogioDoSistema,
     condutor,
     registro: anotar,
   });

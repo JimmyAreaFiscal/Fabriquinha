@@ -16,7 +16,7 @@ import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar } from "../../infra/registro.ts";
 import { conferirPromptComFoto } from "../fotos_retorno/conferir_foto.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeEncerrarRodada } from "./conducao_de_encerrar_rodada.ts";
 
@@ -24,7 +24,12 @@ type Banco = Parameters<typeof carregarDemanda>[0];
 const ENCERRAR = Endereco.doTicket(DEMANDA, 8);
 
 const conduzir = (banco: Banco) =>
-  new ConducaoDeEncerrarRodada({ banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(ENCERRAR);
+  new ConducaoDeEncerrarRodada({
+    banco,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  }).conduzir(ENCERRAR);
 
 const motivoDaFalha = (banco: Banco) => {
   const ag = carregarDemanda(banco, DEMANDA);

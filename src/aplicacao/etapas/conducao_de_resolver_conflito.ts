@@ -28,7 +28,7 @@ export class ConducaoDeResolverConflito extends ConducaoDeImplementar {
         ag,
         { demanda_id: ticket.demanda_id, testes: true, fitness: true, sonar: true, sha },
         FABRIQUINHA,
-        relogio(),
+        { agora: relogio.agora() },
       ),
     );
     return Promise.resolve();

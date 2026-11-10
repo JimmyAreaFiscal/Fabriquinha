@@ -26,7 +26,7 @@ import {
 } from "../../../apoio-testes/cenario_de_ajustes.ts";
 import { limitarTempoDoPi } from "../../../apoio-testes/limite_do_pi.ts";
 import { conferirPromptComFoto } from "../fotos_retorno/conferir_foto.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "../sessao_ajustes.ts";
 import { enviarDemanda } from "../sessoes_demanda.ts";
 import { condutor } from "../trabalho/condutor.ts";
@@ -44,7 +44,7 @@ async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: strin
   const ticket = sessaoDaRodada(reprovada, REF);
   const execucao = await new ConducaoDeAjustarResultado({
     banco,
-    relogio: instanteAtual,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     condutor,
     registro: anotar,
   }).iniciar(Endereco.doTicket(DEMANDA, ticket.ticket_id));

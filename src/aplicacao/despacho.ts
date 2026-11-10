@@ -38,7 +38,7 @@ import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_confli
 import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
 import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { instanteAtual } from "./relogio.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
 
@@ -73,10 +73,10 @@ export const demandasParaDespacho = (banco: DatabaseSync): DemandaParaDespacho[]
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
-const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao): DepsDaConducao => ({
+const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao, relogio: Relogio): DepsDaConducao => ({
   banco,
   limiteMin: timeoutMin,
-  relogio: instanteAtual,
+  relogio,
   condutor,
   registro: anotar,
 });
@@ -95,9 +95,15 @@ const situacaoDoDespacho = (banco: DatabaseSync): SituacaoDoDespacho =>
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa
  * devolvida é da etapa em segundo plano (as revisões, que são `async`, recusam por ela).
  */
-function iniciarEtapa(banco: DatabaseSync, c: Configuracao, t: TicketDemanda, deps: DepsDespacho): Promise<unknown> {
+function iniciarEtapa(
+  banco: DatabaseSync,
+  c: Configuracao,
+  t: TicketDemanda,
+  deps: DepsDespacho,
+  relogio: Relogio,
+): Promise<unknown> {
   exigirEtapaConduzida(t.etapa);
-  const depsDaConducao = depsDaConducaoDe(banco, c);
+  const depsDaConducao = depsDaConducaoDe(banco, c, relogio);
   const CONDUCAO_DA_ETAPA: Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa> = {
     planejar: new ConducaoDePlanejar(depsDaConducao),
     implementar: new ConducaoDeImplementar(depsDaConducao, deps.implementacao),
@@ -130,22 +136,27 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
  * concluíram vai à revisão integral; (2) o Despacho escolhe o que roda, no que sobra do limite (o planejamento
  * reprovado é um ticket pronto como os outros). Devolve as etapas em segundo plano (nunca rejeitam); o ciclo não as espera.
  */
-export function cicloDoDespacho(banco: DatabaseSync, c: Configuracao, deps: DepsDespacho = {}): Promise<void>[] {
-  const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco);
+export function cicloDoDespacho(
+  banco: DatabaseSync,
+  c: Configuracao,
+  deps: DepsDespacho = {},
+  relogio: Relogio = relogioDoSistema,
+): Promise<void>[] {
+  const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco, relogio);
   if (retomadosPorInfraestrutura.length > 0) {
     noLog(`retomados depois de falha de ambiente: ${retomadosPorInfraestrutura.join(", ")}`);
   }
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
     if (ag.demanda.estado !== "em_execucao" || !ag.rodadas.every((r) => r.estado === "concluida")) continue;
     try {
-      iniciarRevisaoIntegral(banco, ag.demanda.id);
+      iniciarRevisaoIntegral(banco, ag.demanda.id, relogio);
     } catch (erro) {
       noLog(erro);
     }
   }
   const { prontos, recusas } = new Despacho(limiteParalelismo(banco)).selecionar(situacaoDoDespacho(banco));
   recusasDoUltimoCiclo = recusas;
-  return prontos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, c, t, deps)));
+  return prontos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, c, t, deps, relogio)));
 }
 
 /**
@@ -158,6 +169,7 @@ export function executarAgora(
   ref: { demanda_id: string; ticket_id: number },
   c: Configuracao,
   deps: DepsDespacho = {},
+  relogio: Relogio = relogioDoSistema,
 ): MotivoDeRecusa | Promise<void> {
   return escrever(banco, () => {
     const situacao = situacaoDoDespacho(banco);
@@ -188,11 +200,11 @@ export function executarAgora(
         ag,
         { ticket_id: ref.ticket_id },
         FABRIQUINHA,
-        { agora: new Date().toISOString() },
+        { agora: relogio.agora() },
         predecessoras_pendentes.length === 0,
       );
       return ag;
     });
-    return acompanhar(iniciarEtapa(banco, c, ticket, deps));
+    return acompanhar(iniciarEtapa(banco, c, ticket, deps, relogio));
   });
 }
