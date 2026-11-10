@@ -3,18 +3,17 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { AgregadoDemanda, TipoDemanda } from "../../../nucleo/agregado_demanda.ts";
-import { AUDITOR } from "../../../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
-import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { relogioDoSistema } from "../../../nucleo/relogio.ts";
-import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
+import { arquivarConcluidas } from "../../../aplicacao/gestao_demandas.ts";
 import { sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
+import { resolverModeloEffort } from "../../../aplicacao/projeto/modelo_effort.ts";
 import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
-import { carregarDemanda } from "../../../armazenamento/demandas.ts";
+import { carregarDemanda, situacaoDasDemandas } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
 import { sessaoDeCadaTicketDaDemanda, ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
@@ -129,11 +128,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
       };
     }),
     tickets: ag.tickets.map((t) => {
-      const { modelo } = resolverConfiguracaoAgente({
-        ticket: t.configuracao_agente,
-        etapaDoProjeto: etapas.find((e) => e.etapa === t.etapa)?.configuracao_agente,
-        padrao: {},
-      });
+      const { modelo } = resolverModeloEffort(t, etapas);
       const sessao = sessoes.get(t.ticket_id);
       const ticketRef = formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id });
       return {
@@ -152,13 +147,6 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     }),
   };
 }
-
-/** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
-const situacaoDasDemandas = (banco: DatabaseSync, nome: string) =>
-  banco.prepare("SELECT id, estado FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(nome) as {
-    id: string;
-    estado: EstadoDemanda;
-  }[];
 
 /** As em andamento sempre; as concluídas, as arquivadas e as canceladas só quando pedidas. */
 function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): ListaDoProjeto {
@@ -186,14 +174,6 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
   };
 }
 
-/** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
-function arquivarConcluidas(banco: DatabaseSync, nome: string): { arquivadas: number } {
-  projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE);
-  const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.estado === "concluida");
-  for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: new Date().toISOString() });
-  return { arquivadas: concluidas.length };
-}
-
 export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "GET",
@@ -203,12 +183,13 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome/arquivar",
-    tratar: ({ banco, params }) => arquivarConcluidas(banco, String(params.nome)),
+    tratar: ({ banco, params, relogio }) =>
+      arquivarConcluidas(banco, String(params.nome), relogio, ORIENTACAO_PROJETO_INEXISTENTE),
   },
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/heatmap",
-    tratar: ({ banco, params }) =>
-      heatmapDo(projetoExistente(banco, String(params.nome), ORIENTACAO_PROJETO_INEXISTENTE)),
+    tratar: ({ banco, params, relogio }) =>
+      heatmapDo(projetoExistente(banco, String(params.nome), ORIENTACAO_PROJETO_INEXISTENTE), relogio.agora()),
   },
 ];

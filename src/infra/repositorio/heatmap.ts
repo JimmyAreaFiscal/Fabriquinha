@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import type { Instante } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { git } from "../processo.ts";
 import { exigirGit } from "./worktree.ts";
@@ -164,10 +165,7 @@ function somar(no: NoDoHeatmap): number {
  * F5 §11: lê a base publicada (`refs/remotes/origin/<branch_base>`, sem fetch) e conta, por arquivo de hoje, os commits
  * não-merge dos 12 meses até `agora` que o tocam. Só lê: roda fora da fila do projeto.
  */
-export async function heatmapDo(
-  projeto: Pick<Projeto, "raiz_git" | "branch_base">,
-  agora = new Date(),
-): Promise<Heatmap> {
+export async function heatmapDo(projeto: Pick<Projeto, "raiz_git" | "branch_base">, agora: Instante): Promise<Heatmap> {
   const { raiz_git: repo, branch_base } = projeto;
   if (!existsSync(repo)) {
     throw new ErroDeRegra(
@@ -203,7 +201,7 @@ export async function heatmapDo(
   return {
     branch: branch_base,
     desde: desde.toISOString(),
-    ate: agora.toISOString(),
+    ate: agora,
     ...montar(basename(repo), arquivos, log, prsDos(log, ponta.saida.trim())),
   };
 }

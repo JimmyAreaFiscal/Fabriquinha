@@ -78,7 +78,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../infra/repositorio/heatmap.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
 ];
 
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
