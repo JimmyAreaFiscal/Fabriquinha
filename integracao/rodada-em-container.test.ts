@@ -3,22 +3,31 @@
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e constrói a imagem na primeira vez.
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { once } from "node:events";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import type { DepsDespacho } from "../src/aplicacao/despacho.ts";
 import { ConducaoDePlanejar } from "../src/aplicacao/etapas/conducao_de_planejar.ts";
+import { conjuntoDoServico } from "../src/aplicacao/espaco/ambiente_do_servico.ts";
+import * as gestao from "../src/aplicacao/gestao_demandas.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
 import { enviarDemanda, lerConversa } from "../src/aplicacao/sessoes_demanda.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { anotar } from "../src/infra/registro.ts";
+import { PACOTE } from "../src/infra/agente/pi.ts";
+import { anotar, pastasDoProcesso } from "../src/infra/registro.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import { AUDITOR } from "../src/nucleo/ator.ts";
 import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
-import { demandaEmExecucao, encerrar, execucoesDe, revisar, rodadaDe, ticketDe } from "./apoio-execucao.ts";
-import { base, ciclo, criarCenario, demanda, demandaAprovada, esperar, git, type Cenario } from "./apoio.ts";
+import { exigirGit } from "../src/infra/repositorio/worktree.ts";
+import { iniciarServico } from "../src/composicao/servico.ts";
+import { demandaEmExecucao, encerrar, execucoesDe, revisar, rodadaDe, statusDe, ticketDe } from "./apoio-execucao.ts";
+import { base, CTX, ciclo, criarCenario, demanda, demandaAprovada, esperar, git, type Cenario } from "./apoio.ts";
 import {
   ghFalso,
   instalarSonarFalso,
@@ -45,10 +54,10 @@ const despachoComVerificacoesReais: DepsDespacho = {
 const PLANEJAMENTO_QUE_SAI_SOZINHO: PassoPi = { uso: null, sai: { codigo: 0 } };
 
 /** O cenário com o projeto de teste e o Ambiente `container` ligado, e o pi falso da imagem dele. */
-function cenarioEmContainer(t: TestContext) {
+function cenarioEmContainer(t: TestContext, portaDaApi?: number) {
   const c = criarCenario(t, "loja", raizCompartilhadaComODocker());
   projetoDeTesteEmContainer(c);
-  const pi = ligarContainerAoCenario(t, c);
+  const pi = ligarContainerAoCenario(t, c, portaDaApi);
   return { c, pi };
 }
 
@@ -123,13 +132,21 @@ test(
   },
 );
 
+/** O Ambiente do container que o conjunto alocou ao Espaço `dono` (por exemplo `I-1.R1`). */
+function ambienteAlocadoPara(c: Cenario, dono: string) {
+  const [linha] = c.banco.prepare("SELECT id FROM ambiente WHERE alocado_para = ?").all(dono) as { id: string }[];
+  assert.ok(linha, `o Espaço ${dono} tem container alocado`);
+  const ambiente = conjuntoDoServico()?.ambientePorId(linha.id);
+  assert.ok(ambiente);
+  return ambiente;
+}
+
+const processosNoContainer = (container: string): string =>
+  execFileSync("docker", ["exec", container, "ps", "-eo", "args"], { encoding: "utf8" });
+
 /** O `ps -eo args` do container do Espaço da rodada 1, o único que ainda existe com o ticket implementado. */
 function processosNoContainerDaRodada(c: Cenario): string {
-  const [container] = c.banco.prepare("SELECT container_id FROM ambiente WHERE alocado_para = 'I-1.R1'").all() as {
-    container_id: string;
-  }[];
-  assert.ok(container, "o Espaço da rodada 1 tem container alocado");
-  return execFileSync("docker", ["exec", container.container_id, "ps", "-eo", "args"], { encoding: "utf8" });
+  return processosNoContainer(ambienteAlocadoPara(c, "I-1.R1").container_id);
 }
 
 /** O motivo do hook de commit: o último estado do ticket `implementar` depois de um ciclo em que o hook se comporta como `caso`. */
@@ -410,5 +427,263 @@ test(
     }
     // O modelo A respondeu duas vezes: a soma não é a de uma mensagem só.
     assert.equal(noJsonl.get("anthropic/claude-opus-5-5")?.entrada, 111);
+  },
+);
+
+/** Os nomes das variáveis que a imagem do container traz no `ENV` (`docker image inspect`). */
+function nomesDoEnvDaImagem(container: string): string[] {
+  const imagem = execFileSync("docker", ["inspect", "--format", "{{.Config.Image}}", container], { encoding: "utf8" });
+  const env = execFileSync("docker", ["image", "inspect", "--format", "{{json .Config.Env}}", imagem.trim()], {
+    encoding: "utf8",
+  });
+  return (JSON.parse(env) as string[]).map((variavel) => variavel.split("=")[0] ?? "");
+}
+
+test(
+  "CA-2: o env de um comando no container não leva o HOME do host nem variável de hospedagem, do Sonar ou do ssh-agent",
+  COM_DOCKER,
+  async (t) => {
+    const { c } = cenarioEmContainer(t);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    const doHost = {
+      SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
+      GH_TOKEN: "segredo-gh",
+      AZURE_DEVOPS_EXT_PAT: "segredo-azure",
+      AZURE_OPENAI_API_KEY: "segredo-azure-openai",
+      SONAR_TOKEN: "segredo-sonar",
+    };
+    const antes = Object.fromEntries(Object.keys(doHost).map((nome) => [nome, process.env[nome]]));
+    Object.assign(process.env, doHost);
+    t.after(() => {
+      for (const [nome, valor] of Object.entries(antes))
+        if (valor === undefined) Reflect.deleteProperty(process.env, nome);
+        else process.env[nome] = valor;
+    });
+    assert.ok(process.env.HOME);
+    const daFabriquinha = {
+      FABRIQUINHA_TOKEN: "token-do-processo",
+      FABRIQUINHA_SAIDA: join(pastasDoProcesso(c.raiz, "env").dir, "saida"),
+      ANTHROPIC_API_KEY: "chave-do-provedor",
+    };
+
+    const { codigo, saida } = await ambiente.executar({
+      programa: "env",
+      argumentos: [],
+      cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
+      env: { ...process.env, ...daFabriquinha },
+    });
+
+    assert.equal(codigo, 0);
+    const variaveis = Object.fromEntries(
+      saida
+        .split("\n")
+        .filter(Boolean)
+        .map((linha) => [linha.slice(0, linha.indexOf("=")), linha.slice(linha.indexOf("=") + 1)]),
+    );
+    const nomes = Object.keys(variaveis);
+    assert.deepEqual(
+      nomes.filter((nome) => /^(SSH_AUTH_SOCK|GH_|AZURE_|SONAR_)/.test(nome)),
+      [],
+    );
+    assert.notEqual(variaveis.HOME, process.env.HOME);
+    assert.doesNotMatch(saida, /segredo-/);
+    // Fora as da imagem e as do docker, só entram as da Fabriquinha e as chaves de provedor do LLM.
+    const doDocker = ["HOSTNAME", "HOME", "PWD", "PATH"];
+    const permitidas = [
+      ...nomesDoEnvDaImagem(ambiente.container_id),
+      ...doDocker,
+      "FABRIQUINHA_API",
+      "PI_CODING_AGENT_DIR",
+      ...Object.keys(daFabriquinha),
+    ];
+    assert.deepEqual(
+      nomes.filter((nome) => !permitidas.includes(nome)),
+      [],
+    );
+    for (const nome of ["FABRIQUINHA_API", "PI_CODING_AGENT_DIR", ...Object.keys(daFabriquinha)])
+      assert.ok(nomes.includes(nome), `o env do container tem ${nome}`);
+    assert.ok(variaveis.PATH?.startsWith(`${join(PACOTE, "bin")}:`), "pacote-pi/bin vem à frente no PATH");
+  },
+);
+
+test("CA-3: o cancelamento da demanda mata o pi dentro do container", COM_DOCKER, async (t) => {
+  const { c, pi } = cenarioEmContainer(t);
+  const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+  const container = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString()).container_id;
+  pi.roteirizar([{ termina: "nunca", uso: null }]);
+  const fim = ciclo(c, despachoComVerificacoesReais);
+  await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(container)), "o pi vivo no container");
+
+  gestao.cancelar(c.banco, id, AUDITOR, CTX);
+  await fim;
+
+  assert.equal(statusDe(c, ticketDe(c, id, 1)), "cancelado");
+  assert.doesNotMatch(processosNoContainer(container), SO_NO_CONTAINER);
+});
+
+/** Quem sobra no container depois da limpeza: o processo que o mantém vivo (`tail`) e o próprio `ps`. */
+const PROCESSOS_DO_CONTAINER_VAZIO = ["ps -eo args", "tail -f /dev/null"];
+
+test(
+  "CA-3: o reinício do serviço com o pi vivo no container falha o ticket por infraestrutura, o retoma e devolve o container limpo",
+  COM_DOCKER,
+  async (t) => {
+    const { c } = cenarioEmContainer(t);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const ref = ticketDe(c, id, 1);
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
+
+    // A instância anterior lançou o pi do ticket e morreu com ele vivo: o banco guarda o processo aberto e o grupo dele.
+    await ambiente.executar({
+      programa: "touch /tmp/sobra /trabalho/sobra",
+      noShell: true,
+      argumentos: [],
+      cwd,
+      env: {},
+    });
+    const pi = ambiente.lancar({ programa: "pi", argumentos: ["--mode", "rpc"], cwd, env: {} });
+    await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(ambiente.container_id)), "o pi vivo no container");
+    c.banco
+      .prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ? AND ticket_id = ?")
+      .run(ref.demanda_id, ref.ticket_id);
+    c.banco
+      .prepare(
+        "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', ?, ?, 'autonomo', 's1')",
+      )
+      .run(ref.demanda_id, ref.ticket_id);
+    c.banco
+      .prepare(
+        "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo, ambiente_id) VALUES ('e1', 's1', ?, 0, ?, ?)",
+      )
+      .run(relogioDoSistema.agora(), pi.identificador.grupo_processo, ambiente.id);
+
+    // Porta 0: a instância nova não disputa a porta com a Fabriquinha de quem roda o teste.
+    const portaAntes = process.env.FABRIQUINHA_PORTA;
+    process.env.FABRIQUINHA_PORTA = "0";
+    const servico = await iniciarServico(c.raiz);
+    try {
+      assert.notEqual(await pi.saiu, 0);
+      assert.partialDeepStrictEqual(
+        servico.banco.prepare("SELECT * FROM tentativa WHERE ticket_id = ?").get(ref.ticket_id),
+        { resultado_tipo: "falha_infraestrutura", causa: "servico_reiniciado", motivo: "serviço reiniciado" },
+      );
+      assert.equal(statusDe(c, ref), "falhou");
+
+      // A mesma retomada do host local: o reinício volta o ticket a `aberto` na hora.
+      assert.deepEqual(retomarFalhasDeInfraestrutura(servico.banco), [`${id}.T${String(ref.ticket_id)}`]);
+      assert.equal(statusDe(c, ref), "aberto");
+
+      assert.equal(servico.banco.prepare("SELECT estado FROM ambiente WHERE id = ?").get(ambiente.id)?.estado, "livre");
+      assert.deepEqual(
+        processosNoContainer(ambiente.container_id).split("\n").slice(1).filter(Boolean).sort(),
+        PROCESSOS_DO_CONTAINER_VAZIO,
+      );
+      const sobras = execFileSync(
+        "docker",
+        ["exec", ambiente.container_id, "find", "/tmp", "/trabalho", "-mindepth", "1"],
+        {
+          encoding: "utf8",
+        },
+      );
+      assert.equal(sobras, "");
+    } finally {
+      if (portaAntes === undefined) Reflect.deleteProperty(process.env, "FABRIQUINHA_PORTA");
+      else process.env.FABRIQUINHA_PORTA = portaAntes;
+      await servico.parar();
+    }
+  },
+);
+
+test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_DOCKER, async (t) => {
+  const { c } = cenarioEmContainer(t);
+  await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+  // Os Espaços da primeira demanda acabaram: o conjunto limpa os containers dela e os devolve livres.
+  const alocados = c.banco
+    .prepare("SELECT container_id, alocado_para FROM ambiente WHERE estado = 'alocado'")
+    .all() as {
+    container_id: string;
+    alocado_para: string;
+  }[];
+  assert.ok(alocados.length > 0);
+  for (const { alocado_para } of alocados)
+    await conjuntoDoServico()?.liberar({ dono: Endereco.ler(alocado_para), branch: "b", base: "b", pasta: "/p" });
+
+  const segunda = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+
+  const worktree = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: segunda, rodada_id: 1 });
+  assert.ok(existsSync(worktree), "a worktree da rodada da segunda demanda existe");
+  const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(segunda, 1).toString());
+  assert.ok(
+    alocados.some(({ container_id }) => container_id === ambiente.container_id),
+    "a segunda demanda recebeu um container que a primeira já usou",
+  );
+  const { codigo } = await ambiente.executar({ programa: "git", argumentos: ["status"], cwd: worktree, env: {} });
+  assert.equal(codigo, 0);
+});
+
+/** Um servidor TCP que escuta em todas as interfaces, para o container tentar alcançá-lo pelo `host.docker.internal`. */
+async function escutarNoHost(t: TestContext): Promise<number> {
+  const servidor = createServer((conexao) => conexao.destroy()).listen(0, "0.0.0.0");
+  await once(servidor, "listening");
+  t.after(() => {
+    servidor.close();
+  });
+  return (servidor.address() as AddressInfo).port;
+}
+
+const CONECTA_NO_HOST = `const s = require("net").connect(Number(process.argv[1]), "host.docker.internal");
+s.on("connect", () => { console.log("conectou"); process.exit(0); });
+s.on("error", (erro) => { console.log(erro.code); process.exit(1); });
+setTimeout(() => { console.log("sem resposta"); process.exit(2); }, 5000);`;
+
+test(
+  "container: FABRIQUINHA_SAIDA é gravável, o pre-push que ele escreve não roda no push do core e só a porta da API do host é alcançável",
+  COM_DOCKER,
+  async (t) => {
+    const portaDaApi = await escutarNoHost(t);
+    const outraPorta = await escutarNoHost(t);
+    const { c, pi } = cenarioEmContainer(t, portaDaApi);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+
+    // O pi grava na saída do processo, que o core lê do host.
+    pi.roteirizar([
+      {
+        escreve: { "feature.txt": "linha\n" },
+        shell: 'test -d "$FABRIQUINHA_SAIDA" && echo gravavel > "$FABRIQUINHA_SAIDA/prova"',
+        uso: null,
+      },
+    ]);
+    await ciclo(c, despachoComVerificacoesReais);
+    const execucao = execucoesDe(c, ticketDe(c, id, 1)).at(-1);
+    assert.ok(execucao);
+    assert.equal(readFileSync(join(pastasDoProcesso(c.raiz, execucao.id).dir, "saida", "prova"), "utf8"), "gravavel\n");
+
+    // O container escreve um pre-push no `.git` do projeto e liga o `core.hooksPath` a ele; o git do core não o executa.
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
+    const marca = join(c.raiz, "execucoes", "pre-push-executou");
+    const escreveOHook = await ambiente.executar({
+      programa: `hooks="$(git rev-parse --path-format=absolute --git-common-dir)/hooks" && mkdir -p "$hooks" && printf '#!/bin/sh\\necho executou >> ${marca}\\n' > "$hooks/pre-push" && chmod +x "$hooks/pre-push" && git config core.hooksPath "$hooks" && git hook run pre-push`,
+      noShell: true,
+      argumentos: [],
+      cwd,
+      env: {},
+    });
+    assert.equal(escreveOHook.codigo, 0, escreveOHook.saida);
+    assert.ok(existsSync(marca), "o hook funciona quando o git roda no container");
+    rmSync(marca);
+    git(c.repo, "branch", "nova");
+    await exigirGit(c.repo, "push", "origin", "nova");
+    assert.equal(existsSync(marca), false, "o git do core não executou o pre-push");
+
+    // Da rede do container, a API do agente responde e nenhuma outra porta do host.
+    const conectar = (porta: number) =>
+      ambiente.executar({ programa: "node", argumentos: ["-e", CONECTA_NO_HOST, String(porta)], cwd, env: {} });
+    assert.equal((await conectar(portaDaApi)).saida.trim(), "conectou");
+    const aOutra = await conectar(outraPorta);
+    assert.notEqual(aOutra.codigo, 0);
+    assert.doesNotMatch(aOutra.saida, /conectou/);
   },
 );
