@@ -49,7 +49,7 @@ interface EscopoDaAvaliacao {
   pedido?: string;
 }
 
-export type EstadoDaAvaliacao = "rodando" | "concluida";
+type EstadoDaAvaliacao = "rodando" | "concluida";
 
 const dirDaAvaliacao = (raiz: string, id: string): string => join(raiz, "avaliacoes", id);
 const DATA = /^\d{4}-\d{2}-\d{2}$/;

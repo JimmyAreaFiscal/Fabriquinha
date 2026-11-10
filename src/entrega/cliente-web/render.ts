@@ -2,7 +2,7 @@
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import type { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../nucleo/primitivos.ts";
+import type { EstadoDemanda, EstadoRodada, EstadoTicket, Instante } from "../../nucleo/primitivos.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Pagina } from "./caminhos.ts";
 
@@ -93,11 +93,12 @@ export function modeloDoSeletor(valor: string): Modelo | null {
 export const plural = (n: number, um: string, varios: string, formato: (n: number) => string = String): string =>
   `${formato(n)} ${n === 1 ? um : varios}`;
 
-const dois = (n: number): string => String(n).padStart(2, "0");
+const FORMATO_DIA_MES = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
+const FORMATO_HORA = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 /** `09/10`, no fuso do navegador. */
-export const diaMes = (d: Date): string => `${dois(d.getDate())}/${dois(d.getMonth() + 1)}`;
+export const diaMes = (instante: Instante): string => FORMATO_DIA_MES.format(Date.parse(instante));
 /** `09:05`, no fuso do navegador. */
-export const hora = (d: Date): string => `${dois(d.getHours())}:${dois(d.getMinutes())}`;
+export const hora = (instante: Instante): string => FORMATO_HORA.format(Date.parse(instante));
 /** `48 s`, `2 min 10 s`, `34 min`, `1 h 20 min`. */
 export function duracao(ms: number): string {
   const s = Math.round(ms / 1000);
@@ -123,8 +124,8 @@ export function compacto(n: number): string {
  * Há quanto tempo, em minutos ou horas e minutos. A duração tem espaços não separáveis: numa coluna estreita ela
  * desce inteira para a linha de baixo, e "1 min" nunca se separa.
  */
-export function ha(desde: string, agora: Date): string {
-  const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
+export function ha(desde: Instante, agora: number | Date): string {
+  const minutos = Math.floor((Number(agora) - Date.parse(desde)) / 60_000);
   let tempo = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
   if (minutos < 1) tempo = "menos de 1 min";
   else if (minutos < 60) tempo = `${String(minutos)} min`;

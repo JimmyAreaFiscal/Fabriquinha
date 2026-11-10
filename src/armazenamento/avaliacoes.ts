@@ -13,7 +13,7 @@ interface NovaAvaliacao {
   demandas: string[];
 }
 
-export interface Achado {
+interface Achado {
   achado_id: number;
   titulo: string;
   descricao: string;
@@ -32,7 +32,7 @@ interface UsoAvaliacao {
   custo: number | null;
 }
 
-export interface ResumoAvaliacao {
+interface ResumoAvaliacao {
   id: string;
   projeto: string;
   de: string;

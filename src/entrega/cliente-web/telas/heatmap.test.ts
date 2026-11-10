@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Heatmap, NoDoHeatmap } from "../../../infra/repositorio/heatmap.ts";
+import type { Heatmap } from "../../contrato/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { caminhoDoHeatmap, calor, conteudo, cor, erroDoHeatmap, linhas, paginaDoHeatmap } from "./heatmap.ts";
 
@@ -15,7 +15,7 @@ const projeto = (nome: string): ProjetoListado => ({
 });
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 
-const arquivo = (nome: string, commits: string[]): NoDoHeatmap => ({ nome, alteracoes: commits.length, commits });
+const arquivo = (nome: string, commits: string[]): Heatmap["raiz"] => ({ nome, alteracoes: commits.length, commits });
 
 const DADOS: Heatmap = {
   branch: "main",

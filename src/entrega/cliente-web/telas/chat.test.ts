@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
-import type { Entrada } from "../../http/rotas/chat.ts";
 import {
   barraDeEstado,
   type Cabecalho,
@@ -11,9 +9,11 @@ import {
   comCursor,
   comResultado,
   corpoDaFerramenta,
+  type Dialogo,
   doSistema,
   conversa,
   emFluxo,
+  type Entrada,
   type Envio,
   envio,
   erroDaFalha,

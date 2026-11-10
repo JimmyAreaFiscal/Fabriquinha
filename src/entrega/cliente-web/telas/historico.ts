@@ -65,14 +65,14 @@ export function dia(instante: string, agora: Date): string {
   if (dias === 0) return "Hoje";
   if (dias === 1) return "Ontem";
   const ano = d.getFullYear() === agora.getFullYear() ? "" : `/${String(d.getFullYear())}`;
-  return `${diaMes(d)}${ano}`;
+  return `${diaMes(instante)}${ano}`;
 }
 
 const pilula = (r: Resultado): string => `<span class="pill ${RESULTADOS[r][1]}">${RESULTADOS[r][0]}</span>`;
 
 const linha = (s: SessaoDeDemanda, selecionada: string): string =>
   `<button type="button" class="linha" data-sel="${escapar(s.sessao)}" aria-selected="${String(s.sessao === selecionada)}">` +
-  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">${s.ticket}</span>` +
+  `<span class="hora">${hora(s.desde)}</span><span class="id">${s.ticket}</span>` +
   `<span class="meio">${escapar(s.titulo)} <span class="muted">· ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</span></span>` +
   `<span class="esconde">${pilula(s.resultado)}</span></button>`;
 
@@ -138,7 +138,7 @@ export function previa(s: SessaoDeDemanda, d: DadosDoChatDemanda, agora: Date): 
     `<dt>Projeto</dt><dd>${escapar(s.projeto)}</dd>` +
     `<dt>Etapa</dt><dd>${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</dd>` +
     `<dt>Resultado</dt><dd>${pilula(s.resultado)}</dd>` +
-    `<dt>Terminada</dt><dd>${dia(s.desde, agora)} ${hora(new Date(s.desde))} · durou ${duracao(durou)}</dd>` +
+    `<dt>Terminada</dt><dd>${dia(s.desde, agora)} ${hora(s.desde)} · durou ${duracao(durou)}</dd>` +
     `<dt>Modelo</dt><dd>${rotuloDoModelo(modeloDe(d, d.conversa))}</dd>` +
     `<dt>Mensagens</dt><dd>${String(mensagens(d).length)}</dd></dl>` +
     `<div class="trecho"><span class="quem">fim da conversa</span>${fim.length ? fim.map(pedaco).join("") : '<span class="muted">sem mensagens</span>'}</div>` +

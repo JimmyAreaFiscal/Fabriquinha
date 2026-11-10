@@ -1,10 +1,13 @@
 // Aba Heatmap da página do projeto (F7 §4.4) como funções puras: o cabeçalho com a janela, a árvore de pastas e arquivos
 // com a cor de calor e o detalhe de cada arquivo. Tudo o que vem do git passa por `escapar`. O DOM e a rede ficam em
 // heatmap-montar.ts.
-import type { CommitDoHeatmap, Heatmap, NoDoHeatmap } from "../../../infra/repositorio/heatmap.ts";
+import type { Heatmap } from "../../contrato/projeto.ts";
 import { diaMes, escapar, plural } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { abas, caminhoDoProjeto, seletor } from "./projeto.ts";
+
+type NoDoHeatmap = Heatmap["raiz"];
+type CommitDoHeatmap = Heatmap["commits"][string];
 
 /** Nó que se sabe pasta (tem `filhos`) ou arquivo (tem `commits`). */
 type Pasta = NoDoHeatmap & { filhos: NoDoHeatmap[] };
@@ -20,7 +23,7 @@ export const calor = (n: number, total: number): number => (total === 0 ? 0 : Ma
 /** @testes função pura da tela, testada sem montar o DOM */
 export const cor = (c: number): string => `hsl(${String(220 * (1 - c))} 70% 50%)`;
 
-const dia = (instante: string): string => `${diaMes(new Date(instante))}/${String(new Date(instante).getFullYear())}`;
+const dia = (instante: string): string => `${diaMes(instante)}/${String(new Date(instante).getFullYear())}`;
 
 /** O nó em `caminho` (nomes separados por `/`, a partir da raiz); o caminho vem das linhas desenhadas aqui. */
 function achar(raiz: NoDoHeatmap, caminho: string): NoDoHeatmap {

@@ -176,7 +176,7 @@ interface InfoSessaoDemanda {
 }
 
 /** A execução como o chat a mostra: o motivo da falha é o da Tentativa que ela abriu. */
-export type ExecucaoDoChat = ProcessoDoTrabalho & { motivo?: string };
+type ExecucaoDoChat = ProcessoDoTrabalho & { motivo?: string };
 
 /** O que o Histórico lê da sessão; demanda, rodada e ticket pelo endereço público (D09). */
 interface CabecalhoDaSessao {

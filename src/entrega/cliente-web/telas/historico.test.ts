@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ProcessoDoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
-import type { DadosDoChatDemanda, Entrada } from "../../http/rotas/chat.ts";
+import type { DadosDoChatDemanda } from "../../http/rotas/chat.ts";
 import type { SessaoDeDemanda } from "../../http/rotas/historico.ts";
+import type { Entrada } from "./chat.ts";
 import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
 process.env.TZ = "America/Sao_Paulo";

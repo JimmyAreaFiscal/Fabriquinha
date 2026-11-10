@@ -17,9 +17,9 @@ import { DadosDoChatDemanda as RespostaDoChat, NovaMensagemDoChat, RespostaDoDia
 import type { Rota } from "../rotas.ts";
 import { abrirFluxoSse } from "../sse.ts";
 
-// shortcut: o cliente web ainda importa estes dois tipos daqui; saem quando ele passar a importar `entrega/contrato/chat.ts`.
+// shortcut: o cliente web ainda importa este tipo daqui; sai quando o Histórico passar a importar `entrega/contrato/chat.ts`.
 /** Uma entrada do JSONL do pi; o prompt montado pela Fabriquinha (F4 §6.3) vem com `fabriquinha`. */
-export type Entrada = Record<string, unknown> & { fabriquinha?: true };
+type Entrada = Record<string, unknown> & { fabriquinha?: true };
 
 /** O chat de uma sessão de ticket da demanda: o cabeçalho com `origem: "demanda"` e a conversa. */
 export type DadosDoChatDemanda = CabecalhoDemanda & { conversa: Entrada[] };

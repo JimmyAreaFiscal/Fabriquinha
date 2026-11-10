@@ -2,13 +2,14 @@
 // filtros, e uma linha por demanda com a linha do tempo dos estados, as rodadas da execução e a gaveta de tickets. O DOM
 // e a rede ficam em projeto-montar.ts.
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
-import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
 import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
   diaMes,
   escapar,
+  ha,
   pilulaDoEstadoDoTicket,
   rotuloDoEstadoDoTicket,
   plural,
@@ -184,21 +185,11 @@ function linhaDoTempo(colunas: ColunasDaLinha, estado: EstadoDaLinha | undefined
   return `<ol class="${["trilho-estados", estado].filter(Boolean).join(" ")}" aria-label="${rotulo}">${passos.join("")}</ol>`;
 }
 
-/** Há quanto tempo, em minutos ou horas e minutos, com espaços não separáveis: "1 min" nunca se separa. */
-/** @testes função pura da tela, testada sem montar o DOM */
-export function ha(desde: string, agora: Date): string {
-  const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
-  let duracao = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
-  if (minutos < 1) duracao = "menos de 1 min";
-  else if (minutos < 60) duracao = `${String(minutos)} min`;
-  return `há ${duracao.replaceAll(" ", " ")}`;
-}
-
 /** O estado do ticket que dá a cor da linha, à direita, quando ela falhou ou roda. */
 const ESTADO_DO_DESTAQUE: Partial<Record<EstadoDaLinha, EstadoTicket>> = { falha: "falhou", rodando: "em_execucao" };
 
 /** À direita da linha: o gate com o link para a demanda, ou o ticket falho ou em execução com o chat. */
-function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora: Date): string {
+function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora: number): string {
   if (estado === "aguarda") {
     return `<a class="chat" href="${caminhoDaDemanda(d.id)}"><span class="pill pill-aguarda">Aguarda você</span><span class="ir">abrir →</span></a>`;
   }
@@ -220,7 +211,7 @@ const SAIDA_DO_ANDAMENTO: Partial<Record<EstadoDemanda, { rotulo: string; classe
 /** Quando a demanda saiu do andamento: cancelada, arquivada ou concluída. */
 function quando(d: DemandaDoProjeto): string {
   const saida = SAIDA_DO_ANDAMENTO[d.estado];
-  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(new Date(d.estadoAlteradoEm))}</span>` : "";
+  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(d.estadoAlteradoEm)}</span>` : "";
 }
 
 /** O que fica sob o título: `I-n`, tipo, a dependência que bloqueia, o progresso e quando saiu do andamento. */
@@ -261,7 +252,7 @@ function rodadas(d: DemandaDoProjeto): string {
 }
 
 /** Um item por Pendência no alto da gaveta: o tipo, o item, o motivo, há quanto tempo e o chat do diálogo. */
-function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: Date): string {
+function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: number): string {
   const chat =
     p.sessao === undefined
       ? ""
@@ -270,7 +261,7 @@ function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: Date)
 }
 
 /** A gaveta: as Pendências e os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
-function gaveta(d: DemandaDoProjeto, agora: Date): string {
+function gaveta(d: DemandaDoProjeto, agora: number): string {
   const linhas = d.tickets.map((t) => {
     const encerrado = t.terminal;
     // A sessão de ajustes conversa na página da demanda, não no chat.
@@ -295,7 +286,7 @@ function gaveta(d: DemandaDoProjeto, agora: Date): string {
 }
 
 /** Uma linha por demanda: título e marcas, a linha do tempo, o destaque, as rodadas na execução e a gaveta. */
-function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string {
+function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: number): string {
   const corDaLinha = estadoDaDemanda(d);
   const aberta = gavetas.get(d.id) ?? (corDaLinha === "aguarda" || corDaLinha === "falha");
   const estado = d.estadoNaLinhaDoTempo;
@@ -350,7 +341,7 @@ export function paginaDoProjeto(
   { demandas, contagem }: ListaDoProjeto,
   mes: MetricasDoMes,
   escolhas: Escolhas,
-  agora: Date,
+  agora: number,
 ): string {
   const alternar = (chave: keyof Escolhas["mostrar"], rotulo: string) =>
     `<label class="alternar"><input type="checkbox" data-mostrar="${chave}"${escolhas.mostrar[chave] ? " checked" : ""}> ${rotulo}</label>`;
