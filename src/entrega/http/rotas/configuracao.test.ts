@@ -78,8 +78,9 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
   for (const rota of ROTAS) {
     const params = rota.metodo === metodo ? casar(rota.caminho, caminho) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => PROXIMA },
         relogio: relogioDoSistema,
@@ -92,6 +93,12 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     } catch (erro) {
       return traduzir(erro);
     }
+    // CA-3: o corpo 2xx em JSON passa pelo schema do contrato da rota; sem schema, o teste nomeia a rota.
+    if (valor !== undefined) {
+      assert.ok(rota.resposta, `${rota.metodo} ${rota.caminho} sem schema de resposta em entrega/contrato`);
+      rota.resposta.parse(valor);
+    }
+    return valor;
   }
   throw new Error(`${metodo} ${caminho} não existe`);
 }
@@ -140,6 +147,7 @@ test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuçõ
   });
   const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15, modeloAuditoria: null };
   assert.deepEqual(await chamar("POST", "/api/configuracao", salvo), { ...salvo, proximaBusca: PROXIMA.toISOString() });
+  assert.deepEqual(await chamar("GET", "/api/configuracao"), { ...salvo, proximaBusca: PROXIMA.toISOString() });
 });
 
 test("modelo das avaliações: o par listado pelo pi grava; o que o pi não lista dá 422 e mantém o anterior; o igual ao gravado não chama o pi", async () => {
