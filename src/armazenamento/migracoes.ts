@@ -1187,6 +1187,15 @@ CREATE INDEX ix_commit_humano_posterior_origem ON commit_humano_posterior(demand
 CREATE INDEX ix_commit_humano_posterior_alterador ON commit_humano_posterior(alterador_demanda_id, ticket_id);
 `;
 
+/**
+ * A 50 dá ao `processo_do_trabalho` o hash (SHA-256 em hex) do token com que o agente fala com a API: nulo nos processos
+ * que já existem, e único quando gravado. O token em claro nunca vai ao banco.
+ */
+const MIGRACAO_50_TOKEN_DO_PROCESSO = `
+ALTER TABLE processo_do_trabalho ADD COLUMN hash_do_token TEXT CHECK (hash_do_token IS NULL OR length(hash_do_token) = 64);
+CREATE UNIQUE INDEX ux_processo_do_trabalho_hash_do_token ON processo_do_trabalho(hash_do_token) WHERE hash_do_token IS NOT NULL;
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -1202,4 +1211,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_47_VERSOES_DO_PLANO,
   MIGRACAO_48_PLANO_DAS_DEMANDAS_ANTIGAS,
   MIGRACAO_49_COMMIT_HUMANO_POSTERIOR,
+  MIGRACAO_50_TOKEN_DO_PROCESSO,
 ];

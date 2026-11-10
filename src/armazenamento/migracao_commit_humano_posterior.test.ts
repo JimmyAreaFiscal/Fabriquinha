@@ -42,7 +42,7 @@ test("a 49 renomeia a tabela e os índices, com as mesmas colunas e o mesmo cont
   const colunasAntes = linhas(banco, COLUNAS.replace("NOME", "retrabalho_demanda"));
   const conteudoAntes = linhas(banco, "SELECT * FROM retrabalho_demanda ORDER BY commit_alterador");
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES + 1 - VERSAO_LINHA_DE_BASE));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(linhas(banco, COLUNAS.replace("NOME", "commit_humano_posterior")), colunasAntes);
