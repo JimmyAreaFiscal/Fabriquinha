@@ -48,13 +48,24 @@ function projeto(banco: DatabaseSync, nome: string, repo: string): void {
   });
 }
 
-/** Cada teste do serviço numa porta livre, para não esbarrar numa Fabriquinha de verdade. */
+/**
+ * Cada teste do serviço numa porta livre, para não esbarrar numa Fabriquinha de verdade. A porta sai de fora do alcance
+ * efêmero do kernel (32768+), que as conexões de saída de outros testes em paralelo ocupam entre o `close` e o `listen`.
+ */
 beforeEach(async () => {
-  const s = createServer().listen(0, "127.0.0.1");
-  await once(s, "listening");
-  process.env.FABRIQUINHA_PORTA = String((s.address() as { port: number }).port);
-  s.close();
-  await once(s, "close");
+  for (;;) {
+    const porta = 20_000 + Math.floor(Math.random() * 10_000);
+    const s = createServer().listen(porta, "127.0.0.1");
+    try {
+      await once(s, "listening");
+    } catch {
+      continue;
+    }
+    process.env.FABRIQUINHA_PORTA = String(porta);
+    s.close();
+    await once(s, "close");
+    return;
+  }
 });
 
 const subir = (raiz = novaRaiz()) => iniciarServico(raiz);

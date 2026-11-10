@@ -138,17 +138,23 @@ interface ProcessoAberto {
   demanda_id: string;
   ticket_id: number;
   grupo_processo: number | null;
+  ambiente_id: string;
 }
 
 /** As execuções sem fim de qualquer ticket: no reinício do serviço, todas são de uma instância anterior. */
 export const processosAbertos = (banco: DatabaseSync): ProcessoAberto[] =>
   banco
     .prepare(
-      `SELECT e.id, e.trabalho_id, s.demanda_id, s.ticket_id, e.grupo_processo
+      `SELECT e.id, e.trabalho_id, s.demanda_id, s.ticket_id, e.grupo_processo, e.ambiente_id
          FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.fim IS NULL ORDER BY e.rowid`,
     )
     .all()
     .map((l) => ({ ...l }) as unknown as ProcessoAberto);
+
+/** O Ambiente que lançou o processo, para a recuperação da subida sinalizá-lo pelo mesmo Ambiente depois de um reinício. */
+export const gravarAmbienteDoProcesso = (banco: DatabaseSync, processoId: string, ambienteId: string): void => {
+  banco.prepare("UPDATE processo_do_trabalho SET ambiente_id = ? WHERE id = ?").run(ambienteId, processoId);
+};
 
 /**
  * Os tickets (`I-n.Tm`) com o pi no ar: execução aberta e com o grupo do pi gravado. A execução abre antes da preparação

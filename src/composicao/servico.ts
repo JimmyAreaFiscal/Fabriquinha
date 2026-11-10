@@ -83,9 +83,21 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   });
   const { port: porta } = web.address() as AddressInfo;
   condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
+  /** O conjunto de Ambientes em container: só existe com `tipo = container`, e com `host_local` o docker nunca é chamado. */
+  let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
+  const conjuntoDoBanco = (banco: DatabaseSync): ConjuntoDeAmbientes | undefined => {
+    if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
+    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio, {
+      raiz,
+      porta_da_api: porta,
+    }));
+  };
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
+    const bancoAberto = aberto;
+    // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
+    montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
     condutor.recuperarNaSubida(aberto, relogio);
     web.on(
       "request",
@@ -105,16 +117,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   }
   const banco = aberto;
 
-  /** O conjunto de Ambientes em container: só existe com `tipo = container`, e com `host_local` o docker nunca é chamado. */
-  let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
-  const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => {
-    if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
-    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio, {
-      raiz,
-      porta_da_api: porta,
-    }));
-  };
-  montarConjuntoDoServico(conjuntoSeContainer);
+  const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
   // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.
