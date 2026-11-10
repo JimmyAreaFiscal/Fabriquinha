@@ -57,7 +57,7 @@ before(async () => {
   livre.close();
   await once(livre, "close");
   origem = `http://127.0.0.1:${process.env.FABRIQUINHA_PORTA}`;
-  servico = await iniciarServico(raiz);
+  servico = await iniciarServico(raiz, join(base, "pacote-bin"));
   for (const nome of ["loja", "site"]) {
     registrarProjeto(servico.banco, {
       nome,
