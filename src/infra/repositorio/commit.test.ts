@@ -14,8 +14,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
 import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+import { AmbienteContainer, dirDoPiDoAmbiente } from "../ambiente/container/ambiente_container.ts";
 import { arquivosDe, commitar } from "./commit.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -45,6 +47,9 @@ function cenario(hooks: Record<string, string> = {}) {
   const worktree = join(base, `worktree${String(++n)}`);
   mkdirSync(worktree, { recursive: true });
   git(worktree, "init", "-q");
+  // O commit no container não herda o gitconfig do host.
+  git(worktree, "config", "user.name", "Auditor");
+  git(worktree, "config", "user.email", "auditor@exemplo.com");
   for (const [nome, conteudo] of [
     ["velho.txt", "a\nb\nc\nd\ne\nf\n"],
     ["mod.txt", "m\n"],
@@ -159,4 +164,48 @@ test("sem alteração, o commit sai vazio; emendar refaz a HEAD em vez de empilh
   await commitar(ambiente, c.worktree, "fix: emendado", { emendar: true, semAlteracao: true }, LIMITE_MS);
   assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes);
   assert.equal(git(c.worktree, "show", "-s", "--format=%B", "HEAD").trim(), "fix: emendado");
+});
+
+test("no container, o hook roda com o env limpo, sem diretório vazio de gh e az; hook que reprova é reprovação e o que trava é infraestrutura, morto no container", async () => {
+  const docker = instalarDockerFalso(join(base, "docker"));
+  const { id: container_id } = docker.semearContainer({});
+  const ambienteContainer = new AmbienteContainer({
+    id: "amb-commit",
+    container_id,
+    bin_do_pacote: join(base, "pacote-pi", "bin"),
+    dir_do_pi: dirDoPiDoAmbiente(base, "amb-commit"),
+    url_da_api: "http://host.docker.internal:3000",
+  });
+  process.env.SSH_AUTH_SOCK = "/tmp/ssh-do-host";
+  const env = join(base, "env-do-hook-no-container");
+  const c = cenario({ "pre-commit": `env > "${env}"` });
+  git(c.worktree, "commit", "-q", "--allow-empty", "-m", "base");
+  await commitar(ambienteContainer, c.worktree, "fix: no container", { emendar: false, semAlteracao: true }, LIMITE_MS);
+  const doHook = readFileSync(env, "utf8");
+  assert.doesNotMatch(doHook, /segredo|SSH_AUTH_SOCK|^GH_|^AZURE_|^SONAR_/m);
+
+  const dica = "corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks";
+  const hooks = join(c.worktree, ".git", "hooks", "pre-commit");
+  writeFileSync(hooks, '#!/bin/sh\necho "lint: 2 erros"\nexit 1\n');
+  await assert.rejects(
+    commitar(ambienteContainer, c.worktree, "fix: reprova", { emendar: false, semAlteracao: true }, LIMITE_MS),
+    (e) =>
+      e instanceof ErroDeReprovacao &&
+      e.message.startsWith("o git commit saiu com código 1, com os hooks do repositório:") &&
+      e.message.endsWith(`lint: 2 erros (${dica})`),
+  );
+
+  writeFileSync(hooks, "#!/bin/sh\necho comecei\nexec sleep 3\n");
+  await assert.rejects(
+    commitar(ambienteContainer, c.worktree, "fix: trava", { emendar: false, semAlteracao: true }, 300),
+    (e) => e instanceof ErroExterno && e.message.startsWith("o git commit passou de 0.005 minutos"),
+  );
+  assert.ok(
+    docker
+      .registro()
+      .some(
+        ([comando, alvo, , , roteiro]) =>
+          comando === "exec" && alvo === container_id && String(roteiro).startsWith("kill -KILL"),
+      ),
+  );
 });

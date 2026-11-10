@@ -23,7 +23,7 @@ import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../inf
 import type { EventoPi } from "../../infra/agente/pi.ts";
 import type { Ambiente, IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
 import { anotar, noLog } from "../../infra/registro.ts";
-import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
+import { ambienteDoServico, conjuntoDoServico } from "../espaco/ambiente_do_servico.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "../auditor_automatico.ts";
 import { type AvisarSessao, recuperarProcessosAbertos } from "./processo_do_ticket.ts";
 
@@ -169,8 +169,8 @@ export interface PedidoDeProcesso {
    * sair, com qualquer código ou sinal, é o desfecho normal, e o `limiteMin` é o único relógio.
    */
   terminaSozinho?: boolean;
-  /** Chamado com o grupo de processos do pi logo depois de lançado, para quem precisa matá-lo no reinício (F4 §7). */
-  aoLancar(pgid: number): void;
+  /** Chamado com o grupo de processos do pi e o Ambiente que o lançou, logo depois de lançado, para quem precisa matá-lo no reinício (F4 §7). */
+  aoLancar(pgid: number, ambienteId: string): void;
   /**
    * Autônoma: o Auditor automático lê antes a pergunta da `perguntar` e devolve a resposta do que é banal; `undefined`
    * deixa a pergunta com o Auditor humano. Sem a triagem, toda pergunta espera o humano.
@@ -181,16 +181,23 @@ export interface PedidoDeProcesso {
 }
 
 /** O sinal a um processo que não vai esperar a resposta; a falha do sinal vai para o log, nunca derruba o serviço. */
-function sinalizarSemEsperar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): void {
-  ambienteDoServico().sinalizar(identificador, sinal).catch(noLog);
+function sinalizarSemEsperar(
+  ambienteDoProcesso: Ambiente,
+  identificador: IdentificadorDoProcesso,
+  sinal: NodeJS.Signals,
+): void {
+  ambienteDoProcesso.sinalizar(identificador, sinal).catch(noLog);
 }
 
 export class CondutorDeTrabalhos {
   private readonly harness = new HarnessPi();
   private readonly vivas = new Map<Id | string, Viva>();
   private readonly ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
-  /** Os processos de ticket com condutor vivo, por id, com o grupo do pi depois de lançado. */
-  private readonly ativas = new Map<string, { identificador?: IdentificadorDoProcesso; interrompida?: boolean }>();
+  /** Os processos de ticket com condutor vivo, por id, com o grupo do pi e o Ambiente que o lançou, depois de lançado. */
+  private readonly ativas = new Map<
+    string,
+    { identificador?: IdentificadorDoProcesso; ambienteDoPi?: Ambiente; interrompida?: boolean }
+  >();
   /** Os condutores em curso, por id do processo: o `parar` do serviço os espera antes de fechar o banco. */
   private readonly condutores = new Map<string, Promise<unknown>>();
   /** As sessões com pi subindo, vivo ou parando: no máximo um pi por sessão. */
@@ -340,7 +347,7 @@ export class CondutorDeTrabalhos {
     const viva = this.ativas.get(id);
     if (!viva) return false;
     viva.interrompida = true;
-    if (viva.identificador) sinalizarSemEsperar(viva.identificador, "SIGTERM");
+    if (viva.identificador && viva.ambienteDoPi) sinalizarSemEsperar(viva.ambienteDoPi, viva.identificador, "SIGTERM");
     return true;
   }
 
@@ -373,8 +380,8 @@ export class CondutorDeTrabalhos {
       return resultado;
     };
     if ((await esperar(limiteMs)) === "limite") {
-      for (const { identificador } of this.ativas.values()) {
-        if (identificador) sinalizarSemEsperar(identificador, "SIGKILL");
+      for (const { identificador, ambienteDoPi } of this.ativas.values()) {
+        if (identificador && ambienteDoPi) sinalizarSemEsperar(ambienteDoPi, identificador, "SIGKILL");
       }
       await esperar(aposKillMs);
     }
@@ -382,21 +389,29 @@ export class CondutorDeTrabalhos {
   }
 
   /**
-   * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, de
-   * cada avaliação e de cada execução simulada pendente (que falha); os processos dos tickets se encerram com falha.
+   * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, pelo
+   * Ambiente que o lançou (o host local ou um container do conjunto), e o de cada avaliação e de cada execução simulada
+   * pendente (que falha); os processos dos tickets se encerram com "serviço reiniciado", decidido aqui, que sabe quem
+   * reiniciou. O container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
    */
   recuperarNaSubida(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): void {
-    const gruposDosTickets = processosAbertos(banco).flatMap((p) =>
-      p.grupo_processo === null ? [] : [p.grupo_processo],
-    );
-    const grupos = [
-      ...gruposDosTickets,
+    const doServico = ambienteDoServico();
+    const gruposDoServico = [
       ...recolherGruposDasAvaliacoes(banco),
       ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
     ];
-    const { id: ambiente_id } = ambienteDoServico();
-    // ponytail: o host local sinaliza na hora; com Ambiente remoto a recuperação passa a esperar os sinais (demanda 24).
-    for (const grupo_processo of grupos) sinalizarSemEsperar({ ambiente_id, grupo_processo }, "SIGKILL");
+    const processos = [
+      ...processosAbertos(banco).flatMap(({ ambiente_id, grupo_processo }) =>
+        grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
+      ),
+      ...gruposDoServico.map((grupo_processo) => ({ ambiente_id: doServico.id, grupo_processo })),
+    ];
+    // ponytail: o sinal não é esperado; com container o `reconciliarNaSubida` limpa o que sobrar antes de o serviço seguir.
+    for (const processo of processos) {
+      const ambiente =
+        processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
+      if (ambiente) sinalizarSemEsperar(ambiente, processo, "SIGKILL");
+    }
     recuperarProcessosAbertos(banco, this.avisar);
   }
 
@@ -618,8 +633,9 @@ export class CondutorDeTrabalhos {
       let agenteTerminou = false;
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
+      const ambienteDoPi = r.ambiente ?? ambienteDoServico();
       const pi = this.harness.lancar(
-        r.ambiente ?? ambienteDoServico(),
+        ambienteDoPi,
         r.args,
         { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {
@@ -680,19 +696,21 @@ export class CondutorDeTrabalhos {
         const ativa = this.ativas.get(String(id));
         if (ativa) {
           ativa.identificador = pi.identificador;
+          ativa.ambienteDoPi = ambienteDoPi;
           // Interrompido durante a preparação: o pi que acaba de subir recebe o término já.
-          if (ativa.interrompida) sinalizarSemEsperar(pi.identificador, "SIGTERM");
+          if (ativa.interrompida) sinalizarSemEsperar(ambienteDoPi, pi.identificador, "SIGTERM");
         }
-        r.aoLancar(pi.identificador.grupo_processo);
+        r.aoLancar(pi.identificador.grupo_processo, pi.identificador.ambiente_id);
       }
       void pi.saiu.then((codigo) => {
         if (r.terminaSozinho) {
           fim();
           return;
         }
-        // Sem código, o pi morreu por sinal: o cgroup do serviço ou um kill externo, que a Fabriquinha trata como reinício.
+        // Sem código, o pi do host morreu por sinal: o cgroup do serviço ou um kill externo, que a Fabriquinha trata como
+        // reinício. No container o processo sai com 128+sinal, e o reinício é decidido pela `recuperarNaSubida`.
         fim(
-          codigo === null
+          codigo === null && ambienteDoPi.tipo === "host_local"
             ? falhaPorServicoReiniciado
             : falhaQueExigeOAuditor(
                 `o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`,

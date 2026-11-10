@@ -69,7 +69,8 @@ export async function commitar(
   { emendar, semAlteracao }: { emendar: boolean; semAlteracao: boolean },
   limiteMs: number,
 ): Promise<void> {
-  const vazio = mkdtempSync(join(tmpdir(), "fabriquinha-commit-"));
+  // O container não tem `gh` nem `az` (ficam no core) e o env dele já nasce vazio: não há diretório vazio a apontar.
+  const vazio = ambiente.tipo === "container" ? undefined : mkdtempSync(join(tmpdir(), "fabriquinha-commit-"));
   try {
     const r = await ambiente.executar({
       programa: "git",
@@ -86,7 +87,7 @@ export async function commitar(
       ],
       // O `-C` leva o git à pasta; um cwd inexistente faria o spawn falhar sem o motivo do git.
       cwd: "/",
-      env: { ...ambienteSemCredenciais(process.env, vazio), GIT_TERMINAL_PROMPT: "0" },
+      env: { ...(vazio ? ambienteSemCredenciais(process.env, vazio) : {}), GIT_TERMINAL_PROMPT: "0" },
       limiteMs,
       ultimosBytes: FIM_DA_SAIDA,
     });
@@ -105,6 +106,6 @@ export async function commitar(
       );
     }
   } finally {
-    rmSync(vazio, { recursive: true, force: true });
+    if (vazio) rmSync(vazio, { recursive: true, force: true });
   }
 }

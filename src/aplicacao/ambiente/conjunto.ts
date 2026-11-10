@@ -69,6 +69,12 @@ export class ConjuntoDeAmbientes {
     return alocado && comoAmbienteContainer(alocado, this.#servicoObrigatorio());
   }
 
+  /** O Ambiente do container `id` do conjunto (alocado ou não), ou `undefined` se ele não está no banco: a recuperação da subida sinaliza por ele. */
+  ambientePorId(id: string): AmbienteContainer | undefined {
+    const gravado = listarAmbientes(this.#banco).find((candidato) => candidato.id === id);
+    return gravado && comoAmbienteContainer(gravado, this.#servicoObrigatorio());
+  }
+
   /** Dá ao Espaço um livre da mesma imagem ou, sem nenhum, um container novo; o Espaço que já tem um recebe o mesmo. */
   async alocar(
     espaco: EspacoDeTrabalho,
@@ -105,7 +111,10 @@ export class ConjuntoDeAmbientes {
   /** Limpa o container do Espaço e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
   async liberar(espaco: EspacoDeTrabalho): Promise<void> {
     const ambiente = buscarAmbienteAlocadoPara(this.#banco, espaco.dono.toString());
-    if (!ambiente) return;
+    if (ambiente) await this.#limparEDevolver(ambiente);
+  }
+
+  async #limparEDevolver(ambiente: AmbienteGravado): Promise<void> {
     let estadoDepoisDaLiberacao: "livre" | "sujo" = "livre";
     try {
       await this.#gerador.limpar(ambiente);
@@ -141,7 +150,10 @@ export class ConjuntoDeAmbientes {
   /**
    * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado; linha
    * do banco cujo container sumiu vira `eliminado`. O que não tem o rótulo nem aparece, porque a listagem só traz os da
-   * Fabriquinha.
+   * Fabriquinha. Todo container ainda `alocado` era de um Espaço da instância anterior, cujo processo morreu com o
+   * reinício: é limpo e volta `livre` (`sujo` se a limpeza falhar).
+   * ponytail: um `alocar` que chegue durante esta espera pode ter o container recém-alocado limpo; a subida é curta e o
+   * agendador só liga depois dela.
    */
   async reconciliarNaSubida(): Promise<void> {
     const noDocker = await this.#gerador.listarDaFabriquinha();
@@ -152,6 +164,10 @@ export class ConjuntoDeAmbientes {
       await this.#gerador.eliminar(orfao);
     for (const sumido of noBanco.filter(({ container_id }) => !containersDoDocker.has(container_id)))
       eliminarAmbiente(this.#banco, sumido.id);
+    for (const alocado of noBanco.filter(
+      ({ estado, container_id }) => estado === "alocado" && containersDoDocker.has(container_id),
+    ))
+      await this.#limparEDevolver(alocado);
   }
 
   #servicoObrigatorio(): ServicoDoConjunto {

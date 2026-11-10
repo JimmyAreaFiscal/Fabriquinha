@@ -317,3 +317,47 @@ test("sem a raiz da Fabriquinha o conjunto recusa alocar, antes de criar o conta
   await conjunto.alocar(espacoA, projeto);
   assert.throws(() => semServico.ambienteAlocadoPara(espacoA), ErroDeRegra);
 });
+
+test("na subida o container ainda alocado é de um Espaço morto pelo reinício: o conjunto o limpa e o devolve livre", async () => {
+  const { docker, banco, conjunto, gerador } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  const chamadasAntes = docker.registro().length;
+
+  await conjunto.reconciliarNaSubida();
+
+  const [livre] = listarAmbientes(banco);
+  assert.deepEqual([livre?.estado, livre?.alocado_para], ["livre", null]);
+  assert.notEqual(livre?.liberado_em, null);
+  const limpeza = docker
+    .registro()
+    .slice(chamadasAntes)
+    .find(([comando, alvo]) => comando === "exec" && alvo === ambiente.container_id);
+  assert.match(String(limpeza?.at(-1)), /kill -9 -1; find \/tmp \/trabalho/);
+  assert.equal((await gerador.listarDaFabriquinha()).length, 1);
+  assert.equal((await conjunto.alocar(espacoB, projeto)).container_id, ambiente.container_id);
+});
+
+test("na subida, a limpeza que falha deixa o alocado sujo, e o que o docker perdeu não é limpo", async () => {
+  const { docker, banco, conjunto, pastaDoDocker } = cenario();
+  const comFalha = await conjunto.alocar(espacoA, projeto);
+  const perdido = await conjunto.alocar(espacoB, projeto);
+  rmSync(join(pastaDoDocker, "containers", perdido.container_id));
+  docker.falharComando("exec", "container travado");
+
+  await conjunto.reconciliarNaSubida();
+
+  assert.deepEqual(
+    listarAmbientes(banco).map(({ container_id, estado }) => ({ container_id, estado })),
+    [{ container_id: comFalha.container_id, estado: "sujo" }],
+  );
+});
+
+test("ambientePorId devolve o Ambiente do container gravado, e undefined para o desconhecido ou eliminado", async () => {
+  const { conjunto } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  assert.equal(conjunto.ambientePorId(ambiente.id)?.container_id, ambiente.container_id);
+  assert.equal(conjunto.ambientePorId("outro"), undefined);
+  await conjunto.liberar(espacoA);
+  await conjunto.eliminar(ambiente.id);
+  assert.equal(conjunto.ambientePorId(ambiente.id), undefined);
+});
