@@ -1,35 +1,29 @@
-// Dependência entre demandas no banco (comparacao-sdlc-implementacao.md §7.2): lê, chama as regras puras do domínio e grava.
+// Dependência entre demandas no banco (comparacao-sdlc-implementacao.md §7.2): lê e grava; as regras são da aplicação.
 import type { DatabaseSync } from "node:sqlite";
-import {
-  type DependenciaDemanda,
-  dependentesNaoConcluidas,
-  registrarDependencia,
-} from "../nucleo/dependencia_demanda.ts";
+import { type DependenciaDemanda, dependentesNaoConcluidas } from "../nucleo/dependencia_demanda.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { EstadoDemanda } from "../nucleo/primitivos.ts";
-import { escrever } from "./banco.ts";
 import { lerEmSnapshot } from "./snapshot.ts";
 
-const arestas = (banco: DatabaseSync) =>
+/** Todas as arestas de dependência, na ordem em que foram gravadas. */
+export const arestasDeDependencia = (banco: DatabaseSync): DependenciaDemanda[] =>
   banco
     .prepare("SELECT demanda_id, depende_demanda_id FROM dependencia_demanda ORDER BY rowid")
     .all() as unknown as DependenciaDemanda[];
 
-const demandaDe = (banco: DatabaseSync, id: string) => {
+/** O id e se foi enviada da demanda que vai registrar ou receber uma dependência; ela precisa existir. */
+export const demandaParaDependencia = (banco: DatabaseSync, id: string): { id: string; enviada: boolean } => {
   const linha = banco.prepare("SELECT enviada FROM demanda WHERE id = ?").get(id);
   return { id, enviada: encontrado(linha, `a demanda ${id} não existe`, "confira o id da demanda").enviada === 1 };
 };
 
-/** Registra `demandaId` como dependente de `dependeId`; as duas precisam existir. */
-export const registrarDependenciaDemanda = (banco: DatabaseSync, demandaId: string, dependeId: string): void => {
-  escrever(banco, () => {
-    const demanda = demandaDe(banco, demandaId);
-    demandaDe(banco, dependeId);
-    const nova = registrarDependencia(arestas(banco), demanda, dependeId);
-    banco
-      .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
-      .run(nova.demanda_id, nova.depende_demanda_id);
-  });
+export const gravarDependenciaDemanda = (
+  banco: DatabaseSync,
+  { demanda_id, depende_demanda_id }: DependenciaDemanda,
+): void => {
+  banco
+    .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
+    .run(demanda_id, depende_demanda_id);
 };
 
 /** As predecessoras diretas de `id` com o estado de cada uma, para `predecessorasPendentes`. */
@@ -55,6 +49,6 @@ export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: strin
         .all()
         .map((l) => [l.id as string, EstadoDemanda.parse(l.estado)]),
     );
-    return dependentesNaoConcluidas(arestas(banco), estados, id);
+    return dependentesNaoConcluidas(arestasDeDependencia(banco), estados, id);
   });
 }

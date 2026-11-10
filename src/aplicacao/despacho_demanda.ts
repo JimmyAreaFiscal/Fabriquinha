@@ -3,17 +3,23 @@
 // ao serviço da etapa. pi, git e testes ficam fora da transação: rodam em segundo plano, depois dela.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, etapaDoEstado } from "../nucleo/ciclos.ts";
+import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { exigirEtapaConduzida } from "../nucleo/etapa.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import type { EtapaTicket } from "../nucleo/primitivos.ts";
+import { EstadoDemanda, type EtapaTicket } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
+import {
+  demandasParaDespacho as lerDemandasParaDespacho,
+  ocupacaoDoLimite as lerOcupacaoDoLimite,
+  retomadasDePlanejamento,
+} from "../armazenamento/despacho_demanda.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
 import type { ConducaoDeEtapa, DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
@@ -44,6 +50,26 @@ export interface DepsDespacho {
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
   verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
 }
+
+// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
+// cuja Etapa é a do ticket que eles esperam, não a do estado.
+const ESTADOS_DESPACHADOS = EstadoDemanda.options.filter(
+  (estado) =>
+    CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
+    estado !== "entender_e_desenhar" &&
+    (etapaDoEstado(estado) ?? estado) === estado,
+);
+
+/** Demandas em planejamento, execução, revisão da demanda e encerramento, com o agregado e se as predecessoras já satisfazem. */
+export const demandasParaDespacho = (
+  banco: DatabaseSync,
+): { agregado: AgregadoDemanda; predecessoras_satisfeitas: boolean }[] =>
+  lerDemandasParaDespacho(banco, ESTADOS_DESPACHADOS).map(({ agregado, predecessoras }) => ({
+    agregado,
+    predecessoras_satisfeitas: predecessorasPendentes(predecessoras).length === 0,
+  }));
+
+const ocupacaoDoLimite = (banco: DatabaseSync): number => lerOcupacaoDoLimite(banco, ESTADOS_DESPACHADOS);
 
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
