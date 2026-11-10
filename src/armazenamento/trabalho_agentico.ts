@@ -200,7 +200,6 @@ export const ticketsEmExecucaoSemProcesso = (banco: DatabaseSync): z.infer<typeo
 
 /**
  * O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente.
- * @testes o teste exercita direto; a produção a usa só dentro do módulo (a consulta que a usa vem em seguida)
  */
 export function sessaoDeCadaTicketDasDemandas(
   banco: DatabaseSync,

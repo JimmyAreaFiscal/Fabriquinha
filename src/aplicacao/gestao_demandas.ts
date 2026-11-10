@@ -2,7 +2,7 @@
 // evidência, enviar e arquivar, uma transação por operação. A web e o CLI chamam estas funções; as regras são do domínio.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Ator } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
@@ -21,7 +21,7 @@ import {
   registrarDemanda,
 } from "../nucleo/transicoes_demanda.ts";
 import { escrever } from "../armazenamento/banco.ts";
-import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda, criarDemandaNova, situacaoDasDemandas } from "../armazenamento/demandas.ts";
 import {
   arestasDeDependencia,
   demandaParaDependencia,
@@ -92,6 +92,19 @@ export const enviar = (banco: DatabaseSync, id: string, autor: Ator, ctx: Contex
 
 export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
+
+/** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
+export const arquivarConcluidas = (
+  banco: DatabaseSync,
+  projeto: string,
+  relogio: Relogio,
+  orientacaoProjetoInexistente: string,
+): { arquivadas: number } => {
+  projetoExistente(banco, projeto, orientacaoProjetoInexistente);
+  const concluidas = situacaoDasDemandas(banco, projeto).filter((d) => d.estado === "concluida");
+  for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: relogio.agora() });
+  return { arquivadas: concluidas.length };
+};
 
 /** Só o Auditor reabre o ticket falho, com a instrução para a sessão que o retomar; devolve o ticket já aberto. */
 export const reabrir = (

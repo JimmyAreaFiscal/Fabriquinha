@@ -7,6 +7,7 @@ import type { Ator } from "../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import type { EstadoDemanda } from "../nucleo/primitivos.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import { escrever, novoId } from "./banco.ts";
 import { lerEmSnapshot } from "./snapshot.ts";
@@ -388,6 +389,13 @@ export function listarDemandas(
     );
   });
 }
+
+/** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
+export const situacaoDasDemandas = (banco: DatabaseSync, projeto: string): { id: string; estado: EstadoDemanda }[] =>
+  banco.prepare("SELECT id, estado FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(projeto) as {
+    id: string;
+    estado: EstadoDemanda;
+  }[];
 
 /**
  * Demanda nova: a persistência só aloca o ID da sequência `issue` (D09); `montar` monta o agregado com ele. Erro em

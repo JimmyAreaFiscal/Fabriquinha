@@ -16,6 +16,7 @@ import {
   comDemanda,
   criarDemandaNova,
   listarDemandas,
+  situacaoDasDemandas,
 } from "./demandas.ts";
 import { abrirTrabalhoDoAgente, gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
@@ -670,4 +671,14 @@ test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na 
   assert.deepEqual(carregarDemandas(b, ["I-1", "I-1"]), [carregarDemanda(b, "I-1"), carregarDemanda(b, "I-1")]);
   assert.equal(preparacoesDe(["I-1", "I-1", "I-1"]), preparacoesDe(["I-1"]));
   assert.throws(() => carregarDemandas(b, ["I-9"]), ErroDeInexistente);
+});
+
+test("situacaoDasDemandas devolve só o id e o estado das demandas do projeto pedido", () => {
+  const b = comBase();
+  const { estado } = carregarDemanda(b, "I-1").demanda;
+  assert.deepEqual(
+    situacaoDasDemandas(b, "p").map((linha) => ({ ...linha })),
+    [{ id: "I-1", estado }],
+  );
+  assert.deepEqual(situacaoDasDemandas(b, "outro"), []);
 });

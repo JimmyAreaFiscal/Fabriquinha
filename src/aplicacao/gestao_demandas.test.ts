@@ -332,6 +332,25 @@ test("CA-27: arquivar demanda concluída muda só o estado", () => {
   );
 });
 
+test("arquivarConcluidas: arquiva só as concluídas do projeto, no instante do relógio, e recusa o projeto inexistente", () => {
+  const b = novoBanco();
+  const concluida = registrar(b);
+  const andamento = registrar(b);
+  b.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(concluida);
+  const relogio = relogioFixo("2026-03-01T00:00:00.000Z");
+  const projeto = "fabriquinha";
+  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio, "oriente"), { arquivadas: 1 });
+  const arquivada = carregarDemanda(b, concluida).demanda;
+  assert.equal(arquivada.estado, "arquivada");
+  assert.equal(arquivada.estado_alterado_em, "2026-03-01T00:00:00.000Z");
+  assert.notEqual(estado(b, andamento), "arquivada");
+  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio, "oriente"), { arquivadas: 0 });
+  assert.throws(
+    () => gestao.arquivarConcluidas(b, "nao-existe", relogio, "oriente"),
+    /o projeto nao-existe não existe/,
+  );
+});
+
 test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
@@ -360,7 +379,7 @@ test("reabrir: só o Auditor reabre o ticket falho, com a instrução e o instan
 });
 
 test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, cancelamento e arquivamento", () => {
-  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "cancelar", "arquivar"];
+  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "cancelar", "arquivar", "arquivarConcluidas"];
   for (const nome of nomes) {
     assert.equal(typeof (gestao as Record<string, unknown>)[nome], "function", nome);
   }
