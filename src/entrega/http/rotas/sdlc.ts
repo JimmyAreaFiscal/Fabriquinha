@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { ProjetoConfigurado } from "../../../nucleo/projeto.ts";
 import { gravarConfiguracaoSdlc, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
-import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
+import { consultarConfiguracaoSdlc } from "../../../aplicacao/consultas/sdlc.ts";
+import { ConfiguracaoSdlcDoProjeto } from "../../contrato/sdlc.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Troca a mensagem do zod por uma orientação; as regras do domínio (`custom`) já vêm em português e ficam. */
@@ -25,13 +26,8 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/configuracao-sdlc",
-    tratar: ({ banco, params }) => {
-      const nome = String(params.nome);
-      const configuracao = projetoExistente(banco, nome);
-      const cursor = cursorDaBase(banco, nome);
-      const comCursor = cursor === undefined ? {} : { cursor_commit_humano: cursor };
-      return { configurada: configuracao.verificacoes.linguagens.length > 0, configuracao, ...comCursor };
-    },
+    tratar: ({ banco, params }) => consultarConfiguracaoSdlc(banco, String(params.nome)),
+    resposta: ConfiguracaoSdlcDoProjeto,
   },
   {
     metodo: "POST",
@@ -43,5 +39,6 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
       if (!lida.success) throw new z.ZodError(lida.error.issues.map(orientar));
       return { configurada: true, configuracao: gravarConfiguracaoSdlc(banco, lida.data) };
     },
+    resposta: ConfiguracaoSdlcDoProjeto,
   },
 ];

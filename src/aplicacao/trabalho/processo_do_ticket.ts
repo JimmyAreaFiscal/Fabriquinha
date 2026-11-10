@@ -11,6 +11,7 @@ import {
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { colunasDoModelo, lerUsoDoPi } from "../../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
@@ -63,8 +64,13 @@ function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloE
 }
 
 /** O único escritor do encerramento: fim, falha e uso na mesma transação; não toca ticket, etapa nem gate. */
-export function encerrarProcessoDoTicket(c: ProcessoEncerravel, falhou: boolean, log: string): void {
-  const fim = new Date().toISOString();
+export function encerrarProcessoDoTicket(
+  c: ProcessoEncerravel,
+  falhou: boolean,
+  log: string,
+  relogio: Relogio = relogioDoSistema,
+): void {
+  const fim = relogio.agora();
   const usos = coletarUso(c, fim, log);
   comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
@@ -94,6 +100,7 @@ export function encerrarProcessoOrfao(
   id: string,
   falha: FalhaDaTentativa,
   avisar: AvisarSessao,
+  relogio: Relogio = relogioDoSistema,
 ): void {
   const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
@@ -107,20 +114,24 @@ export function encerrarProcessoOrfao(
     "confira o banco",
   );
   const { log } = pastasDoProcesso(raizDo(banco), id);
-  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log);
-  falharTicketDemanda(banco, ref, falha);
+  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log, relogio);
+  falharTicketDemanda(banco, ref, falha, relogio);
   avisar(sessao.id, log);
 }
 
 /** Reinício do serviço (§4.2): todo processo aberto é de uma instância anterior e falha, sem avançar etapa nem gate. */
-export function recuperarProcessosAbertos(banco: DatabaseSync, avisar: AvisarSessao): void {
+export function recuperarProcessosAbertos(
+  banco: DatabaseSync,
+  avisar: AvisarSessao,
+  relogio: Relogio = relogioDoSistema,
+): void {
   for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
-    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar);
+    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar, relogio);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
   const presos = ticketsEmExecucaoSemProcesso(banco);
   for (const { demanda_id, ticket_id } of presos) {
-    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado);
+    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado, relogio);
   }
 }

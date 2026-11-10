@@ -23,3 +23,10 @@ export const mesDoInstante = (instante: Instante): string => {
   const data = new Date(instante);
   return `${String(data.getFullYear())}-${String(data.getMonth() + 1).padStart(2, "0")}`;
 };
+
+/** O `instante` adiantado em `ms` milissegundos. */
+export const instanteDepois = (instante: Instante, ms: number): Instante =>
+  new Date(Date.parse(instante) + ms).toISOString();
+
+/** A `data` (ISO ou qualquer texto que o `Date` entenda) como Instante. */
+export const comoInstante = (data: string): Instante => new Date(data).toISOString();

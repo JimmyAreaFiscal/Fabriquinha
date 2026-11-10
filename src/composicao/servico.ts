@@ -108,7 +108,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
   const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => {
     if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
-    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes()));
+    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio));
   };
   montarConjuntoDoServico(conjuntoSeContainer);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */

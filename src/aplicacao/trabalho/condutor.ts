@@ -8,7 +8,7 @@ import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import type { Id } from "../../nucleo/primitivos.ts";
-import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
+import { instanteDepois, type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import {
   type CausaDeInfraestrutura,
   type FalhaDaTentativa,
@@ -403,8 +403,9 @@ export class CondutorDeTrabalhos {
    * relógio parado) até o Auditor respondê-lo ou cancelá-lo, ou até o pi terminar. Se a extensão que faz isso existir,
    * dar o diálogo por resolvido no `turn_start` seguinte.
    */
-  iniciar(r: PedidoDeProcesso): Promise<FalhaDaTentativa | undefined> {
+  iniciar(r: PedidoDeProcesso, relogio: Relogio = relogioDoSistema): Promise<FalhaDaTentativa | undefined> {
     return new Promise((resolve) => {
+      const agoraEmMs = () => Date.parse(relogio.agora());
       const { id, sessaoPi } = r.execucao;
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
@@ -414,7 +415,7 @@ export class CondutorDeTrabalhos {
       let ultima: Mensagem = {};
       let restante = r.limiteMin * 60_000;
       let desde = 0;
-      let relogio: NodeJS.Timeout | undefined;
+      let temporizadorDoLimite: NodeJS.Timeout | undefined;
       /** As ferramentas em execução, por `toolCallId`: enquanto alguma roda, o silêncio do pi não é do modelo. */
       const ferramentasRodando = new Set<string>();
       let vigiaDoModelo: NodeJS.Timeout | undefined;
@@ -423,7 +424,7 @@ export class CondutorDeTrabalhos {
       const fim = (falha?: FalhaDaTentativa) => {
         if (feito) return;
         feito = true;
-        clearTimeout(relogio);
+        clearTimeout(temporizadorDoLimite);
         clearTimeout(vigiaDoModelo);
         for (const t of expiracoes.values()) clearTimeout(t);
         this.vivas.delete(id);
@@ -438,13 +439,13 @@ export class CondutorDeTrabalhos {
         // Depois do fim, eventos atrasados do pi não armam relógio novo: ele seguraria o processo à toa.
         if (feito) return;
         if (autonoma) {
-          if (pendentes.size > 0 && relogio) {
-            clearTimeout(relogio);
-            relogio = undefined;
-            restante -= Date.now() - desde;
-          } else if (pendentes.size === 0 && !relogio) {
-            desde = Date.now();
-            relogio = setTimeout(() => {
+          if (pendentes.size > 0 && temporizadorDoLimite) {
+            clearTimeout(temporizadorDoLimite);
+            temporizadorDoLimite = undefined;
+            restante -= agoraEmMs() - desde;
+          } else if (pendentes.size === 0 && !temporizadorDoLimite) {
+            desde = agoraEmMs();
+            temporizadorDoLimite = setTimeout(() => {
               fim({
                 tipo: "falha_infraestrutura",
                 causa: "tempo_limite",
@@ -454,10 +455,10 @@ export class CondutorDeTrabalhos {
           }
           return;
         }
-        clearTimeout(relogio);
-        relogio = undefined;
+        clearTimeout(temporizadorDoLimite);
+        temporizadorDoLimite = undefined;
         if (!estaViva.ocupado && pendentes.size === 0) {
-          relogio = setTimeout(() => {
+          temporizadorDoLimite = setTimeout(() => {
             anotar(r.log, `sessão ociosa por ${String(r.limiteMin)} min; o pi para`);
             fim();
           }, restante);
@@ -488,7 +489,7 @@ export class CondutorDeTrabalhos {
       };
       const ocupar = (ocupado: boolean) => {
         estaViva.ocupado = ocupado;
-        estaViva.desde = new Date().toISOString();
+        estaViva.desde = relogio.agora();
       };
 
       const aoRecusar = (evento: EventoPi) => {
@@ -542,15 +543,15 @@ export class CondutorDeTrabalhos {
       };
       const aoDialogo = (evento: EventoPi) => {
         const dialogo = String(evento.id);
-        const em = Date.now();
+        const em = relogio.agora();
         // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
         const timeout = typeof evento.timeout === "number" ? evento.timeout : undefined;
         const pergunta = evento.method === "select" ? daPergunta(evento, perguntas.values()) : undefined;
         pendentes.set(dialogo, {
           ...evento,
           ...pergunta,
-          em: new Date(em).toISOString(),
-          ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
+          em,
+          ...(timeout !== undefined && { expiraEm: instanteDepois(em, timeout) }),
         });
         const chamada = [...perguntas].find(
           ([, a]) => evento.title === a.question || String(evento.title).startsWith(`${String(a.question)}\n\n`),
@@ -679,7 +680,7 @@ export class CondutorDeTrabalhos {
         execucao: id,
         sessaoPi,
         ocupado: r.prompt !== undefined,
-        desde: new Date().toISOString(),
+        desde: relogio.agora(),
         pendentes,
         eventosDaMensagemEmEscrita: [],
         naoGravadas: [],

@@ -11,6 +11,7 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { criarTicketCorretivo } from "./criar_ticket_corretivo.ts";
 
@@ -48,6 +49,13 @@ test("cria o corretivo na rodada do agente com o título como descrição, e dev
     [criado?.etapa, criado?.rodada_id, criado?.titulo, criado?.descricao],
     ["implementar", 2, "Corrigir", "Corrigir"],
   );
+});
+
+test("o ticket corretivo nasce no instante do relógio", () => {
+  const { banco, processo } = cenario();
+  const instante = "2031-05-06T07:08:09.000Z";
+  criarTicketCorretivo(banco, processo, { rodada: "I-206.R2", titulo: "Corrigir" }, relogioFixo(instante));
+  assert.equal(carregarDemanda(banco, "I-206").tickets.find((t) => t.ticket_id === 10)?.estado_alterado_em, instante);
 });
 
 test("sem título, endereço que não é de rodada ou rodada de outra demanda não cria nada e mostra a rodada certa", () => {

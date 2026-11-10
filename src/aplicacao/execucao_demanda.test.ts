@@ -366,6 +366,14 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
   assert.ok(existsSync(join(c.raiz, "execucoes", `E-${id}`, "prompt.md")));
 });
 
+test("o início e o fim da execução vêm do relógio", async () => {
+  const { banco, sessoes } = await cenario();
+  const instante = "2031-05-06T07:08:09.000Z";
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }, relogioFixo(instante)).fim;
+  const [execucao] = sessoes(1).execucoes;
+  assert.deepEqual([execucao?.inicio, execucao?.fim], [instante, instante]);
+});
+
 test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, custo: null }]);
