@@ -6,6 +6,8 @@ import { AUDITOR } from "../../nucleo/ator.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import { reabrirTicket } from "../../nucleo/transicoes_demanda.ts";
+import { abrir, raizDo } from "../../armazenamento/banco.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../../infra/repositorio/worktree-demanda.ts";
 import { anotar } from "../../infra/registro.ts";
@@ -48,6 +50,9 @@ test("o pi roda na worktree da rodada, com a fitness gravada antes, e sem decisÃ
 
 test("o revisor que decide deixa o ticket concluÃ­do, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao();
+  // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
+  const { porta } = await servir(abrir(raizDo(banco)));
+  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
   piFalso.roteirizar([
     {
       cli: [

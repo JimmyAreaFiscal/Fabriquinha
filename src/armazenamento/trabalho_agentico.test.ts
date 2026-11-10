@@ -11,7 +11,9 @@ import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
+  gravarTokenDoProcesso,
   processosAbertos,
+  processoVivoDoToken,
   sessaoDeCadaTicketDaDemanda,
   sessaoDeCadaTicketDasDemandas,
   ticketDoTrabalho,
@@ -280,4 +282,41 @@ test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a qu
       ["I-9", new Map()],
     ]),
   );
+});
+
+test("o token resolve só o processo vivo dono dele; encerrado, de outro e desconhecido não resolvem", () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao("e1"), execucao("e2")], []);
+  gravarTokenDoProcesso(b, "e1", "token-1");
+  gravarTokenDoProcesso(b, "e2", "token-2");
+
+  assert.equal(processoVivoDoToken(b, "token-1"), "e1");
+  assert.equal(processoVivoDoToken(b, "token-2"), "e2");
+  assert.equal(processoVivoDoToken(b, "desconhecido"), undefined);
+  assert.equal(processoVivoDoToken(b, ""), undefined);
+
+  // o upsert do ticket (encerrar) não apaga o hash, mas o processo terminado deixa de resolver
+  comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarProcesso(x.execucoes, "e1", em, false) }));
+  assert.equal(processoVivoDoToken(b, "token-1"), undefined);
+  assert.equal(processoVivoDoToken(b, "token-2"), "e2");
+});
+
+test("o banco guarda só o hash do token, e processo inexistente ou terminado não recebe token", () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao()], []);
+  gravarTokenDoProcesso(b, "e1", "segredo");
+  const hash = String(b.prepare("SELECT hash_do_token FROM processo_do_trabalho").get()?.hash_do_token);
+  assert.match(hash, /^[0-9a-f]{64}$/);
+  assert.notEqual(hash, "segredo");
+
+  assert.throws(() => {
+    gravarTokenDoProcesso(b, "inexistente", "t");
+  }, ErroDeRegra);
+  comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarProcesso(x.execucoes, "e1", em, false) }));
+  assert.throws(() => {
+    gravarTokenDoProcesso(b, "e1", "outro");
+  }, /já terminou/);
+  assert.throws(() => {
+    b.exec("UPDATE processo_do_trabalho SET hash_do_token = 'curto'");
+  }, /CHECK/);
 });

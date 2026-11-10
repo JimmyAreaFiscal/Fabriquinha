@@ -100,6 +100,8 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
 });
 
 test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num diretório vazio", () => {
+  process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdadas do serviço
+  process.env.FABRIQUINHA_ROOT = "/herdada";
   process.env.GH_TOKEN = "segredo";
   process.env.SYSTEM_ACCESSTOKEN = "segredo";
   process.env.SONAR_TOKEN = "segredo";
@@ -108,12 +110,16 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
     assert.equal(env.GH_TOKEN, undefined);
     assert.equal(env.SYSTEM_ACCESSTOKEN, undefined);
     assert.equal(env.SONAR_TOKEN, undefined);
-    assert.equal(env.PATH, process.env.PATH);
+    assert.equal(env.PATH, `${PACOTE}/bin:${String(process.env.PATH)}`);
+    assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
+    assert.equal(env.FABRIQUINHA_ROOT, undefined);
     assert.deepEqual(
-      [env.FABRIQUINHA_EXECUCAO, env.FABRIQUINHA_ROOT, env.FABRIQUINHA_SAIDA, env.GH_CONFIG_DIR, env.AZURE_CONFIG_DIR],
-      ["7", "/r", "/r/execucoes/E-7/saida", "/r/execucoes/E-7/vazio", "/r/execucoes/E-7/vazio"],
+      [env.FABRIQUINHA_SAIDA, env.GH_CONFIG_DIR, env.AZURE_CONFIG_DIR],
+      ["/r/execucoes/E-7/saida", "/r/execucoes/E-7/vazio", "/r/execucoes/E-7/vazio"],
     );
   } finally {
+    delete process.env.FABRIQUINHA_EXECUCAO;
+    delete process.env.FABRIQUINHA_ROOT;
     delete process.env.GH_TOKEN;
     delete process.env.SYSTEM_ACCESSTOKEN;
     delete process.env.SONAR_TOKEN;
@@ -159,6 +165,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   try {
     const env = harness.ambiente("/r", `/r/avaliacoes/${sessao}`);
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
+    assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.GH_TOKEN, undefined);
     assert.deepEqual(
       [env.FABRIQUINHA_ROOT, env.FABRIQUINHA_AUDITORIA, env.GH_CONFIG_DIR],

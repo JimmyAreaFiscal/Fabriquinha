@@ -12,6 +12,7 @@ const MODULO_CLIENTE_WEB = "entrega/cliente-web";
 
 // Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
 const QUALQUER_EXTERNO = () => true;
+const SO_NODE_SEM_SQLITE = (alvo: string) => alvo.startsWith("node:") && alvo !== "node:sqlite";
 const SO_ZOD_E_PATH = (alvo: string) => alvo === "zod" || alvo === "node:path";
 
 // O pacote de um especificador externo: `react-dom/client` → `react-dom`, `@assistant-ui/react/x` → `@assistant-ui/react`.
@@ -45,7 +46,9 @@ const MATRIZ: Record<string, RegraDoModulo> = {
     modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
     externoPermitido: QUALQUER_EXTERNO,
   },
-  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo", "entrega/contrato"], externoPermitido: QUALQUER_EXTERNO },
+  // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
+  "entrega/cli-agente": { modulosPermitidos: ["entrega/contrato"], externoPermitido: SO_NODE_SEM_SQLITE },
   // Roda no navegador: de valor, só o `entrega/compartilhado` (o `casar`); do contrato e do núcleo, só `import type`;
   // de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes, que a matriz não lê).
   [MODULO_CLIENTE_WEB]: {
@@ -243,6 +246,21 @@ test("a lista de exceções está vazia: entrega/http não importa armazenamento
   assert.deepEqual(daHttp.map(descrever), []);
 });
 
+// A matriz libera `aplicacao` inteira a entrega/http; a API do agente só alcança os casos de uso do agente.
+test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
+  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("entrega/http/agente/"));
+  assert.ok(daApiDoAgente.length > 0);
+  const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
+    const caminho = join(SRC, arquivo);
+    return ts
+      .preProcessFile(readFileSync(caminho, "utf8"), true, true)
+      .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
+      .filter((alvo) => alvo.startsWith("aplicacao/") && !alvo.startsWith("aplicacao/agente/"))
+      .map((alvo) => `${arquivo} importa ${alvo}`);
+  });
+  assert.deepEqual(deAplicacaoFora, []);
+});
+
 test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
   const importadores = listarArquivosDeProducao(SRC)
     .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("entrega/http/"))
@@ -268,6 +286,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "infra/ok.ts": 'import { spawn } from "node:child_process";\nimport { z } from "../nucleo/ok.ts";\n',
     "entrega/compartilhado/ok.ts": "export const c = 1;\n",
     "entrega/contrato/ok.ts": 'import { z } from "zod";\nimport { Id } from "../../nucleo/ok.ts";\n',
+    "entrega/cli-agente/ok.ts":
+      'import { Resposta } from "../contrato/ok.ts";\nimport { readFileSync } from "node:fs";\nimport { b } from "./sub.ts";\n',
     "entrega/http/ok.ts":
       'import { a } from "../../aplicacao/ok.ts";\nimport { c } from "../compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\n',
     "entrega/cliente-web/ok.ts":
@@ -292,6 +312,11 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "entrega/cliente-web/react_puro.ts": 'import { useState } from "react";\n',
     "entrega/cliente-web/node.test.ts":
       'import { test } from "node:test";\nimport { a } from "../../aplicacao/ok.ts";\n',
+    "entrega/cli-agente/aplicacao.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
+    "entrega/cli-agente/armazenamento.ts": 'import { a } from "../../armazenamento/ok.ts";\n',
+    "entrega/cli-agente/nucleo.ts": 'import { n } from "../../nucleo/ok.ts";\n',
+    "entrega/cli-agente/sqlite.ts": 'import { DatabaseSync } from "node:sqlite";\n',
+    "entrega/cli-agente/zod.ts": 'import { z } from "zod";\n',
     "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
     "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
     "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
@@ -308,6 +333,11 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
+      "entrega/cli-agente/aplicacao.ts importa ../../aplicacao/ok.ts",
+      "entrega/cli-agente/armazenamento.ts importa ../../armazenamento/ok.ts",
+      "entrega/cli-agente/nucleo.ts importa ../../nucleo/ok.ts",
+      "entrega/cli-agente/sqlite.ts importa node:sqlite",
+      "entrega/cli-agente/zod.ts importa zod",
       "entrega/cliente-web/aplicacao_tipo.ts importa ../../aplicacao/ok.ts",
       "entrega/cliente-web/aplicacao_valor.ts importa ../../aplicacao/ok.ts",
       "entrega/compartilhado/impuro.ts importa ../../nucleo/ok.ts",

@@ -513,3 +513,7 @@ test("as revisões recebem o que a Fabriquinha já verificou no último commit d
   assert.match(montar("revisar_demanda"), /## Verificações já feitas\n\n.*\n\n\(nenhuma\)/);
   assert.doesNotMatch(montar("implementar"), /## Verificações já feitas/);
 });
+
+test("o prompt não leva o caminho do banco: o agente fala com a Fabriquinha pela API", () => {
+  for (const etapa of NOVAS) assert.doesNotMatch(montar(etapa), /fabriquinha\.db/);
+});

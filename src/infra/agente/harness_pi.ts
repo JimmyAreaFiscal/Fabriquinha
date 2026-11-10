@@ -2,7 +2,7 @@
 // framing do stdout e a parada do grupo de processos, a consulta sem ferramentas, a lista de modelos e o arquivo da sessão.
 import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
@@ -143,20 +143,22 @@ export class HarnessPi {
 
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
-   * pasta do processo) e as variáveis da Fabriquinha. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), não
-   * há `FABRIQUINHA_EXECUCAO`, porque ela não é de nenhum ticket, e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket (`execucao`) fala com a API pelo cliente
+   * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
+   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
+   * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
    */
   ambiente(raiz: string, dir: string, execucao?: number | string): NodeJS.ProcessEnv {
-    const { FABRIQUINHA_EXECUCAO: _herdada, ...semCredenciais } = ambienteSemCredenciais(
-      process.env,
-      join(dir, "vazio"),
-    );
+    const {
+      FABRIQUINHA_EXECUCAO: _execucaoHerdada,
+      FABRIQUINHA_ROOT: _raizHerdada,
+      ...semCredenciais
+    } = ambienteSemCredenciais(process.env, join(dir, "vazio"));
     return execucao === undefined
       ? { ...semCredenciais, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
       : {
           ...semCredenciais,
-          FABRIQUINHA_EXECUCAO: String(execucao),
-          FABRIQUINHA_ROOT: raiz,
+          PATH: [join(PACOTE, "bin"), semCredenciais.PATH].filter(Boolean).join(delimiter),
           FABRIQUINHA_SAIDA: join(dir, "saida"),
         };
   }

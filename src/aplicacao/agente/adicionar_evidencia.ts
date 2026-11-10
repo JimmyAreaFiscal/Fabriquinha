@@ -13,7 +13,7 @@ import { projetoExistente } from "../../armazenamento/projetos.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
 import { gerarAula, type Trecho } from "../evidencias/aula.ts";
-import type { Origens } from "../evidencias/submissao.ts";
+import type { AnexoEnviado, Origens } from "../evidencias/submissao.ts";
 import {
   enderecoDoTicketDoAgente,
   type EscopoDoAgente,
@@ -26,12 +26,15 @@ import {
 } from "./escopo.ts";
 import { tipoDoAgente } from "./tipo_do_agente.ts";
 
-/** A evidência que o agente submete ao próprio ticket; `dados` é o valor da opção, que `lerJson` lê, e `anexos` são caminhos. */
+/**
+ * A evidência que o agente submete ao próprio ticket; `dados` é o valor da opção, que `lerJson` lê, e cada anexo chega
+ * com os bytes e o SHA-256, e o caminho vale no Ambiente do agente.
+ */
 interface PedidoDeEvidencia {
   readonly ticket: string;
   readonly tipo: string;
   readonly dados: string | undefined;
-  readonly anexos: readonly string[];
+  readonly anexos: readonly AnexoEnviado[];
 }
 
 /** O ticket do agente, que só recebe evidência aberto ou em execução. */
@@ -65,15 +68,17 @@ function origensDosAnexos(
 
 /**
  * Submete a evidência do próprio ticket do agente (sobre `submeterEvidencia`). Valida o ticket, o tipo, o schema e os
- * anexos antes de gravar, e reconfere a execução dentro da transação. A recusa é erro síncrono ao agente, sem Tentativa
- * nem Reprovação (D10-1).
+ * anexos antes de gravar, e reconfere a execução dentro da transação: o core inverte o caminho declarado de cada anexo
+ * para o host e confere que o arquivo ali tem o SHA-256 enviado. A recusa é erro síncrono ao agente, sem Tentativa nem
+ * Reprovação (D10-1).
  */
-export async function adicionarEvidencia(
+export async function adicionarEvidenciaComAnexosEnviados(
   banco: DatabaseSync,
   processo: ProcessoDoAgente,
   pedido: PedidoDeEvidencia,
   lerJson: LeitorDeJson,
 ) {
+  let anexosEnviados: readonly AnexoEnviado[] | undefined = pedido.anexos;
   const agente = escopoDoProcessoAberto(banco, processo);
   exigirTicketProprio(agente, pedido.ticket, true);
   const { tipo, schema } = tipoDoAgente(pedido.tipo);
@@ -82,13 +87,13 @@ export async function adicionarEvidencia(
   const ticket = exigirTicketAberto(agregadoLido, agente);
   if (pedido.dados === undefined) throw new ErroDeRegra("falta --dados", "passe --dados <arquivo.json|->");
   const dados = await lerJson(pedido.dados);
-  let anexos = [...pedido.anexos];
+  let anexos = pedido.anexos.map((anexo) => anexo.caminho);
   const origens = origensDosAnexos(banco, agente, agregadoLido, ticket);
   if (tipo === "aula_codigo") {
     if (anexos.length > 0) {
       throw new ErroDeRegra("aula_codigo não aceita anexo do agente", "a Fabriquinha gera o HTML; submeta só --dados");
     }
-    // O HTML nasce dos trechos, antes de a submissão ser avaliada; o CLI mostra o ZodError em uma linha com `z.prettifyError`.
+    // O HTML nasce dos trechos, antes de a submissão ser avaliada; a API devolve o ZodError como 422.
     const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
     const html = await gerarAula(
       ambienteDoServico(),
@@ -100,12 +105,15 @@ export async function adicionarEvidencia(
     const aula = join(origens.saida, "aula.html");
     writeFileSync(aula, html);
     anexos = [aula];
+    // O HTML da aula está no host: não passa pela inversão de caminho dos anexos enviados.
+    anexosEnviados = undefined;
   }
   const avaliacao = submeterEvidencia(
     banco,
     { tipo, dono: Endereco.doTicket(demanda_id, ticket_id), produtor: agente.ator, dados, anexos },
     {
       origens,
+      enviados: anexosEnviados && { anexos: anexosEnviados, ambiente: ambienteDoServico() },
       conferirAntesDeGravar(agregado) {
         reconferirExecucao(banco, agente);
         exigirTicketAberto(agregado, agente);

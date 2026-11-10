@@ -115,5 +115,5 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
     };
   }
 
-  return { pedir, executados };
+  return { pedir, executados, porta };
 }

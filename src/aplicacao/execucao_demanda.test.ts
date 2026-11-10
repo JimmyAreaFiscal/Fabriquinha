@@ -1,9 +1,10 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
@@ -20,7 +21,7 @@ import {
   type FalhaDaTentativa,
   falhaInterrompidaPeloAuditor,
 } from "../nucleo/tentativa.ts";
-import { anotar } from "../infra/registro.ts";
+import { anotar, pastasDoProcesso } from "../infra/registro.ts";
 import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
 import { relogioFixo } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -29,11 +30,16 @@ import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
+import {
+  carregarTrabalhosDoTicket,
+  comTrabalhosDoTicket,
+  processoVivoDoToken,
+} from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+import { montarAmbienteDoServico } from "./espaco/ambiente_do_servico.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -877,4 +883,81 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
   assert.match(prompt, /I-1\.T9 \(revisar_rodada\), reprovado: o teste de X quebrou Y/);
   assert.match(prompt, /Pergunta: Como confiro o Sonar\?\n\s+Resposta: fica com o Auditor no gate do PR/);
   assert.equal(prompt.match(/Pergunta:/g)?.length, 1);
+});
+
+test("I-287: o pi recebe o token do processo e a URL da API; o token vale até o fim e nunca vai a log, prompt, evidência ou saída", async () => {
+  const { c, banco, piFalso, sessoes } = await cenario();
+  condutor.urlDaApi = "http://127.0.0.1:9";
+  // Escrita atômica: o laço abaixo só vê o arquivo já completo, nunca o vazio que o `>` cria antes do printenv.
+  piFalso.roteirizar([
+    {
+      ...PASSO_PI,
+      shell: "printenv > ambiente-do-pi.tmp && mv ambiente-do-pi.tmp ambiente-do-pi.txt",
+      termina: "nunca",
+    },
+  ]);
+  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.05 });
+  const arquivoDoAmbiente = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2", "ambiente-do-pi.txt");
+  while (!existsSync(arquivoDoAmbiente)) await dormir(20);
+  const variaveis = new Map(
+    readFileSync(arquivoDoAmbiente, "utf8")
+      .split("\n")
+      .map((linha) => [linha.slice(0, linha.indexOf("=")), linha.slice(linha.indexOf("=") + 1)] as const),
+  );
+  const token = variaveis.get("FABRIQUINHA_TOKEN") ?? "";
+  assert.match(token, /^[0-9a-f]{64}$/);
+  assert.equal(variaveis.get("FABRIQUINHA_API"), "http://127.0.0.1:9");
+  assert.equal(variaveis.get("FABRIQUINHA_EXECUCAO"), undefined);
+  assert.equal(variaveis.get("FABRIQUINHA_ROOT"), undefined);
+  assert.equal(processoVivoDoToken(banco, token), id);
+  assert.equal(
+    (banco.prepare("SELECT hash_do_token FROM processo_do_trabalho WHERE id = ?").get(id) as { hash_do_token: string })
+      .hash_do_token,
+    createHash("sha256").update(token).digest("hex"),
+  );
+
+  await fim;
+  assert.equal(processoVivoDoToken(banco, token), undefined);
+  assert.notEqual(sessoes(1).execucoes[0]?.fim, null);
+
+  const { dir } = pastasDoProcesso(c.raiz, id);
+  const arquivosGravados = readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .map((nome) => join(dir, nome))
+    .filter((caminho) => statSync(caminho).isFile());
+  assert.ok(arquivosGravados.some((caminho) => basename(caminho) === "prompt.md"));
+  assert.ok(arquivosGravados.some((caminho) => basename(caminho) === "log"));
+  for (const caminho of arquivosGravados) assert.ok(!readFileSync(caminho, "utf8").includes(token), caminho);
+  const gravadoNoBanco = JSON.stringify([
+    banco.prepare("SELECT * FROM evidencia_demanda").all(),
+    banco.prepare("SELECT * FROM processo_do_trabalho").all(),
+  ]);
+  assert.ok(!gravadoNoBanco.includes(token));
+  condutor.urlDaApi = undefined;
+});
+
+test("I-287: o prompt leva worktree, saída e anexos pelo caminho que o Ambiente dá, e não o caminho do banco", async () => {
+  const { c, banco } = await cenario();
+  banco
+    .prepare(
+      "INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('manual', 'I-1', 'desenho_solucao', ?, ?)",
+    )
+    .run(JSON.stringify({ resumo: "r", arquivosPrevistos: [], foraDeEscopo: [] }), em);
+  const sha = "bb".repeat(32);
+  banco.prepare("INSERT INTO arquivo_evidencia VALUES ('manual', 1, 'manual.txt', ?, 'text/plain', 3)").run(sha);
+  // Um caminho diferente na forma e igual no disco: o pi falso ainda lança na worktree.
+  const noAmbiente = (caminhoNoHost: string): string =>
+    caminhoNoHost.replace(c.raiz, join(c.raiz, "..", basename(c.raiz)));
+  montarAmbienteDoServico(Object.assign(new AmbienteHostLocal(), { caminhoNoAmbiente: noAmbiente }));
+  try {
+    const { id, fim } = iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 });
+    await fim;
+    const prompt = readFileSync(join(pastasDoProcesso(c.raiz, id).dir, "prompt.md"), "utf8");
+    const worktree = join(c.raiz, "worktrees", "loja", "I-1", "demanda");
+    assert.ok(prompt.includes(`Worktree (diretório de trabalho): ${noAmbiente(worktree)}`));
+    assert.ok(prompt.includes(`: ${noAmbiente(join(pastasDoProcesso(c.raiz, id).dir, "saida"))}`));
+    assert.ok(prompt.includes(`\`${noAmbiente(join(c.raiz, "arquivos", sha.slice(0, 2), sha))}\``));
+    assert.ok(!prompt.includes("fabriquinha.db"));
+  } finally {
+    montarAmbienteDoServico(new AmbienteHostLocal());
+  }
 });

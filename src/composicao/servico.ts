@@ -82,6 +82,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     web.listen(pedida, "127.0.0.1", pronto);
   });
   const { port: porta } = web.address() as AddressInfo;
+  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
@@ -184,6 +185,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     proximaBusca,
     async parar() {
       condutor.marcarParada();
+      condutor.urlDaApi = undefined;
       clearInterval(intervaloDoCiclo);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
