@@ -127,7 +127,14 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   await ciclo(c, despacho());
 
   // Rodada 1: revisão reprovada (devolução com correção); rodada 2: aprovada.
-  const correcao = { demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir", descricao: "d", caminhos: [] };
+  const correcao = {
+    demanda_id: id,
+    ticket_id: 1,
+    rodada_id: 1,
+    titulo: "Corrigir",
+    descricao: "d",
+    arquivos_previstos: [],
+  };
   await despacharComAgente(c, despacho(), async () => {
     await decidirComoRevisor(c, id, { resultado: "reprovado", motivo: "falta o caso X", correcoes: [correcao] }, 1);
     await decidirComoRevisor(c, id, { resultado: "aprovado" }, 2);

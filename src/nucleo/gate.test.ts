@@ -66,18 +66,27 @@ const demandaEmPlanejamento = (): AgregadoDemanda => {
 const planoDe = (sobrescrito: Record<string, unknown> = {}) => ({
   demanda_id: DEMANDA,
   criterios: ["CA-1"],
+  arquivos_previstos: ["src/b.ts"],
   rodadas: [
-    { demanda_id: DEMANDA, rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+    {
+      demanda_id: DEMANDA,
+      rodada_id: 1,
+      titulo: "r1",
+      e2e: false,
+      criterios: ["CA-1"],
+      arquivos_previstos: ["src/b.ts"],
+    },
     {
       demanda_id: DEMANDA,
       rodada_id: 2,
       titulo: "r2",
       e2e: true,
+      arquivos_previstos: ["src/b.ts"],
       depende: [{ demanda_id: DEMANDA, rodada_id: 1 }],
     },
   ],
   tickets: [
-    { demanda_id: DEMANDA, ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, caminhos: ["src/b.ts"] },
+    { demanda_id: DEMANDA, ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, arquivos_previstos: ["src/b.ts"] },
     {
       demanda_id: DEMANDA,
       ticket_id: 1,
@@ -850,7 +859,14 @@ test("gate_planejamento: aprovar materializa rodadas, tickets renumerados, camin
   const plano = planoDe({
     criterios: ["CA-1", "CA-2"],
     tickets: [
-      { demanda_id: DEMANDA, ticket_id: 5, titulo: "b", descricao: "d", rodada_id: 2, caminhos: ["src/b.ts"] },
+      {
+        demanda_id: DEMANDA,
+        ticket_id: 5,
+        titulo: "b",
+        descricao: "d",
+        rodada_id: 2,
+        arquivos_previstos: ["src/b.ts"],
+      },
       {
         demanda_id: DEMANDA,
         ticket_id: 4,

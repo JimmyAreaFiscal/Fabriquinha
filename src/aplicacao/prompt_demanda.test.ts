@@ -87,7 +87,7 @@ test("toda etapa pede leitura por faixa, edit em vez de heredoc e exploração d
 
 test("revisar_rodada mostra o formato do --correcoes e pede espera num único comando", () => {
   const rodada = montar("revisar_rodada");
-  assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "caminhos": \["src\/a\.ts"\]\}\]/);
+  assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "arquivos_previstos": \["src\/a\.ts"\]\}\]/);
   assert.match(rodada, /espere num único comando/);
 });
 

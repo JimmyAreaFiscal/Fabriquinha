@@ -24,7 +24,15 @@ const PLANO = {
   criterios: ["CA-1"],
   rodadas: [{ demanda_id: "I-206", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
   tickets: [
-    { demanda_id: "I-206", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d", caminhos: [], depende: [] },
+    {
+      demanda_id: "I-206",
+      ticket_id: 1,
+      rodada_id: 1,
+      titulo: "t",
+      descricao: "d",
+      arquivos_previstos: [],
+      depende: [],
+    },
   ],
 };
 const ESTRESSE = {

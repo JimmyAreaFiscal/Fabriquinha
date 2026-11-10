@@ -118,12 +118,20 @@ const criterios = { criterios: [{ id: "CA-1" }, { id: "CA-2" }] };
 const planoV = (m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   criterios: ["CA-1"],
+  arquivos_previstos: ["src/b.ts"],
   rodadas: [
-    { demanda_id: "I-1", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+    {
+      demanda_id: "I-1",
+      rodada_id: 1,
+      titulo: "r1",
+      e2e: false,
+      criterios: ["CA-1"],
+      arquivos_previstos: ["src/b.ts"],
+    },
     { demanda_id: "I-1", rodada_id: 2, titulo: "r2", e2e: true, depende: [{ demanda_id: "I-1", rodada_id: 1 }] },
   ],
   tickets: [
-    { demanda_id: "I-1", ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, caminhos: ["src/b.ts"] },
+    { demanda_id: "I-1", ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, arquivos_previstos: ["src/b.ts"] },
     {
       demanda_id: "I-1",
       ticket_id: 1,
@@ -184,7 +192,7 @@ test("CA-2: caminho absoluto Windows com barras normais Ã© reprovado na submissÃ
   const antes = structuredClone(ag);
   const plano = planoV();
   for (const caminho of ["C:/fora/segredo.ts", "c:/fora/segredo.ts"]) {
-    const e = planoV({ tickets: [{ ...plano.tickets[0], caminhos: [caminho] }, ...plano.tickets.slice(1)] });
+    const e = planoV({ tickets: [{ ...plano.tickets[0], arquivos_previstos: [caminho] }, ...plano.tickets.slice(1)] });
     assert.throws(() => validarPlano(ag, e, agente), /caminho relativo/);
   }
   assert.deepEqual(ag, antes);

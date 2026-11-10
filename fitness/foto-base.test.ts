@@ -24,6 +24,8 @@ interface DiferencaIntencional {
 }
 
 const MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO = "I-269.R4: o texto cita o campo do projeto pelo nome novo, branch_base";
+const MOTIVO_ARQUIVOS_PREVISTOS =
+  "I-280.R1: o campo `caminhos` do ticket passa a se chamar `arquivos_previstos`, o mesmo nome dos três níveis do plano";
 const MOTIVO_NOME_NOVO = "o fluxo de issues foi desligado (cutover de 2026-10-28), e o texto passa a falar de demanda";
 const MOTIVO_REVISOES_ANTERIORES =
   "I-294: a revisar_rodada recebe as revisões anteriores da rodada e confere primeiro os motivos, sem reabrir o decidido";
@@ -301,6 +303,12 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de,
     para,
     motivo: MOTIVO_VEREDITO_DO_PARECER,
+  })),
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: '"caminhos": ["src/a.ts"]',
+    para: '"arquivos_previstos": ["src/a.ts"]',
+    motivo: MOTIVO_ARQUIVOS_PREVISTOS,
   })),
 ];
 

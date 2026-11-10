@@ -38,7 +38,9 @@ const banco = (planejado: string[] | null = ["a", "b", "c", "d"]) => {
       demanda_id: "I-1",
       criterios: [],
       rodadas: [1, 2].map((r) => ({ demanda_id: "I-1", rodada_id: r, titulo: "r", e2e: false })),
-      tickets: [{ demanda_id: "I-1", ticket_id: 2, rodada_id: 1, titulo: "t", descricao: "d", caminhos: planejado }],
+      tickets: [
+        { demanda_id: "I-1", ticket_id: 2, rodada_id: 1, titulo: "t", descricao: "d", arquivos_previstos: planejado },
+      ],
     };
     plano.rodadas.length = 1;
     b.prepare(

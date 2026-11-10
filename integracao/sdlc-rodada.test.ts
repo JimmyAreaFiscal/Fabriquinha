@@ -45,7 +45,7 @@ const correcao = (id: string, titulo: string) => ({
   rodada_id: 1,
   titulo,
   descricao: "descrição da correção",
-  caminhos: [],
+  arquivos_previstos: [],
 });
 
 /** Abre na hospedagem o PR que o encerramento adotará pela marca (o `problema` entra no estado dele). */

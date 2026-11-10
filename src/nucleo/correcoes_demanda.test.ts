@@ -94,7 +94,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
     ref,
     [
       t(7, 5, {
-        caminhos: ["x.ts"],
+        arquivos_previstos: ["x.ts"],
         depende: [{ demanda_id: D, ticket_id: 2 }],
         configuracao_agente: { modelo: { provedor: "anthropic", nome: "m" }, effort: "high" },
       }),
@@ -140,11 +140,14 @@ test("rodada: recusa vazio, referência alheia, rodada inexistente e ticket de o
 
 test("rodada: recusa caminho inseguro, duplicata, ciclo, dependência fora do fragmento e modelo incompleto", () => {
   for (const caminho of ["/abs", "../fora", "a\\b", "C:/x"]) {
-    recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: [caminho] })], REVISOR, t1), "inválida");
+    recusa(
+      () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { arquivos_previstos: [caminho] })], REVISOR, t1),
+      "inválida",
+    );
   }
   recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5), t(1, 5)], REVISOR, t1), "se repete");
   recusa(
-    () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: ["a", "a"] })], REVISOR, t1),
+    () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { arquivos_previstos: ["a", "a"] })], REVISOR, t1),
     "repete caminho",
   );
   const dep = (a: number, b: number) => t(a, 5, { depende: [{ demanda_id: D, ticket_id: b }] });
@@ -178,7 +181,7 @@ const plano = (extra = {}) => ({
     rodadaP(1, { criterios: ["CA-1"] }),
   ],
   tickets: [
-    t(4, 2, { caminhos: ["n.ts"], depende: [{ demanda_id: D, ticket_id: 3 }] }),
+    t(4, 2, { arquivos_previstos: ["n.ts"], depende: [{ demanda_id: D, ticket_id: 3 }] }),
     t(3, 2),
     t(8, 1, { configuracao_agente: { effort: "low", modelo: { provedor: "openai", nome: "g" } } }),
   ],

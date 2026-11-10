@@ -81,13 +81,13 @@ function encerramentoEmExecucao(ag: AgregadoDemanda, ref: RefRodada) {
 }
 
 /** Uma correção da rodada: id local, na rodada, sem dependências (o domínio renumera). */
-const correcao = (ref: RefRodada, n: number, titulo: string, descricao: string, caminhos: string[] = []) => ({
+const correcao = (ref: RefRodada, n: number, titulo: string, descricao: string, arquivos_previstos: string[] = []) => ({
   demanda_id: ref.demanda_id,
   ticket_id: n,
   rodada_id: ref.rodada_id,
   titulo: titulo.replaceAll(/\s+/g, " ").slice(0, 120),
   descricao,
-  caminhos,
+  arquivos_previstos,
 });
 
 /** As evidências do encerramento não têm anexo: nenhuma origem é lida. */

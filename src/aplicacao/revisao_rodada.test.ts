@@ -201,7 +201,15 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
     resultado: "reprovado",
     motivo: "corrigir o lint",
     correcoes: [
-      { demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] },
+      {
+        demanda_id: "I-1",
+        ticket_id: 1,
+        rodada_id: 1,
+        titulo: "corrige",
+        descricao: "d",
+        arquivos_previstos: [],
+        depende: [],
+      },
     ],
   });
   const ag = carregarDemanda(banco, "I-1");
