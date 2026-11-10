@@ -52,7 +52,7 @@ Motivo: o teste falhou em x.ts
 2. Implemente com testes na worktree, só nos caminhos do ticket.
 3. Rode os testes e as verificações do projeto até passarem.
    Docker, containers e deploy de teste estão liberados para isso; não peça permissão.
-   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho_demanda.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).
+   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).
    Se a falha vier de outro ticket ou do ambiente (contêiner órfão, porta ocupada, fixture que não limpa o que criou), corrija a causa mesmo fora dos seus caminhos, só o necessário para passar, e diga na resposta o que corrigiu e por quê.
 
 **Entregas:** o código e os testes do ticket I-2.T1 na worktree.

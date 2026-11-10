@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
-import { Despacho, motivoDeRecusaDoItem, type SituacaoDoDespacho } from "../nucleo/despacho.ts";
+import { Despacho, type MotivoDeRecusa, motivoDeRecusaDoItem, type SituacaoDoDespacho } from "../nucleo/despacho.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { exigirEtapaConduzida } from "../nucleo/etapa.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
@@ -56,6 +56,12 @@ const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao): De
   registro: anotar,
 });
 
+/** As recusas do último ciclo, só em memória: o Auditor as vê por `GET /api/despacho`; o reinício as zera até o ciclo seguinte. */
+let recusasDoUltimoCiclo: ReadonlyMap<Endereco, MotivoDeRecusa> = new Map();
+
+/** Por que cada item parado no último ciclo não foi despachado. */
+export const ultimasRecusas = (): ReadonlyMap<Endereco, MotivoDeRecusa> => recusasDoUltimoCiclo;
+
 /** A situação lida num snapshot só: as demandas em andamento e os tickets com trabalho vivo. */
 const situacaoDoDespacho = (banco: DatabaseSync): SituacaoDoDespacho =>
   noSnapshot(banco, () => ({ demandas: demandasParaDespacho(banco), vivos: trabalhosVivos(banco) }));
@@ -99,7 +105,7 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
  * concluíram vai à revisão integral; (2) o Despacho escolhe o que roda, no que sobra do limite (o planejamento
  * reprovado é um ticket pronto como os outros). Devolve as etapas em segundo plano (nunca rejeitam); o ciclo não as espera.
  */
-export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: DepsDespacho = {}): Promise<void>[] {
+export function cicloDoDespacho(banco: DatabaseSync, c: Configuracao, deps: DepsDespacho = {}): Promise<void>[] {
   const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco);
   if (retomadosPorInfraestrutura.length > 0) {
     noLog(`retomados depois de falha de ambiente: ${retomadosPorInfraestrutura.join(", ")}`);
@@ -112,21 +118,22 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
       noLog(erro);
     }
   }
-  const { prontos } = new Despacho(limiteParalelismo(banco)).selecionar(situacaoDoDespacho(banco));
+  const { prontos, recusas } = new Despacho(limiteParalelismo(banco)).selecionar(situacaoDoDespacho(banco));
+  recusasDoUltimoCiclo = recusas;
   return prontos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, c, t, deps)));
 }
 
 /**
- * "Executar agora": a mesma elegibilidade e o mesmo limite global do ciclo, na mesma transação da reserva. Recusa com o
- * motivo, sem criar execução; duas tentativas seguidas geram uma só (a 2ª encontra o ticket já em execução). Devolve a
- * etapa em segundo plano, que nunca rejeita.
+ * "Executar agora": a mesma seleção e o mesmo limite global do ciclo, na mesma transação da reserva. O que o Despacho
+ * recusa volta como `MotivoDeRecusa`, sem criar execução; duas tentativas seguidas geram uma só (a 2ª encontra o ticket
+ * já em execução e lança). Aceito, devolve a etapa em segundo plano, que nunca rejeita.
  */
-export function executarAgoraDemanda(
+export function executarAgora(
   banco: DatabaseSync,
   ref: { demanda_id: string; ticket_id: number },
   c: Configuracao,
   deps: DepsDespacho = {},
-): Promise<void> {
+): MotivoDeRecusa | Promise<void> {
   return escrever(banco, () => {
     const situacao = situacaoDoDespacho(banco);
     const { agregado, predecessoras_pendentes } = existe(
@@ -148,10 +155,8 @@ export function executarAgoraDemanda(
     const { recusas } = new Despacho(limiteParalelismo(banco)).selecionar(situacao);
     const recusa = motivoDeRecusaDoItem(recusas, Endereco.doTicket(ref.demanda_id, ref.ticket_id));
     // Os outros prontos disputam as vagas livres no ciclo; quem executa agora só esbarra no limite cheio de execuções.
-    if (recusa?.tipo === "limite_de_paralelismo" && recusa.em_uso >= recusa.limite) {
-      throw new ErroDeRegra("o limite global de paralelismo está ocupado", "espere uma execução terminar");
-    }
-    // Ensaio da reserva: a recusa diz por que a seleção não escolheria o ticket (predecessora pendente, rodada ocupada...).
+    if (recusa && !(recusa.tipo === "limite_de_paralelismo" && recusa.em_uso < recusa.limite)) return recusa;
+    // Ensaio da reserva: sem recusa, diz por que a seleção ainda não escolheria o ticket (outro aberto vem antes, etapa fora do estado).
     // O agregado volta como veio, então nada é gravado; a reserva de verdade é a da etapa.
     comDemanda(banco, ref.demanda_id, (ag) => {
       reservarTicket(

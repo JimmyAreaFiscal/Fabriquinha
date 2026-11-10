@@ -94,7 +94,7 @@ As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36` no PR #115. Cada tes
 | `migracao_historico_legado.test.ts` | v30 → v31 só acrescenta; constraints novas recusam o inválido | CA-4 (as tabelas de histórico ficam, DG-3) |
 | `migracao_preparacao_projeto.test.ts` | copia a preparação legada para a tabela e remove a coluna | CA-4; `configuracao_projeto.test.ts` |
 | `migracao_remocao_legado.test.ts` | CA-8 copia iterações, propostas e retrabalho para a demanda antes de apagar o legado; copia modelo e effort das etapas legadas; CA-9 `issue` sem demanda recusa a migração; iteração sem ticket da demanda desfaz a migração | nenhuma: o cutover já rodou no único banco real (v36); CA-5 recusa banco anterior à v36 |
-| `migracao_sessoes.test.ts` | CA-16 v24 → v25 só acrescenta; CA-3, 4, 5, 7 progresso do encerramento; CA-10, 11, 13 sessões, execuções e usos | CA-4; `sessoes.test.ts` (FK, CHECK) e `despacho_demanda.test.ts` |
+| `migracao_sessoes.test.ts` | CA-16 v24 → v25 só acrescenta; CA-3, 4, 5, 7 progresso do encerramento; CA-10, 11, 13 sessões, execuções e usos | CA-4; `sessoes.test.ts` (FK, CHECK) e `despacho.test.ts` |
 
 Também do PR #115 (não são desta rodada):
 
