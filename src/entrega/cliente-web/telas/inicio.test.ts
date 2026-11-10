@@ -7,7 +7,7 @@ import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../contrato
 import type { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
 import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
 
-const agora = new Date("2026-10-28T12:00:00.000Z");
+const agora = Date.parse("2026-10-28T12:00:00.000Z");
 const mes = {
   mes: "2026-10",
   projeto: null,

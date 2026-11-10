@@ -95,7 +95,7 @@ const comEnderecosInteiros = (texto: string): string =>
   escapar(texto).replaceAll(/\bI-\d+(?:\.[RT]\d+)?\b/g, '<span class="endereco">$&</span>');
 
 /** Cartão de uma Pendência; o cartão inteiro abre o chat da sessão ou a página da demanda, onde se resolve. */
-function cartaoDaPendencia(p: PendenciaDoInicio, agora: Date): string {
+function cartaoDaPendencia(p: PendenciaDoInicio, agora: number): string {
   const rotulo = ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo];
   const emAlerta = EM_ALERTA.has(p.tipo);
   const destino = p.sessao === undefined ? caminhoDaDemanda(p.demanda) : caminhoDaSessao(p.sessao);
@@ -109,7 +109,7 @@ function cartaoDaPendencia(p: PendenciaDoInicio, agora: Date): string {
 }
 
 /** Linha de uma sessão rodando: o que o agente faz, como o processo vivo diz; sem ele, o título ou a etapa do ticket. */
-function linhaDaSessaoRodando(s: SessaoRodando, agora: Date): string {
+function linhaDaSessaoRodando(s: SessaoRodando, agora: number): string {
   return `<a class="rodando-linha" href="${caminhoDaSessao(s.sessao)}">
     <span class="pill pill-rodando">${MODO_DA_SESSAO[s.modo]}</span>
     <span class="id">${escapar(s.demanda)}</span>
@@ -131,7 +131,7 @@ function linhaDoItemParado({ item, motivo }: RecusaDoDespacho): string {
 }
 
 /** As marcas do cartão, em HTML (cada uma num texto só, que quebra entre as palavras) e sem repetir: em execução, aguarda você e bloqueada por I-x (que não quebra no hífen). */
-function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
+function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: number) {
   const marcas = new Map<string, [classe: string, pill: string]>();
   for (const s of dados.rodando.filter((x) => enderecoDe(x) === c.ref)) {
     // No cartão estreito a marca quebra entre as palavras; da duração do `ha()`, só "menos de" se separa do "1 min".
@@ -151,7 +151,7 @@ function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
   return [...marcas];
 }
 
-function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): string {
+function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: number): string {
   const marcas = marcasDoCartao(c, dados, agora);
   const classes = ["cartao", ...new Set(marcas.map(([, [classe]]) => classe))].join(" ");
   const pills = marcas.map(([html, [, pill]]) => `<span class="pill ${pill}"><span>${html}</span></span>`).join("");
@@ -166,7 +166,7 @@ function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): str
 }
 
 /** Board: uma coluna por estado, agrupadas sob as 5 etapas; as de gate hachuradas e marcadas "gate". */
-function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
+function colunasDoBoard(dados: DadosDoInicio, agora: number): string {
   const coluna = ([chave, nome]: readonly [ColunaDoBoard, string]) => {
     const cartoes = dados.board.filter((c) => c.coluna === chave);
     const gate = GATES.has(chave);
@@ -184,7 +184,7 @@ function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
 }
 
 /** A página `/home`: a frase do mês, Aguarda você (da espera mais antiga para a mais nova), Rodando (com os itens parados) e o board. */
-export function inicio(dados: DadosDoInicio, agora: Date, recusas: readonly RecusaDoDespacho[]): string {
+export function inicio(dados: DadosDoInicio, agora: number, recusas: readonly RecusaDoDespacho[]): string {
   const { aguarda, rodando } = dados;
   return `<div class="cabeca-pagina"><h1>Início</h1></div>
   ${fraseDoMes(dados.mes)}

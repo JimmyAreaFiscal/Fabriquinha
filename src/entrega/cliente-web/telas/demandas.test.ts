@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { pagina, quadro } from "./demandas.ts";
 
@@ -150,8 +149,8 @@ const dadosDaPagina = (resto: Partial<PaginaDaDemanda> = {}): PaginaDaDemanda =>
 const demandaNoEstado = (estado: PaginaDaDemanda["demanda"]["estado"]): PaginaDaDemanda["demanda"] => ({
   ...dadosDaPagina().demanda,
   estado,
-  terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
-  arquivavel: CICLO_DA_DEMANDA.transicoes[estado].includes("arquivada"),
+  terminal: ["concluida", "arquivada", "cancelada"].includes(estado),
+  arquivavel: estado === "concluida",
 });
 
 /** O trecho do HTML que começa em `marca` e vai até a próxima seção. */
@@ -1028,7 +1027,7 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto elegível traz Ex
           ref: "I-206.T3",
           etapa: "implementar",
           estado,
-          satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(estado),
+          satisfaz_dependencia: estado === "concluido",
           elegivel,
         },
       ],

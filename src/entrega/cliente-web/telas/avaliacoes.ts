@@ -2,14 +2,18 @@
 // e a lista; no detalhe, a barra, o escopo, os achados, o envio e a conversa. O texto que vem do servidor passa sempre
 // por `escapar`.
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { abrir, EstadoDaAvaliacao } from "../../../aplicacao/avaliacao.ts";
-import type { Achado, ResumoAvaliacao } from "../../../armazenamento/avaliacoes.ts";
-import type { Entrada } from "../../http/rotas/chat.ts";
+import type { AvaliacaoNaLista, DadosDaAvaliacao } from "../../contrato/avaliacoes.ts";
 import { caminhoDaAvaliacao, caminhoDaDemanda, escapar, plural, rotuloDoModelo } from "../render.ts";
-import { chaveDa, doSistema, type Envio, mensagem, type MensagemPi } from "./chat.ts";
+import { chaveDa, doSistema, type Entrada, type Envio, mensagem, type MensagemPi } from "./chat.ts";
 
 /** A linha de `GET /api/avaliacoes`. */
-export type AvaliacaoListada = ResumoAvaliacao & { achados: number; estado: EstadoDaAvaliacao };
+export type AvaliacaoListada = AvaliacaoNaLista;
+
+/** O que `GET /api/avaliacoes/:id` e o primeiro evento do SSE dão. */
+export type { DadosDaAvaliacao };
+
+type EstadoDaAvaliacao = DadosDaAvaliacao["estado"];
+type Achado = DadosDaAvaliacao["achados"][number];
 
 const ESTADOS: Record<EstadoDaAvaliacao, [rotulo: string, pilula: string]> = {
   rodando: ["rodando", "pill-rodando"],
@@ -62,9 +66,6 @@ export function listaDasAvaliacoes(lista: readonly AvaliacaoListada[]): string {
   );
   return `<div class="lista-avaliacoes">${linhas.join("")}</div>`;
 }
-
-/** O que `GET /api/avaliacoes/:id` e o primeiro evento do SSE dão. */
-export type DadosDaAvaliacao = Omit<ReturnType<typeof abrir>, "assinar">;
 
 const DICA = '<span class="dica-tecla">Enter envia · Shift+Enter quebra linha</span>';
 

@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { heatmapDo, lerLog, prsDos, type NoDoHeatmap } from "./heatmap.ts";
+import { heatmapDo, lerLog, prsDos } from "./heatmap.ts";
+
+type NoDoHeatmap = Awaited<ReturnType<typeof heatmapDo>>["raiz"];
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-heatmap-")));
 after(() => {

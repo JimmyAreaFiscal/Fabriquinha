@@ -7,7 +7,7 @@ import type { Projeto } from "../../nucleo/projeto.ts";
 import { git } from "../processo.ts";
 import { exigirGit } from "./worktree.ts";
 
-export interface CommitDoHeatmap {
+interface CommitDoHeatmap {
   hash: string;
   mensagem: string;
   /** Data do commit (ISO 8601). */
@@ -16,7 +16,7 @@ export interface CommitDoHeatmap {
   pr: string | null;
 }
 
-export interface NoDoHeatmap {
+interface NoDoHeatmap {
   nome: string;
   /** Pasta: soma dos arquivos abaixo dela. */
   alteracoes: number;
@@ -26,7 +26,7 @@ export interface NoDoHeatmap {
   commits?: string[];
 }
 
-export interface Heatmap {
+interface Heatmap {
   branch: string;
   /** Início e fim da janela (ISO 8601). */
   desde: string;
