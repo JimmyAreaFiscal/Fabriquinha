@@ -1,18 +1,13 @@
-// CLI `fabriquinha` (F7 §3): sem `FABRIQUINHA_EXECUCAO`, o serviço (`servidor`, `abrir`) e a ferramenta externa
-// (`demanda ...`); com ela, só o agente da execução da demanda. Converte a entrada, chama o comando e traduz o resultado
-// em uma linha de JSON e o erro em uma linha de texto. Nenhuma regra mora aqui; o que abre banco, serviço e navegador
-// vem da composição pelos `DepsDoCli`.
+// CLI `fabriquinha` (F7 §3): o serviço (`servidor`, `abrir`) e a ferramenta externa (`demanda ...`); com
+// `FABRIQUINHA_EXECUCAO`, nenhum comando é alcançável, porque o agente fala com o serviço pelo cliente empacotado.
+// Converte a entrada, chama o comando e traduz o resultado em uma linha de JSON e o erro em uma linha de texto. Nenhuma
+// regra mora aqui; o que abre banco, serviço e navegador vem da composição pelos `DepsDoCli`.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { z, ZodError } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
-import { COMANDOS_DEMANDA as LEITURAS_DEMANDA } from "./agente_demanda.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, ErroDeUso } from "./comando.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";
-import { COMANDOS_EVIDENCIA_DEMANDA } from "./evidencia_agente_demanda.ts";
-
-const COMANDOS_DO_AGENTE: readonly Comando[] = [...LEITURAS_DEMANDA, ...COMANDOS_EVIDENCIA_DEMANDA];
 
 const COMANDOS_DO_SERVICO: readonly Comando[] = [
   {
@@ -58,22 +53,12 @@ const palavrasDe = (comando: Comando): readonly string[] => comando.nome.split("
 const uso = (c: Comando): string =>
   ["  fabriquinha", ...palavrasDe(c), ...c.posicionais, ...(c.opcoesDeUso ? [c.opcoesDeUso] : [])].join(" ");
 
-/**
- * A ajuda de quem chama: o agente vê só os comandos da execução da demanda; sem `FABRIQUINHA_EXECUCAO`, só o serviço e
- * a ferramenta externa. Com um grupo conhecido (`demanda`, `ticket`...), só ele.
- */
-function ajuda(grupo: string | undefined, doAgente: boolean): string {
-  const secoes: readonly (readonly [string, readonly Comando[]])[] = doAgente
-    ? [
-        [
-          "Agente de uma execução da demanda (tickets e rodadas pelo endereço, como I-206.T3 e I-206.R2):",
-          COMANDOS_DO_AGENTE,
-        ],
-      ]
-    : [
-        ["Serviço:", COMANDOS_DO_SERVICO],
-        ["Ferramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):", COMANDOS_DEMANDA_EXTERNA],
-      ];
+/** A ajuda do serviço e da ferramenta externa; com um grupo conhecido (`demanda`, `servidor`...), só ele. */
+function ajuda(grupo: string | undefined): string {
+  const secoes: readonly (readonly [string, readonly Comando[]])[] = [
+    ["Serviço:", COMANDOS_DO_SERVICO],
+    ["Ferramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):", COMANDOS_DEMANDA_EXTERNA],
+  ];
   const doGrupo = (cs: readonly Comando[]) => cs.filter((c) => palavrasDe(c)[0] === grupo);
   const conhecido = secoes.some(([, cs]) => doGrupo(cs).length > 0);
   return [
@@ -89,11 +74,11 @@ function ajuda(grupo: string | undefined, doAgente: boolean): string {
   ].join("\n");
 }
 
-/** O comando de `args` na tabela de quem chama, rodado; nenhum outro é alcançável (uso inválido). */
+/** O comando de `args` na tabela do serviço e da ferramenta externa, rodado; com `FABRIQUINHA_EXECUCAO`, nenhum é alcançável. */
 function rodarComando(args: readonly string[], deps: DepsDoCli): Promise<unknown> {
   const achar = (tabela: readonly Comando[]) => tabela.find((c) => palavrasDe(c).every((p, i) => args[i] === p));
   const comando = deps.env.FABRIQUINHA_EXECUCAO
-    ? achar(COMANDOS_DO_AGENTE)
+    ? undefined
     : (achar(COMANDOS_DEMANDA_EXTERNA) ?? achar(COMANDOS_DO_SERVICO));
   if (!comando) throw new ErroDeUso(args.length === 0 ? "falta o comando" : `comando desconhecido: ${args.join(" ")}`);
   return comando.executar(entradaDe(comando, args.slice(palavrasDe(comando).length)), deps);
@@ -116,9 +101,9 @@ function entradaDe(comando: Comando, resto: readonly string[]): EntradaDoComando
   return { posicionais, opcoes };
 }
 
-/** Uma linha só: o `ZodError` vem pelo `z.prettifyError`, com o caminho de cada campo (F3 §5). */
+/** Uma linha só: as linhas da mensagem do erro, sem recuo nem vazias. */
 const umaLinha = (erro: unknown): string =>
-  (erro instanceof ZodError ? z.prettifyError(erro) : mensagem(erro))
+  mensagem(erro)
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
@@ -126,9 +111,8 @@ const umaLinha = (erro: unknown): string =>
 
 /** Roda `fabriquinha <args>` e devolve o código de saída: 0 sucesso, 1 erro, 2 uso inválido (F7 §3.3). */
 export async function principal(args: readonly string[], deps: DepsDoCli): Promise<number> {
-  const doAgente = Boolean(deps.env.FABRIQUINHA_EXECUCAO);
   if (args.includes("--help") || args.includes("-h")) {
-    deps.stdout.write(ajuda(args[0], doAgente));
+    deps.stdout.write(ajuda(args[0]));
     return 0;
   }
   try {
@@ -137,7 +121,7 @@ export async function principal(args: readonly string[], deps: DepsDoCli): Promi
     return 0;
   } catch (error_) {
     if (error_ instanceof ErroDeUso) {
-      deps.stderr.write(`${error_.message}\n\n${ajuda(args[0], doAgente)}`);
+      deps.stderr.write(`${error_.message}\n\n${ajuda(args[0])}`);
       return 2;
     }
     deps.stderr.write(`${umaLinha(error_)}\n`);

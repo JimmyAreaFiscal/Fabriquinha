@@ -5,6 +5,7 @@ import { type Ator, AUDITOR } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   type Avaliacao,
+  agregadoDaRodada,
   AvaliadorDeEvidencia,
   conferirQuantidadeENomes,
   evidenciasPendentes,
@@ -356,4 +357,9 @@ test("plano: só o agente submete, e a validação do plano real recusa fora de 
     );
   }
   assert.equal(comValidacaoReal.avaliar(ag, submissao("plano", ticket(6), plano, AGENTE)).resultado, "recusada");
+});
+
+test("agregadoDaRodada sem rodada devolve o agregado inteiro", () => {
+  const agregado = montarAgregadoDemanda("I-1", "em_execucao");
+  assert.equal(agregadoDaRodada(agregado), agregado);
 });

@@ -2,7 +2,7 @@
 // reconfere dentro da transação e recusa por erro síncrono, sem gravar nada e sem Tentativa (D10-1).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
@@ -18,7 +18,7 @@ import {
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { createHash } from "node:crypto";
-import { adicionarEvidencia, adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";
+import { adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -101,11 +101,16 @@ function cenario() {
     id: abrirTrabalhoDoAgente(banco, { demanda_id: "I-206", ticket_id }).trabalho_id,
   });
   const lerJson = (valor: string) => Promise.resolve(JSON.parse(valor) as unknown);
-  const adicionar = (ticket_id: number, tipo: string, dados: unknown, ...anexos: string[]) =>
-    adicionarEvidencia(
+  const adicionar = (ticket_id: number, tipo: string, dados: unknown, ...caminhos: string[]) =>
+    adicionarEvidenciaComAnexosEnviados(
       banco,
       processo(ticket_id),
-      { ticket: `I-206.T${String(ticket_id)}`, tipo, dados: JSON.stringify(dados), anexos },
+      {
+        ticket: `I-206.T${String(ticket_id)}`,
+        tipo,
+        dados: JSON.stringify(dados),
+        anexos: caminhos.map(anexoLidoDe),
+      },
       lerJson,
     );
   const saida = (ticket_id: number, nome: string, conteudo: string) => {
@@ -116,6 +121,12 @@ function cenario() {
   };
   return { raiz, banco, processo, adicionar, saida, lerJson };
 }
+
+/** O anexo como o cliente do agente o manda: o caminho, os bytes lidos e o SHA-256 deles. */
+const anexoLidoDe = (caminho: string) => {
+  const conteudo = readFileSync(caminho);
+  return { caminho, conteudo, sha256: createHash("sha256").update(conteudo).digest("hex") };
+};
 
 const gravadas = (banco: DatabaseSync) =>
   banco
@@ -173,39 +184,16 @@ test("anexo fora da worktree e da saída é recusado sem gravar", async () => {
   assert.deepEqual(gravadas(banco), []);
 });
 
-test("anexos enviados: o da saída é aceito pelo caminho do host (Ambiente local) e o de fora é recusado sem gravar", async () => {
-  const { raiz, banco, processo, saida, lerJson } = cenario();
-  const enviar = (caminho: string, conteudo: string) =>
-    adicionarEvidenciaComAnexosEnviados(
-      banco,
-      processo(5),
-      {
-        ticket: "I-206.T5",
-        tipo: "testes_estresse",
-        dados: JSON.stringify(ESTRESSE),
-        anexos: [
-          { caminho, conteudo: Buffer.from(conteudo), sha256: createHash("sha256").update(conteudo).digest("hex") },
-        ],
-      },
-      lerJson,
-    );
-  const fora = join(raiz, "fora.log");
-  writeFileSync(fora, "x");
-  await assert.rejects(enviar(fora, "x"), /está fora da worktree do ticket e do diretório de saída/);
-  assert.deepEqual(gravadas(banco), []);
-  assert.deepEqual(await enviar(saida(5, "estresse.log", "tudo certo\n"), "tudo certo\n"), {
-    ticket: "I-206.T5",
-    tipo: "testes_estresse",
-    veredito: "atende",
-  });
-  assert.deepEqual(gravadas(banco), [{ ticket_id: 5, tipo: "testes_estresse" }]);
-});
-
 test("ticket alheio, T-5 e rodada não gravam nada e mostram a forma certa", async () => {
   const { banco, processo, lerJson } = cenario();
   const dados = JSON.stringify(ESTRESSE);
   const adicionar = (ticket: string) =>
-    adicionarEvidencia(banco, processo(5), { ticket, tipo: "testes_estresse", dados, anexos: [] }, lerJson);
+    adicionarEvidenciaComAnexosEnviados(
+      banco,
+      processo(5),
+      { ticket, tipo: "testes_estresse", dados, anexos: [] },
+      lerJson,
+    );
   await assert.rejects(adicionar("I-206.T4"), { message: "o agente só age no próprio ticket (aja em I-206.T5)" });
   await assert.rejects(adicionar("T-5"), /I-206\.T5/);
   await assert.rejects(adicionar("I-206.R1"), /I-206\.T5/);
@@ -225,8 +213,11 @@ test("ticket já concluído, execução terminada e execução inexistente não 
     message: "a execução e-I-206-T5 já terminou (peça ao Auditor uma nova execução)",
   });
   await assert.rejects(
-    adicionarEvidencia(banco, { id: "exec-x" }, { ticket: "I-206.T5", tipo: "plano", dados: "{}", anexos: [] }, () =>
-      Promise.resolve({}),
+    adicionarEvidenciaComAnexosEnviados(
+      banco,
+      { id: "exec-x" },
+      { ticket: "I-206.T5", tipo: "plano", dados: "{}", anexos: [] },
+      () => Promise.resolve({}),
     ),
     { message: "a execução exec-x não existe (confira a execução)" },
   );
@@ -244,14 +235,14 @@ test("tipo que o agente não submete, ou de outra etapa, é recusado", async () 
 
 test("sem dados, ou com dados que o leitor não lê, a evidência é recusada antes de gravar", async () => {
   const { banco, processo } = cenario();
-  const sem = adicionarEvidencia(
+  const sem = adicionarEvidenciaComAnexosEnviados(
     banco,
     processo(5),
     { ticket: "I-206.T5", tipo: "testes_estresse", dados: undefined, anexos: [] },
     () => Promise.resolve({}),
   );
   await assert.rejects(sem, { message: "falta --dados (passe --dados <arquivo.json|->)" });
-  const ruim = adicionarEvidencia(
+  const ruim = adicionarEvidenciaComAnexosEnviados(
     banco,
     processo(5),
     { ticket: "I-206.T5", tipo: "testes_estresse", dados: "{", anexos: [] },

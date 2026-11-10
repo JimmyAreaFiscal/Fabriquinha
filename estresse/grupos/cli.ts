@@ -1,4 +1,4 @@
-// Grupo do estresse dos comandos do CLI de `COMANDOS_DEMANDA_EXTERNA` e `COMANDOS_DEMANDA`: uma ação por comando, cada
+// Grupo do estresse dos comandos do CLI de `COMANDOS_DEMANDA_EXTERNA` e `COMANDOS_DO_AGENTE`: uma ação por comando, cada
 // chamada um processo `fabriquinha` de verdade na raiz temporária. O tempo vai do início do processo à saída dele; a
 // preparação (demandas, execuções abertas, arquivos) é semeada toda antes e fica fora do tempo medido. Saída diferente
 // de 0, `SQLITE_BUSY` ou `database is locked` contam como erro. `semMedicaoCli` confere a cobertura contra as duas tabelas.
@@ -7,8 +7,8 @@ import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { COMANDOS_DEMANDA } from "../../src/entrega/cli/agente_demanda.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/entrega/cli/demanda_externa.ts";
+import { COMANDOS_DO_AGENTE } from "../../src/entrega/cli-agente/comandos.ts";
 import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
 import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demandas.ts";
@@ -20,7 +20,7 @@ import { CHAMADAS } from "../medir.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoCli {
-  /** `fabriquinha <palavras>`, com ` (agente)` nos comandos de `COMANDOS_DEMANDA`: é o nome da ação na tabela. */
+  /** `fabriquinha <palavras>`, com ` (agente)` nos comandos de `COMANDOS_DO_AGENTE`: é o nome da ação na tabela. */
   nome: string;
   /** Orçamento de p95 em ms: 3× o p95 medido nesta máquina (Linux, Node 22, SQLite local), para não virar teste instável. */
   orcamento: number;
@@ -284,6 +284,7 @@ export function semMedicaoCli(acoes: readonly AcaoCli[]): string[] {
   const medidas = new Set(acoes.map((a) => a.nome));
   return [
     ...COMANDOS_DEMANDA_EXTERNA.map((c) => nomeExterno(c.nome.split(" "))),
-    ...COMANDOS_DEMANDA.map((c) => nomeAgente(c.nome.split(" "))),
+    // `evidencia schema` e `evidencia add` nunca tiveram ação aqui: o estresse mede os comandos de leitura e de decisão.
+    ...COMANDOS_DO_AGENTE.filter((c) => !c.nome.startsWith("evidencia")).map((c) => nomeAgente(c.nome.split(" "))),
   ].filter((nome) => !medidas.has(nome));
 }
