@@ -8,11 +8,10 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { LIMITE } from "../../nucleo/schemas.ts";
 import type { Relogio } from "../../nucleo/relogio.ts";
 import { casar } from "../compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
-import { rotaDeEvidenciaAdd } from "./agente/evidencia.ts";
+import { rotasDeEvidenciaAdd } from "./agente/evidencia.ts";
 import { erroDaApiDoAgente, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente, rotasDoAgente } from "./agente/rotas.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
@@ -45,15 +44,15 @@ export const ROTAS: Rota[] = [
 ];
 
 /** As rotas de /api/agente/*: fora de `ROTAS`, porque entram com o token do processo e não com o cookie do navegador. */
-const ROTAS_DO_AGENTE: RotaDoAgente[] = [...rotasDoAgente(), rotaDeEvidenciaAdd()];
+const ROTAS_DO_AGENTE: RotaDoAgente[] = [...rotasDoAgente(), ...rotasDeEvidenciaAdd()];
 
 const CLIENTE = join(import.meta.dirname, "../cliente-web");
 const COMPARTILHADO = join(import.meta.dirname, "../compartilhado");
 const COOKIE = "fabriquinha";
 const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
 const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
-// O `evidencia add` leva os anexos em base64 no JSON: o maior anexo (o vídeo) vezes 4/3, mais o JSON de sempre.
-const LIMITE_DO_JSON_DO_AGENTE = { bytes: Math.ceil(LIMITE.video / 3) * 4 + LIMITE_DO_JSON.bytes, texto: "667 MiB" };
+// Os `dados` da evidência do agente; o anexo vai em pedido próprio, em fluxo (rotas.ts, `corpoEmFluxo`).
+const LIMITE_DO_JSON_DO_AGENTE = { bytes: 5 * 1024 * 1024, texto: "5 MiB" };
 
 /** Os tipos servidos em `/static/*`. O cliente é TypeScript: o navegador recebe o JavaScript sem os tipos. */
 const TIPOS: Record<string, string> = {
@@ -245,13 +244,15 @@ export function servirWeb({
     throw new ErroHttp(404, `${String(pedido.method)} ${url.pathname} não existe`);
   }
 
-  /** `/api/agente/*`: o token vem antes do corpo, para quem não o tem não fazer o serviço ler até 667 MiB. */
+  /** `/api/agente/*`: o token vem antes do corpo, para quem não o tem não fazer o serviço ler o pedido. */
   async function apiDoAgente(pedido: IncomingMessage, url: URL, resposta: ServerResponse): Promise<void> {
     const agente = autenticarAgente(banco, pedido.headers);
     for (const rota of rotasDaApiDoAgente) {
       const params = rota.metodo === pedido.method ? casar(rota.caminho, url.pathname) : undefined;
       if (!params) continue;
-      const corpo = rota.metodo === "POST" ? await lerCorpo(pedido, LIMITE_DO_JSON_DO_AGENTE) : undefined;
+      let corpo: unknown;
+      if (rota.corpoEmFluxo) corpo = pedido;
+      else if (rota.metodo === "POST") corpo = await lerCorpo(pedido, LIMITE_DO_JSON_DO_AGENTE);
       json(resposta, 200, await rota.tratar({ banco, relogio, agente, params, query: url.searchParams, corpo }));
       return;
     }

@@ -21,7 +21,7 @@ import {
   RespostaTicketCriar,
   RespostaTicketVer,
 } from "../../contrato/agente.ts";
-import { rotaDeEvidenciaAdd } from "./evidencia.ts";
+import { rotasDeEvidenciaAdd } from "./evidencia.ts";
 import { CASOS_DE_USO_DO_AGENTE, type CasosDeUsoDoAgente, rotasDoAgente } from "./rotas.ts";
 
 const ESTRESSE = {
@@ -69,7 +69,7 @@ for (const [comando, pedidoDe] of Object.entries(PEDIDOS_POR_COMANDO)) {
   test(`CA-2: ${comando} com o token de outro processo vivo, de processo encerrado e sem token é recusado sem chamar o caso de uso nem gravar`, async () => {
     const { banco } = cenarioDaApiDoAgente();
     const casos = casosComEspioes();
-    const pedir = await servirApiDoAgente(banco, [...rotasDoAgente(casos), rotaDeEvidenciaAdd(casos)]);
+    const pedir = await servirApiDoAgente(banco, [...rotasDoAgente(casos), ...rotasDeEvidenciaAdd(casos)]);
     const [metodo, caminho, corpo] = pedidoDe(TICKETS.estresse);
     const antes = contagemDasTabelas(banco);
     const recusar = async (token: string | undefined, status: number) => {

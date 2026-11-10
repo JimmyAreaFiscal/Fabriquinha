@@ -75,15 +75,25 @@ export type RespostaRevisaoDecidir = z.infer<typeof RespostaRevisaoDecidir>;
 export const RespostaEvidenciaSchema = z.object({ dados: z.record(z.string(), z.unknown()), arquivos: z.unknown() });
 export type RespostaEvidenciaSchema = z.infer<typeof RespostaEvidenciaSchema>;
 
-/** Um anexo no corpo do `PedidoEvidenciaAdd`: o caminho no Ambiente do agente, os bytes em base64 e o SHA-256 deles. */
+/** Um anexo já enviado: o caminho no Ambiente do agente e o SHA-256 dos bytes, que `POST /api/agente/anexos` conferiu. */
 const AnexoDoPedido = z.object({
   caminho: z.string().min(1),
-  conteudo_base64: z.string(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 
 /**
- * `POST /api/agente/evidencias`: a evidência do próprio ticket; `dados` chega já lido e os anexos vão com os bytes.
+ * `POST /api/agente/anexos?caminho=<caminho no Ambiente>&sha256=<hex>`: o corpo é o arquivo, em `application/octet-stream`.
+ * O serviço lê em blocos e só aceita se o SHA-256 dos bytes for o declarado.
+ */
+export const ParametrosDoAnexoEnviado = AnexoDoPedido;
+export type ParametrosDoAnexoEnviado = z.infer<typeof ParametrosDoAnexoEnviado>;
+
+/** O anexo que o serviço conferiu: o `PedidoEvidenciaAdd` o cita pelo mesmo caminho e SHA-256. */
+export const RespostaAnexoEnviado = AnexoDoPedido;
+export type RespostaAnexoEnviado = z.infer<typeof RespostaAnexoEnviado>;
+
+/**
+ * `POST /api/agente/evidencias`: a evidência do próprio ticket; `dados` chega já lido e cada anexo cita um já enviado.
  */
 export const PedidoEvidenciaAdd = z.object({
   ticket: EnderecoDoTicket,

@@ -228,10 +228,9 @@ export function guardarAnexos(
   );
 }
 
-/** Um anexo do agente: o caminho no Ambiente dele, os bytes que ele leu e o SHA-256 que declara para eles. */
+/** Um anexo do agente: o caminho no Ambiente dele e o SHA-256 dos bytes que ele enviou (a entrega já os conferiu). */
 export interface AnexoEnviado {
   readonly caminho: string;
-  readonly conteudo: Buffer;
   readonly sha256: string;
 }
 
@@ -254,8 +253,7 @@ function caminhoDoHost(declarado: string, origens: Origens, ambiente: Ambiente):
 }
 
 /**
- * Guarda os anexos que o agente enviou de dentro do Ambiente: confere que os bytes têm o SHA-256 declarado, inverte o
- * caminho para o host, exige que esteja na worktree ou na saída e que o arquivo ali tenha o mesmo SHA-256, abrindo com
+ * Guarda os anexos que o agente enviou de dentro do Ambiente: inverte o caminho para o host, exige que esteja na worktree ou na saída e que o arquivo ali tenha o mesmo SHA-256, abrindo com
  * `O_NOFOLLOW` como `guardarAnexos`. Assim o agente só anexa o que está no seu Espaço, e o que fica guardado é o
  * arquivo do host.
  */
@@ -266,16 +264,17 @@ export function guardarAnexosEnviados(
   regra: RegraArquivos,
   origens: Origens,
 ): ArquivoEvidencia[] {
-  const aAbrir = anexos.map(({ caminho, conteudo, sha256 }) => {
+  const aAbrir = anexos.map(({ caminho, sha256 }) => {
     if (!isAbsolute(caminho)) {
       throw new ErroDeRegra(`${caminho} não é um caminho absoluto`, "informe o caminho completo do arquivo");
+    }
+    // O `open` lança TypeError (500) para byte nulo.
+    if (caminho.includes("\0")) {
+      throw new ErroDeRegra(`${JSON.stringify(caminho)} tem byte nulo no caminho`, "informe o caminho real do arquivo");
     }
     const abrirEm = caminhoDoHost(caminho, origens, ambiente);
     if (abrirEm === undefined) {
       throw new ErroDeRegra(`${caminho} está fora ${origens.fora}`, `copie-o para ${origens.copie}`);
-    }
-    if (createHash("sha256").update(conteudo).digest("hex") !== sha256) {
-      throw new ErroDeRegra(`os bytes enviados de ${caminho} não têm o SHA-256 declarado`, "envie o arquivo de novo");
     }
     return { caminho, abrirEm, sha256 };
   });

@@ -1,10 +1,19 @@
 // O transporte do cliente do agente: `fetch` à API de `FABRIQUINHA_API` com o token de `FABRIQUINHA_TOKEN`. A recusa da
 // API volta como `ErroDoComando` com a mensagem e o código de saída do corpo; serviço parado vira "a Fabriquinha está fora".
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import { ErroDaApiDoAgente } from "../contrato/agente.ts";
 import { type ApiDoAgente, ErroDoComando, frase } from "./comando.ts";
 
+/** O corpo do pedido: o tipo, os bytes e, se for fluxo (o `fetch` exige `duplex`), o arquivo lido em blocos. */
+interface Corpo {
+  readonly tipo: string;
+  readonly bytes: string | ReadableStream;
+  readonly fluxo?: true;
+}
+
 export function criarApiDoAgente(env: NodeJS.ProcessEnv, buscar: typeof fetch): ApiDoAgente {
-  async function pedir(metodo: "GET" | "POST", caminho: string, corpo?: unknown): Promise<unknown> {
+  async function pedir(metodo: "GET" | "POST", caminho: string, corpo?: Corpo): Promise<unknown> {
     const { FABRIQUINHA_API: api, FABRIQUINHA_TOKEN: token } = env;
     if (!api) throw new ErroDoComando(frase("falta FABRIQUINHA_API", "o pi a define ao lançar o agente"));
     if (!token) throw new ErroDoComando(frase("falta FABRIQUINHA_TOKEN", "o pi o define ao lançar o agente"));
@@ -14,9 +23,10 @@ export function criarApiDoAgente(env: NodeJS.ProcessEnv, buscar: typeof fetch): 
         method: metodo,
         headers: {
           authorization: `Bearer ${token}`,
-          ...(corpo !== undefined && { "content-type": "application/json" }),
+          ...(corpo && { "content-type": corpo.tipo }),
         },
-        body: corpo === undefined ? undefined : JSON.stringify(corpo),
+        body: corpo?.bytes,
+        ...(corpo?.fluxo && { duplex: "half" }),
       });
     } catch {
       throw new ErroDoComando(frase(`a Fabriquinha está fora: nada respondeu em ${api}`, "confira FABRIQUINHA_API"));
@@ -31,6 +41,12 @@ export function criarApiDoAgente(env: NodeJS.ProcessEnv, buscar: typeof fetch): 
 
   return {
     get: (caminho) => pedir("GET", caminho),
-    post: (caminho, corpo) => pedir("POST", caminho, corpo),
+    post: (caminho, corpo) => pedir("POST", caminho, { tipo: "application/json", bytes: JSON.stringify(corpo) }),
+    postArquivo: (caminho, arquivo) =>
+      pedir("POST", caminho, {
+        tipo: "application/octet-stream",
+        bytes: Readable.toWeb(createReadStream(arquivo)) as ReadableStream,
+        fluxo: true,
+      }),
   };
 }

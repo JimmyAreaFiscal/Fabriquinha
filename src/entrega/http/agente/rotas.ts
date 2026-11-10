@@ -48,6 +48,8 @@ export interface RotaDoAgente {
   caminho: string;
   /** O schema do contrato do corpo 200; o teste de rota confere o corpo por ele. */
   resposta: z.ZodType;
+  /** O corpo é binário e grande: `corpo` chega como o fluxo da requisição (`AsyncIterable<Buffer>`), sem ler. */
+  corpoEmFluxo?: true;
   tratar(pedido: PedidoDoAgente): unknown;
 }
 
