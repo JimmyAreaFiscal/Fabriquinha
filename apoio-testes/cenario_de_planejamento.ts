@@ -14,7 +14,7 @@ import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
 import { instanteAtual } from "../src/aplicacao/relogio.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
-import { registrarDependenciaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
+import { registrarDependenciaDemanda } from "../src/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { anotar } from "../src/infra/registro.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";

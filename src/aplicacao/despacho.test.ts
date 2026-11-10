@@ -17,7 +17,7 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
+import { registrarDependenciaDemanda } from "./gestao_demandas.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, type Tentativa } from "../nucleo/tentativa.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
@@ -27,7 +27,7 @@ import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.t
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_conflito.ts";
-import { cicloDoDespacho, type DepsDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
+import { cicloDoDespacho, demandasParaDespacho, type DepsDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -281,6 +281,26 @@ test("CA-6 e CA-16: o planejar com predecessora pendente não é despachado nem 
   });
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
   assert.deepEqual(carregarDemanda(banco, "I-6"), antes); // o ensaio da reserva não grava
+});
+
+test("demandasParaDespacho lê planejamento, execução, revisão e encerramento, com as predecessoras pendentes", async () => {
+  const { banco } = await cenario(3);
+  demanda(banco, 4, {});
+  demanda(banco, 6, { estado: "planejar" });
+  demanda(banco, 7, { estado: "revisar_demanda" });
+  demanda(banco, 8, { estado: "encerrar_demanda" });
+  demanda(banco, 9, { estado: "gate_planejamento" });
+  demanda(banco, 10, { estado: "entender_e_desenhar" });
+  banco.exec("INSERT INTO dependencia_demanda VALUES ('I-6', 'I-4')");
+  banco.exec("INSERT INTO dependencia_demanda VALUES ('I-7', 'I-8')");
+  banco.exec("INSERT INTO dependencia_demanda VALUES ('I-8', 'I-9')");
+  const lidas = demandasParaDespacho(banco).map((d) => [d.agregado.demanda.id, d.predecessoras_pendentes]);
+  assert.deepEqual(lidas, [
+    ["I-4", []],
+    ["I-6", ["I-4"]],
+    ["I-7", ["I-8"]],
+    ["I-8", ["I-9"]],
+  ]);
 });
 
 test("CA-7: repositório inexistente não deixa o ticket em execução e o motivo vai ao log", async () => {

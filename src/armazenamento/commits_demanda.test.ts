@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { migrar } from "./banco.ts";
-import type { ArquivoCommit, Commit } from "./commits.ts";
+import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
 import {
   commitDoTicketDemanda,
   gravarCommitDemanda,

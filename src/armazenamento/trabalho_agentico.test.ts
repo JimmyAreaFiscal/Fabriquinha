@@ -5,13 +5,17 @@ import { ErroDeRegra } from "../nucleo/erros.ts";
 import { encerrarProcesso, iniciarProcesso, registrarUso } from "../nucleo/trabalho_agentico.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { migrar } from "./banco.ts";
+import { trabalhosComTituloDaDemanda } from "./historico_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
   processosAbertos,
+  ticketDoTrabalho,
   ticketsComPiAtivo,
+  ticketsEmExecucaoSemProcesso,
+  trabalhosComTicketDaDemanda,
 } from "./trabalho_agentico.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -204,4 +208,36 @@ test("CA-10: execuções abertas de qualquer ticket, com grupo de processo nulo 
     { id: "e2", trabalho_id: "s1", demanda_id: "I-1", ticket_id: 1, grupo_processo: 4321 },
     { id: "e3", trabalho_id: "s2", demanda_id: "I-1", ticket_id: 2, grupo_processo: null },
   ]);
+});
+
+test("o ticket dono do trabalho e os trabalhos da demanda; id desconhecido volta sem ticket", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [], []);
+  gravar(b, [sessao("s2", 2)], [], [], noTicket2);
+  assert.deepEqual({ ...ticketDoTrabalho(b, "s2") }, noTicket2);
+  assert.equal(ticketDoTrabalho(b, "nao-existe"), undefined);
+  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-1"), [
+    { id: "s1", ...ref },
+    { id: "s2", ...noTicket2 },
+  ]);
+  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-2"), []);
+});
+
+test("tickets em execução de etapa que fecha depois da execução; ticket aberto ou de etapa fora da lista não entram", () => {
+  const b = banco();
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
+  b.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), [ref]);
+  b.exec("UPDATE ticket_demanda SET etapa = 'planejar' WHERE ticket_id = 1");
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
+});
+
+test("trabalhos do histórico com o título da demanda, filtrados por projeto, demanda e etapa", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [], []);
+  assert.deepEqual(trabalhosComTituloDaDemanda(b, {}), [{ id: "s1", titulo: "t" }]);
+  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "p", demanda: "I-1", etapa: "implementar" }).length, 1);
+  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "outro" }).length, 0);
+  assert.equal(trabalhosComTituloDaDemanda(b, { demanda: "I-2" }).length, 0);
+  assert.equal(trabalhosComTituloDaDemanda(b, { etapa: "planejar" }).length, 0);
 });

@@ -18,6 +18,7 @@ import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
   processosAbertos,
+  ticketsEmExecucaoSemProcesso,
 } from "../../armazenamento/trabalho_agentico.ts";
 import { HarnessPi } from "../../infra/agente/harness_pi.ts";
 import { anotar, pastasDoProcesso } from "../../infra/registro.ts";
@@ -118,14 +119,7 @@ export function recuperarProcessosAbertos(banco: DatabaseSync, avisar: AvisarSes
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
-  const presos = banco
-    .prepare(
-      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
-         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
-         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
-           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
-    )
-    .all() as unknown as TicketRef[];
+  const presos = ticketsEmExecucaoSemProcesso(banco);
   for (const { demanda_id, ticket_id } of presos) {
     falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado);
   }

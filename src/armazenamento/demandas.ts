@@ -9,6 +9,7 @@ import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import { escrever, novoId } from "./banco.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, SQLInputValue>;
@@ -346,13 +347,7 @@ const existente = (banco: DatabaseSync, id: string): AgregadoDemanda =>
 
 /** O agregado da demanda, lido num snapshot só; demanda inexistente dá `ErroDeInexistente`. */
 export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemanda {
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
-  if (propria) banco.exec("BEGIN");
-  try {
-    return existente(banco, id);
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+  return lerEmSnapshot(banco, () => existente(banco, id));
 }
 
 /**
@@ -363,9 +358,7 @@ export function listarDemandas(
   banco: DatabaseSync,
   { arquivadas = false, soNaoTerminadas = false }: { arquivadas?: boolean; soNaoTerminadas?: boolean } = {},
 ): AgregadoDemanda[] {
-  const propria = !banco.isTransaction;
-  if (propria) banco.exec("BEGIN");
-  try {
+  return lerEmSnapshot(banco, () => {
     const filtro = soNaoTerminadas
       ? `WHERE NOT ${CICLO_DA_DEMANDA.sqlDosTerminais("estado")}`
       : arquivadas
@@ -373,9 +366,7 @@ export function listarDemandas(
         : "WHERE estado <> 'arquivada'";
     const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
     return ids.map((l) => existente(banco, String(l.id)));
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+  });
 }
 
 /**
@@ -413,3 +404,41 @@ export const comDemanda = (
     aposGravar?.(depois);
     return depois;
   });
+
+/** A execução do agente com o trabalho, o ticket e o projeto dela; `fim` é nulo enquanto a execução está aberta. */
+interface EscopoDoProcessoNoBanco {
+  readonly fim: string | null;
+  readonly sessao: string;
+  readonly demanda_id: string;
+  readonly ticket_id: number;
+  readonly projeto: string;
+}
+
+/** O escopo de `execucao`, aberta ou terminada, ou `undefined` se ela não está em `processo_do_trabalho`. */
+export function carregarEscopoDoProcesso(banco: DatabaseSync, execucao: string): EscopoDoProcessoNoBanco | undefined {
+  const linha = banco
+    .prepare(
+      `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id, d.projeto
+         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id JOIN demanda d ON d.id = s.demanda_id
+        WHERE e.id = ?`,
+    )
+    .get(execucao);
+  return (
+    linha && {
+      fim: linha.fim === null ? null : String(linha.fim),
+      sessao: String(linha.sessao),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+      projeto: String(linha.projeto),
+    }
+  );
+}
+
+/** O id da sessão de cada ticket da demanda; com mais de uma no ticket, vale a mais recente. */
+export const sessaoDeCadaTicketDaDemanda = (banco: DatabaseSync, id: string): Map<number, string> =>
+  new Map(
+    banco
+      .prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid")
+      .all(id)
+      .map((s) => [Number(s.ticket_id), String(s.id)]),
+  );

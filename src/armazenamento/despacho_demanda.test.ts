@@ -6,6 +6,7 @@ import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { demandasParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
+const ESTADOS_LIDOS = ["planejar", "em_execucao", "revisar_demanda", "encerrar_demanda"] as const;
 const T = "'2026-01-01T00:00:00.000Z'";
 
 const banco = () => {
@@ -30,7 +31,7 @@ const execucao = (b: DatabaseSync, id: string, n: number, inicio: string, fim: s
   );
 };
 
-test("CA-1 a CA-6: lê só planejamento, execução, revisão e encerramento, com as predecessoras", () => {
+test("CA-1 a CA-6: lê só as demandas nos estados pedidos, com as predecessoras", () => {
   const b = banco();
   demanda(b, "I-4", "em_execucao");
   demanda(b, "I-6", "planejar");
@@ -39,12 +40,12 @@ test("CA-1 a CA-6: lê só planejamento, execução, revisão e encerramento, co
   demanda(b, "I-9", "gate_planejamento");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-6', 'I-4')");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-7', 'I-8')");
-  const lidas = demandasParaDespacho(b).map((d) => [d.agregado.demanda.id, d.predecessoras_pendentes.length === 0]);
+  const lidas = demandasParaDespacho(b, ESTADOS_LIDOS).map((d) => [d.agregado.demanda.id, d.predecessoras]);
   assert.deepEqual(lidas, [
-    ["I-4", true],
-    ["I-6", false],
-    ["I-7", false],
-    ["I-8", true],
+    ["I-4", []],
+    ["I-6", [{ demanda_id: "I-4", estado: "em_execucao" }]],
+    ["I-7", [{ demanda_id: "I-8", estado: "encerrar_demanda" }]],
+    ["I-8", []],
   ]);
   assert.equal(b.isTransaction, false);
 });

@@ -271,7 +271,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
 export function semMedicaoCli(acoes: readonly AcaoCli[]): string[] {
   const medidas = new Set(acoes.map((a) => a.nome));
   return [
-    ...COMANDOS_DEMANDA_EXTERNA.map((c) => nomeExterno(c.palavras)),
-    ...COMANDOS_DEMANDA.map((c) => nomeAgente(c.palavras)),
+    ...COMANDOS_DEMANDA_EXTERNA.map((c) => nomeExterno(c.nome.split(" "))),
+    ...COMANDOS_DEMANDA.map((c) => nomeAgente(c.nome.split(" "))),
   ].filter((nome) => !medidas.has(nome));
 }

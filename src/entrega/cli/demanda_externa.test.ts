@@ -8,12 +8,13 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
+import { caminhoArquivo, lerLinhas } from "../../../apoio-testes/acesso_ao_banco.ts";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../nucleo/erros.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
-import { principal } from "./cli.ts";
-import { COMANDOS_DEMANDA_EXTERNA, ErroDeUso } from "./demanda_externa.ts";
+import { executarFabriquinha } from "../../composicao/cli.ts";
+import { ErroDeUso } from "./comando.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-demanda-externa-"));
@@ -51,7 +52,7 @@ const novaRaiz = (): NodeJS.ProcessEnv => {
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = "") {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([stdin]),
     stdout: { write: (t: string) => (out += t) },
@@ -225,8 +226,10 @@ const EVIDENCIA = (id: string, tipo: string, dados: string, arquivo: string) => 
   "--arquivo",
   arquivo,
 ];
-const anexosGuardados = (env: NodeJS.ProcessEnv) =>
-  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT caminho, mime, sha256 FROM arquivo_evidencia").all() ?? [];
+const anexosGuardados = (env: NodeJS.ProcessEnv) => {
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  return b ? lerLinhas(b, "SELECT caminho, mime, sha256 FROM arquivo_evidencia") : [];
+};
 
 test("anexo que é link simbólico para fora da pasta é recusado e nada é guardado (O_NOFOLLOW)", async () => {
   const env = novaRaiz();
@@ -323,8 +326,10 @@ const USO = {
     },
   ],
 };
-const linhasDeUso = (env: NodeJS.ProcessEnv) =>
-  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT demanda_id, linhas FROM uso_declarado").all() ?? [];
+const linhasDeUso = (env: NodeJS.ProcessEnv) => {
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  return b ? lerLinhas(b, "SELECT demanda_id, linhas FROM uso_declarado") : [];
+};
 
 test("CA-6: uso inválido sai com o caminho do campo e a dica; o válido enviado duas vezes deixa uma só linha", async () => {
   const env = novaRaiz();
@@ -450,7 +455,7 @@ test("a ajuda lista a seção externa", async () => {
 test("CA-19: a skill traz um exemplo de cada comando e cada comando citado existe", () => {
   const skill = readFileSync(join(cwd, "pacote-pi", "skills", "demanda-externa", "SKILL.md"), "utf8");
   const citados = [...skill.matchAll(/^fabriquinha demanda (\S+)/gm)].map((m) => m[1]);
-  const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.palavras[1]);
+  const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.nome.split(" ")[1]);
   assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "uso", "ver"]);
   for (const c of citados) assert.ok(existentes.includes(c), c);
   for (const c of existentes) assert.ok(citados.includes(c), c);
