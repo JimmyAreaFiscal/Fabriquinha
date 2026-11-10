@@ -13,7 +13,7 @@ import { PACOTE } from "../infra/agente/pi.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { dirDaExecucaoSimulada } from "../infra/registro.ts";
+import { dirDaExecucaoSimulada, noLog } from "../infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { ambienteSemCredenciais } from "../infra/ambiente/ambiente.ts";
 import { executar } from "../infra/processo.ts";
@@ -166,6 +166,11 @@ export function executarTarefa(banco: DatabaseSync, tarefa: Id, opcoes: OpcoesDa
   })();
 }
 
-/** O Executar da Simulação: `executarTarefa` com o tempo máximo da Configuração. */
+/** @testes os testes esperam o fim das execuções; a produção usa `iniciarExecucaoDaTarefa` */
 export const executarTarefaComConfiguracao = (banco: DatabaseSync, tarefa: Id, relogio: Relogio): Promise<void> =>
   executarTarefa(banco, tarefa, { timeoutMin: configuracao(banco).timeoutMin, relogio });
+
+/** O Executar da Simulação: `executarTarefa` com o tempo máximo da Configuração, em segundo plano; falha de banco vai ao log. */
+export function iniciarExecucaoDaTarefa(banco: DatabaseSync, tarefa: Id, relogio: Relogio): void {
+  executarTarefaComConfiguracao(banco, tarefa, relogio).catch(noLog);
+}

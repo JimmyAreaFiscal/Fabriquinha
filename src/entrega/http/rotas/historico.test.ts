@@ -65,8 +65,9 @@ function recusaDoEndereco(texto: string): string {
 async function sessoes(query: string): Promise<unknown> {
   const rota = ROTAS.find((r) => r.metodo === "GET" && casar(r.caminho, "/api/sessoes"));
   assert.ok(rota);
+  let valor: unknown;
   try {
-    return await rota.tratar({
+    valor = await rota.tratar({
       banco,
       agendador: { proximaBusca: () => new Date() },
       relogio: relogioDoSistema,
@@ -79,6 +80,9 @@ async function sessoes(query: string): Promise<unknown> {
   } catch (erro) {
     return traduzir(erro);
   }
+  assert.ok(rota.resposta, "GET /api/sessoes não declara o schema da resposta");
+  rota.resposta.parse(JSON.parse(JSON.stringify(valor)));
+  return valor;
 }
 
 const resumo = (lista: unknown) =>

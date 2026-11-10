@@ -11,6 +11,7 @@ import { buscarProjeto } from "../../../armazenamento/projetos.ts";
 import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
+import type { Rota } from "../rotas.ts";
 import { ROTAS } from "../servidor.ts";
 
 const { banco, fechar } = abrirBancoTemporario();
@@ -23,14 +24,22 @@ registrarProjeto(banco, {
   chave_sonarqube: "Fabriquinha",
 });
 
+/** O corpo 2xx em JSON passa pelo schema do contrato da rota; o 204 não tem corpo. */
+function conferirContrato(rota: Rota, valor: unknown): void {
+  if (valor === undefined) return;
+  assert.ok(rota.resposta, `${rota.metodo} ${rota.caminho} não declara o schema da resposta`);
+  rota.resposta.parse(JSON.parse(JSON.stringify(valor)));
+}
+
 /** Chama a rota como o servidor: o valor devolvido, ou `[status, mensagem]` do erro traduzido. */
 async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise<unknown> {
   const [path, busca = ""] = caminho.split("?");
   for (const rota of ROTAS) {
     const params = rota.metodo === metodo ? casar(rota.caminho, String(path)) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
         relogio: relogioDoSistema,
@@ -43,6 +52,8 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     } catch (erro) {
       return traduzir(erro);
     }
+    conferirContrato(rota, valor);
+    return valor;
   }
   throw new Error(`${metodo} ${caminho} não existe`);
 }

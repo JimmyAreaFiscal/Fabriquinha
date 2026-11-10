@@ -17,3 +17,9 @@ export const inicioDoMes = (ano: number, mes: number): Instante => new Date(ano,
 /** O `instante` recuado em `ms` milissegundos. */
 export const instanteAntes = (instante: Instante, ms: number): Instante =>
   new Date(Date.parse(instante) - ms).toISOString();
+
+/** O mês `AAAA-MM` do `instante`, no fuso do serviço. */
+export const mesDoInstante = (instante: Instante): string => {
+  const data = new Date(instante);
+  return `${String(data.getFullYear())}-${String(data.getMonth() + 1).padStart(2, "0")}`;
+};

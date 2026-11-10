@@ -41,7 +41,7 @@ import {
 import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
-export type Estado = "rodando" | "aguardando_humano" | "terminada";
+type Estado = "rodando" | "aguardando_humano" | "terminada";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
 type ModoEnvio = "prompt" | "steer" | "follow_up";
@@ -156,7 +156,7 @@ export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
 }
 
 /** A Pendência como o chat a leva: `item` pelo endereço público (D09). */
-export type PendenciaDoChat = Omit<Pendencia, "item"> & { item: string };
+type PendenciaDoChat = Omit<Pendencia, "item"> & { item: string };
 
 const pendenciaDoChat = (p: Pendencia): PendenciaDoChat => ({ ...p, item: p.item.toString() });
 
