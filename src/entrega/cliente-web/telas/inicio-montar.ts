@@ -3,7 +3,8 @@
 import type { DadosDoInicio } from "../../http/rotas/inicio.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api } from "../dom.ts";
-import { inicio, type RecusaDoDespacho } from "./inicio.ts";
+import type { RecusasDoDespacho } from "../../contrato/despacho.ts";
+import { inicio } from "./inicio.ts";
 
 /** Quanto aguarda o Auditor: o mesmo número do Aguarda você. */
 export async function contarOQueAguarda(): Promise<number> {
@@ -14,7 +15,7 @@ export async function contarOQueAguarda(): Promise<number> {
 export async function montarInicio(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
   const [dados, { recusas }] = await Promise.all([
     api<DadosDoInicio>("/api/inicio", { signal }),
-    api<{ recusas: RecusaDoDespacho[] }>("/api/despacho", { signal }),
+    api<RecusasDoDespacho>("/api/despacho", { signal }),
   ]);
   const rolagem = main.querySelector(".board-etapas")?.scrollLeft ?? 0;
   main.innerHTML = inicio(dados, new Date(), recusas);

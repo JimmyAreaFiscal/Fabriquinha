@@ -50,7 +50,7 @@ export const APARENCIA_DO_ESTADO_DA_RODADA: Record<EstadoRodada, [rotulo: string
 };
 
 /** A cor do status do ticket, nas pílulas comuns; em execução não pulsa, porque o ticket pode estar parado à espera. */
-export const PILULA_DO_ESTADO_DO_TICKET: Record<EstadoTicket, string> = {
+const PILULA_DO_ESTADO_DO_TICKET: Record<EstadoTicket, string> = {
   aberto: "pill-neutro",
   em_execucao: "pill-rodando sem-pulso",
   concluido: "pill-ok",

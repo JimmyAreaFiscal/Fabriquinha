@@ -12,6 +12,7 @@ import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import * as gestao from "./gestao_demandas.ts";
 import { registrarDependenciaDemanda } from "./gestao_demandas.ts";
@@ -338,6 +339,24 @@ test("CA-28: arquivar fora de concluida é reprovado", () => {
   gestao.enviar(b, id, autor, ctx);
   assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só no estado concluida/);
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
+});
+
+test("reabrir: só o Auditor reabre o ticket falho, com a instrução e o instante do relógio", () => {
+  const b = novoBanco();
+  const id = registrar(b);
+  b.prepare("UPDATE ticket_demanda SET estado = 'falhou' WHERE demanda_id = ?").run(id);
+  const relogio = relogioFixo("2026-02-01T00:00:00.000Z");
+  assert.throws(
+    () => gestao.reabrir(b, id, { ticket_id: 1, instrucao: "tente de novo" }, autor, relogio),
+    /só o Auditor pode reabrir/,
+  );
+  assert.equal(carregarDemanda(b, id).tickets[0]?.estado, "falhou");
+  const ticket = gestao.reabrir(b, id, { ticket_id: 1, instrucao: "tente de novo" }, AUDITOR, relogio);
+  assert.deepEqual(
+    [ticket.estado, ticket.instrucao, ticket.estado_alterado_em],
+    ["aberto", "tente de novo", "2026-02-01T00:00:00.000Z"],
+  );
+  assert.throws(() => gestao.reabrir(b, id, { ticket_id: 1, instrucao: "de novo" }, AUDITOR, relogio), /falhou/);
 });
 
 test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, cancelamento e arquivamento", () => {

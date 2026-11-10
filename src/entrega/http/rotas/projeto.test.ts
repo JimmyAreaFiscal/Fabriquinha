@@ -261,7 +261,7 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
       rodada: "I-206.R2",
       modelo: "llamacpp / qwen3-coder-30b",
       sessao: "s-nova",
-      piAtivo: true,
+      pi_ativo: true,
     },
   ]);
 });

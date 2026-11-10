@@ -1,13 +1,15 @@
 // Quadro e página da demanda no DOM: leem a API e desenham com `quadro` e `pagina`. O app.ts redesenha só o quadro a
 // cada 5 s; a página decide os gates da demanda e do planejamento. Os testes de ponta a ponta (e2e/) os exercitam.
 import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
+import type { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
-import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
-import { type MotivoDeRecusaEmJson, textoDoMotivoDeRecusa } from "./inicio.ts";
+import { pagina, quadro } from "./demandas.ts";
+import { textoDoMotivoDeRecusa } from "./inicio.ts";
 
 export async function montarDemandas(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
-  const dados = await api<DadosDoQuadro>("/api/demandas", { signal });
+  const dados = await api<BoardDeDemandas>("/api/demandas", { signal });
   const demandas =
     params.projeto === undefined ? dados.demandas : dados.demandas.filter((d) => d.projeto === params.projeto);
   main.innerHTML = quadro({ demandas, trabalho: dados.trabalho });
@@ -17,7 +19,7 @@ const NAO_ENCONTRADA =
   '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/home">Ir para o Início</a></p>';
 
 /** Desenha a página; o "ler tudo" só fica onde o texto recolhido não cabe. */
-function desenharPagina(main: HTMLElement, dados: DadosDaPagina): void {
+function desenharPagina(main: HTMLElement, dados: PaginaDaDemanda): void {
   main.innerHTML = pagina(dados);
   for (const botao of main.querySelectorAll<HTMLButtonElement>("button[data-expandir]")) {
     const texto = botao.previousElementSibling;
@@ -27,9 +29,9 @@ function desenharPagina(main: HTMLElement, dados: DadosDaPagina): void {
 
 /** Lê a demanda e redesenha a página com o que a API devolve; o 404 vira a página de não encontrada. */
 async function carregar(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<boolean> {
-  let dados: DadosDaPagina;
+  let dados: PaginaDaDemanda;
   try {
-    dados = await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(params.demanda ?? "")}`, { signal });
+    dados = await api<PaginaDaDemanda>(`/api/demandas/${encodeURIComponent(params.demanda ?? "")}`, { signal });
   } catch (erro) {
     if (!(erro instanceof ErroDaApi && erro.status === 404)) throw erro;
     main.innerHTML = NAO_ENCONTRADA;
@@ -211,6 +213,6 @@ async function agirNaDemanda(botao: HTMLButtonElement, main: HTMLElement): Promi
   } catch (falha) {
     mostrarErro(falha);
     const id = main.querySelector(".dm-cabeca .id")?.textContent ?? "";
-    desenharPagina(main, await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(id)}`));
+    desenharPagina(main, await api<PaginaDaDemanda>(`/api/demandas/${encodeURIComponent(id)}`));
   }
 }

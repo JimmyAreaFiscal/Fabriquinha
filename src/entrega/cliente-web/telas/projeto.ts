@@ -204,7 +204,7 @@ function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora:
   }
   const ticket = estado && d.tickets.find((t) => t.estado === ESTADO_DO_DESTAQUE[estado]);
   if (!ticket) return "";
-  const conteudo = `<span class="pill ${pilulaDoEstadoDoTicket(ticket.estado, ticket.piAtivo)}">${rotuloDoEstadoDoTicket(ticket.estado, ticket.piAtivo)}</span><span class="muted quando">${ha(ticket.estadoAlteradoEm, agora)}</span>`;
+  const conteudo = `<span class="pill ${pilulaDoEstadoDoTicket(ticket.estado, ticket.pi_ativo)}">${rotuloDoEstadoDoTicket(ticket.estado, ticket.pi_ativo)}</span><span class="muted quando">${ha(ticket.estadoAlteradoEm, agora)}</span>`;
   return ticket.sessao === undefined
     ? `<span class="chat">${conteudo}</span>`
     : `<a class="chat" href="${caminhoDaSessao(ticket.sessao)}">${conteudo}<span class="ir">chat →</span></a>`;
@@ -282,7 +282,7 @@ function gaveta(d: DemandaDoProjeto, agora: Date): string {
       <td class="etapa-cel">${ROTULO_DA_ETAPA[t.etapa].toLowerCase()}</td>
       <td class="id-cel"><span class="id">${escapar(t.ref)}</span></td>
       <td class="titulo-cel">${escapar(t.titulo ?? TITULO_PADRAO_DA_ETAPA[t.etapa])}</td>
-      <td class="status-cel"><span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.piAtivo)}">${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}</span></td>
+      <td class="status-cel"><span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.pi_ativo)}">${nomeDoEstadoDoTicket(t.estado, t.pi_ativo)}</span></td>
       <td class="modelo-cel">${rotuloDoModelo(t.modelo ?? "padrão do pi")}</td>
       <td class="sessao-cel">${chat}</td>
     </tr>`;

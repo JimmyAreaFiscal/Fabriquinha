@@ -9,16 +9,18 @@ import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
+import { sessaoDeCadaTicketDaDemanda, ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
-import { type PendenciaDoInicio, pendenciasDasDemandas } from "./inicio.ts";
+import { pendenciasDasDemandas } from "../../../aplicacao/consultas/pendencias.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 
 /** Uma linha da página do projeto: a demanda, as rodadas com o PR e os tickets com o modelo efetivo e a sessão. */
 export interface DemandaDoProjeto {
@@ -49,7 +51,7 @@ export interface DemandaDoProjeto {
     modelo?: string;
     sessao?: string;
     /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
-    piAtivo?: true;
+    pi_ativo?: true;
   }[];
 }
 
@@ -93,14 +95,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   const ag = carregarDemanda(banco, id);
   const etapas = buscarProjeto(banco, ag.demanda.projeto)?.etapas ?? [];
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
-  const sessoes = new Map(
-    (
-      banco.prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid").all(id) as {
-        ticket_id: number;
-        id: string;
-      }[]
-    ).map((s) => [s.ticket_id, s.id]),
-  );
+  const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
   const rodada = (rodada_id: number) => formatarRodadaRef({ demanda_id: id, rodada_id });
   const comPiAtivo = ticketsComPiAtivo(banco);
   return {
@@ -122,7 +117,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
           [ag],
           sessoesDeDemanda(banco, { escopo: "ativas", demanda: id }),
           condutor.situacao.bind(condutor),
-          new Date(),
+          relogioDoSistema.agora(),
         ),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoEspaco(ag, r.rodada_id);
@@ -152,7 +147,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
         ...(t.titulo !== undefined && { titulo: t.titulo }),
         ...(modelo && { modelo: `${modelo.provedor} / ${modelo.nome}` }),
         ...(sessao !== undefined && { sessao }),
-        ...(comPiAtivo.has(ticketRef) && { piAtivo: true as const }),
+        ...(comPiAtivo.has(ticketRef) && { pi_ativo: true as const }),
       };
     }),
   };

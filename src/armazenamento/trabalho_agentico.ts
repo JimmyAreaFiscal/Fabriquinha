@@ -197,3 +197,29 @@ export const ticketsEmExecucaoSemProcesso = (banco: DatabaseSync): z.infer<typeo
     )
     .all()
     .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef>);
+
+/**
+ * O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente.
+ * @testes o teste exercita direto; a produção a usa só dentro do módulo (a consulta que a usa vem em seguida)
+ */
+export function sessaoDeCadaTicketDasDemandas(
+  banco: DatabaseSync,
+  ids: readonly string[],
+): Map<string, Map<number, string>> {
+  const linhas = banco
+    .prepare(
+      "SELECT demanda_id, ticket_id, id FROM trabalho_agentico WHERE demanda_id IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+    )
+    .all(JSON.stringify(ids));
+  // shortcut: filtra as linhas por demanda (ids × linhas), agrupar num passe só se passar de milhares de sessões.
+  return new Map(
+    ids.map((id) => [
+      id,
+      new Map(linhas.filter((l) => l.demanda_id === id).map((l) => [Number(l.ticket_id), String(l.id)])),
+    ]),
+  );
+}
+
+/** O id da sessão de cada ticket da demanda; com mais de uma no ticket, vale a mais recente. */
+export const sessaoDeCadaTicketDaDemanda = (banco: DatabaseSync, id: string): Map<number, string> =>
+  new Map(sessaoDeCadaTicketDasDemandas(banco, [id]).get(id));
