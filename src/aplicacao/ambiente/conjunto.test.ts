@@ -50,7 +50,9 @@ function cenario() {
   validarESalvarConfiguracaoDoAmbiente(banco, LIMITES);
   const gerador = new GeradorDeAmbientes();
   const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioDoSistema, SERVICO);
-  const criacoes = () => docker.registro().filter(([comando]) => comando === "run" || comando === "create");
+  // O `run --rm` é o container passageiro das regras de rede, não um Ambiente.
+  const criacoes = () =>
+    docker.registro().filter(([comando, opcao]) => (comando === "run" && opcao !== "--rm") || comando === "create");
   return { docker, banco, conjunto, gerador, criacoes, pastaDoDocker: join(base, `docker-${String(cenarios)}`) };
 }
 
@@ -140,10 +142,11 @@ test("liberar de um Espaço sem container não faz nada", async () => {
 });
 
 test("liberar com a limpeza falhando grava sujo, e o sujo não é reusado", async () => {
-  const { docker, banco, conjunto } = cenario();
+  const { docker, banco, conjunto, pastaDoDocker } = cenario();
   const primeiro = await conjunto.alocar(espacoA, projeto);
   docker.falharComando("exec", "container travado");
   await conjunto.liberar(espacoA);
+  rmSync(join(pastaDoDocker, "falhas", "exec"));
   assert.equal(listarAmbientes(banco)[0]?.estado, "sujo");
   const segundo = await conjunto.alocar(espacoB, projeto);
   assert.notEqual(segundo.container_id, primeiro.container_id);

@@ -106,7 +106,10 @@ export class ConjuntoDeAmbientes {
       pacote: PACOTE,
       auth_json: join(dirDoPiDoAuditor(), "auth.json"),
     };
-    return comoAmbienteContainer(await this.#criarAlocado(imagem, alocadoPara, montagens), servico);
+    return comoAmbienteContainer(
+      await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens),
+      servico,
+    );
   }
 
   /** Limpa o container do Espaço e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
@@ -179,8 +182,13 @@ export class ConjuntoDeAmbientes {
     );
   }
 
-  async #criarAlocado(imagem: string, alocadoPara: string, montagens: Montagens): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), montagens);
+  async #criarAlocado(
+    imagem: string,
+    alocadoPara: string,
+    portaDaApi: number,
+    montagens: Montagens,
+  ): Promise<AmbienteGravado> {
+    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), portaDaApi, montagens);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,

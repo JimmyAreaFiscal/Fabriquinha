@@ -2,11 +2,11 @@
 // O docker falso dos testes. Duas faces no mesmo arquivo:
 // - importado, `instalarDockerFalso(dir)` põe um executável `docker` à frente no PATH e guarda o estado e o registro em `dir`;
 // - executado como o `docker` (`import.meta.main`), simula imagens e containers: `image inspect`, `build`, `pull`, `run`,
-//   `create`, `start`, `ps`, `inspect`, `exec` e `rm`. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
+//   `create`, `start`, `ps`, `inspect`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
 //   trocada por uma pasta do estado; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
-//   um desastre.
+//   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
 // `ps` e `inspect` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>" e `inspect` imprime o JSON.
@@ -191,9 +191,19 @@ function executarDockerFalso(): void {
   } else if (comando === "pull") {
     writeFileSync(join(imagens, codificar(args[0] ?? "")), "");
   } else if (comando === "run" || comando === "create") {
-    const { opcoes, resto } = tirarOpcoes(args, ["--label", "--memory", "--cpus", "--workdir", "-v", "--add-host"]);
+    const { opcoes, resto } = tirarOpcoes(args, [
+      "--label",
+      "--memory",
+      "--cpus",
+      "--workdir",
+      "-v",
+      "--add-host",
+      "--net",
+      "--cap-add",
+    ]);
     const [imagem = "", ...programa] = resto;
     if (!temImagem(imagem)) sair(125, `Unable to find image '${imagem}' locally`);
+    if (opcoes["--rm"]) return; // roda e some, como o que aplica regras no namespace de rede de outro container
     const rotulos = Object.fromEntries(
       (opcoes["--label"] ?? []).map((rotulo) => [rotulo.split("=")[0] ?? "", rotulo.split("=").slice(1).join("=")]),
     );
@@ -246,6 +256,8 @@ function executarDockerFalso(): void {
       JSON.stringify({ ...container, comandos: [...container.comandos, programa] }),
     );
     const [shell, opcaoC, roteiro = ""] = programa;
+    if (shell === "cat" && opcaoC === "/etc/hosts")
+      for (const hospedeiro of container.hospedeiros) console.log(`172.17.0.1\t${hospedeiro.split(":")[0] ?? ""}`);
     if (shell === "sh" && opcaoC === "-c" && roteiro.includes(PASTA_DOS_PIDS_NO_CONTAINER))
       simularProcessoDoContainer(dir, container, programa, opcoes, sair);
   } else if (comando === "rm") {
