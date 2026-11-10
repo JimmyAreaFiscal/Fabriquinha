@@ -10,6 +10,7 @@ import { desdeAReabertura, POLITICA_DE_TENTATIVAS, tentativasDoTicket } from "..
 import { retomarTicketFalhoPorInfraestrutura } from "../nucleo/transicoes_demanda.ts";
 import { buscarProjeto } from "../armazenamento/projetos.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import { noLog } from "../infra/registro.ts";
 import { demandasParaDespacho } from "./despacho.ts";
 
@@ -18,7 +19,8 @@ import { demandasParaDespacho } from "./despacho.ts";
  * hora; o transitório depois da espera; o da cota com o modelo reserva. Os que passaram do limite de falhas seguidas, e
  * os que pedem o Auditor, ficam para ele. Devolve os endereços retomados; o erro de um não para os outros.
  */
-export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new Date()): string[] {
+export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): string[] {
+  const agora = relogio.agora();
   const retomados: string[] = [];
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
     for (const t of ag.tickets) {
@@ -26,7 +28,7 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new D
       const historico = desdeAReabertura(tentativasDoTicket(ag.tentativas, t.ticket_id));
       const passo = POLITICA_DE_TENTATIVAS.proximoPasso(t.etapa, historico);
       if (passo.tipo !== "retomar_automaticamente") continue;
-      if (agora.getTime() - Date.parse(t.estado_alterado_em) < passo.esperaMs) continue;
+      if (Date.parse(agora) - Date.parse(t.estado_alterado_em) < passo.esperaMs) continue;
       let modelo: Modelo | undefined;
       if (passo.trocarProvedor) {
         const etapa = buscarProjeto(banco, ag.demanda.projeto)?.etapas.find((e) => e.etapa === t.etapa);
@@ -41,7 +43,7 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new D
       try {
         comDemanda(banco, ag.demanda.id, (a) =>
           retomarTicketFalhoPorInfraestrutura(a, { ticket_id: t.ticket_id, ...(modelo && { modelo }) }, FABRIQUINHA, {
-            agora: agora.toISOString(),
+            agora,
           }),
         );
         retomados.push(formatarTicketRef(t));
