@@ -11,7 +11,7 @@ import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
 import { migrar } from "../../armazenamento/banco.ts";
 import { MIGRACOES } from "../../armazenamento/migracoes.ts";
 import { listarAmbientes } from "../../armazenamento/ambientes.ts";
-import { salvarConfiguracaoDoAmbiente } from "../../armazenamento/servico.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configuracao_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
@@ -170,7 +170,7 @@ function cenarioComContainer() {
   const docker = instalarDockerFalso(join(temporario, `docker-${String(Math.random())}`));
   const banco = new DatabaseSync(":memory:");
   migrar(banco, MIGRACOES);
-  salvarConfiguracaoDoAmbiente(banco, {
+  validarESalvarConfiguracaoDoAmbiente(banco, {
     tipo: "container",
     memoria_maxima_mb: 512,
     cpus: 1,

@@ -5,8 +5,8 @@ import { encontrado, ErroDeInexistente, ErroDeRegra, existe } from "../nucleo/er
 import type { Id } from "../nucleo/primitivos.ts";
 import {
   NomeDoAnexo,
-  NovaTarefa,
-  NovoUsuarioSimulado,
+  type NovaTarefa,
+  type NovoUsuarioSimulado,
   type RelatorioSimulacao,
   SEM_LINK,
   type StatusExecucaoSimulada,
@@ -64,8 +64,11 @@ const doUsuario = (banco: DatabaseSync, id: Id): void => {
 };
 
 /** Cria um Usuário Simulado do projeto; o nome não se repete dentro dele. */
-export function criarUsuarioSimulado(banco: DatabaseSync, nomeDoProjeto: string, entrada: unknown): UsuarioSimulado {
-  const { nome, descricao } = NovoUsuarioSimulado.parse(entrada);
+export function criarUsuarioSimulado(
+  banco: DatabaseSync,
+  nomeDoProjeto: string,
+  { nome, descricao }: NovoUsuarioSimulado,
+): UsuarioSimulado {
   const id = escrever(banco, () => {
     doProjeto(banco, nomeDoProjeto);
     const { changes, lastInsertRowid } = banco
@@ -133,8 +136,7 @@ export function removerAnexo(banco: DatabaseSync, usuario: Id, nome: string): vo
 }
 
 /** Cria a Tarefa do projeto e a aloca aos Usuários Simulados dele; usuário de outro projeto é rejeitado. */
-export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, entrada: unknown): Tarefa {
-  const { texto, n, usuarios } = NovaTarefa.parse(entrada);
+export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, { texto, n, usuarios }: NovaTarefa): Tarefa {
   const criadaEm = new Date().toISOString();
   const id = escrever(banco, () => {
     doProjeto(banco, nomeDoProjeto);
