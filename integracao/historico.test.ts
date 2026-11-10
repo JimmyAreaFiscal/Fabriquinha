@@ -44,7 +44,7 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "./apoio.ts";
-import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b
@@ -69,7 +69,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
-  const fins = despacharDemandas(c.banco, config, despacho());
+  const fins = cicloDoDespacho(c.banco, config, despacho());
   assert.equal(fins.length, 2);
   await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);
@@ -189,24 +189,6 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
     [anexoHtml()],
   );
-  submeter("custos_realizados", {
-    sessoes: [
-      {
-        ferramenta: "avaliacao",
-        sessao: autor.sessao,
-        linhas: [
-          {
-            provedor: "a",
-            modelo: "m",
-            tokens_entrada: 1,
-            tokens_saida: 1,
-            tokens_cache_leitura: 0,
-            tokens_cache_escrita: 0,
-          },
-        ],
-      },
-    ],
-  });
   gestao.enviar(c.banco, nova.id, autor, CTX);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);

@@ -1,9 +1,9 @@
-// Início (F7 §4.4) no DOM: lê `GET /api/inicio` e desenha com a função pura de inicio.ts. O app.ts o redesenha a cada
-// 5 s e conta o que aguarda pela mesma rota. Os testes de ponta a ponta (e2e/) o exercitam.
+// Início (F7 §4.4) no DOM: lê `GET /api/inicio` e `GET /api/despacho` (os itens parados) e desenha com a função pura de
+// inicio.ts. O app.ts o redesenha a cada 5 s e conta o que aguarda por `/api/inicio`. Os testes de ponta a ponta (e2e/) o exercitam.
 import type { DadosDoInicio } from "../../http/rotas/inicio.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api } from "../dom.ts";
-import { inicio } from "./inicio.ts";
+import { inicio, type RecusaDoDespacho } from "./inicio.ts";
 
 /** Quanto aguarda o Auditor: o mesmo número do Aguarda você. */
 export async function contarOQueAguarda(): Promise<number> {
@@ -12,9 +12,12 @@ export async function contarOQueAguarda(): Promise<number> {
 
 /** A página `/home`. Redesenhar preserva a rolagem horizontal do board. */
 export async function montarInicio(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
-  const dados = await api<DadosDoInicio>("/api/inicio", { signal });
+  const [dados, { recusas }] = await Promise.all([
+    api<DadosDoInicio>("/api/inicio", { signal }),
+    api<{ recusas: RecusaDoDespacho[] }>("/api/despacho", { signal }),
+  ]);
   const rolagem = main.querySelector(".board-etapas")?.scrollLeft ?? 0;
-  main.innerHTML = inicio(dados, new Date());
+  main.innerHTML = inicio(dados, new Date(), recusas);
   const etapas = main.querySelector(".board-etapas");
   if (etapas) etapas.scrollLeft = rolagem;
 }

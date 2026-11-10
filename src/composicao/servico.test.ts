@@ -426,17 +426,30 @@ test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem 
   await s.parar();
 });
 
-test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
+test("executarAgora: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
   const s = await subir();
   demandaEmExecucao(s.banco, 1);
   s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
     VALUES ('I-1', 2, 'implementar', 'aberto', '${AGORA}', 1)`);
-  await assert.rejects(
-    s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 2 }),
-    /o ticket T2 .*vem antes|vem antes/,
-  );
-  await s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 1 });
+  await assert.rejects(s.executarAgora({ demanda_id: "I-1", ticket_id: 2 }), /o ticket T2 .*vem antes|vem antes/);
+  await s.executarAgora({ demanda_id: "I-1", ticket_id: 1 });
   assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
+  await s.parar();
+});
+
+test("executarAgora: com o limite global ocupado, devolve o motivo e não inicia o ticket", async () => {
+  const s = await subir();
+  s.banco.exec("UPDATE configuracao SET limite_paralelismo = 1");
+  demandaEmExecucao(s.banco, 1);
+  demandaEmExecucao(s.banco, 2);
+  await s.executarAgora({ demanda_id: "I-1", ticket_id: 1 });
+  assert.deepEqual(await s.executarAgora({ demanda_id: "I-2", ticket_id: 1 }), {
+    tipo: "limite_de_paralelismo",
+    em_uso: 1,
+    limite: 1,
+  });
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-2"), "aberto");
   await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
 });

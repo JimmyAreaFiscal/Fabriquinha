@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
+import { cicloDoDespacho } from "../../../aplicacao/despacho.ts";
 import type { SessaoDeDemanda } from "../../../aplicacao/historico_demanda.ts";
+import { configuracao } from "../../../armazenamento/servico.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { type DadosDoInicio, inicio, trabalhoVivoDaSessao } from "./inicio.ts";
@@ -408,4 +410,53 @@ test("GET /api/inicio responde com o mês corrente de todos os projetos", async 
   assert.equal(dados.mes.projeto, null);
   assert.equal(dados.aguarda.length, 10);
   assert.equal((await pedir("/api/inicio", { cookie: false })).status, 401);
+});
+
+test("GET /api/despacho devolve as recusas do último ciclo, com os endereços em texto", async () => {
+  const banco = cenario();
+  const { pedir } = await servir(banco);
+  assert.deepEqual((await pedir("/api/despacho")).json(), { recusas: [] });
+  await Promise.all(cicloDoDespacho(banco, configuracao(banco)));
+  const { recusas } = (await pedir("/api/despacho")).json<{ recusas: { item: string; motivo: unknown }[] }>();
+  assert.deepEqual(
+    recusas.find((r) => r.item === "I-303.T4"),
+    { item: "I-303.T4", motivo: { tipo: "ocupado", por: "I-303.T5" } },
+  );
+  assert.equal((await pedir("/api/despacho", { cookie: false })).status, 401);
+});
+
+test("GET /api/inicio: o custo do mês sai no texto do Uso somado, com ≥ e o aviso quando uma sessão não trouxe custo", async () => {
+  const banco = cenario();
+  const agoraIso = new Date().toISOString();
+  banco.exec(`
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0),
+      ('xu2', 's-ajustes', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu2', 'p', 'm', 5, 1, 0, 0, NULL);`);
+  const { pedir } = await servir(banco);
+  const { mes } = (await pedir("/api/inicio")).json<DadosDoInicio>();
+  assert.equal(mes.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
+  assert.equal(mes.total.modelos[0]?.tokens_entrada, 15);
+});
+
+test("GET /api/inicio: o Uso declarado soma ao medido do mês, e a sessão declarada sem custo traz o ≥", async () => {
+  const banco = cenario();
+  const agoraIso = new Date().toISOString();
+  banco.exec(`
+    UPDATE demanda SET estado_alterado_em = '${agoraIso}' WHERE id = 'I-300';
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2);`);
+  const declarar = (sessao: string, custo: string) => {
+    banco.exec(`INSERT INTO uso_declarado VALUES ('claude', '${sessao}', 'I-300', json_array(json_object(
+      'modelo', 'p/m', 'tokens_entrada', 5, 'tokens_saida', 1, 'tokens_cache_leitura', 0, 'tokens_cache_escrita', 0,
+      'custo', ${custo}, 'chamadas', 0)))`);
+  };
+  declarar("d1", "1.8");
+  const { pedir } = await servir(banco);
+  const comCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
+  assert.equal(comCusto.textoDoCusto, "US$ 6,00");
+  assert.equal(comCusto.modelos[0]?.tokens_entrada, 15);
+  declarar("d2", "NULL");
+  const totalComSessaoSemCusto = (await pedir("/api/inicio")).json<DadosDoInicio>().mes.total;
+  assert.equal(totalComSessaoSemCusto.textoDoCusto, "≥ US$ 6,00 (1 sessão sem custo)");
 });

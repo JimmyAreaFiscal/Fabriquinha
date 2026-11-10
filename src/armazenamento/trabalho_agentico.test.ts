@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { encerrarProcesso, iniciarProcesso, registrarUso, totalDoTicket } from "../nucleo/trabalho_agentico.ts";
+import { encerrarProcesso, iniciarProcesso, registrarUso } from "../nucleo/trabalho_agentico.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { migrar } from "./banco.ts";
 import { trabalhosComTituloDaDemanda } from "./historico_demanda.ts";
@@ -107,18 +107,15 @@ test("CA-10, CA-13, CA-14: FK ou CHECK desfazem a gravação inteira", () => {
   );
 });
 
-test("CA-15: carregar por demanda e o total do ticket sobre o que foi lido", () => {
+test("CA-15: carregar por demanda e o ticket sobre o que foi lido", () => {
   const b = banco();
   const ref2 = { demanda_id: "I-1", ticket_id: 2 };
-  const s = [sessao(), sessao("s2", 2)];
-  const e = [execucao(), execucao("e2", "s2")];
   const u = [uso({ custo: 1 }), uso({ execucao_id: "e2", tokens_entrada: 7 })];
   gravar(b, [sessao()], [execucao()], [u[0] as never]);
   gravar(b, [sessao("s2", 2)], [execucao("e2", "s2")], [u[1] as never], ref2);
   const ticket = carregarTrabalhosDoTicket(b, ref);
   assert.equal(ticket.sessoes.length, 1);
-  const antes = totalDoTicket(s, e, u, ref);
-  assert.deepEqual(totalDoTicket(ticket.sessoes, ticket.execucoes, ticket.usos, ref), antes);
+  assert.deepEqual(ticket.usos, [u[0]]);
   assert.equal(carregarTrabalhosDaDemanda(b, "I-1").usos.length, 2);
   comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: [...x.execucoes] }));
   assert.throws(

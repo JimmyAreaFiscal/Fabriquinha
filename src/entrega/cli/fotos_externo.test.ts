@@ -88,7 +88,6 @@ const REGISTRAR = ["demanda", "registrar", "--projeto", "fabriquinha", "--titulo
 const DADOS_DAS_EVIDENCIAS = [
   ["criterios_aceite", "criterios.json"],
   ["desenho_solucao", "desenho.json", "--arquivo", "desenho.html"],
-  ["custos_realizados", "custos.json"],
 ];
 
 async function registrada(): Promise<NodeJS.ProcessEnv> {
@@ -97,7 +96,7 @@ async function registrada(): Promise<NodeJS.ProcessEnv> {
   return env;
 }
 
-async function comAsTresEvidencias(): Promise<NodeJS.ProcessEnv> {
+async function comAsEvidenciasDoEnvio(): Promise<NodeJS.ProcessEnv> {
   const env = await registrada();
   for (const [tipo, dados, ...resto] of DADOS_DAS_EVIDENCIAS) {
     await cli(env, ["demanda", "evidencia", "I-1", String(tipo), "--dados", String(dados), ...resto]);
@@ -115,7 +114,7 @@ test("foto demanda registrar: registra a demanda; sem --titulo é uso inválido;
   foto(await cli(env, ["demanda", "registrar", "--projeto", "fabriquinha"]), {
     codigo: 2,
     out: "",
-    err: "falta --titulo\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
+    err: "falta --titulo\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda uso I-<n> --dados <arquivo.json|-> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
   });
   const projetoInexistente = [...REGISTRAR, "--descricao", "desc.md"];
   projetoInexistente[3] = "nao-existe";
@@ -167,7 +166,7 @@ test("foto demanda evidencia: grava a evidência com anexo; tipo inválido é re
   foto(await cli(env, ["demanda", "evidencia", "I-1", "nada", "--dados", "criterios.json"]), {
     codigo: 2,
     out: "",
-    err: "nada não é evidência da demanda; os tipos são: criterios_aceite, desenho_solucao, custos_realizados, comportamento, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
+    err: "nada não é evidência da demanda; os tipos são: criterios_aceite, desenho_solucao, comportamento, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda uso I-<n> --dados <arquivo.json|-> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
   });
 });
 
@@ -176,23 +175,23 @@ test("foto demanda enviar: sem as evidências é recusado; completa, envia", asy
   foto(await cli(env, ["demanda", "enviar", "I-1"]), {
     codigo: 1,
     out: "",
-    err: "a demanda I-1 não pode ser enviada: faltam as evidências criterios_aceite, desenho_solucao, custos_realizados (submeta cada uma e envie de novo)\n",
+    err: "a demanda I-1 não pode ser enviada: faltam as evidências criterios_aceite, desenho_solucao (submeta cada uma e envie de novo)\n",
   });
   for (const [tipo, dados, ...resto] of DADOS_DAS_EVIDENCIAS) {
     await cli(env, ["demanda", "evidencia", "I-1", String(tipo), "--dados", String(dados), ...resto]);
   }
   foto(await cli(env, ["demanda", "enviar", "I-1"]), {
     codigo: 0,
-    out: '{"id":"I-1","projeto":"fabriquinha","titulo":"T","tipo":"funcionalidade","descricao":"descrição","estado":"gate_demanda","estado_alterado_em":"2026-01-01T00:00:00.000Z","origem_ferramenta":"claude","origem_sessao":"S1","enviada":true,"branch":"fabriquinha/I-1","dependencias":[],"evidencias":[{"tipo":"criterios_aceite","em":"2026-01-01T00:00:00.000Z","arquivos":[]},{"tipo":"desenho_solucao","em":"2026-01-01T00:00:00.000Z","arquivos":[{"nome":"desenho.html","sha256":"d61d59af2514cd746526521954a6f462d03f3deaea1e665ca5f8ab9d845da6bc"}]},{"tipo":"custos_realizados","em":"2026-01-01T00:00:00.000Z","arquivos":[]}]}\n',
+    out: '{"id":"I-1","projeto":"fabriquinha","titulo":"T","tipo":"funcionalidade","descricao":"descrição","estado":"gate_demanda","estado_alterado_em":"2026-01-01T00:00:00.000Z","origem_ferramenta":"claude","origem_sessao":"S1","enviada":true,"branch":"fabriquinha/I-1","dependencias":[],"evidencias":[{"tipo":"criterios_aceite","em":"2026-01-01T00:00:00.000Z","arquivos":[]},{"tipo":"desenho_solucao","em":"2026-01-01T00:00:00.000Z","arquivos":[{"nome":"desenho.html","sha256":"d61d59af2514cd746526521954a6f462d03f3deaea1e665ca5f8ab9d845da6bc"}]}]}\n',
     err: "",
   });
 });
 
 test("foto demanda ver: mostra a demanda com as evidências; demanda inexistente é recusada", async () => {
-  const env = await comAsTresEvidencias();
+  const env = await comAsEvidenciasDoEnvio();
   foto(await cli(env, ["demanda", "ver", "I-1"]), {
     codigo: 0,
-    out: '{"id":"I-1","projeto":"fabriquinha","titulo":"T","tipo":"funcionalidade","descricao":"descrição","estado":"entender_e_desenhar","estado_alterado_em":"2026-01-01T00:00:00.000Z","origem_ferramenta":"claude","origem_sessao":"S1","enviada":false,"branch":"fabriquinha/I-1","dependencias":[],"evidencias":[{"tipo":"criterios_aceite","em":"2026-01-01T00:00:00.000Z","arquivos":[]},{"tipo":"desenho_solucao","em":"2026-01-01T00:00:00.000Z","arquivos":[{"nome":"desenho.html","sha256":"d61d59af2514cd746526521954a6f462d03f3deaea1e665ca5f8ab9d845da6bc"}]},{"tipo":"custos_realizados","em":"2026-01-01T00:00:00.000Z","arquivos":[]}]}\n',
+    out: '{"id":"I-1","projeto":"fabriquinha","titulo":"T","tipo":"funcionalidade","descricao":"descrição","estado":"entender_e_desenhar","estado_alterado_em":"2026-01-01T00:00:00.000Z","origem_ferramenta":"claude","origem_sessao":"S1","enviada":false,"branch":"fabriquinha/I-1","dependencias":[],"evidencias":[{"tipo":"criterios_aceite","em":"2026-01-01T00:00:00.000Z","arquivos":[]},{"tipo":"desenho_solucao","em":"2026-01-01T00:00:00.000Z","arquivos":[{"nome":"desenho.html","sha256":"d61d59af2514cd746526521954a6f462d03f3deaea1e665ca5f8ab9d845da6bc"}]}]}\n',
     err: "",
   });
   foto(await cli(env, ["demanda", "ver", "I-9"]), {
@@ -204,14 +203,14 @@ test("foto demanda ver: mostra a demanda com as evidências; demanda inexistente
 
 test("foto demanda schema: schema do tipo; tipo desconhecido é recusado", async () => {
   const env = novaRaiz();
-  foto(await cli(env, ["demanda", "schema", "custos_realizados"]), {
+  foto(await cli(env, ["demanda", "schema", "criterios_aceite"]), {
     codigo: 0,
-    out: '{"dados":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sessoes":{"type":"array","items":{"type":"object","properties":{"ferramenta":{"type":"string","minLength":1},"sessao":{"type":"string","minLength":1},"linhas":{"minItems":1,"type":"array","items":{"type":"object","properties":{"provedor":{"type":"string","minLength":1},"modelo":{"type":"string","minLength":1},"tokens_entrada":{"type":"integer","minimum":0,"maximum":9007199254740991},"tokens_saida":{"type":"integer","minimum":0,"maximum":9007199254740991},"tokens_cache_leitura":{"type":"integer","minimum":0,"maximum":9007199254740991},"tokens_cache_escrita":{"type":"integer","minimum":0,"maximum":9007199254740991},"custo":{"description":"custo em dólares; omita se desconhecido (fica null, nunca 0)","anyOf":[{"type":"number","minimum":0},{"type":"null"}]}},"required":["provedor","modelo","tokens_entrada","tokens_saida","tokens_cache_leitura","tokens_cache_escrita"]}}},"required":["ferramenta","sessao","linhas"]}}},"required":["sessoes"]},"arquivos":{"classes":["video","imagem","html","texto"],"min":0,"max":0}}\n',
+    out: '{"dados":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"criterios":{"minItems":1,"type":"array","items":{"type":"object","properties":{"id":{"type":"string","pattern":"^CA-\\\\d+$"},"dado":{"type":"string","minLength":1},"quando":{"type":"string","minLength":1},"entao":{"type":"string","minLength":1}},"required":["id","dado","quando","entao"]}}},"required":["criterios"]},"arquivos":{"classes":["video","imagem","html","texto"],"min":0,"max":0}}\n',
     err: "",
   });
   foto(await cli(env, ["demanda", "schema", "nada"]), {
     codigo: 2,
     out: "",
-    err: "nada não é evidência da demanda; os tipos são: criterios_aceite, desenho_solucao, custos_realizados, comportamento, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
+    err: "nada não é evidência da demanda; os tipos são: criterios_aceite, desenho_solucao, comportamento, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura\n\nUso:\n\nFerramenta externa, demandas (sem FABRIQUINHA_EXECUCAO):\n  fabriquinha demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda editar I-<n> [--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda evidencia I-<n> <tipo> --dados <arquivo.json|-> [--arquivo <caminho>]... [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda uso I-<n> --dados <arquivo.json|-> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda enviar I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda ver I-<n> [--ferramenta <f>] [--sessao <s>]\n  fabriquinha demanda schema <tipo> [--ferramenta <f>] [--sessao <s>]\n\nCom FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, demanda e --help.\nIDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.\n",
   });
 });

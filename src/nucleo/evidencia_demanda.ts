@@ -3,7 +3,7 @@
 import { type AgregadoDemanda, donoDe } from "./agregado_demanda.ts";
 
 /** Obrigatórias da demanda no envio (CA-SDLC-01). */
-export const OBRIGATORIAS_DEMANDA = ["criterios_aceite", "desenho_solucao", "custos_realizados"] as const;
+export const OBRIGATORIAS_DEMANDA = ["criterios_aceite", "desenho_solucao"] as const;
 const OPCIONAIS_DEMANDA = [
   "comportamento",
   "prototipo",

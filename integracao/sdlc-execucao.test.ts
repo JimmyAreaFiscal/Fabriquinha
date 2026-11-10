@@ -2,6 +2,8 @@
 // entre agendador e "executar agora", implementação sem submissão e falha, timeout e reinício. O cenário é montado pelos
 // serviços e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web. As verificações
 // (testes, fitness e Sonar) são o único ponto injetado: o Sonar não existe aqui.
+import type { MotivoDeRecusa } from "../src/nucleo/despacho.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -11,7 +13,7 @@ import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from ".
 import { AUDITOR } from "../src/nucleo/ator.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
-import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho, executarAgora } from "../src/aplicacao/despacho.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
@@ -61,12 +63,16 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
 
   // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é negado.
   gravarLimiteParalelismo(c.banco, 1);
-  const primeiro = despacharDemandas(c.banco, configuracao(c.banco), deps);
+  const primeiro = cicloDoDespacho(c.banco, configuracao(c.banco), deps);
   assert.equal(primeiro.length, 1);
-  assert.equal(despacharDemandas(c.banco, configuracao(c.banco), deps).length, 0);
+  assert.equal(cicloDoDespacho(c.banco, configuracao(c.banco), deps).length, 0);
   assert.equal(statusDe(c, r1t1), "em_execucao");
   assert.equal(statusDe(c, r2t1), "aberto");
-  assert.throws(() => executarAgoraDemanda(c.banco, r2t1, c.config, deps), /limite global de paralelismo/);
+  assert.deepEqual(executarAgora(c.banco, r2t1, c.config, deps), {
+    tipo: "limite_de_paralelismo",
+    em_uso: 1,
+    limite: 1,
+  });
   abrirPortao();
   await Promise.all(primeiro);
   assert.equal(statusDe(c, r1t1), "concluido");
@@ -74,14 +80,14 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   // Com vagas: R1.T2 e R2 executam juntas; R3 (depende de R1, ainda não concluída) aguarda, e R1 não tem dois ativos.
   fecharPortao();
   gravarLimiteParalelismo(c.banco, 4);
-  const juntas = despacharDemandas(c.banco, configuracao(c.banco), deps);
+  const juntas = cicloDoDespacho(c.banco, configuracao(c.banco), deps);
   assert.equal(juntas.length, 2);
   assert.equal(statusDe(c, r1t2), "em_execucao");
   assert.equal(statusDe(c, r2t1), "em_execucao");
   assert.equal(statusDe(c, r3t1), "aberto");
   assert.ok([...ativosPorRodada(c, id).values()].every((n) => n === 1));
-  assert.throws(() => executarAgoraDemanda(c.banco, r3t1, c.config, deps), /depende|rodada/);
-  assert.equal(despacharDemandas(c.banco, configuracao(c.banco), deps).length, 0);
+  assert.equal((executarAgora(c.banco, r3t1, c.config, deps) as MotivoDeRecusa).tipo, "dependencia_pendente");
+  assert.equal(cicloDoDespacho(c.banco, configuracao(c.banco), deps).length, 0);
   abrirPortao();
   await Promise.all(juntas);
 
@@ -105,15 +111,15 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
   gravarLimiteParalelismo(c.banco, 4);
 
   // "Executar agora" da demanda d primeiro, o agendador logo depois: o ciclo reserva só o que sobra (a), não d de novo.
-  const manual = executarAgoraDemanda(c.banco, td, c.config, deps);
-  const ciclo = despacharDemandas(c.banco, c.config, deps);
+  const manual = executarAgora(c.banco, td, c.config, deps);
+  const ciclo = cicloDoDespacho(c.banco, c.config, deps);
   assert.equal(ciclo.length, 1);
   assert.deepEqual([statusDe(c, ta), statusDe(c, td)], ["em_execucao", "em_execucao"]);
 
   // Agora o inverso em a (reservada pelo agendador): "executar agora" encontra o ticket em execução; idem em d.
-  assert.throws(() => executarAgoraDemanda(c.banco, ta, c.config, deps), /está em_execucao/);
-  assert.throws(() => executarAgoraDemanda(c.banco, td, c.config, deps), /está em_execucao/);
-  assert.equal(despacharDemandas(c.banco, c.config, deps).length, 0);
+  assert.throws(() => executarAgora(c.banco, ta, c.config, deps), /está em_execucao/);
+  assert.throws(() => executarAgora(c.banco, td, c.config, deps), /está em_execucao/);
+  assert.equal(cicloDoDespacho(c.banco, c.config, deps).length, 0);
   await esperar(() => pisAteAgora() === 2, "o pi receber um prompt por ticket");
   abrirPortao();
   await Promise.all([manual, ...ciclo]);
@@ -134,7 +140,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   const deps = despacho(() => verificacoesPassam);
 
   // O pi termina bem, mas as verificações reprovam: devolvido com a instrução, sem commit nem conclusão.
-  await executarAgoraDemanda(c.banco, ref, c.config, deps);
+  await executarAgora(c.banco, ref, c.config, deps);
   const devolvido = demanda(c, id).tickets.find((x) => x.ticket_id === ref.ticket_id);
   assert.ok(devolvido);
   assert.equal(devolvido.estado, "aberto", motivoDoTicket(c, id, ref.ticket_id));
@@ -154,7 +160,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
 
   // Reexecutado (mesma sessão) e aprovado: a aplicação grava as evidências, commita e conclui; o agente não submeteu nada.
   verificacoesPassam = true;
-  await executarAgoraDemanda(c.banco, ref, c.config, deps);
+  await executarAgora(c.banco, ref, c.config, deps);
   const ag = demanda(c, id);
   assert.equal(statusDe(c, ref), "concluido");
   assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
@@ -189,17 +195,20 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
 
   // Falha: o pi sai com erro; o ticket falha, a segunda tarefa da rodada não avança e o estado não muda.
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
-  await Promise.all(despacharDemandas(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /código 1|falha do pi falso/);
   assert.equal(execucoesDe(c, t1).length, 1);
   const bloqueado = () => {
-    assert.equal(despacharDemandas(c.banco, c.config, deps).length, 0);
+    assert.equal(cicloDoDespacho(c.banco, c.config, deps).length, 0);
     assert.equal(statusDe(c, t2), "aberto");
     assert.equal(estado(), "implementar");
   };
   bloqueado();
-  assert.throws(() => executarAgoraDemanda(c.banco, t2, c.config, deps), /está falhou/);
+  assert.deepEqual(executarAgora(c.banco, t2, c.config, deps), {
+    tipo: "ocupado",
+    por: Endereco.doTicket(id, t1.ticket_id),
+  });
 
   // Reabrir exige instrução e não executa na hora: o ticket só fica aberto, sem nova execução nem prompt.
   assert.throws(() => reabrir(c, t1), /instrução|instrucao/);
@@ -214,7 +223,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   // Timeout: o pi trava e o limite (fracionário, só no teste) estoura; histórico das duas execuções e a mesma sessão.
   pi.roteirizar([{ termina: "trava" }]);
   const curto = { ...c.config, timeoutMin: 0.01 };
-  await Promise.all(despacharDemandas(c.banco, curto, deps));
+  await Promise.all(cicloDoDespacho(c.banco, curto, deps));
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /Reabertura[\s\S]*tente de novo, com atenção ao cache/);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /tempo limite/);

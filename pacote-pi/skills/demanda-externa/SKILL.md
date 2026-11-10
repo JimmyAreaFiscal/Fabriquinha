@@ -31,13 +31,12 @@ fabriquinha demanda registrar --projeto fabriquinha --titulo "CLI externo" --tip
 fabriquinha demanda editar I-30 --titulo "Novo título"
 ```
 
-3. Ver o schema do tipo e submeter a evidência (`criterios_aceite`, `desenho_solucao` e `custos_realizados` são obrigatórias). Anexos vêm da pasta onde você roda o comando:
+3. Ver o schema do tipo e submeter a evidência (`criterios_aceite` e `desenho_solucao` são obrigatórias). Anexos vêm da pasta onde você roda o comando:
 
 ```
 fabriquinha demanda schema desenho_solucao
 fabriquinha demanda evidencia I-30 criterios_aceite --dados criterios.json
 fabriquinha demanda evidencia I-30 desenho_solucao --dados desenho.json --arquivo desenho.html
-fabriquinha demanda evidencia I-30 custos_realizados --dados custos.json
 ```
 
 `criterios.json`:
@@ -46,7 +45,13 @@ fabriquinha demanda evidencia I-30 custos_realizados --dados custos.json
 { "criterios": [{ "id": "CA-1", "dado": "um projeto", "quando": "eu registro", "entao": "recebo o I-<n>" }] }
 ```
 
-`custos.json` (sessões externas; omita `custo` se desconhecido, nunca ponha 0):
+Declarar o Uso das sessões externas (opcional; vale até a demanda terminar, repetir a mesma sessão não duplica):
+
+```
+fabriquinha demanda uso I-30 --dados custos.json
+```
+
+`custos.json` (omita `custo` se desconhecido, nunca ponha 0):
 
 ```json
 { "sessoes": [{ "ferramenta": "claude", "sessao": "S1", "linhas": [{ "provedor": "anthropic", "modelo": "opus", "tokens_entrada": 1000, "tokens_saida": 200, "tokens_cache_leitura": 0, "tokens_cache_escrita": 0 }] }] }
@@ -64,4 +69,4 @@ fabriquinha demanda enviar I-30
 fabriquinha demanda ver I-30
 ```
 
-Depois do envio só `custos_realizados` aceita nova submissão; o resto está congelado.
+Depois do envio só `fabriquinha demanda uso` aceita nova submissão; o resto está congelado.

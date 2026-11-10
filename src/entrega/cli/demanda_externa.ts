@@ -9,7 +9,7 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
+import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
 import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
 import {
   type Comando,
@@ -153,6 +153,23 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const arquivos = (opcoes.arquivo ?? []) as string[];
       return deps.comBanco((banco) => {
         const { avisos } = submeterEvidencia(banco, id, { tipo, dados, arquivos }, autor, origens);
+        return { ...visao(banco, id), avisos };
+      });
+    },
+  },
+  {
+    nome: "demanda uso",
+    posicionais: ["I-<n>"],
+    opcoesDeUso: `--dados <arquivo.json|-> ${USO_IDENTIDADE}`,
+    argumentos: { options: { ...IDENTIDADE, dados: { type: "string" } } },
+    async executar(entrada, deps) {
+      const id = idDe(String(entrada.posicionais[0]));
+      const autor = autorDe(entrada, deps);
+      const arquivo = entrada.opcoes.dados as string | undefined;
+      if (arquivo === undefined) throw new ErroDeUso("falta --dados");
+      const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
+      return deps.comBanco((banco) => {
+        const { avisos } = declararUso(banco, id, dados, autor);
         return { ...visao(banco, id), avisos };
       });
     },

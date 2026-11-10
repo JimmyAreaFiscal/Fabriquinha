@@ -11,7 +11,7 @@ import { retomarTicketFalhoPorInfraestrutura } from "../nucleo/transicoes_demand
 import { buscarProjeto } from "../armazenamento/projetos.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";
 import { noLog } from "../infra/registro.ts";
-import { demandasParaDespacho } from "./despacho_demanda.ts";
+import { demandasParaDespacho } from "./despacho.ts";
 
 /**
  * Devolve a `aberto` os tickets falhos das demandas em andamento cuja política manda retomar: o do reinício sempre e na

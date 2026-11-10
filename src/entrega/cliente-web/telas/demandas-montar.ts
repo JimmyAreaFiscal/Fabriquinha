@@ -4,6 +4,7 @@ import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
+import { type MotivoDeRecusaEmJson, textoDoMotivoDeRecusa } from "./inicio.ts";
 
 export async function montarDemandas(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   const dados = await api<DadosDoQuadro>("/api/demandas", { signal });
@@ -152,7 +153,7 @@ async function decidir(
 
 /**
  * Reabrir (com instrução) ou executar agora um ticket, ou concluir a sessão de ajustes. Instrução vazia não vai ao
- * servidor; com ou sem erro dele, a página se redesenha com o status atual.
+ * servidor; com ou sem erro dele, a página se redesenha com o status atual. O motivo da recusa do Despacho fica no aviso.
  */
 async function agirNoTicket(
   botao: HTMLButtonElement,
@@ -173,8 +174,10 @@ async function agirNoTicket(
   }
   avisar();
   for (const b of main.querySelectorAll<HTMLButtonElement>("button[data-acao]")) b.disabled = true;
+  let recusa: MotivoDeRecusaEmJson | undefined;
   try {
-    await api(botao.dataset.caminho ?? "", {
+    // O "Executar agora" recusado pelo Despacho responde 200 com o motivo; aceito, responde 204.
+    recusa = await api<MotivoDeRecusaEmJson | undefined>(botao.dataset.caminho ?? "", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(reabrir ? { instrucao } : {}),
@@ -183,7 +186,9 @@ async function agirNoTicket(
   } catch (falha) {
     mostrarErro(falha);
   }
-  if (!signal.aborted) await carregar(main, params, signal);
+  if (signal.aborted) return;
+  await carregar(main, params, signal);
+  if (recusa) avisar(textoDoMotivoDeRecusa(recusa));
 }
 
 /**

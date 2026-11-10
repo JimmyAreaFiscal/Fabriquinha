@@ -22,14 +22,18 @@ const ticket = (ticket_id: number, etapa: string, rodada_id?: number) => ({
 });
 const linhas = (...custos: (number | null)[]) =>
   custos.map((custo) => ({
-    provedor: "p",
-    modelo: "m",
+    modelo: "p/m",
     tokens_entrada: 1,
     tokens_saida: 1,
     tokens_cache_leitura: 0,
     tokens_cache_escrita: 0,
     custo,
+    chamadas: 0,
   }));
+const usosDeclarados = [
+  { ferramenta: "claude", sessao: "a", demanda_id: "I-206", linhas: linhas(1, 2) },
+  { ferramenta: "codex", sessao: "b", demanda_id: "I-206", linhas: linhas(4, null) },
+];
 const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
   AgregadoDemanda.parse({
     demanda: {
@@ -68,18 +72,6 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
         tipo: "pr_aberto",
         autor: { tipo: "fabriquinha" },
         dados: { id: "41", url: "http://pr/41" },
-        em,
-      },
-      {
-        demanda_id: "I-206",
-        tipo: "custos_realizados",
-        autor: { tipo: "externo", ferramenta: "x", sessao: "y" },
-        dados: {
-          sessoes: [
-            { ferramenta: "claude", sessao: "a", linhas: linhas(1, 2) },
-            { ferramenta: "codex", sessao: "b", linhas: linhas(4, null) },
-          ],
-        },
         em,
       },
     ],
@@ -126,7 +118,7 @@ const uso = (n: number, custo?: number): UsoModeloExecucao => ({
 });
 
 test("árvore: PR final, SHA, PR e critérios por rodada", () => {
-  const a = montarArvorePRs(agregado(), [], [], []);
+  const a = montarArvorePRs(agregado(), [], [], [], []);
   assert.deepEqual(a.pr_final, { numero: 50, url: "http://pr/50" });
   assert.equal(a.base, "develop");
   assert.equal(a.sha_integracao, "abc123");
@@ -137,12 +129,18 @@ test("árvore: PR final, SHA, PR e critérios por rodada", () => {
 });
 
 test("árvore sem encerramento gravado usa nulos", () => {
-  const a = montarArvorePRs(agregado("problema", false), [], [], []);
+  const a = montarArvorePRs(agregado("problema", false), [], [], [], []);
   assert.deepEqual([a.pr_final, a.sha_integracao, a.base], [null, null, null]);
 });
 
 test("custo conhecido x incompleto, externos separados dos internos", () => {
-  const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 1.5), uso(8)]);
+  const a = montarArvorePRs(
+    agregado(),
+    [sessao(3), sessao(8)],
+    [exec(3), exec(8)],
+    [uso(3, 1.5), uso(8)],
+    usosDeclarados,
+  );
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 1.5, situacao: "conhecido" });
   assert.deepEqual(a.rodadas[1]?.tickets[0]?.custo, { valor: 0, situacao: "incompleto" });
   // T7 sem sessão (conduzido pela Fabriquinha): conhecido, não torna o total incompleto.
@@ -159,12 +157,12 @@ test("custo conhecido x incompleto, externos separados dos internos", () => {
 });
 
 test("ticket com todo uso medido é conhecido", () => {
-  const a = montarArvorePRs(agregado(), [sessao(3)], [exec(3)], [uso(3, 2)]);
+  const a = montarArvorePRs(agregado(), [sessao(3)], [exec(3)], [uso(3, 2)], []);
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 2, situacao: "conhecido" });
 });
 
 test("ticket sem sessão não torna o total interno incompleto (CA-14)", () => {
-  const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 0.75), uso(8, 0.5)]);
+  const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 0.75), uso(8, 0.5)], []);
   assert.deepEqual(a.custos.internos, { valor: 1.25, situacao: "conhecido" });
 });
 

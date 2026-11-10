@@ -11,6 +11,7 @@ import { arquivar, cancelar } from "../../../aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../../aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../../../armazenamento/demandas.ts";
 import type { Pedido, Rota } from "../rotas.ts";
+import { recusaEmJson } from "./inicio.ts";
 
 const Motivo = (de: string) =>
   z
@@ -88,14 +89,16 @@ function reabrir(pedido: Pedido) {
   };
 }
 
-async function executar(pedido: Pedido): Promise<void> {
+/** Aceito, responde 204; recusado pelo Despacho, responde o `MotivoDeRecusa`. */
+async function executar(pedido: Pedido): Promise<unknown> {
   const { agendador } = pedido;
-  if (!agendador.executarAgoraDemanda)
+  if (!agendador.executarAgora)
     throw new ErroDeRegra(
       "o agendador não executa tickets de demanda",
       "suba a Fabriquinha com o serviço (fabriquinha servir)",
     );
-  await agendador.executarAgoraDemanda(refDoTicket(pedido));
+  const recusa = await agendador.executarAgora(refDoTicket(pedido));
+  return recusa && recusaEmJson(recusa);
 }
 
 const cancelamento = ({ banco, params }: Pedido) => cancelar(banco, String(params.id), AUDITOR, agora());
