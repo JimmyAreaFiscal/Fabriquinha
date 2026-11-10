@@ -501,7 +501,7 @@ export function enviarDemanda(
   id: string,
   texto: string,
   modo: ModoEnvio,
-  limiteMin: number,
+  limiteMin = configuracao(banco).ociosidadeMin,
   relogio: Relogio = relogioDoSistema,
 ): boolean {
   const ref = ticketDoTrabalho(banco, id);

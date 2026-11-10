@@ -13,7 +13,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
-import type { DadosDoChatDemanda } from "./chat.ts";
+import { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../aplicacao/execucao_demanda.ts";
@@ -174,7 +174,7 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
       .join("\n") + "\n",
   );
 
-  const chat = (await pedir("/api/sessoes/sd-310")).corpo as DadosDoChatDemanda;
+  const chat = DadosDoChatDemanda.parse((await pedir("/api/sessoes/sd-310")).corpo);
   assert.deepEqual(
     [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.pendencia?.tipo],
     ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "dialogo_do_agente"],
