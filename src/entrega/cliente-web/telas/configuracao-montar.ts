@@ -2,8 +2,9 @@
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Modelo } from "../../../nucleo/configuracao_agente.ts";
 import type { Effort } from "../../../nucleo/primitivos.ts";
-import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
+import type { UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
@@ -13,8 +14,6 @@ import {
   confirmacaoDeRemover,
   type Erros,
   errosDoZod,
-  type EstadoDaConfiguracao,
-  type EstadoDoAmbiente,
   ETAPAS,
   formularioDeProjeto,
   menu,
@@ -22,7 +21,6 @@ import {
   NOVO,
   type OpcoesDosUsuarios,
   pagina,
-  type ProjetoCadastrado,
   type ProjetoListado,
   projetoInexistente,
   rascunhoDe,

@@ -3,23 +3,9 @@
 // cards do mês do Projeto. O DOM e a rede ficam em metricas-montar.ts. A comparação com a média é feita aqui, sobre a
 // lista de meses lida das tabelas da demanda.
 import type { EstadoDemanda, EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type { DefinicaoDaMetrica, TipoMetrica } from "../../../nucleo/metrica.ts";
+import type { TipoMetrica } from "../../../nucleo/metrica.ts";
 import type { LinhaDeUso } from "../../../nucleo/uso.ts";
-import type { ValorDe } from "../../../aplicacao/metricas/calculo_de_metrica.ts";
-import type { MetricaDeAlteracoesPosteriores } from "../../../aplicacao/metricas/metrica_de_alteracoes_posteriores.ts";
-import type { MetricaDeAprovacoesEReprovacoes } from "../../../aplicacao/metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
-import type { MetricaDeBugsNosArquivosRevisados } from "../../../aplicacao/metricas/metrica_de_bugs_nos_arquivos_revisados.ts";
-import type { MetricaDeConformidade } from "../../../aplicacao/metricas/metrica_de_conformidade.ts";
-import type { MetricaDeExigenciasDeAlteracao } from "../../../aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts";
-import type { MetricaDeNotaHumana } from "../../../aplicacao/metricas/metrica_de_nota_humana.ts";
-import type { MetricaDeUso } from "../../../aplicacao/metricas/metrica_de_uso.ts";
-import type {
-  MetricasDaDemandaNoPeriodo,
-  MetricasDaEtapa,
-  MetricasDoMes,
-  MetricasPorDemanda,
-  Nivel,
-} from "../../../aplicacao/metricas/metricas_do_periodo.ts";
+import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../contrato/metricas.ts";
 import {
   caminhoDaDemanda,
   compacto,
@@ -32,6 +18,9 @@ import {
 import { pilula } from "./demandas.ts";
 
 type MetricasMes = MetricasDoMes;
+type MetricasDaEtapa = MetricasMes["etapas"][number];
+type Nivel = MetricasMes["niveis"][number]["nivel"];
+type MetricasDaDemandaNoPeriodo = MetricasDasDemandas["demandas"][number];
 
 // ——— meses (`AAAA-MM`) ———
 
@@ -40,8 +29,13 @@ const indice = (mes: string): number => {
   return ano * 12 + m - 1;
 };
 
-/** O mês de um instante, no fuso local (o do serviço, no servidor; o do navegador, que é a mesma máquina). */
-export const mesDe = (d: Date): string => `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const FORMATO_DO_MES = new Intl.DateTimeFormat("pt-BR", { year: "numeric", month: "2-digit" });
+
+/** O mês de um instante (milissegundos), no fuso do navegador. */
+export const mesDe = (instante: number): string => {
+  const partes = Object.fromEntries(FORMATO_DO_MES.formatToParts(instante).map((p) => [p.type, p.value]));
+  return `${String(partes.year)}-${String(partes.month)}`;
+};
 
 /** O mês `n` meses depois (ou antes, com `n` negativo). */
 /** @testes função pura da tela, testada sem montar o DOM */
@@ -59,8 +53,8 @@ const mesesDe = (de: string, ate: string): string[] =>
   Array.from({ length: contarMeses(de, ate) }, (_, i) => somarMeses(de, i));
 
 /** `outubro`. */
-const extenso = (mes: string): string =>
-  new Date(Math.floor(indice(mes) / 12), indice(mes) % 12, 1).toLocaleString("pt-BR", { month: "long" });
+const FORMATO_DO_MES_POR_EXTENSO = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" });
+const extenso = (mes: string): string => FORMATO_DO_MES_POR_EXTENSO.format(Date.UTC(0, indice(mes) % 12, 1));
 
 /** `out/26`. */
 /** @testes função pura da tela, testada sem montar o DOM */
@@ -126,7 +120,7 @@ export interface DadosDasMetricas {
   meses: readonly MetricasMes[];
   demandas: readonly MetricasDaDemandaNoPeriodo[];
   /** O Uso somado das `demandas`, com a conformidade e a nota do período, que o servidor entrega para o rodapé da tabela. */
-  totalDasDemandas: MetricasPorDemanda["total"];
+  totalDasDemandas: MetricasDasDemandas["total"];
   /** O mês corrente: o último que os filtros oferecem. */
   atual: string;
 }
@@ -158,10 +152,10 @@ interface DefMetrica {
 const plural = (n: number, um: string, varios: string): string => pluralDe(n, um, varios, qtd);
 
 /** O valor da Métrica de `tipo` no mês: a nota humana e as alterações posteriores são de uma só Etapa cada. */
-const valorNoMes = <Calculo>(m: MetricasMes, tipo: TipoMetrica): ValorDe<Calculo> =>
-  m.etapas.flatMap((e) => e.metricas).find((x) => x.definicao.tipo === tipo)?.valor as ValorDe<Calculo>;
-const notaDoMes = (m: MetricasMes) => valorNoMes<MetricaDeNotaHumana>(m, "nota_humana");
-const alteracoesDoMes = (m: MetricasMes) => valorNoMes<MetricaDeAlteracoesPosteriores>(m, "alteracoes_posteriores");
+const valorNoMes = <Tipo extends TipoMetrica>(m: MetricasMes, tipo: Tipo): ValorDaMetricaDoTipo<Tipo> =>
+  m.etapas.flatMap((e) => e.metricas).find((x) => x.definicao.tipo === tipo)?.valor as ValorDaMetricaDoTipo<Tipo>;
+const notaDoMes = (m: MetricasMes) => valorNoMes(m, "nota_humana");
+const alteracoesDoMes = (m: MetricasMes) => valorNoMes(m, "alteracoes_posteriores");
 
 const METRICAS: Record<Metrica, DefMetrica> = {
   custo: {
@@ -450,12 +444,12 @@ interface ApresentacaoDaMetrica<Valor> {
 }
 
 const APRESENTACAO_DAS_METRICAS: {
-  aprovacoes_e_reprovacoes: ApresentacaoDaMetrica<ValorDe<MetricaDeAprovacoesEReprovacoes>>;
-  conformidade_com_o_plano: ApresentacaoDaMetrica<ValorDe<MetricaDeConformidade>>;
-  alteracoes_posteriores: ApresentacaoDaMetrica<ValorDe<MetricaDeAlteracoesPosteriores>>;
-  exigencias_de_alteracao: ApresentacaoDaMetrica<ValorDe<MetricaDeExigenciasDeAlteracao>>;
-  bugs_nos_arquivos_revisados: ApresentacaoDaMetrica<ValorDe<MetricaDeBugsNosArquivosRevisados>>;
-  nota_humana: ApresentacaoDaMetrica<ValorDe<MetricaDeNotaHumana>>;
+  aprovacoes_e_reprovacoes: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"aprovacoes_e_reprovacoes">>;
+  conformidade_com_o_plano: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"conformidade_com_o_plano">>;
+  alteracoes_posteriores: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"alteracoes_posteriores">>;
+  exigencias_de_alteracao: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"exigencias_de_alteracao">>;
+  bugs_nos_arquivos_revisados: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"bugs_nos_arquivos_revisados">>;
+  nota_humana: ApresentacaoDaMetrica<ValorDaMetricaDoTipo<"nota_humana">>;
 } = {
   aprovacoes_e_reprovacoes: {
     numero: (v) => v.reprovacoes,
@@ -500,8 +494,8 @@ const valorDaEtapa = (m: MetricasMes, etapa: EtapaTicket, tipo: TipoMetrica): un
 /** O Uso é a Métrica de todas as Etapas. */
 const usoDaEtapa = (etapa: MetricasDaEtapa) =>
   etapa.metricas.find((m) => m.definicao.tipo === "uso") as {
-    definicao: DefinicaoDaMetrica;
-    valor: ValorDe<MetricaDeUso>;
+    definicao: MetricasDaEtapa["metricas"][number]["definicao"];
+    valor: ValorDaMetricaDoTipo<"uso">;
   };
 
 const tokensDoModelo = (x: LinhaDeUso): number =>
@@ -566,7 +560,7 @@ function usoDaSecao(
 ): string {
   const { definicao, valor: uso } = usoDaEtapa(etapa);
   const dosAnteriores = anteriores.map(
-    (m) => (valorDaEtapa(m, etapa.etapa, "uso") as ValorDe<MetricaDeUso>).custo.conhecido,
+    (m) => (valorDaEtapa(m, etapa.etapa, "uso") as ValorDaMetricaDoTipo<"uso">).custo.conhecido,
   );
   const sessoes = uso.custoExterno.sessoes;
   const partes = [`${compacto(uso.tokens.total)} tokens`];

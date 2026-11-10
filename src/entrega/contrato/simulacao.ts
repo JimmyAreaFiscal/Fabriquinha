@@ -14,6 +14,7 @@ export const UsuarioSimulado = z.object({
   descricao: z.string(),
   anexos: z.array(Anexo),
 });
+export type UsuarioSimulado = z.infer<typeof UsuarioSimulado>;
 
 /** O `relatorio` só vem na execução concluída e o `erro`, na que falhou. */
 const ExecucaoSimulada = z.object({
@@ -35,3 +36,4 @@ export const Tarefa = z.object({
   usuarios: z.array(z.object({ id: Id, nome: z.string() })),
   execucoes: z.array(ExecucaoSimulada),
 });
+export type Tarefa = z.infer<typeof Tarefa>;

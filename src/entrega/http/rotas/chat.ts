@@ -7,7 +7,6 @@ import { ErroDeInexistente } from "../../../nucleo/erros.ts";
 import {
   abortarDemanda,
   abrirChatDemanda,
-  type CabecalhoDemanda,
   type ChatDemanda,
   enviarDemanda,
   exportarHistoricoDemanda,
@@ -16,13 +15,6 @@ import {
 import { DadosDoChatDemanda as RespostaDoChat, NovaMensagemDoChat, RespostaDoDialogo } from "../../contrato/chat.ts";
 import type { Rota } from "../rotas.ts";
 import { abrirFluxoSse } from "../sse.ts";
-
-// shortcut: o cliente web ainda importa este tipo daqui; sai quando o Histórico passar a importar `entrega/contrato/chat.ts`.
-/** Uma entrada do JSONL do pi; o prompt montado pela Fabriquinha (F4 §6.3) vem com `fabriquinha`. */
-type Entrada = Record<string, unknown> & { fabriquinha?: true };
-
-/** O chat de uma sessão de ticket da demanda: o cabeçalho com `origem: "demanda"` e a conversa. */
-export type DadosDoChatDemanda = CabecalhoDemanda & { conversa: Entrada[] };
 
 /** O erro da sessão que não é de nenhuma demanda. */
 const naoExiste = (sessao: string): ErroDeInexistente =>
