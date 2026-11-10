@@ -27,7 +27,8 @@ export const EspacoDeTrabalho = z.object({
 
 export type EspacoDeTrabalho = z.infer<typeof EspacoDeTrabalho>;
 
-const pastaDaDemanda = (raiz: string, projeto: string, demanda: string): string =>
+/** A pasta das worktrees da demanda: a do Espaço da demanda e as das rodadas dela moram dentro. */
+export const pastaDaDemanda = (raiz: string, projeto: string, demanda: string): string =>
   resolve(raiz, "worktrees", Slug.parse(projeto), DemandaId.parse(demanda));
 
 /** O Espaço da demanda: parte da base do projeto. */

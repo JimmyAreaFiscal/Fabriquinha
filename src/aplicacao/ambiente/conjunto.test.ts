@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,11 @@ import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_am
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
+// O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
+const dirDoPiDoAuditorDoTeste = join(base, "pi-do-auditor");
+mkdirSync(dirDoPiDoAuditorDoTeste);
+writeFileSync(join(dirDoPiDoAuditorDoTeste, "auth.json"), "{}");
+process.env.PI_CODING_AGENT_DIR = dirDoPiDoAuditorDoTeste;
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
@@ -62,6 +67,16 @@ test("alocar sem livre cria o container com os limites da configuração e grava
   assert.equal(container.memoria, 768 * 1048576);
   assert.equal(container.cpus, 1.5);
   assert.equal(container.rotulos["fabriquinha.ambiente"], ambiente.id);
+});
+
+test("alocar cria o container com a pasta da demanda do Espaço, o .git do projeto e as sessões montados", async () => {
+  const { docker, conjunto } = cenario();
+  await conjunto.alocar(espacoB, projeto);
+  const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0]);
+  assert.ok(origens.includes(join(base, "worktrees", "loja", "I-1")), "a pasta da demanda");
+  assert.ok(origens.includes(join(base, ".git")), "o .git do projeto");
+  assert.ok(origens.includes(join(base, "sessoes")), "as sessões");
+  assert.ok(!origens.includes(espacoB.pasta), "a worktree do Espaço não é montada: o git do container a cria");
 });
 
 test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async () => {

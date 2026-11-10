@@ -121,9 +121,12 @@ export function adicionarProjeto(c: { banco: DatabaseSync; dir: string }, nome: 
   return { repo, bare };
 }
 
-/** Cenário novo numa raiz temporária própria (banco, repositórios e execuções), removida (com o banco fechado) quando o teste `t` termina (CA-3). */
-export function criarCenario(t: TestContext, projeto = "loja"): Cenario {
-  const { raiz, banco, fechar } = abrirBancoTemporario();
+/**
+ * Cenário novo numa raiz temporária própria (banco, repositórios e execuções), removida (com o banco fechado) quando o
+ * teste `t` termina (CA-3). `raizExistente` é a pasta já criada que o cenário usa no lugar de uma nova no tmp.
+ */
+export function criarCenario(t: TestContext, projeto = "loja", raizExistente?: string): Cenario {
+  const { raiz, banco, fechar } = abrirBancoTemporario(raizExistente);
   t.after(fechar);
   const dir = realpathSync(raiz);
   const { repo, bare } = adicionarProjeto({ banco, dir }, projeto);

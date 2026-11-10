@@ -69,7 +69,7 @@ test("criar liga o container à rede do host pelo host-gateway, mesmo sem montag
   assert.deepEqual([container?.hospedeiros, container?.montagens], [["host.docker.internal:host-gateway"], []]);
 });
 
-test("criar monta exatamente a worktree, o .git, as sessões, a execução, o pacote (ro) e o dir do pi com o auth.json", async () => {
+test("criar monta exatamente a pasta da demanda, o .git, as sessões, a execução, o pacote (ro) e o dir do pi com o auth.json", async () => {
   const raiz = join(base, "fabriquinha-raiz");
   const authJson = join(base, "pi-do-usuario", "auth.json");
   mkdirSync(join(base, "pi-do-usuario"));
@@ -77,10 +77,10 @@ test("criar monta exatamente a worktree, o .git, as sessões, a execução, o pa
   writeFileSync(join(base, "pi-do-usuario", "trust.json"), "{}");
   mkdirSync(raiz);
   writeFileSync(join(raiz, "fabriquinha.db"), "banco");
-  const worktree = join(raiz, "worktrees", "projeto", "I-1", "rodadas", "1");
+  const pastaDaDemanda = join(raiz, "worktrees", "projeto", "I-1");
   const pacote = join(base, "pacote-pi");
   const criado = await gerador.criar("node:22-alpine", limites, {
-    worktree,
+    pastaDaDemanda,
     raiz_git: raizGit,
     raiz,
     execucao: 7,
@@ -97,7 +97,7 @@ test("criar monta exatamente a worktree, o .git, as sessões, a execução, o pa
     });
   const mesmoCaminho = (caminho: string, modo: string) => ({ origem: caminho, destino: caminho, modo });
   assert.deepEqual(montagens, [
-    mesmoCaminho(worktree, "rw"),
+    mesmoCaminho(pastaDaDemanda, "rw"),
     mesmoCaminho(join(raizGit, ".git"), "rw"),
     mesmoCaminho(join(raiz, "sessoes"), "rw"),
     mesmoCaminho(join(raiz, "execucoes", "E-7"), "rw"),
@@ -114,11 +114,31 @@ test("criar monta exatamente a worktree, o .git, as sessões, a execução, o pa
   assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
 });
 
+test("criar sem a execução (o container nasce antes do processo) não monta a pasta de nenhuma execução", async () => {
+  const raiz = join(base, "raiz-sem-execucao");
+  const authJson = join(base, "auth-sem-execucao.json");
+  writeFileSync(authJson, "{}");
+  const criado = await gerador.criar("node:22-alpine", limites, {
+    pastaDaDemanda: join(raiz, "worktrees", "projeto", "I-2"),
+    raiz_git: raizGit,
+    raiz,
+    pacote: join(base, "pacote-pi"),
+    auth_json: authJson,
+  });
+  const destinos = docker
+    .containers()
+    .find((c) => c.id === criado.container_id)
+    ?.montagens.map((montagem) => montagem.split(":")[1]);
+  assert.equal(destinos?.length, 5);
+  assert.ok(!destinos.some((destino) => destino?.includes("execucoes")));
+  assert.ok(!readdirSync(raiz).includes("execucoes"));
+});
+
 test("criar com montagens sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {
   const antes = docker.registro().length;
   await assert.rejects(
     gerador.criar("node:22-alpine", limites, {
-      worktree: join(base, "w"),
+      pastaDaDemanda: join(base, "w"),
       raiz_git: raizGit,
       raiz: join(base, "fabriquinha-raiz"),
       execucao: 8,

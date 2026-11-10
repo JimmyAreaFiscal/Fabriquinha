@@ -77,7 +77,7 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
-    banco.close();
+    if (banco.isOpen) banco.close(); // o teste pode já ter fechado o banco do cenário dele
   });
   const token = new URL(readFileSync(join(raizDo(banco), "web.url"), "utf8")).searchParams.get("token");
 
