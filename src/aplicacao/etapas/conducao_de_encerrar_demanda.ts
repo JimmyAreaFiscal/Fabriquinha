@@ -159,7 +159,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     };
     let leitura;
     try {
-      leitura = await lerPR(projeto, String(pr.numero));
+      leitura = await lerPR(projeto, String(pr.numero), relogio);
     } catch (erro) {
       devolverParaEspera(); // a leitura que falha não é decisão do humano: o próximo ciclo relê
       throw erro;

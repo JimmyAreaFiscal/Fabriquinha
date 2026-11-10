@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
@@ -76,6 +77,7 @@ interface Conducao {
   sessao: TrabalhoGerenciado;
   execucao: ProcessoDoTrabalho;
   opcoes: OpcoesExecucaoDemanda;
+  relogio: Relogio;
 }
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
@@ -195,13 +197,13 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   if (condutor.foiInterrompido(execucao.id)) falha = falhaInterrompidaPeloAuditor;
   else if (condutor.emParada()) falha = falhaPorServicoReiniciado;
   condutor.deixarDeAcompanhar(execucao.id);
-  encerrarProcessoDoTicket(c, falha !== undefined, log);
+  encerrarProcessoDoTicket(c, falha !== undefined, log, c.relogio);
   try {
     await opcoes.fechar?.(c.banco, c.ref, { falha });
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {
-      falharTicketDemanda(c.banco, c.ref, falhaQueExigeOAuditor(`fechamento falhou: ${mensagem(error_)}`));
+      falharTicketDemanda(c.banco, c.ref, falhaQueExigeOAuditor(`fechamento falhou: ${mensagem(error_)}`), c.relogio);
     } catch (erroFalha) {
       anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
     }
@@ -220,6 +222,7 @@ export function iniciarExecucaoDemanda(
   banco: DatabaseSync,
   ref: TicketRef,
   opcoes: OpcoesExecucaoDemanda,
+  relogio: Relogio = relogioDoSistema,
 ): { id: string; fim: Promise<FalhaDaTentativa | undefined> } {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = encontrado(
@@ -236,7 +239,7 @@ export function iniciarExecucaoDemanda(
   const abrir = (trabalho_id: string): ProcessoDoTrabalho => ({
     id: randomUUID(),
     trabalho_id,
-    inicio: new Date().toISOString(),
+    inicio: relogio.agora(),
     falha: false,
     configuracao_agente: configuracaoAgente,
   });
@@ -268,7 +271,7 @@ export function iniciarExecucaoDemanda(
     }),
   );
   const fim = condutor.acompanhar(execucao.id, () =>
-    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }),
+    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes, relogio }),
   );
   return { id: execucao.id, fim };
 }
@@ -277,7 +280,11 @@ export function iniciarExecucaoDemanda(
  * Interrompe a execução aberta do ticket. Com condutor vivo, o SIGTERM no grupo faz o condutor gravar a falha; órfã
  * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
  */
-export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef): void {
+export function interromperExecucaoDemanda(
+  banco: DatabaseSync,
+  ref: TicketRef,
+  relogio: Relogio = relogioDoSistema,
+): void {
   const { execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.fim == null),
@@ -290,5 +297,5 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
     ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
   }
-  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar);
+  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar, relogio);
 }
