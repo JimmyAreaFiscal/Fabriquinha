@@ -92,9 +92,11 @@ async function verificarCheckout(
   const refs = await exigirGitNoAmbiente(ambiente, repo, "for-each-ref", "--format=%(refname)", ref);
   const existe = refs.split("\n").includes(ref);
   if (!existe && refs !== "") recusar(`outra branch ocupa o prefixo ${ref}`);
-  const posse = (
-    await exigirGitNoAmbiente(ambiente, repo, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`)
-  ).replace(/\n$/, "");
+  // A posse mora na config do clone, que o container vê congelada (montagem de arquivo) e só em leitura.
+  const posse = (await exigirGit(repo, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`)).replace(
+    /\n$/,
+    "",
+  );
   if ((existe || posse !== "") && posse !== dono) recusar(`a branch ${branch} não pertence a esta demanda/rodada`);
   if (obrigatorio && (!existe || !existsSync(caminho))) recusar(`worktree obrigatória ausente em ${caminho}`);
   if (existsSync(caminho)) {
@@ -151,12 +153,14 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
         "origin",
         `+refs/heads/${projeto.branch_base}:refs/remotes/origin/${projeto.branch_base}`,
       );
-      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "config", chave, dono);
+      // A config do clone é só leitura no container: a posse da branch é gravada pelo core.
+      await exigirGit(projeto.raiz_git, "config", chave, dono);
       await exigirGitNoAmbiente(
         ambiente,
         projeto.raiz_git,
         "worktree",
         "add",
+        "--no-track",
         "-b",
         branch,
         caminho,
@@ -264,14 +268,18 @@ export async function garantirWorktreeRodada(
           await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "prune", "--expire", "now");
           await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", caminho, branch);
         } else {
+          await exigirGit(projeto.raiz_git, "config", `branch.${branch}.fabriquinha`, `rodada:${caminho}`);
           await exigirGitNoAmbiente(
             ambiente,
             projeto.raiz_git,
-            "config",
-            `branch.${branch}.fabriquinha`,
-            `rodada:${caminho}`,
+            "worktree",
+            "add",
+            "--no-track",
+            "-b",
+            branch,
+            caminho,
+            sha,
           );
-          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", "-b", branch, caminho, sha);
         }
       }
       return marcaPreparacao(ambiente, caminho);

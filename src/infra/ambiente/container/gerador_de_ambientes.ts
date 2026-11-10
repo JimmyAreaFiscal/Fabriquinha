@@ -89,13 +89,17 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
   const dirDoPi = dirDoPiDoAmbiente(raiz, idDoAmbiente);
   const dirDasSessoes = join(raiz, "sessoes");
   const dirDasExecucoes = join(raiz, "execucoes");
-  for (const dir of [pastaDasWorktreesDoProjeto, dirDoPi, dirDasSessoes, dirDasExecucoes])
+  const hooksDoClone = join(raiz_git, ".git", "hooks");
+  for (const dir of [pastaDasWorktreesDoProjeto, dirDoPi, dirDasSessoes, dirDasExecucoes, hooksDoClone])
     mkdirSync(dir, { recursive: true });
   copyFileSync(auth_json, join(dirDoPi, "auth.json"));
   chmodSync(join(dirDoPi, "auth.json"), 0o600);
   const montagensComModo: [string, "rw" | "ro"][] = [
     [pastaDasWorktreesDoProjeto, "rw"],
     [join(raiz_git, ".git"), "rw"],
+    // O git do usuário executa o que está na config (`core.fsmonitor`, `core.hooksPath`) e nos hooks do clone.
+    [join(raiz_git, ".git", "config"), "ro"],
+    [hooksDoClone, "ro"],
     [dirDasSessoes, "rw"],
     [dirDasExecucoes, "rw"],
     [pacote, "ro"],
