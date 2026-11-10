@@ -20,6 +20,9 @@ import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-aprovacao-")));
@@ -109,6 +112,9 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
     tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: [],
     evidencias: semPR
       ? []
@@ -135,8 +141,8 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
           },
         ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log);
   const commitDaRodada = commitarArquivo(rodada, "a.txt", "a\n");
   rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
   hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });

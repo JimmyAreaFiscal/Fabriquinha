@@ -12,7 +12,7 @@ import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
-import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
 import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/trabalho/condutor.ts";
 import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
@@ -45,7 +45,7 @@ const correcao = (id: string, titulo: string) => ({
   rodada_id: 1,
   titulo,
   descricao: "descrição da correção",
-  caminhos: [],
+  arquivos_previstos: [],
 });
 
 /** Abre na hospedagem o PR que o encerramento adotará pela marca (o `problema` entra no estado dele). */
@@ -149,6 +149,21 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
     tipo: "agente",
     trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id,
   });
+
+  // I-280: a reprovação grava a versão 2 do Plano (a 1 é o aprovado), do Agente revisor, com os tickets corretivos criados.
+  assert.deepEqual(
+    ag.versoes_plano.map((v) => v.numero),
+    [1, 2],
+  );
+  const versaoDaCorrecao = ag.versoes_plano[1];
+  assert.ok(versaoDaCorrecao);
+  assert.equal(versaoDaCorrecao.origem, "revisao_rodada");
+  assert.deepEqual(versaoDaCorrecao.autor, corretivo.criado_por);
+  const { tickets_novos } = versaoDaCorrecao.dados as { tickets_novos: { titulo: string }[] };
+  assert.deepEqual(
+    tickets_novos.map((t) => t.titulo),
+    [corretivo.titulo],
+  );
 
   // A correção executa pelo agendador, como qualquer implementação, e a rodada volta à revisão com um revisor novo.
   pi.roteirizar(agenteQuePergunta);
@@ -357,7 +372,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
     ["reprovado", "o PR mistura duas mudanças", undefined],
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
-  assert.equal(despacharDemandas(humana.banco, humana.config, despacho()).length, 0);
+  assert.equal(cicloDoDespacho(humana.banco, humana.config, despacho()).length, 0);
 
   // A conversa só registra correções: o que ela commitou é desfeito ao concluir, e nada é implementado nem integrado.
   const { ticket_id } = atual(humana, idHumana, "ajustar_resultado");

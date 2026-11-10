@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
+import { after, mock, test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { abrir, escrever, migrar, novoId } from "./banco.ts";
 import { MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
@@ -336,6 +336,34 @@ test("escrever() aninhada: erro na externa desfaz as duas", () => {
   assert.equal(banco.isTransaction, false);
   assert.equal(valor(banco, "SELECT count(*) FROM sequencia"), 0);
   banco.close();
+});
+
+test("escrever() aninhada: cada conexão conta os próprios SAVEPOINTs, sem confirmar nem desfazer os da outra", () => {
+  const raiz = raizTemp();
+  const conexaoA = abrir(raiz);
+  const conexaoB = abrir(raiz);
+  const conexaoC = abrir(raiz);
+  conexaoB.exec("PRAGMA busy_timeout = 0");
+  const comandosDaConexaoB = mock.method(conexaoB, "exec");
+  escrever(conexaoA, () => {
+    novoId(conexaoA, "demanda");
+    escrever(conexaoA, () => {
+      // A segura o lock de escrita num SAVEPOINT aberto; a escrita aninhada de B falha no nível interno.
+      conexaoB.exec("BEGIN");
+      escrever(conexaoB, () => {
+        assert.throws(() => escrever(conexaoB, () => novoId(conexaoB, "demanda")), /database is locked/);
+      });
+      conexaoB.exec("ROLLBACK");
+    });
+  });
+  const savepointsAbertosPorB = comandosDaConexaoB.mock.calls
+    .map((chamada) => chamada.arguments[0])
+    .filter((comando) => comando.startsWith("SAVEPOINT"));
+  assert.deepEqual(savepointsAbertosPorB, ["SAVEPOINT sp_1", "SAVEPOINT sp_2"]);
+  assert.equal(valor(conexaoC, "SELECT valor FROM sequencia WHERE nome = 'demanda'"), 1);
+  conexaoA.close();
+  conexaoB.close();
+  conexaoC.close();
 });
 
 test("escrever() desfaz e propaga quando o próprio COMMIT falha", () => {

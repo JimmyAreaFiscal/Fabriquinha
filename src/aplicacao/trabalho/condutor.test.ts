@@ -13,6 +13,7 @@ import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { executar } from "../../infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "../auditor_automatico.ts";
+import { type Relogio, relogioFixo } from "../../nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
 import { atividadeDo, condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA, type PedidoDeProcesso } from "./condutor.ts";
 
@@ -94,6 +95,7 @@ function rodar(
   limiteMin = 1,
   triarPergunta?: PedidoDeProcesso["triarPergunta"],
   silencioMaximoDoModeloMin?: number,
+  relogio?: Relogio,
 ) {
   const sessao = `s-${String(++n)}`;
   const dir = mkdtempSync(join(base, "exec-"));
@@ -115,20 +117,23 @@ function rodar(
       .map((entrada) => `${String(entrada.comando?.value)}\n`)
       .join("");
   let grupoDoPi = 0;
-  const fim = condutor.iniciar({
-    execucao: { id: sessao, sessaoPi: sessao, modo },
-    args: [],
-    cwd: dir,
-    env: { ...process.env, FABRIQUINHA_ROOT: dir },
-    log: join(dir, "log"),
-    prompt: "trabalhe",
-    limiteMin,
-    aoLancar: (grupo) => {
-      grupoDoPi = grupo;
+  const fim = condutor.iniciar(
+    {
+      execucao: { id: sessao, sessaoPi: sessao, modo },
+      args: [],
+      cwd: dir,
+      env: { ...process.env, FABRIQUINHA_ROOT: dir },
+      log: join(dir, "log"),
+      prompt: "trabalhe",
+      limiteMin,
+      aoLancar: (grupo) => {
+        grupoDoPi = grupo;
+      },
+      triarPergunta,
+      silencioMaximoDoModeloMin,
     },
-    triarPergunta,
-    silencioMaximoDoModeloMin,
-  });
+    relogio,
+  );
   return { sessao, fim, dir, respostas, grupoDoPi };
 }
 
@@ -179,6 +184,18 @@ test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com temp
     condutor.responder(sessao, "s1", { value: "a" });
   }, ErroDeRegra);
   assert.equal(await fim, undefined);
+});
+
+test("o diálogo e a situação da sessão usam o instante do relógio recebido; o tempo limite soma ao instante", async () => {
+  const instante = "2026-01-02T03:04:05.000Z";
+  const { sessao, fim } = rodar([{ eventos: dialogos }], "interativo", 1, undefined, undefined, relogioFixo(instante));
+  await ate(() => (condutor.situacao(sessao)?.dialogos.length ?? 0) >= 1, "o diálogo");
+  assert.equal(condutor.situacao(sessao)?.desde, instante);
+  const confirmar = condutor.situacao(sessao)?.dialogos.find((d) => d.id === "c1");
+  assert.equal(confirmar?.em, instante);
+  assert.equal(confirmar.expiraEm, "2026-01-02T03:04:05.150Z");
+  condutor.encerrar(sessao);
+  await fim;
 });
 
 test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a falha de abortada pelo Auditor", async () => {
@@ -522,4 +539,13 @@ test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chego
   } finally {
     fechar();
   }
+});
+
+test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que falhou", async () => {
+  const pi =
+    (codigo: number): typeof executar =>
+    () =>
+      Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
+  assert.deepEqual(await condutor.consultar("pergunta", undefined, 1000, pi(0)), { saida: "resposta", uso: [] });
+  assert.equal(await condutor.consultar("pergunta", undefined, 1000, pi(1)), undefined);
 });

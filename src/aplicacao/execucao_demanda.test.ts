@@ -1,9 +1,10 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
@@ -20,16 +21,27 @@ import {
   type FalhaDaTentativa,
   falhaInterrompidaPeloAuditor,
 } from "../nucleo/tentativa.ts";
+import { anotar, pastasDoProcesso } from "../infra/registro.ts";
+import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
+import {
+  carregarTrabalhosDoTicket,
+  comTrabalhosDoTicket,
+  processoVivoDoToken,
+} from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+import { montarAmbienteDoServico } from "./espaco/ambiente_do_servico.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const MODELO_DA_ETAPA = { provedor: "anthropic", nome: "claude-etapa" };
@@ -121,10 +133,13 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  if (!semWorktree) await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
+  if (!semWorktree) await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir).roteirizar([PASSO_PI]);
   return {
     c,
@@ -137,6 +152,14 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 }
 
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
+/** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
+const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
+  new ConducaoDeImplementar({
+    banco,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  }).conduzir(Endereco.doTicket("I-1", ticket_id));
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {
@@ -347,6 +370,14 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
     },
   ]);
   assert.ok(existsSync(join(c.raiz, "execucoes", `E-${id}`, "prompt.md")));
+});
+
+test("o início e o fim da execução vêm do relógio", async () => {
+  const { banco, sessoes } = await cenario();
+  const instante = "2031-05-06T07:08:09.000Z";
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }, relogioFixo(instante)).fim;
+  const [execucao] = sessoes(1).execucoes;
+  assert.deepEqual([execucao?.inicio, execucao?.fim], [instante, instante]);
 });
 
 test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async () => {
@@ -573,8 +604,7 @@ const assertTicket = (banco: DatabaseSync, ticket_id: number) => {
 test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem devolução", async () => {
   const { banco, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
-  emExecucao(banco, 1);
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  await conduzirImplementar(banco, 1);
   const ag = carregarDemanda(banco, "I-1");
   const t = ag.tickets.find((x) => x.ticket_id === 1);
   assert.equal(t?.estado, "falhou");
@@ -688,12 +718,12 @@ test("a varredura da base roda só quando a worktree da demanda busca a base, e 
   const nova = await cenario({ semWorktree: true });
   nova.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
   await iniciarExecucaoDemanda(nova.banco, ref(3), { limiteMin: 1 }).fim;
-  assert.match(logDaExecucao(nova.c.raiz), /varrerBase falhou: .*varredura_base/);
+  assert.match(logDaExecucao(nova.c.raiz), /varrerCommitsHumanos falhou: .*varredura_base/);
   assert.equal(nova.registro()[0]?.evento, "inicio");
   const existente = await cenario();
   existente.banco.exec("DROP TABLE varredura_base");
   await iniciarExecucaoDemanda(existente.banco, ref(3), { limiteMin: 1 }).fim;
-  assert.doesNotMatch(logDaExecucao(existente.c.raiz), /varrerBase falhou/);
+  assert.doesNotMatch(logDaExecucao(existente.c.raiz), /varrerCommitsHumanos falhou/);
 });
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
@@ -731,8 +761,7 @@ async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarTraba
 test("I-246 CA-1: aguardarTodos espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   const grupo = await grupoDoPi(sessoes, 1);
   const espera = condutor.aguardarTodos(10_000);
   process.kill(-grupo, "SIGTERM"); // como o cgroup do systemd
@@ -741,16 +770,15 @@ test("I-246 CA-1: aguardarTodos espera o condutor gravar o fim, e o ticket falha
   assert.notEqual(execucao?.fim, null);
   assert.equal(execucao?.falha, true);
   assert.equal("erro" in execucao, false);
+  await fim;
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
-  await fim;
 });
 
 test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serviço reiniciado'", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   process.kill(-(await grupoDoPi(sessoes, 1)), "SIGTERM");
   await fim;
   assert.equal(Object.hasOwn(sessoes(1).execucoes[0] ?? {}, "erro"), false);
@@ -760,10 +788,10 @@ test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serv
 test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  emExecucao(banco, 1);
-  iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   const grupo = await grupoDoPi(sessoes, 1);
   await condutor.aguardarTodos(50);
+  await fim;
   const [execucao] = sessoes(1).execucoes;
   assert.notEqual(execucao?.fim, null);
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
@@ -783,8 +811,7 @@ test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: agu
 
 test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticket falha com 'serviço reiniciado'", async () => {
   const { banco, sessoes, registro } = await cenario({ preparacao: "sleep 1" });
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   await new Promise((r) => setTimeout(r, 300));
   condutor.marcarParada();
   await fim;
@@ -800,8 +827,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   banco
     .prepare("UPDATE linguagem_projeto SET comando_teste = ? WHERE projeto = 'loja'")
     .run(`sh -c 'echo $$ > ${arquivoComPidDaColeta}; exec sleep 31'`);
-  emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const fim = conduzirImplementar(banco, 1);
   while (!existsSync(arquivoComPidDaColeta) || readFileSync(arquivoComPidDaColeta, "utf8").trim() === "")
     await dormir(50); // a coleta está nos testes
   condutor.marcarParada();
@@ -857,4 +883,81 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
   assert.match(prompt, /I-1\.T9 \(revisar_rodada\), reprovado: o teste de X quebrou Y/);
   assert.match(prompt, /Pergunta: Como confiro o Sonar\?\n\s+Resposta: fica com o Auditor no gate do PR/);
   assert.equal(prompt.match(/Pergunta:/g)?.length, 1);
+});
+
+test("I-287: o pi recebe o token do processo e a URL da API; o token vale até o fim e nunca vai a log, prompt, evidência ou saída", async () => {
+  const { c, banco, piFalso, sessoes } = await cenario();
+  condutor.urlDaApi = "http://127.0.0.1:9";
+  // Escrita atômica: o laço abaixo só vê o arquivo já completo, nunca o vazio que o `>` cria antes do printenv.
+  piFalso.roteirizar([
+    {
+      ...PASSO_PI,
+      shell: "printenv > ambiente-do-pi.tmp && mv ambiente-do-pi.tmp ambiente-do-pi.txt",
+      termina: "nunca",
+    },
+  ]);
+  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.05 });
+  const arquivoDoAmbiente = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2", "ambiente-do-pi.txt");
+  while (!existsSync(arquivoDoAmbiente)) await dormir(20);
+  const variaveis = new Map(
+    readFileSync(arquivoDoAmbiente, "utf8")
+      .split("\n")
+      .map((linha) => [linha.slice(0, linha.indexOf("=")), linha.slice(linha.indexOf("=") + 1)] as const),
+  );
+  const token = variaveis.get("FABRIQUINHA_TOKEN") ?? "";
+  assert.match(token, /^[0-9a-f]{64}$/);
+  assert.equal(variaveis.get("FABRIQUINHA_API"), "http://127.0.0.1:9");
+  assert.equal(variaveis.get("FABRIQUINHA_EXECUCAO"), undefined);
+  assert.equal(variaveis.get("FABRIQUINHA_ROOT"), undefined);
+  assert.equal(processoVivoDoToken(banco, token), id);
+  assert.equal(
+    (banco.prepare("SELECT hash_do_token FROM processo_do_trabalho WHERE id = ?").get(id) as { hash_do_token: string })
+      .hash_do_token,
+    createHash("sha256").update(token).digest("hex"),
+  );
+
+  await fim;
+  assert.equal(processoVivoDoToken(banco, token), undefined);
+  assert.notEqual(sessoes(1).execucoes[0]?.fim, null);
+
+  const { dir } = pastasDoProcesso(c.raiz, id);
+  const arquivosGravados = readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .map((nome) => join(dir, nome))
+    .filter((caminho) => statSync(caminho).isFile());
+  assert.ok(arquivosGravados.some((caminho) => basename(caminho) === "prompt.md"));
+  assert.ok(arquivosGravados.some((caminho) => basename(caminho) === "log"));
+  for (const caminho of arquivosGravados) assert.ok(!readFileSync(caminho, "utf8").includes(token), caminho);
+  const gravadoNoBanco = JSON.stringify([
+    banco.prepare("SELECT * FROM evidencia_demanda").all(),
+    banco.prepare("SELECT * FROM processo_do_trabalho").all(),
+  ]);
+  assert.ok(!gravadoNoBanco.includes(token));
+  condutor.urlDaApi = undefined;
+});
+
+test("I-287: o prompt leva worktree, saída e anexos pelo caminho que o Ambiente dá, e não o caminho do banco", async () => {
+  const { c, banco } = await cenario();
+  banco
+    .prepare(
+      "INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('manual', 'I-1', 'desenho_solucao', ?, ?)",
+    )
+    .run(JSON.stringify({ resumo: "r", arquivosPrevistos: [], foraDeEscopo: [] }), em);
+  const sha = "bb".repeat(32);
+  banco.prepare("INSERT INTO arquivo_evidencia VALUES ('manual', 1, 'manual.txt', ?, 'text/plain', 3)").run(sha);
+  // Um caminho diferente na forma e igual no disco: o pi falso ainda lança na worktree.
+  const noAmbiente = (caminhoNoHost: string): string =>
+    caminhoNoHost.replace(c.raiz, join(c.raiz, "..", basename(c.raiz)));
+  montarAmbienteDoServico(Object.assign(new AmbienteHostLocal(), { caminhoNoAmbiente: noAmbiente }));
+  try {
+    const { id, fim } = iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 });
+    await fim;
+    const prompt = readFileSync(join(pastasDoProcesso(c.raiz, id).dir, "prompt.md"), "utf8");
+    const worktree = join(c.raiz, "worktrees", "loja", "I-1", "demanda");
+    assert.ok(prompt.includes(`Worktree (diretório de trabalho): ${noAmbiente(worktree)}`));
+    assert.ok(prompt.includes(`: ${noAmbiente(join(pastasDoProcesso(c.raiz, id).dir, "saida"))}`));
+    assert.ok(prompt.includes(`\`${noAmbiente(join(c.raiz, "arquivos", sha.slice(0, 2), sha))}\``));
+    assert.ok(!prompt.includes("fabriquinha.db"));
+  } finally {
+    montarAmbienteDoServico(new AmbienteHostLocal());
+  }
 });

@@ -34,7 +34,7 @@ const demandaRegistrada = (): AgregadoDemanda =>
     agora: t0,
   });
 const demandaEnviada = (): AgregadoDemanda => {
-  const comDefinicao = (["criterios_aceite", "desenho_solucao", "custos_realizados"] as const).reduce(
+  const comDefinicao = (["criterios_aceite", "desenho_solucao"] as const).reduce(
     (agregado, tipo) =>
       comEvidencia(
         agregado,
@@ -66,18 +66,27 @@ const demandaEmPlanejamento = (): AgregadoDemanda => {
 const planoDe = (sobrescrito: Record<string, unknown> = {}) => ({
   demanda_id: DEMANDA,
   criterios: ["CA-1"],
+  arquivos_previstos: ["src/b.ts"],
   rodadas: [
-    { demanda_id: DEMANDA, rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+    {
+      demanda_id: DEMANDA,
+      rodada_id: 1,
+      titulo: "r1",
+      e2e: false,
+      criterios: ["CA-1"],
+      arquivos_previstos: ["src/b.ts"],
+    },
     {
       demanda_id: DEMANDA,
       rodada_id: 2,
       titulo: "r2",
       e2e: true,
+      arquivos_previstos: ["src/b.ts"],
       depende: [{ demanda_id: DEMANDA, rodada_id: 1 }],
     },
   ],
   tickets: [
-    { demanda_id: DEMANDA, ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, caminhos: ["src/b.ts"] },
+    { demanda_id: DEMANDA, ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, arquivos_previstos: ["src/b.ts"] },
     {
       demanda_id: DEMANDA,
       ticket_id: 1,
@@ -850,7 +859,14 @@ test("gate_planejamento: aprovar materializa rodadas, tickets renumerados, camin
   const plano = planoDe({
     criterios: ["CA-1", "CA-2"],
     tickets: [
-      { demanda_id: DEMANDA, ticket_id: 5, titulo: "b", descricao: "d", rodada_id: 2, caminhos: ["src/b.ts"] },
+      {
+        demanda_id: DEMANDA,
+        ticket_id: 5,
+        titulo: "b",
+        descricao: "d",
+        rodada_id: 2,
+        arquivos_previstos: ["src/b.ts"],
+      },
       {
         demanda_id: DEMANDA,
         ticket_id: 4,
@@ -906,6 +922,15 @@ test("gate_planejamento: aprovar materializa rodadas, tickets renumerados, camin
   );
   assert.deepEqual(decidido.dependencias_ticket, [{ demanda_id: DEMANDA, ticket_id: 5, depende_ticket_id: 3 }]);
   assert.deepEqual(decidido.caminhos_ticket, [{ demanda_id: DEMANDA, ticket_id: 4, caminho: "src/b.ts" }]);
+  assert.deepEqual(
+    decidido.versoes_plano.map((v) => [v.numero, v.origem, v.autor, v.rodada_id]),
+    [[1, "aprovacao_do_planejamento", FABRIQUINHA, undefined]],
+  );
+  assert.deepEqual(decidido.arquivos_previstos_demanda, [{ demanda_id: DEMANDA, caminho: "src/b.ts" }]);
+  assert.deepEqual(decidido.arquivos_previstos_rodada, [
+    { demanda_id: DEMANDA, rodada_id: 1, caminho: "src/b.ts" },
+    { demanda_id: DEMANDA, rodada_id: 2, caminho: "src/b.ts" },
+  ]);
   assert.equal(decidido.tickets[1]?.estado, "concluido");
   assert.deepEqual(decidido.decisoes.at(-1), {
     demanda_id: DEMANDA,
@@ -1025,6 +1050,10 @@ test("gate_revisao_rodada: reprovar grava o motivo, cria a correção e volta a 
   assert.deepEqual(agregado, agregadoAntes);
   assert.deepEqual(decidido.decisoes[0]?.por, agenteRevisor);
   assert.deepEqual(decidido.tickets.at(-1)?.criado_por, agenteRevisor);
+  assert.deepEqual(
+    decidido.versoes_plano.map((v) => [v.numero, v.origem, v.autor, v.rodada_id]),
+    [[1, "revisao_rodada", agenteRevisor, 1]],
+  );
   assert.deepEqual(
     decidido.rodadas.map((r) => r.estado),
     ["implementar", "implementar"],
@@ -1239,6 +1268,10 @@ test("gate_revisao_demanda: reprovar cria só rodadas novas, preserva as integra
   ]);
   assert.deepEqual(decidido.evidencias, agregado.evidencias);
   assert.deepEqual(decidido.tentativas.at(-1)?.resultado, { tipo: "sucesso" });
+  assert.deepEqual(
+    decidido.versoes_plano.map((v) => [v.numero, v.origem, v.autor, v.rodada_id]),
+    [[1, "revisao_demanda", agenteRevisor, undefined]],
+  );
 });
 
 for (const [rotulo, correcoes] of [

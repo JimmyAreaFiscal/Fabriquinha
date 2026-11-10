@@ -3,6 +3,9 @@
 import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
+import type { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
+import { conjuntoDoServico } from "./ambiente_do_servico.ts";
 import { limparDemanda, pendenciasDoEspaco } from "../../infra/repositorio/limpeza_demanda.ts";
 import { integrarPR } from "../../infra/repositorio/pr.ts";
 import {
@@ -11,10 +14,13 @@ import {
   atualizarWorktreeRodada,
   type ResultadoAtualizacao,
 } from "../../infra/repositorio/worktree-demanda.ts";
-import { exigirGit, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
+import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
 import { anotar } from "../../infra/registro.ts";
 
-type ProjetoDoCiclo = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes" | "hospedagem">;
+type ProjetoDoCiclo = Pick<
+  Projeto,
+  "nome" | "raiz_git" | "branch_base" | "verificacoes" | "hospedagem" | "imagem_do_ambiente"
+>;
 
 /** Onde o ciclo grava: a raiz da Fabriquinha (worktrees e fila git) e o log da operação. */
 interface RegistroDoCiclo {
@@ -26,11 +32,29 @@ abstract class CicloDoEspaco {
   protected readonly espaco: EspacoDeTrabalho;
   protected readonly projeto: ProjetoDoCiclo;
   protected readonly registro: RegistroDoCiclo;
+  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. */
+  readonly ambiente: Ambiente;
+  /** O conjunto de containers; `undefined` com o Ambiente no host local, que nunca chama o docker. */
+  readonly #conjunto: ConjuntoDeAmbientes | undefined;
 
-  constructor(espaco: EspacoDeTrabalho, projeto: ProjetoDoCiclo, registro: RegistroDoCiclo) {
+  constructor(
+    espaco: EspacoDeTrabalho,
+    projeto: ProjetoDoCiclo,
+    registro: RegistroDoCiclo,
+    ambiente: Ambiente,
+    conjunto: ConjuntoDeAmbientes | undefined = conjuntoDoServico(),
+  ) {
     this.espaco = espaco;
     this.projeto = projeto;
     this.registro = registro;
+    this.ambiente = ambiente;
+    this.#conjunto = conjunto;
+  }
+
+  /** Dá ao Espaço o container do Projeto; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
+  protected async alocarContainerSeHouver(): Promise<void> {
+    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
+      await this.#conjunto.alocar(this.espaco, this.projeto);
   }
 
   /**
@@ -45,12 +69,24 @@ abstract class CicloDoEspaco {
 
   /** A falha da varredura nunca falha a operação: só vai para o log. */
   readonly anotarFalhaDaVarredura = (erro: unknown): void => {
-    anotar(this.registro.log, `varrerBase falhou: ${mensagem(erro)}`);
+    anotar(this.registro.log, `varrerCommitsHumanos falhou: ${mensagem(erro)}`);
   };
 
-  /** Remove a worktree e as branches que a Fabriquinha criou para o Espaço; o que falhar volta em `pendentes`. */
-  async limpar(): Promise<{ removidos: string[]; pendentes: string[] }> {
-    return limparDemanda(this.registro.raiz, this.projeto, await pendenciasDoEspaco(this.projeto, this.espaco));
+  /**
+   * Remove a worktree e as branches que a Fabriquinha criou para o Espaço; o que falhar volta em `pendentes`. Dada a
+   * lista de uma passada anterior (`pendentes`), repete só ela: a posse some junto com a branch local, e uma remota que
+   * falhou só é reconhecida pela lista.
+   */
+  async limpar(pendentes?: readonly string[]): Promise<{ removidos: string[]; pendentes: string[] }> {
+    const resultado = await limparDemanda(
+      this.ambiente,
+      this.registro.raiz,
+      this.projeto,
+      pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
+    );
+    // O container só volta ao conjunto quando o Espaço acabou de verdade; com pendência, a repetição do limpar o libera.
+    if (resultado.pendentes.length === 0) await this.#conjunto?.liberar(this.espaco);
+    return resultado;
   }
 }
 
@@ -62,12 +98,19 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
   }
 
   async criar() {
-    const pasta = await garantirWorktreeRodada(this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
+    await this.alocarContainerSeHouver();
+    const pasta = await garantirWorktreeRodada(
+      this.ambiente,
+      this.registro.raiz,
+      this.projeto,
+      this.#rodada,
+      this.registro.log,
+    );
     return { pasta, buscouBase: false };
   }
 
   async atualizarComBase(): Promise<ResultadoAtualizacao> {
-    return atualizarWorktreeRodada(this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
+    return atualizarWorktreeRodada(this.ambiente, this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
   }
 
   /** Integra o PR na hospedagem e avança a ref local da Demanda: o merge da hospedagem é o único commit novo dela. */
@@ -79,7 +122,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
     const { pasta: demanda, branch } = espacoDaDemanda(this.projeto, demanda_id, raiz);
     await naFilaDoProjeto(raiz, this.projeto.nome, async () => {
       await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-      await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
+      await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
     });
   }
 }
@@ -87,7 +130,9 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
 /** PR final, integrado pelo humano na plataforma: a Fabriquinha só cria e limpa. @testes o teste a instancia direto; a produção a cria por `cicloDoEspaco` */
 export class CicloDoEspacoDaDemanda extends CicloDoEspaco {
   async criar() {
+    await this.alocarContainerSeHouver();
     const { caminho, buscouBase } = await garantirWorktreeDemandaDizendoSeBuscouBase(
+      this.ambiente,
       this.registro.raiz,
       this.projeto,
       this.espaco.dono.demanda_id,
@@ -120,8 +165,9 @@ export function cicloDoEspaco(
   espaco: EspacoDeTrabalho,
   projeto: ProjetoDoCiclo,
   registro: RegistroDoCiclo,
+  ambiente: Ambiente,
 ): CicloDoEspaco {
   return espaco.dono.rodada_id === undefined
-    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro)
-    : new CicloDoEspacoDaRodada(espaco, projeto, registro);
+    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente)
+    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente);
 }

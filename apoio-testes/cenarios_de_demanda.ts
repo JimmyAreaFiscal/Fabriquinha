@@ -13,6 +13,9 @@ import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-deman
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
+import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 export const INSTANTE_DO_CENARIO = "2026-01-01T00:00:00.000Z";
 
@@ -93,6 +96,9 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     pull_requests: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
@@ -247,7 +253,10 @@ export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", 
 }
 
 /** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `processo_do_trabalho.id`. */
-export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: string; ticket_id: number }): Ator {
+export function abrirTrabalhoDoAgente(
+  banco: DatabaseSync,
+  ref: { demanda_id: string; ticket_id: number },
+): Extract<Ator, { tipo: "agente" }> {
   const trabalho_id = `e-${ref.demanda_id}-T${String(ref.ticket_id)}`;
   banco
     .prepare(
@@ -321,7 +330,7 @@ export async function cenarioRevisao({ integral = false } = {}) {
     }),
   );
   gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
-  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir);
   return {
     c,

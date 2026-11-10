@@ -1,92 +1,84 @@
 // Rotas da avaliação de melhoria do SDLC (D12, I-240): disparar, listar, abrir, conversar, acompanhar por SSE, abortar e
-// encaminhar um achado como demanda. Cada rota só converte a entrada e chama o serviço; as recusas voltam pelo mapa de erros.
-import type { ServerResponse } from "node:http";
-import type { DatabaseSync } from "node:sqlite";
+// encaminhar um achado como demanda. Cada rota só converte a entrada e chama a consulta ou o caso de uso; as recusas
+// voltam pelo mapa de erros e cada resposta JSON é um tipo de `entrega/contrato/avaliacoes.ts`.
 import { z } from "zod";
 import {
   abortarAvaliacao,
   abrir,
   encaminharAchado,
   enviarNaAvaliacao,
-  estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "../../../aplicacao/avaliacao.ts";
-import { carregarDemanda } from "../../../armazenamento/demandas.ts";
-import { demandasComSessaoNoPeriodo, listarAvaliacoes } from "../../../armazenamento/avaliacoes.ts";
-import { configuracao } from "../../../armazenamento/servico.ts";
-import { IdDoCaminho, type Rota } from "../rotas.ts";
-
-/** A ociosidade e o modelo das avaliações da Configuração de agora. */
-const opcoesDaAvaliacao = (banco: DatabaseSync) => {
-  const { ociosidadeMin, modeloAuditoria } = configuracao(banco);
-  return { ociosidadeMin, modelo: modeloAuditoria };
-};
-
-const Periodo = { projeto: z.string().min(1), de: z.string(), ate: z.string() };
-const NovaAvaliacao = z.strictObject({
-  ...Periodo,
-  demandas: z.array(z.string().min(1)).optional(),
-  pedido: z.string().trim().max(4000).optional(),
-});
-const NovaMensagem = z.strictObject({ texto: z.string().trim().min(1) });
+import { consultarAvaliacoes, consultarDemandasDoPeriodo } from "../../../aplicacao/consultas/avaliacoes.ts";
+import {
+  AchadoEncaminhado,
+  AvaliacaoCriada,
+  AvaliacaoNaLista,
+  DadosDaAvaliacao,
+  DemandaDoPeriodo,
+  NovaAvaliacao,
+  NovaMensagemDaAvaliacao,
+  PeriodoDaAvaliacao,
+} from "../../contrato/avaliacoes.ts";
+import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";
+import { abrirFluxoSse } from "../sse.ts";
 
 const idDe = (params: Record<string, unknown>): string => z.uuid().parse(params.id);
-
-/** SSE: primeiro `{ type: "avaliacao" }` com a avaliação lida logo antes de assinar; depois os eventos do pi e `estado`. */
-function eventos(banco: DatabaseSync, id: string, resposta: ServerResponse): void {
-  const avaliacao = abrir(banco, id);
-  const escrever = (dado: object) => resposta.write(`data: ${JSON.stringify(dado)}\n\n`);
-  resposta.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" });
-  escrever({ type: "avaliacao", ...avaliacao }); // `assinar` é função: o JSON a omite
-  resposta.on("close", avaliacao.assinar(escrever));
-}
 
 export const ROTAS_DAS_AVALIACOES: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/avaliacoes",
+    resposta: AvaliacaoCriada,
     tratar: async ({ banco, corpo }) => {
       const { pedido, ...escopo } = NovaAvaliacao.parse(corpo);
-      return {
-        id: await iniciarAvaliacao(banco, { ...escopo, pedido: pedido || undefined }, opcoesDaAvaliacao(banco)),
-      };
+      return { id: await iniciarAvaliacao(banco, { ...escopo, pedido: pedido || undefined }) };
     },
   },
   {
     metodo: "GET",
     caminho: "/api/avaliacoes",
-    tratar: ({ banco }) => listarAvaliacoes(banco).map((a) => ({ ...a, estado: estadoDaAvaliacao(a.id) })),
+    resposta: z.array(AvaliacaoNaLista),
+    tratar: ({ banco }) => consultarAvaliacoes(banco),
   },
   // Antes de `/:id`, que casa qualquer segmento.
   {
     metodo: "GET",
     caminho: "/api/avaliacoes/demandas",
+    resposta: z.array(DemandaDoPeriodo),
     tratar: ({ banco, query }) => {
-      const { projeto, de, ate } = z.strictObject(Periodo).parse(Object.fromEntries(query));
-      return demandasComSessaoNoPeriodo(banco, projeto, de, ate).map((id) => ({
-        id,
-        titulo: carregarDemanda(banco, id).demanda.titulo,
-      }));
+      const { projeto, de, ate } = PeriodoDaAvaliacao.parse(Object.fromEntries(query));
+      return consultarDemandasDoPeriodo(banco, projeto, de, ate);
     },
   },
-  { metodo: "GET", caminho: "/api/avaliacoes/:id", tratar: ({ banco, params }) => abrir(banco, idDe(params)) },
+  {
+    metodo: "GET",
+    caminho: "/api/avaliacoes/:id",
+    resposta: DadosDaAvaliacao,
+    tratar: ({ banco, params }) => abrir(banco, idDe(params)),
+  },
   {
     metodo: "GET",
     caminho: "/api/avaliacoes/:id/eventos",
+    fluxoSse: true,
+    // Primeiro `{ type: "avaliacao" }` com a avaliação lida logo antes de assinar; depois os eventos do pi e `estado`.
     tratar: ({ banco, params, resposta }) => {
-      eventos(banco, idDe(params), resposta);
+      const { assinar, ...dados } = abrir(banco, idDe(params));
+      abrirFluxoSse(resposta, { type: "avaliacao", ...dados }, assinar);
     },
   },
   {
     metodo: "POST",
     caminho: "/api/avaliacoes/:id/mensagens",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, corpo }) => {
-      enviarNaAvaliacao(banco, idDe(params), NovaMensagem.parse(corpo).texto, opcoesDaAvaliacao(banco));
+      enviarNaAvaliacao(banco, idDe(params), NovaMensagemDaAvaliacao.parse(corpo).texto);
     },
   },
   {
     metodo: "POST",
     caminho: "/api/avaliacoes/:id/abortar",
+    resposta: SemCorpoEmJson,
     tratar: ({ params }) => {
       abortarAvaliacao(idDe(params));
     },
@@ -94,6 +86,7 @@ export const ROTAS_DAS_AVALIACOES: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/avaliacoes/:id/achados/:n/encaminhar",
+    resposta: AchadoEncaminhado,
     tratar: ({ banco, params }) => {
       const ag = encaminharAchado(banco, idDe(params), IdDoCaminho.parse(params.n));
       return { demanda: ag.demanda.id };

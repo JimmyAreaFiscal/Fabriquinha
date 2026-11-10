@@ -80,8 +80,11 @@ export interface PassoPi {
   listaDeModelos?: { tabela?: string; stderr?: string; codigo?: number };
   /** Processo sem RPC: saída crua, término opcionalmente só depois do EOF do stdin. */
   saidaDoProcesso?: { stdout?: string; stderr?: string; codigo?: number; esperaEof?: boolean };
-  /** `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. */
-  chamadaUnica?: { saida?: string | object; codigo?: number };
+  /**
+   * `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. Com `uso`, grava no
+   * `--session-dir` a sessão com a mensagem do assistente (anthropic/claude-opus-5-5), como o pi sem `--no-session`.
+   */
+  chamadaUnica?: { saida?: string | object; codigo?: number; uso?: { input: number; output: number; custo?: number } };
   /** `--mode json`: grava o relatório em $FABRIQUINHA_SAIDA depois do EOF do stdin. */
   simulacao?: {
     /** Objeto (JSON), texto cru (arquivo inválido) ou null (não entrega). Padrão: um relatório de usabilidade. */
@@ -223,7 +226,15 @@ async function executarPiFalso(): Promise<void> {
 
   if (argumentos.includes("-p")) {
     registrar({ evento: "chamada_unica", argv: argumentos, cwd: process.cwd() });
-    const { saida, codigo } = passoDoInicio.chamadaUnica ?? {};
+    const { saida, codigo, uso } = passoDoInicio.chamadaUnica ?? {};
+    if (uso) {
+      const dir = arg("--session-dir");
+      mkdirSync(dir, { recursive: true });
+      const usage = { input: uso.input, output: uso.output, cacheRead: 0, cacheWrite: 0, cost: { total: uso.custo } };
+      const message = { role: "assistant", provider: "anthropic", model: "claude-opus-5-5", usage };
+      const entrada = { type: "message", timestamp: new Date().toISOString(), message };
+      appendFileSync(join(dir, "consulta.jsonl"), `${JSON.stringify(entrada)}\n`);
+    }
     if (saida !== undefined) process.stdout.write(`${typeof saida === "string" ? saida : JSON.stringify(saida)}\n`);
     process.exit(codigo ?? (saida === undefined ? 1 : 0));
   }
@@ -279,9 +290,9 @@ interface Apoio {
   proximoPasso: () => PassoPi;
 }
 
-/** O CLI `fabriquinha` como o agente o chama, com o escopo da execução no ambiente. */
+/** O cliente empacotado `fabriquinha` como o agente o chama, com `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN` no ambiente. */
 const cliFabriquinha = (...args: string[]) =>
-  execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "composicao", "fabriquinha.ts"), ...args]);
+  execFileSync(process.execPath, [join(import.meta.dirname, "..", "pacote-pi", "bin", "fabriquinha"), ...args]);
 
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },
@@ -502,7 +513,7 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
       [
         "## Oportunidades de melhoria\n\nO prompt do desenvolvimento repete o desenho inteiro.",
         "## Custos\n\nO desenvolvimento levou a maior parte do gasto.",
-        "## Qualidade\n\nHouve retrabalho e correções do Auditor no mês.",
+        "## Qualidade\n\nHouve correções do Auditor no mês.",
         "## Melhorias propostas\n\n1. Resumo por ticket no prompt do desenvolvimento.",
       ].join("\n\n"),
     );

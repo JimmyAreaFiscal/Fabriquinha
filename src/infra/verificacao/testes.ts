@@ -11,7 +11,7 @@ import {
   type Falha,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
@@ -25,7 +25,7 @@ export interface EntradaDeTestes {
   aoTerminarAsLinguagens?: () => void;
 }
 
-export class VerificacaoDeTestes extends Verificacao {
+export class VerificacaoDeTestes extends VerificacaoComRegistro {
   readonly tipo = "testes";
   readonly #entrada: EntradaDeTestes;
 
@@ -34,16 +34,17 @@ export class VerificacaoDeTestes extends Verificacao {
     this.#entrada = entrada;
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
     const { projeto, e2e, arquivos, aoTerminarAsLinguagens } = this.#entrada;
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const comandos: Record<string, unknown>[] = [];
       const logs = [];
       const falhas: Falha[] = [];
       for (const { caminho, comando_teste: comando } of projeto.verificacoes.linguagens) {
         const r = await rodar(comando, join(worktree, caminho));
-        comandos.push({ ...linhaDoComando(comando, r), caminho });
-        logs.push({ nome: `teste-${caminho}.log`, texto: r.log });
+        const nomeDoLog = `teste-${caminho}.log`;
+        comandos.push({ ...linhaDoComando(comando, r, nomeDoLog), caminho });
+        logs.push({ nome: nomeDoLog, texto: r.log });
         const falha = classificarComando(comando, r);
         if (falha) falhas.push(falha);
       }

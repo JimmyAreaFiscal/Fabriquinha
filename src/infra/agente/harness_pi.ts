@@ -1,20 +1,28 @@
 // O harness pi (F4 §6.1): o binário, a linha de comando e o ambiente de cada modo, o lançamento em modo RPC com o
 // framing do stdout e a parada do grupo de processos, a consulta sem ferramentas, a lista de modelos e o arquivo da sessão.
-import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
-import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
+import type { LinhaDeUso } from "../../nucleo/uso.ts";
+import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
+import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
 import { PACOTE, type EventoPi } from "./pi.ts";
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
+
+/** O que a consulta devolve: o stdout do pi e o Uso que ela gastou. */
+export interface RespostaDaConsulta {
+  saida: string;
+  uso: LinhaDeUso[];
+}
 
 export interface Lancamento {
   raiz: string;
@@ -67,15 +75,23 @@ function objetoJson(linha: string): EventoPi | undefined {
   }
 }
 
+/** Como a consulta roda o pi: `executar` do host; os testes trocam. */
+export type RodarComando = typeof executar;
+
 interface ProcessoPi {
-  /** O grupo de processos do pi (F4 §7). */
-  readonly pgid: number;
+  /** O grupo de processos do pi no Ambiente (F4 §7). */
+  readonly identificador: IdentificadorDoProcesso;
   /** Um comando RPC, como uma linha JSON no stdin. */
   enviar(comando: object): void;
   /** Resolve com o código de saída quando o pi termina e o stdout fecha, inclusive se ele nem chegou a rodar. */
   readonly saiu: Promise<number | null>;
   /** SIGTERM no grupo, até 10 s para o pi fechar, e SIGKILL no grupo, para não sobrar o que o agente abriu. */
   parar(): Promise<void>;
+}
+
+/** O Uso de todos os arquivos do diretório de sessão (o pi só grava os `.jsonl` dela), sem janela: a consulta é um Trabalho só. */
+function usoDaSessaoEm(dir: string): LinhaDeUso[] {
+  return readdirSync(dir).flatMap((nome) => lerUsoDoPi(readFileSync(join(dir, nome), "utf8"), 0, Infinity));
 }
 
 export class HarnessPi {
@@ -127,84 +143,94 @@ export class HarnessPi {
 
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
-   * pasta do processo) e as variáveis da Fabriquinha. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), não
-   * há `FABRIQUINHA_EXECUCAO`, porque ela não é de nenhum ticket, e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket (`execucao`) fala com a API pelo cliente
+   * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
+   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
+   * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
    */
   ambiente(raiz: string, dir: string, execucao?: number | string): NodeJS.ProcessEnv {
-    const { FABRIQUINHA_EXECUCAO: _herdada, ...semCredenciais } = ambienteSemCredenciais(
-      process.env,
-      join(dir, "vazio"),
-    );
+    const {
+      FABRIQUINHA_EXECUCAO: _execucaoHerdada,
+      FABRIQUINHA_ROOT: _raizHerdada,
+      ...semCredenciais
+    } = ambienteSemCredenciais(process.env, join(dir, "vazio"));
     return execucao === undefined
       ? { ...semCredenciais, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
       : {
           ...semCredenciais,
-          FABRIQUINHA_EXECUCAO: String(execucao),
-          FABRIQUINHA_ROOT: raiz,
+          PATH: [join(PACOTE, "bin"), semCredenciais.PATH].filter(Boolean).join(delimiter),
           FABRIQUINHA_SAIDA: join(dir, "saida"),
         };
   }
 
   /**
-   * Lança o pi num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
+   * Lança o pi, pelo `ambiente`, num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
    * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
    * e o modo RPC precisa do stdin aberto.
    */
   lancar(
+    ambiente: Ambiente,
     args: readonly string[],
     { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
     aoEvento: (evento: EventoPi) => void,
   ): ProcessoPi {
-    const filho = spawn(this.binarioPi(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
-    const pgid = Number(filho.pid);
+    const processo = ambiente.lancar({
+      programa: this.binarioPi(),
+      argumentos: [...args],
+      cwd: ambiente.caminhoNoAmbiente(cwd),
+      env: Object.fromEntries(
+        Object.entries(env).flatMap(([nome, valor]) => (valor === undefined ? [] : [[nome, valor]])),
+      ),
+    });
+    const { identificador } = processo;
     // Escrever no stdin de um pi que já saiu dá EPIPE; sem ouvinte, o erro derrubaria o serviço.
-    const falhou = (erro: Error) => {
+    processo.aoFalhar((erro) => {
       anotar(log, `pi: ${erro.message}`);
-    };
-    filho.on("error", falhou);
-    filho.stdin.on("error", falhou);
-    if (fecharStdin) filho.stdin.end();
-    filho.stderr.on("data", (parte: Buffer) => {
+    });
+    if (fecharStdin) processo.stdin.end();
+    processo.stderr.on("data", (parte: Buffer) => {
       appendFileSync(log, parte);
     });
     const dividir = divisorJsonl();
-    filho.stdout.setEncoding("utf8").on("data", (parte: string) => {
+    processo.stdout.setEncoding("utf8").on("data", (parte: string) => {
       for (const linha of dividir(parte)) {
         const evento = objetoJson(linha);
         if (evento) aoEvento(evento);
         else anotar(log, `pi, fora do protocolo: ${linha}`);
       }
     });
-    const saiu = new Promise<number | null>((resolve) => filho.on("close", resolve));
+    const { saiu } = processo;
     return {
-      pgid,
+      identificador,
       saiu,
       enviar(comando) {
-        filho.stdin.write(JSON.stringify(comando) + "\n");
+        processo.stdin.write(JSON.stringify(comando) + "\n");
       },
       async parar() {
-        sinalNoGrupo(pgid, "SIGTERM");
+        await ambiente.sinalizar(identificador, "SIGTERM");
         await Promise.race([saiu, dormir(GRACA_MS, undefined, { ref: false })]);
-        sinalNoGrupo(pgid, "SIGKILL");
+        await ambiente.sinalizar(identificador, "SIGKILL");
       },
     };
   }
 
   /**
-   * O modo consulta: uma chamada única do pi (`-p`) sem ferramentas, skills, contexto do projeto nem sessão: o modelo
-   * só lê o `prompt`. As extensões ficam, porque provedores como o claude-bridge são extensões do pi. Sem `modelo`,
+   * O modo consulta: uma chamada única do pi (`-p`) sem ferramentas, skills nem contexto do projeto: o modelo só lê o
+   * `prompt`. A sessão do pi vai para um diretório temporário, apagado ao fim, só para o Uso ser lido por `lerUsoDoPi`. As extensões ficam, porque provedores como o claude-bridge são extensões do pi. Sem `modelo`,
    * vale o padrão do pi. O ambiente é o dos outros modos, sem credenciais de hospedagem nem do Sonar.
-   * Devolve o stdout, ou `undefined` se o pi falhou, saiu com código diferente de 0 ou passou de `limiteMs`.
+   * Devolve o stdout e o Uso, ou `undefined` se o pi falhou, saiu com código diferente de 0 ou passou de `limiteMs`.
    */
   async perguntar(
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
-    rodar: typeof executar = executar,
-  ): Promise<string | undefined> {
+    rodar: RodarComando = executar,
+  ): Promise<RespostaDaConsulta | undefined> {
+    const dirDaSessao = mkdtempSync(join(tmpdir(), "fabriquinha-consulta-"));
     const args = [
       "-p",
-      "--no-session",
+      "--session-dir",
+      dirDaSessao,
       "--no-tools",
       "--no-skills",
       "--no-context-files",
@@ -213,13 +239,16 @@ export class HarnessPi {
       ...(modelo ? ["--model", `${modelo.provedor}/${modelo.nome}`] : []),
       prompt,
     ];
+    let resposta: RespostaDaConsulta | undefined;
     try {
       const env = ambienteSemCredenciais(process.env, join(tmpdir(), "fabriquinha-vazio"));
       const r = await rodar(this.binarioPi(), args, { env, limiteMs });
-      return r.codigo === 0 ? r.saida : undefined;
+      if (r.codigo === 0) resposta = { saida: r.saida, uso: usoDaSessaoEm(dirDaSessao) };
     } catch {
-      return undefined;
+      resposta = undefined;
     }
+    rmSync(dirDaSessao, { recursive: true, force: true });
+    return resposta;
   }
 
   /** Os pares da tabela de `pi --list-models [busca]`; a busca do pi é aproximada. */

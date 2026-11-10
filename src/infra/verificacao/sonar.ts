@@ -6,13 +6,14 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { executar } from "../processo.ts";
-import { exigirGit } from "../repositorio/worktree.ts";
+import type { Ambiente } from "../ambiente/ambiente.ts";
+import { exigirGitNoAmbiente } from "../repositorio/worktree.ts";
 import {
   aprovacao,
   type ContextoDaVerificacao,
   type Falha,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 // ponytail: o servidor local do Auditor, o mesmo comando do sonar_gate.py; vira configuração se a Fabriquinha
@@ -138,8 +139,9 @@ async function esperarTarefa(api: Api, host: string, id: string, limiteMs: numbe
 }
 
 /** Alterados contra HEAD: versionados (staged ou não) e não versionados fora do .gitignore. `-z`: o caminho cru. */
-export async function arquivosAlterados(worktree: string): Promise<string[]> {
-  const nomes = async (...args: string[]) => (await exigirGit(worktree, ...args)).split("\0").filter(Boolean);
+export async function arquivosAlterados(ambiente: Ambiente, worktree: string): Promise<string[]> {
+  const nomes = async (...args: string[]) =>
+    (await exigirGitNoAmbiente(ambiente, worktree, ...args)).split("\0").filter(Boolean);
   const versionados = await nomes("diff", "--name-only", "-z", "HEAD");
   const novos = await nomes("ls-files", "--others", "--exclude-standard", "-z");
   return [...new Set([...versionados, ...novos])].sort((a, b) => a.localeCompare(b));
@@ -201,7 +203,7 @@ export async function analisarSonar(
 }
 
 /** Qualquer ErroDeRegra do Sonar (fora do ar, scanner, tempo) é infraestrutura; issue aberta em arquivo alterado, técnica. */
-export class VerificacaoSonar extends Verificacao {
+export class VerificacaoSonar extends VerificacaoComRegistro {
   readonly tipo = "sonar";
   readonly #chaveSonarqube: string;
   readonly #arquivosAlterados: string[];

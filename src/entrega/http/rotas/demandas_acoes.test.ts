@@ -15,7 +15,20 @@ import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-t
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../infra/repositorio/worktree-demanda.ts";
+import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
+import {
+  DecisaoDoPR,
+  DemandaArquivada,
+  DemandaComCanceladas,
+  DemandaEmJson,
+  TicketReaberto,
+} from "../../contrato/demanda.ts";
+import { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
+import { AmbienteHostLocal } from "../../../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-acoes-web-")));
@@ -68,7 +81,7 @@ const plano = {
  * I-206 num dos três gates: `demanda` (aprovação da demanda), `planejamento` (plano submetido) ou `pr` (R2 com o PR 1
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
-async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
+async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true, recusa?: MotivoDeRecusa) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   banco
@@ -118,8 +131,8 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   if (gate === "pr") {
-    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-    const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
+    await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+    const head = commitarArquivo(await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
     resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "em_execucao" };
@@ -176,7 +189,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   return {
     c,
     banco,
-    ...(await servir(banco, comExecutarDemanda)),
+    ...(await servir(banco, comExecutarDemanda, recusa)),
     ag: () => carregarDemanda(banco, DEMANDA),
     estado: (id = DEMANDA) => carregarDemanda(banco, id).demanda.estado,
   };
@@ -191,7 +204,7 @@ test("CA-13: aprovar a demanda avança de estado e a resposta traz a demanda atu
   const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { resultado: "aprovado" } });
   assert.equal(r.status, 200);
-  const { demanda, canceladas } = r.json<{ demanda: { demanda: { estado: string } }; canceladas: string[] }>();
+  const { demanda, canceladas } = DemandaComCanceladas.parse(r.json());
   assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
   assert.equal(estado(), "planejar");
@@ -236,7 +249,7 @@ test("CA-15: reprovar com motivo cancela a I-206 e a I-207 que depende dela", as
     corpo: { resultado: "reprovado", motivo: "escopo grande demais" },
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
+  assert.deepEqual(DemandaComCanceladas.parse(r.json()).canceladas, ["I-206", "I-207"]);
   assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
 });
 
@@ -256,7 +269,7 @@ test("CA-17: aprovar o planejamento avança de estado e cria a worktree de cada 
     corpo: { resultado: "aprovado", nota: 4 },
   });
   assert.equal(r.status, 200);
-  assert.equal(r.json<{ demanda: { estado: string } }>().demanda.estado, "em_execucao");
+  assert.equal(DemandaEmJson.parse(r.json()).demanda.estado, "em_execucao");
   assert.equal(estado(), "em_execucao");
   assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
   // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
@@ -295,10 +308,9 @@ test("CA-20: aprovar o PR com nota 4 conclui a rodada e grava a nota", async () 
   const c = await cenario("pr");
   const r = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "aprovado", nota: 4 } });
   assert.equal(r.status, 200);
-  assert.equal(
-    r.json<{ rodadas: { rodada_id: number; estado: string }[] }>().rodadas.find((x) => x.rodada_id === 2)?.estado,
-    "concluida",
-  );
+  const decisao = DecisaoDoPR.parse(r.json());
+  assert.ok("rodadas" in decisao);
+  assert.equal(decisao.rodadas.find((x) => x.rodada_id === 2)?.estado, "concluida");
   assert.equal(rodada(c)?.estado, "concluida");
   assert.equal(c.ag().decisoes.find((d) => d.resultado === "aprovado")?.nota, 4);
 });
@@ -339,12 +351,12 @@ async function comSessao() {
     corpo: { resultado: "reprovado", motivo: "cobertura abaixo do combinado" },
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(Object.keys(r.json()), ["sessao"]);
+  assert.deepEqual(Object.keys(DecisaoDoPR.parse(r.json())), ["sessao"]);
   const { id: sessao } = c.banco.prepare("SELECT id FROM trabalho_agentico WHERE ticket_id = 9").get() as {
     id: string;
   };
   // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
-  await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
+  await ate(async () => (await chat(c, sessao)).sessao.pendencia?.tipo === "dialogo_do_agente");
   return { ...c, execucao: r.json<{ sessao: string }>().sessao, sessao };
 }
 
@@ -353,7 +365,7 @@ interface Entrada {
   fabriquinha?: true;
 }
 const chat = async ({ pedir }: Cenario, sessao: string) =>
-  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { motivo?: string }; conversa: Entrada[] }>();
+  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { pendencia?: { tipo: string } }; conversa: Entrada[] }>();
 const conversa = async (c: Cenario, sessao: string) => JSON.stringify((await chat(c, sessao)).conversa);
 async function ate(condicao: () => Promise<boolean>): Promise<void> {
   for (let i = 0; i < 500 && !(await condicao()); i++) await dormir(20);
@@ -432,6 +444,7 @@ test("CA-27: concluir a sessão a deixa concluída e ela não aceita mais mensag
   const c = await comSessao();
   const r = await concluirSessao(c, 9);
   assert.equal(r.status, 200);
+  DemandaEmJson.parse(r.json());
   assert.equal(rodada(c)?.estado, "implementar");
   assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "concluido");
   const depois = await c.pedir(`/api/sessoes/${c.sessao}/mensagens`, {
@@ -492,7 +505,7 @@ test("CA-28: reabrir o ticket falho grava a instrução e o ticket volta a abert
   assert.equal(r.status, 200);
   const t = ag().tickets[0];
   assert.deepEqual([t?.estado, t?.instrucao], ["aberto", "trate a lista vazia"]);
-  assert.equal(r.json<{ ticket: { instrucao: string } }>().ticket.instrucao, "trate a lista vazia");
+  assert.equal(TicketReaberto.parse(r.json()).ticket.instrucao, "trate a lista vazia");
 });
 
 test("CA-29: reabrir sem instrução pede a instrução e o ticket continua falho", async () => {
@@ -513,6 +526,23 @@ test("CA-30: Executar agora entrega o ticket ao agendador e responde 204", async
   assert.deepEqual(executados, [{ demanda_id: "I-206", ticket_id: 1 }]);
 });
 
+test("Executar agora recusado pelo Despacho responde 200 com o MotivoDeRecusa", async () => {
+  const recusa = { tipo: "limite_de_paralelismo", em_uso: 3, limite: 3 } as const;
+  const { pedir } = await cenario("demanda", true, recusa);
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.equal(r.status, 200);
+  assert.deepEqual(MotivoDeRecusaEmJson.parse(r.json()), recusa);
+});
+
+test("Executar agora recusado por dependência responde os endereços em texto", async () => {
+  const { pedir } = await cenario("demanda", true, {
+    tipo: "dependencia_pendente",
+    aguarda: [Endereco.doTicket("I-206", 2)],
+  });
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.deepEqual(r.json(), { tipo: "dependencia_pendente", aguarda: ["I-206.T2"] });
+});
+
 test("Executar agora sem o agendador das demandas devolve erro claro", async () => {
   const { pedir } = await cenario("demanda", false);
   const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
@@ -524,7 +554,7 @@ test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
   const { pedir, estado, ag } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
+  assert.deepEqual(DemandaComCanceladas.parse(r.json()).canceladas, ["I-206", "I-207"]);
   assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
   assert.equal(ag().tickets.length, 1);
 });
@@ -552,6 +582,6 @@ test("CA-34 e CA-35: arquivar só a concluída", async () => {
   banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(r.status, 200);
-  assert.equal(r.json<{ demanda: { demanda: { estado: string } } }>().demanda.demanda.estado, "arquivada");
+  assert.equal(DemandaArquivada.parse(r.json()).demanda.demanda.estado, "arquivada");
   assert.equal(estado(), "arquivada");
 });

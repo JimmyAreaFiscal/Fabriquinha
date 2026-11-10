@@ -30,15 +30,16 @@
     "typescript-eslint": "^8.71.1"
   },
   "scripts": {
+    "empacotar-cli-agente": "esbuild src/entrega/cli-agente/principal.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"#!/usr/bin/env node\" --outfile=pacote-pi/bin/fabriquinha --log-level=warning && chmod +x pacote-pi/bin/fabriquinha",
     "types": "tsc",
     "lint": "eslint --max-warnings=0 .",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "test": "mkdir -p coverage && node --disable-warning=ExperimentalWarning --test --experimental-test-coverage --test-coverage-exclude=\"**/*.test.ts\" --test-coverage-exclude=\"e2e/**\" --test-coverage-exclude=\"apoio-testes/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"src/**/*.test.ts\" \"pacote-pi/**/*.test.ts\"",
-    "fitness": "node --disable-warning=ExperimentalWarning --test \"fitness/*.test.ts\" \"apoio-testes/*.test.ts\"",
-    "integracao": "node --disable-warning=ExperimentalWarning --test \"integracao/*.test.ts\"",
+    "test": "npm run empacotar-cli-agente && mkdir -p coverage && node --disable-warning=ExperimentalWarning --test --experimental-test-coverage --test-coverage-exclude=\"**/*.test.ts\" --test-coverage-exclude=\"e2e/**\" --test-coverage-exclude=\"apoio-testes/**\" --test-coverage-exclude=\"pacote-pi/bin/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"src/**/*.test.ts\" \"pacote-pi/**/*.test.ts\"",
+    "fitness": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --test \"fitness/*.test.ts\" \"apoio-testes/*.test.ts\"",
+    "integracao": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --test \"integracao/*.test.ts\"",
     "check": "npm run types && npm run lint && npm run format:check && npm test && npm run fitness",
-    "e2e": "NODE_OPTIONS=--disable-warning=ExperimentalWarning playwright test",
-    "estresse": "node --disable-warning=ExperimentalWarning estresse/estresse.ts"
+    "e2e": "npm run empacotar-cli-agente && NODE_OPTIONS=--disable-warning=ExperimentalWarning playwright test",
+    "estresse": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning estresse/estresse.ts"
   }
 }

@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
 import {
   agendador,
+  ambiente,
+  confirmacaoDeEliminar,
   confirmacaoDeRemover,
   errosDoZod,
-  type EstadoDaConfiguracao,
   formularioDeProjeto,
   menu,
   modeloDasAvaliacoes,
   NOVO,
   pagina,
-  type ProjetoCadastrado,
   projetoInexistente,
   rascunhoDe,
   selecao,
@@ -56,6 +57,7 @@ test("selecao: o item do menu pelo endereço", () => {
   assert.deepEqual(selecao("?projeto="), { tipo: "agendador" });
   assert.deepEqual(selecao("?novo"), { tipo: "novo" });
   assert.deepEqual(selecao("?avaliacoes"), { tipo: "avaliacoes" });
+  assert.deepEqual(selecao("?ambiente"), { tipo: "ambiente" });
 });
 
 test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na raiz", () => {
@@ -94,6 +96,11 @@ test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo
     /<a href="\/config\?avaliacoes" aria-current="page">Avaliações<\/a>/,
   );
   assert.doesNotMatch(menu(ligado, [], { tipo: "avaliacoes" }), /<a href="\/config" aria-current/);
+  assert.match(html, /<a href="\/config\?ambiente">Ambiente<\/a>/);
+  assert.match(
+    menu(ligado, [], { tipo: "ambiente" }),
+    /<a href="\/config\?ambiente" aria-current="page">Ambiente<\/a>/,
+  );
   assert.match(menu(ligado, [], { tipo: "novo" }), /<a class="novo" href="\/config\?novo" aria-current="page">/);
 });
 
@@ -418,5 +425,85 @@ test("página: cabeçalho, menu e painel; projeto do endereço que não existe",
   assert.match(
     projetoInexistente("a<b"),
     /O projeto a&#60;b não está cadastrado\. <a class="link" href="\/config\?novo">/,
+  );
+});
+
+const AMBIENTE: EstadoDoAmbiente = {
+  configuracao: { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 30 },
+  conjunto: [
+    {
+      id: "a-livre",
+      container_id: "c1",
+      imagem: "fabriquinha/loja:abc",
+      estado: "livre",
+      alocado_para: null,
+      criado_em: "2026-11-09T10:00:00.000Z",
+      liberado_em: "2026-11-09T11:30:00.000Z",
+    },
+    {
+      id: "a-sujo",
+      container_id: "c2",
+      imagem: "alpine",
+      estado: "sujo",
+      alocado_para: null,
+      criado_em: "2026-11-09T10:00:00.000Z",
+      liberado_em: null,
+    },
+    {
+      id: "a-<x>",
+      container_id: "c3",
+      imagem: "alpine",
+      estado: "alocado",
+      alocado_para: "I-1",
+      criado_em: "2026-11-09T12:00:00.000Z",
+      liberado_em: "2026-11-09T11:00:00.000Z",
+    },
+  ],
+};
+
+test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para livre e sujo", () => {
+  const html = ambiente(AMBIENTE, new Map());
+  assert.match(html, /<h2>Ambiente<\/h2><form class="form" data-ambiente novalidate>/);
+  assert.match(html, /<option value="host_local">Host local<\/option><option value="container" selected>Container</);
+  assert.match(html, /name="memoria_maxima_mb" value="1024" min="512" step="1"> MB/);
+  assert.match(html, /name="cpus" value="1.5" min="0.1" step="any"> CPUs/);
+  assert.match(html, /name="ociosidade_para_eliminar_min" value="30" min="5" step="1"> min/);
+  assert.match(
+    html,
+    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
+  );
+  assert.match(
+    html,
+    /<tr data-ambiente="a-sujo">.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td><button[^>]*>Eliminar</,
+  );
+  assert.match(
+    html,
+    /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
+  );
+  assert.equal(html.match(/ disabled>/g)?.length, 1);
+});
+
+test("ambiente: conjunto vazio e o erro de um limite ao lado do campo", () => {
+  const html = ambiente(
+    { ...AMBIENTE, conjunto: [] },
+    errosDoZod(
+      "✖ Pequeno demais: esperava que o número fosse >= 512\n  → at memoria_maxima_mb\n✖ inválido\n  → at tipo",
+    ),
+  );
+  assert.match(html, /<p class="muted">Nenhum container no conjunto.<\/p>/);
+  assert.doesNotMatch(html, /<table/);
+  assert.match(
+    html,
+    /aria-invalid="true" aria-describedby="campo-memoria_maxima_mb-erro"> MB<\/span><span class="msg-erro"/,
+  );
+  assert.match(html, /<select id="campo-tipo" name="tipo" aria-invalid="true" aria-describedby="campo-tipo-erro">/);
+});
+
+test("confirmação de eliminar: o id escapado e o botão que confirma", () => {
+  const html = confirmacaoDeEliminar("a<b");
+  assert.match(html, /<h2 id="titulo-eliminar">Eliminar o container a&#60;b<\/h2>/);
+  assert.match(
+    html,
+    /<button type="button" class="btn btn-perigo-cheio" data-confirmar-eliminar>Eliminar container<\/button>/,
   );
 });

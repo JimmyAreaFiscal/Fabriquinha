@@ -5,17 +5,22 @@ import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
+import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../armazenamento/banco.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
 import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
-import { salvarConfiguracao } from "../armazenamento/servico.ts";
+import { Configuracao, salvarConfiguracao } from "../armazenamento/servico.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../aplicacao/configuracao/configuracao_do_ambiente.ts";
 import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
+import { condutor } from "../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -89,7 +94,9 @@ test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida"
   const link = new URL(readFileSync(join(raiz, "web.url"), "utf8"));
   assert.notEqual(link.port, "0");
   assert.equal((await fetch(link, { redirect: "manual" })).status, 303, "o link de entrada responde nela");
+  assert.equal(condutor.urlDaApi, `http://127.0.0.1:${link.port}`, "o condutor leva a URL da API ao pi");
   await s.parar();
+  assert.equal(condutor.urlDaApi, undefined);
 });
 
 test("instância única: a porta é a trava, e a segunda instância sai com erro antes de abrir o banco", async () => {
@@ -287,9 +294,9 @@ test("próxima busca: a batida em que o contador chega ao intervaloMin; desligad
   assert.equal(proxima(), "2026-10-12T14:05:00.000Z", "padrão: 5 minutos depois da subida");
   t.mock.timers.tick(2 * 60_000);
   assert.equal(proxima(), "2026-10-12T14:05:00.000Z");
-  salvarConfiguracao(s.banco, { intervaloMin: 1 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ intervaloMin: 1 }));
   assert.equal(proxima(), "2026-10-12T14:03:00.000Z", "o contador já passou do intervalo: a batida seguinte");
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 3 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 3 }));
   t.mock.timers.tick(60_000);
   assert.equal(proxima(), "2026-10-12T14:06:00.000Z", "buscou às 14:03; a próxima, 3 minutos depois");
   await s.parar();
@@ -299,7 +306,7 @@ test("o ciclo nunca trava nem lança: erro na batida vai para o log e a batida s
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
   const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
 
   s.banco.exec("ALTER TABLE configuracao RENAME TO guardada");
   minuto();
@@ -316,7 +323,7 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
   const s = await subir(raiz);
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
   const dir = mkdtempSync(join(raiz, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
@@ -355,7 +362,7 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
   const s = await subir(raiz);
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   const dir = mkdtempSync(join(raiz, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
   git(dir, "init", "-q", "--bare", "origin.git");
@@ -396,7 +403,7 @@ const estadoDoTicketDaDemanda = (banco: DatabaseSync, id: string) =>
 test("o relógio bate e a demanda é despachada", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   demandaEmExecucao(s.banco, 1);
   minuto();
   assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
@@ -407,7 +414,7 @@ test("o relógio bate e a demanda é despachada", async (t) => {
 test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem esperar o intervalo inteiro", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 5 });
+  salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 5 }));
   demandaEmExecucao(s.banco, 1);
   for (let i = 0; i < 5; i++) minuto();
   assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
@@ -422,17 +429,102 @@ test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem 
   await s.parar();
 });
 
-test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
+test("executarAgora: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
   const s = await subir();
   demandaEmExecucao(s.banco, 1);
   s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
     VALUES ('I-1', 2, 'implementar', 'aberto', '${AGORA}', 1)`);
-  await assert.rejects(
-    s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 2 }),
-    /o ticket T2 .*vem antes|vem antes/,
-  );
-  await s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 1 });
+  await assert.rejects(s.executarAgora({ demanda_id: "I-1", ticket_id: 2 }), /o ticket T2 .*vem antes|vem antes/);
+  await s.executarAgora({ demanda_id: "I-1", ticket_id: 1 });
   assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
   await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
+});
+
+test("executarAgora: com o limite global ocupado, devolve o motivo e não inicia o ticket", async () => {
+  const s = await subir();
+  s.banco.exec("UPDATE configuracao SET limite_paralelismo = 1");
+  demandaEmExecucao(s.banco, 1);
+  demandaEmExecucao(s.banco, 2);
+  await s.executarAgora({ demanda_id: "I-1", ticket_id: 1 });
+  assert.deepEqual(await s.executarAgora({ demanda_id: "I-2", ticket_id: 1 }), {
+    tipo: "limite_de_paralelismo",
+    em_uso: 1,
+    limite: 1,
+  });
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-2"), "aberto");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
+  await s.parar();
+});
+
+const AMBIENTE_EM_CONTAINER = { tipo: "container", memoria_maxima_mb: 512, cpus: 1, ociosidade_para_eliminar_min: 30 };
+
+test("com tipo host_local, o padrão, subir, bater o relógio e parar não chamam o docker", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-host-local-")));
+  const minuto = relogio(t);
+  const s = await subir();
+  minuto();
+  await s.parar();
+  assert.deepEqual(docker.registro(), []);
+});
+
+test("com tipo container, a subida elimina o órfão com rótulo e nunca toca o container sem rótulo", async () => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-reconciliar-")));
+  const orfao = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "orfao" } });
+  const sonar = docker.semearContainer({ imagem: "sonarqube" });
+  const { raiz, banco } = abrirBancoTemporario();
+  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  banco.close();
+  const s = await subir(raiz);
+  await s.parar();
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [sonar.id],
+  );
+  assert.ok(!docker.registro().some((chamada) => chamada.includes(sonar.id)));
+  assert.ok(docker.registro().some((chamada) => chamada.includes(orfao.id)));
+});
+
+test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o alocado", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-ociosos-")));
+  const minuto = relogio(t);
+  const { raiz, banco } = abrirBancoTemporario();
+  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  for (const [id, alocadoPara] of [
+    ["ocioso", "I-1"],
+    ["em-uso", "I-2"],
+  ] as const) {
+    const container = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": id } });
+    inserirAmbienteAlocado(banco, {
+      id,
+      container_id: container.id,
+      imagem: "alpine",
+      criado_em: "2020-01-01T00:00:00.000Z",
+      alocado_para: alocadoPara,
+    });
+  }
+  liberarAmbiente(banco, "ocioso", "livre", "2020-01-01T00:00:00.000Z");
+  banco.close();
+  const s = await subir(raiz);
+  minuto();
+  await ate(() => listarAmbientes(s.banco).length === 1);
+  assert.deepEqual(
+    listarAmbientes(s.banco).map(({ id }) => id),
+    ["em-uso"],
+  );
+  await s.parar();
+});
+
+test("com tipo container e o docker fora do ar, o serviço sobe e a batida do relógio não lança", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-fora-")));
+  docker.falharComando("ps", "Cannot connect to the Docker daemon");
+  const erros = t.mock.method(console, "error", () => undefined);
+  const minuto = relogio(t);
+  const { raiz, banco } = abrirBancoTemporario();
+  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  banco.close();
+  const s = await subir(raiz);
+  minuto();
+  await s.parar();
+  assert.ok(erros.mock.callCount() > 0);
 });

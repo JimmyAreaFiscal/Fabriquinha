@@ -6,10 +6,13 @@ import { createServer, request } from "node:http";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
+import type { MotivoDeRecusa } from "../src/nucleo/despacho.ts";
+import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { guardarBytes } from "../src/armazenamento/arquivos.ts";
 import { raizDo } from "../src/armazenamento/banco.ts";
 import { gravarAnexos } from "../src/armazenamento/evidencia_demanda.ts";
 import { servirWeb } from "../src/entrega/http/servidor.ts";
+import { noLog } from "../src/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,
@@ -45,21 +48,31 @@ export async function cenarioDemandas() {
 }
 
 /** O servidor web de verdade sobre `banco`, numa porta livre, com um agendador falso que só anota o que lhe pedem. */
-export async function servir(banco: DatabaseSync, comExecutarDemanda = true) {
+export async function servir(banco: DatabaseSync, comExecutarDemanda = true, recusaDoDespacho?: MotivoDeRecusa) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
   const agendador = {
     proximaBusca: () => new Date(),
-    executarAgoraDemanda(ref: { demanda_id: string; ticket_id: number }) {
+    executarAgora(ref: { demanda_id: string; ticket_id: number }) {
       executados.push(ref);
-      return Promise.resolve();
+      return Promise.resolve(recusaDoDespacho);
     },
   };
-  if (!comExecutarDemanda) delete (agendador as { executarAgoraDemanda?: unknown }).executarAgoraDemanda;
+  if (!comExecutarDemanda) delete (agendador as { executarAgora?: unknown }).executarAgora;
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
-  servidor.on("request", servirWeb({ banco, porta, agendador }));
+  servidor.on(
+    "request",
+    servirWeb({
+      banco,
+      raiz: raizDo(banco),
+      porta,
+      agendador,
+      relogio: relogioDoSistema,
+      registrarErro: noLog,
+    }),
+  );
   fechamentos.push(async () => {
     servidor.closeAllConnections();
     servidor.close();
@@ -102,5 +115,5 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true) {
     };
   }
 
-  return { pedir, executados };
+  return { pedir, executados, porta };
 }

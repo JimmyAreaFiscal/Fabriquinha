@@ -8,6 +8,7 @@ import {
   apagarAvaliacao,
   criarAvaliacao,
   demandasComSessaoNoPeriodo,
+  demandasComTituloComSessaoNoPeriodo,
   importarAchados,
   listarAvaliacoes,
   regravarUso,
@@ -70,6 +71,17 @@ test("escopo: sessão terminada no período, inclusivo nas duas pontas, só do p
   assert.deepEqual(demandasComSessaoNoPeriodo(b, "a", "2026-01-01", "2026-01-31"), ["I-1"]);
   assert.deepEqual(demandasComSessaoNoPeriodo(b, "a", "2026-02-01", "2026-02-01"), ["I-1"]);
   assert.deepEqual(demandasComSessaoNoPeriodo(b, "a", "2026-03-01", "2026-03-02"), []);
+});
+
+test("escopo com título: as mesmas demandas, cada uma com o título, numa leitura só", () => {
+  const b = banco();
+  execucao(b, "I-1", "e1", "2026-01-10T00:00:00.000Z");
+  execucao(b, "I-1", "e2", "2026-01-11T00:00:00.000Z");
+  execucao(b, "I-2", "e3", "2026-01-12T00:00:00.000Z");
+  assert.deepEqual(demandasComTituloComSessaoNoPeriodo(b, "a", "2026-01-01", "2026-01-31"), [
+    { id: "I-1", titulo: "t" },
+    { id: "I-2", titulo: "t" },
+  ]);
 });
 
 test("criar, listar com a contagem de achados, abrir e importar sem duplicar", () => {

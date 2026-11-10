@@ -41,7 +41,7 @@ Confira o formato de cada evidência com `fabriquinha demanda schema <tipo>`.
 
 ### Custos da sessão
 
-`custos_realizados` (obrigatória) traz o uso desta sessão do Claude Code, somado do transcript por modelo.
+O Uso desta sessão do Claude Code, somado do transcript por modelo, é declarado com `fabriquinha demanda uso` (não é evidência nem trava o envio).
 A identidade é a mesma dos outros comandos:
 
 ```bash
@@ -62,7 +62,7 @@ fabriquinha demanda registrar --projeto <p> --titulo "<título>" --tipo <funcion
 fabriquinha demanda evidencia I-<n> criterios_aceite --dados criterios.json
 fabriquinha demanda evidencia I-<n> desenho_solucao --dados desenho.json --arquivo desenho.html
 fabriquinha demanda evidencia I-<n> comportamento --dados comp.json --arquivo <prova>...
-fabriquinha demanda evidencia I-<n> custos_realizados --dados custos.json
+fabriquinha demanda uso I-<n> --dados custos.json
 fabriquinha demanda enviar I-<n>
 ```
 
@@ -86,7 +86,7 @@ Diga ao usuário a demanda criada (`I-<n>`) e que ela espera o gate do Auditor n
 Destaque só o que ele ainda não sabe: um achado do código, uma assunção registrada, um risco.
 
 Se o Auditor reprovar, a demanda e as que dependem dela vão a `cancelada`: `fabriquinha demanda ver I-<n>` mostra o estado, e o motivo fica na página da demanda (`/demandas/I-<n>`).
-Depois do envio, só `custos_realizados` aceita nova submissão; o resto está congelado, e a correção vira uma demanda nova.
+Depois do envio, só `fabriquinha demanda uso` aceita nova submissão (até a demanda terminar); o resto está congelado, e a correção vira uma demanda nova.
 
 ## Limites
 

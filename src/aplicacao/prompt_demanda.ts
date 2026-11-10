@@ -2,6 +2,7 @@
 // demanda, com o modo de trabalhar de `etapas/<etapa>.md`. Tickets e rodadas aparecem só pelo endereço público.
 import { readFileSync } from "node:fs";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { CATALOGO_DE_ETAPAS } from "../nucleo/etapa.ts";
 import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
@@ -275,13 +276,10 @@ const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string
 };
 
 /** O texto do modo de trabalhar da etapa, com os placeholders trocados pelos endereços públicos. */
-function modoDeTrabalhar(etapa: string, enderecos: Record<"demanda" | "rodada" | "ticket", string>): string {
-  let texto: string;
-  try {
-    texto = readFileSync(new URL(`etapas/${etapa}.md`, import.meta.url), "utf8");
-  } catch {
-    throw new Error(`a etapa ${etapa} não tem modo de trabalhar escrito (etapas/${etapa}.md)`);
-  }
+function modoDeTrabalhar(etapa: EtapaTicket, enderecos: Record<"demanda" | "rodada" | "ticket", string>): string {
+  const { instrucao } = CATALOGO_DE_ETAPAS[etapa];
+  if (instrucao === undefined) throw new Error(`a etapa ${etapa} não tem modo de trabalhar escrito no catálogo`);
+  const texto = readFileSync(new URL(`etapas/${instrucao}`, import.meta.url), "utf8");
   return texto.replace(/\{(demanda|rodada|ticket)\}/g, (_, nome: keyof typeof enderecos) => enderecos[nome]);
 }
 

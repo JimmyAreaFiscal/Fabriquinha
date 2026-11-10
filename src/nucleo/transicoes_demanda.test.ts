@@ -16,7 +16,7 @@ import {
   tentativasDoTicket,
 } from "./tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { selecionarTrabalho } from "./selecao_trabalho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "./despacho.ts";
 import {
   editarDemanda,
   enviarDemanda,
@@ -40,10 +40,7 @@ const ev = (tipo: string, extra = {}) => ({ tipo: tipo as never, dados: { v: 1 }
 
 const registrada = () => registrarDemanda(reg, autora, { agora: t0 });
 const completa = (): AgregadoDemanda =>
-  ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
-    (ag, tipo) => comEvidencia(ag, ev(tipo), autora, t0),
-    registrada(),
-  );
+  ["criterios_aceite", "desenho_solucao"].reduce((ag, tipo) => comEvidencia(ag, ev(tipo), autora, t0), registrada());
 const enviada = () => enviarDemanda(completa(), autora, { agora: t1 });
 
 test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
@@ -85,7 +82,7 @@ test("CA-2: envio incompleto lista todas as pendências e não muda nada", () =>
   const antes = structuredClone(ag);
   assert.throws(
     () => enviarDemanda(ag, autora, { agora: t1 }),
-    (e: Error) => e instanceof ErroDeRegra && e.message.includes("criterios_aceite, custos_realizados"),
+    (e: Error) => e instanceof ErroDeRegra && e.message.includes("criterios_aceite"),
   );
   assert.deepEqual(ag, antes);
 });
@@ -105,7 +102,7 @@ test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e env
   assert.equal(ag.demanda.criada_por.ferramenta, "codex");
   assert.equal(ag.demanda.criada_por.sessao, " sessao-demo-197 ");
   ag = editarDemanda(ag, { titulo: "novo" }, autor);
-  for (const tipo of ["criterios_aceite", "desenho_solucao", "custos_realizados"]) {
+  for (const tipo of ["criterios_aceite", "desenho_solucao"]) {
     ag = comEvidencia(ag, ev(tipo), autor, t0);
   }
   assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
@@ -118,12 +115,20 @@ const criterios = { criterios: [{ id: "CA-1" }, { id: "CA-2" }] };
 const planoV = (m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   criterios: ["CA-1"],
+  arquivos_previstos: ["src/b.ts"],
   rodadas: [
-    { demanda_id: "I-1", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+    {
+      demanda_id: "I-1",
+      rodada_id: 1,
+      titulo: "r1",
+      e2e: false,
+      criterios: ["CA-1"],
+      arquivos_previstos: ["src/b.ts"],
+    },
     { demanda_id: "I-1", rodada_id: 2, titulo: "r2", e2e: true, depende: [{ demanda_id: "I-1", rodada_id: 1 }] },
   ],
   tickets: [
-    { demanda_id: "I-1", ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, caminhos: ["src/b.ts"] },
+    { demanda_id: "I-1", ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, arquivos_previstos: ["src/b.ts"] },
     {
       demanda_id: "I-1",
       ticket_id: 1,
@@ -143,7 +148,7 @@ const planoV = (m: Record<string, unknown> = {}) => ({
   ...m,
 });
 const emPlanejamento = (): AgregadoDemanda => {
-  const definida = ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
+  const definida = ["criterios_aceite", "desenho_solucao"].reduce(
     (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );
@@ -184,7 +189,7 @@ test("CA-2: caminho absoluto Windows com barras normais é reprovado na submiss�
   const antes = structuredClone(ag);
   const plano = planoV();
   for (const caminho of ["C:/fora/segredo.ts", "c:/fora/segredo.ts"]) {
-    const e = planoV({ tickets: [{ ...plano.tickets[0], caminhos: [caminho] }, ...plano.tickets.slice(1)] });
+    const e = planoV({ tickets: [{ ...plano.tickets[0], arquivos_previstos: [caminho] }, ...plano.tickets.slice(1)] });
     assert.throws(() => validarPlano(ag, e, agente), /caminho relativo/);
   }
   assert.deepEqual(ag, antes);
@@ -546,13 +551,13 @@ test("CA-1, CA-2: primeira e segunda reprovações voltam a aberto com instruç�
 test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
   const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
   assert.deepEqual([tk3(ag).estado, motivoDaFalhaDoTicket(ag.tentativas, tk3(ag))], ["falhou", "corrija os testes"]);
-  assert.deepEqual(selecionarTrabalho(ag, true), []);
+  assert.deepEqual(new Despacho().selecionar(situacaoDeUmaDemanda(ag, true)).prontos, []);
   const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
   assert.deepEqual(
     [tk3(global).estado, motivoDaFalhaDoTicket(global.tentativas, tk3(global))],
     ["falhou", "corrija os testes"],
   );
-  assert.deepEqual(selecionarTrabalho(global, true), []);
+  assert.deepEqual(new Despacho().selecionar(situacaoDeUmaDemanda(global, true)).prontos, []);
 });
 
 test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação; sem motivo é reprovada", () => {

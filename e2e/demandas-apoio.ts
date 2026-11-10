@@ -60,6 +60,9 @@ const demanda = (id: string, estado: string, resto: object = {}): AgregadoDemand
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     tentativas: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
@@ -162,6 +165,15 @@ export function semearDemandas(raiz: string): void {
   );
   gravarAgregadoPronto(banco, comTicketDeDemanda("I-208"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
+  banco.close();
+}
+
+/** Faz `demanda_id` depender de `depende_demanda_id`, que ainda não satisfaz a dependência. */
+export function semearDependenciaEntreDemandas(raiz: string, demanda_id: string, depende_demanda_id: string): void {
+  const banco = abrir(raiz);
+  banco
+    .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
+    .run(demanda_id, depende_demanda_id);
   banco.close();
 }
 
@@ -499,6 +511,9 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     tentativas: [],
   } as unknown as AgregadoDemanda);
   banco.close();

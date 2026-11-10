@@ -5,7 +5,10 @@ import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { guardarBytes } from "../../../armazenamento/arquivos.ts";
 import { comDemanda } from "../../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../../armazenamento/evidencia_demanda.ts";
+import { gravarUsoDeclarado } from "../../../armazenamento/uso_declarado.ts";
+import { metricasDasDemandasDoPeriodo } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";
+import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
 
 interface Anexo {
   nome: string;
@@ -17,8 +20,15 @@ interface Evidencia {
   ticket?: string;
   anexos: Anexo[];
 }
+interface PendenciaDaTela {
+  tipo: string;
+  item: string;
+  acao_esperada: string;
+  desde: string;
+}
 interface Pagina {
   demanda: { tipo: string; descricao: string };
+  uso: { modelos: { modelo: string; tokens_entrada: number }[]; textoDoCusto: string };
   rodadas: { ref: string; pr?: { id: string; url: string }; ticket_atual_por_etapa: Record<string, string> }[];
   tickets: {
     ref: string;
@@ -33,6 +43,7 @@ interface Pagina {
   decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number; por: string }[];
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[]; aguardando_merge?: { url: string } };
+  pendencias: PendenciaDaTela[];
   dependencias: unknown[];
   dependentes: { demanda_id: string; titulo: string; estado: string }[];
 }
@@ -44,7 +55,7 @@ interface Board {
     estado: string;
     rodadas: unknown[];
     bloqueios: unknown[];
-    falhos: unknown[];
+    pendencias: PendenciaDaTela[];
   }[];
   trabalho: unknown[];
 }
@@ -66,6 +77,7 @@ test("CA-1: o board traz a I-206 com o estado dela", async () => {
   const r = await pedir("/api/demandas");
   assert.equal(r.status, 200);
   const i206 = r.json<Board>().demandas.find((d) => d.id === "I-206");
+  assert.deepEqual(BoardDeDemandas.parse(r.json()), r.json());
   assert.deepEqual([i206?.projeto, i206?.titulo, i206?.estado], ["loja", "demanda I-206", "em_execucao"]);
 });
 
@@ -87,7 +99,9 @@ test("CA-3: as duas rodadas da I-206 com o estado de cada uma e o PR aberto da R
 
 test("CA-3: a página traz o PR só da rodada em gate; a R1 concluída, com PR integrado, fica sem", async () => {
   const { pedir } = await cenarioDemandas();
-  const { rodadas } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  const r = await pedir("/api/demandas/I-206");
+  assert.deepEqual(PaginaDaDemanda.parse(r.json()), r.json());
+  const { rodadas } = r.json<Pagina>();
   assert.deepEqual(
     rodadas.map((r) => [r.ref, r.pr]),
     [
@@ -138,21 +152,124 @@ test("o board não mostra a demanda arquivada", async () => {
   assert.deepEqual(ids, ["I-206"]);
 });
 
-test("CA-3 (T-1289): o board traz os tickets falhos com o endereço público e a etapa", async () => {
+test("CA-3 (T-1289): o ticket falho vira Pendência item_bloqueado, a mesma no board e na página", async () => {
   const { pedir, banco } = await cenarioDemandas();
-  const falhosDe = async () => (await pedir("/api/demandas")).json<Board>().demandas[0]?.falhos;
-  assert.deepEqual(await falhosDe(), []);
+  const bloqueadosNoBoard = async () =>
+    (await pedir("/api/demandas")).json<Board>().demandas[0]?.pendencias.filter((p) => p.tipo === "item_bloqueado");
+  assert.deepEqual(await bloqueadosNoBoard(), []);
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
     tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, estado: "falhou" } : t)),
   }));
-  assert.deepEqual(await falhosDe(), [{ ref: "I-206.T3", etapa: "implementar" }]);
+  const [bloqueado] = (await bloqueadosNoBoard()) ?? [];
+  assert.deepEqual([bloqueado?.item, bloqueado?.acao_esperada], ["I-206.T3", "reabrir_com_instrucao"]);
+  const daPagina = (await pedir("/api/demandas/I-206")).json<Pagina>().pendencias;
+  assert.deepEqual(
+    daPagina.filter((p) => p.tipo === "item_bloqueado"),
+    [bloqueado],
+  );
+});
+
+test("a rodada em ajustar_resultado é Pendência do tipo diálogo do agente, no board e na página", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    rodadas: ag.rodadas.map((r) => (r.rodada_id === 2 ? { ...r, estado: "ajustar_resultado" as const } : r)),
+  }));
+  const doBoard = (await pedir("/api/demandas")).json<Board>().demandas[0]?.pendencias;
+  const daPagina = (await pedir("/api/demandas/I-206")).json<Pagina>().pendencias;
+  assert.deepEqual(
+    doBoard?.filter((p) => p.tipo === "dialogo_do_agente").map((p) => p.item),
+    ["I-206.R2"],
+  );
+  assert.deepEqual(daPagina, doBoard);
+});
+
+test("a conversa parada de uma sessão interativa é Pendência de diálogo do agente no ticket dela", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  banco.exec(`
+    INSERT INTO trabalho_agentico VALUES ('s-conversa', 'I-206', 3, 'interativo', 'c');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('e-conversa', 's-conversa', '2026-01-01T00:00:00.000Z', '2026-01-01T00:01:00.000Z', 0)`);
+  const doBoard = (await pedir("/api/demandas")).json<Board>().demandas[0]?.pendencias;
+  const daPagina = (await pedir("/api/demandas/I-206")).json<Pagina>().pendencias;
+  assert.deepEqual(
+    daPagina.filter((p) => p.tipo === "dialogo_do_agente").map((p) => [p.tipo, p.item, p.acao_esperada, p.desde]),
+    [["dialogo_do_agente", "I-206.T3", "responder", "2026-01-01T00:01:00.000Z"]],
+  );
+  assert.deepEqual(doBoard, daPagina);
+});
+
+test("a demanda terminada não espera o Auditor, mesmo com ticket falho", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    demanda: { ...ag.demanda, estado: "cancelada" },
+    tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, estado: "falhou" } : t)),
+  }));
+  assert.deepEqual((await pedir("/api/demandas")).json<Board>().demandas[0]?.pendencias, []);
+  assert.deepEqual((await pedir("/api/demandas/I-206")).json<Pagina>().pendencias, []);
 });
 
 test("a página traz o tipo e a descrição da demanda, que o Auditor lê na aprovação", async () => {
   const { pedir } = await cenarioDemandas();
   const { demanda } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual([demanda.tipo, demanda.descricao], ["funcionalidade", "d"]);
+});
+
+test("a página traz o Uso da demanda já somado e o texto do custo, com ≥ quando uma sessão não trouxe custo", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const { uso: semUso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual([semUso.modelos, semUso.textoDoCusto], [[], "US$ 0,00"]);
+  const agoraIso = new Date().toISOString();
+  banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-uso', 'I-206', 1, 'autonomo', 'conv');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-uso', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
+  const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    uso.modelos.map((m) => [m.modelo, m.tokens_entrada]),
+    [
+      ["p/m", 10],
+      ["p/n", 5],
+    ],
+  );
+  assert.equal(uso.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
+});
+
+test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sessão sem custo por execução e o Uso declarado somado", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const agoraIso = new Date().toISOString();
+  banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-uso', 'I-206', 1, 'autonomo', 'conv')`);
+  for (const [execucao, custo] of [
+    ["xu1", "4.2"],
+    ["xu2", "NULL"],
+    ["xu3", "NULL"],
+  ] as const)
+    banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', 's-uso', '${agoraIso}', '${agoraIso}', 0);
+      INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 10, 1, 0, 0, ${custo})`);
+  gravarUsoDeclarado(banco, {
+    ferramenta: "claude",
+    sessao: "externa",
+    demanda_id: "I-206",
+    linhas: [
+      {
+        modelo: "m",
+        tokens_entrada: 1,
+        tokens_saida: 1,
+        tokens_cache_leitura: 0,
+        tokens_cache_escrita: 0,
+        custo: 3,
+        chamadas: 1,
+      },
+    ],
+  });
+  const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  // O Uso declarado entra no mês do registro da demanda, que o cenário fixa no passado.
+  const linha = metricasDasDemandasDoPeriodo(banco, { de: "2000-01", ate: agoraIso.slice(0, 7) }).demandas.find(
+    (d) => d.demanda === "I-206",
+  );
+  assert.equal(uso.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");
+  assert.equal(linha?.textoDoCusto, uso.textoDoCusto);
 });
 
 test("CA-6: a página traz cada ticket com o endereço público e a etapa", async () => {
@@ -237,6 +354,10 @@ test("CA-16 e CA-17: a página traz a sessão mais recente só nos tickets que t
   );
   nova.run("s-antiga");
   nova.run("s-nova");
+  // O Aguarda você lê as sessões da demanda, e a sessão sempre tem ao menos uma execução.
+  banco.exec(
+    "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e-1', 's-antiga', '2026-01-01T00:00:00.000Z', '2026-01-01T00:01:00.000Z', 0), ('e-2', 's-nova', '2026-01-01T00:00:00.000Z', '2026-01-01T00:01:00.000Z', 0)",
+  );
   const { tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(
     tickets.map((t) => t.sessao),
@@ -343,7 +464,7 @@ test("CA-10: o progresso do encerramento com os passos feitos e o pendente", asy
   });
 });
 
-test("o PR final à espera do merge humano vem no encerramento e marca a demanda no quadro", async () => {
+test("o PR final à espera do merge humano vem no encerramento e é Pendência de ação externa no quadro", async () => {
   const { pedir, banco } = await cenarioDemandas();
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
@@ -374,14 +495,14 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
   assert.deepEqual(encerramento.aguardando_merge, { url: "https://pr/9" });
   // A seleção o escolheria, mas ele pede o merge na plataforma, não a execução.
   assert.equal(tickets.find((t) => t.etapa === "encerrar_demanda")?.elegivel, false);
-  const { demandas } = (await pedir("/api/demandas")).json<{ demandas: { id: string; aguarda_merge: boolean }[] }>();
+  const { demandas } = (await pedir("/api/demandas")).json<Board>();
+  const acoesExternas = (id: string) =>
+    demandas.find((d) => d.id === id)?.pendencias.filter((p) => p.tipo === "acao_externa");
   assert.deepEqual(
-    demandas.map((d) => [d.id, d.aguarda_merge]),
-    [
-      ["I-206", true],
-      ["I-207", false],
-    ],
+    acoesExternas("I-206")?.map((p) => [p.item, p.acao_esperada]),
+    [["I-206", "integrar_na_plataforma"]],
   );
+  assert.deepEqual(acoesExternas("I-207"), []);
 });
 
 test("sem encerramento, todos os passos estão pendentes", async () => {

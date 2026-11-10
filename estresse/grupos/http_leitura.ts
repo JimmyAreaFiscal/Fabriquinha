@@ -14,7 +14,7 @@ import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 
 /** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoHttp {
@@ -125,6 +125,9 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
         criterios_citados: [],
         dependencias_ticket: [],
         caminhos_ticket: [],
+        arquivos_previstos_rodada: [],
+        arquivos_previstos_demanda: [],
+        versoes_plano: [],
         pull_requests: [],
         tentativas: [],
       }) as unknown as AgregadoDemanda,
@@ -200,8 +203,10 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
   const periodo = "projeto=loja&de=2026-01-01&ate=2026-12-31";
   return [
     acao("/api/inicio", "/api/inicio", 151),
+    acao("/api/despacho", "/api/despacho", 15),
     acao("/api/sessoes", "/api/sessoes?escopo=ativas", 52),
     acao("/api/configuracao", "/api/configuracao", 15),
+    acao("/api/ambiente", "/api/ambiente", 15),
     acao("/api/projetos", "/api/projetos", 17),
     acao("/api/projetos/:nome", "/api/projetos/loja", 19),
     acao("/api/modelos", "/api/modelos", 437),

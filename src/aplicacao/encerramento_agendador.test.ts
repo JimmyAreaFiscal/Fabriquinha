@@ -1,33 +1,36 @@
-// Encerramento final pelo agendador (CA-15 e CA-16): git real e hospedagem falsa; só o `despacharDemandas` conduz as
-// etapas, e o merge do PR final é do humano, que o teste faz na plataforma falsa. O agente do `resolver_conflito` é falso: escreve na worktree da demanda e fecha pelo `fecharTicketDemanda`.
+// Encerramento final pelo agendador (CA-15 e CA-16): git real e hospedagem falsa; só o `cicloDoDespacho` conduz as
+// etapas, e o merge do PR final é do humano, que o teste faz na plataforma falsa. O agente do `resolver_conflito` é o pi falso: escreve na worktree da demanda, e a condução fecha o ticket com verificações que passaram.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import { criarTrabalho, encerrarProcesso, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
-import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
-import { fecharTicketDemanda } from "./fechamento_ticket.ts";
+import { cicloDoDespacho, type DepsDespacho } from "./despacho.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-agendador-")));
 process.env.GH_TOKEN = "token-do-servico";
+process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
+delete process.env.FABRIQUINHA_PORTA;
+const piFalso = instalarPiFalso(temporario);
 const hospedagem = hospedagemFalsa(temporario);
 beforeEach(() => {
   hospedagem.zerar();
@@ -102,57 +105,31 @@ async function cenario() {
     tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
-  await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
+  const demanda = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, D, c.log);
+  await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
   const verificacaoQuePassa = (tipo: RegistroDaVerificacao["tipo"]) => verificacaoDeTeste(tipo, true, undefined, []);
-  /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações que passaram. */
-  const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarProcesso"]> = (b, ref) => {
-    const id = randomUUID();
-    const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
-    comTrabalhosDoTicket(b, ref, (estado) => {
-      const sessoes = criarTrabalho(estado.sessoes, sessao);
-      return {
-        ...estado,
-        sessoes,
-        execucoes: iniciarProcesso(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
-      };
-    });
-    writeFileSync(join(demanda, "resolvido.txt"), "base incorporada\n");
-    const fim = (async () => {
-      comTrabalhosDoTicket(b, ref, (estado) => ({
-        ...estado,
-        execucoes: encerrarProcesso(estado.execucoes, id, em, false),
-      }));
-      await fecharTicketDemanda(
-        b,
-        ref,
-        {},
-        {
-          coletarVerificacoes: () =>
-            Promise.resolve(
-              (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(verificacaoQuePassa),
-            ),
-        },
-      );
-      return undefined;
-    })();
-    return { id, fim };
-  };
+  piFalso.roteirizar([{ escreve: { "resolvido.txt": "base incorporada\n" } }]);
   const deps: DepsDespacho = {
-    iniciarProcesso: iniciarExecucaoFalsa,
+    implementacao: {
+      coletarVerificacoes: () =>
+        Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(verificacaoQuePassa)),
+    },
     verificacao: { intervaloMs: 1, carenciaMs: 0 },
   };
   const config = configuracao(banco);
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () => Promise.all(despacharDemandas(banco, config, deps)),
+    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps)),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

@@ -23,8 +23,8 @@ import { condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA } from "./trabalho/condutor.ts
 import {
   abortarDemanda,
   abrirChatDemanda,
-  cabecalhoDaDemanda,
-  calcular,
+  cabecalhoDaSessao,
+  estadoEDesdeDaSessao,
   type Carregada,
   emMarkdown,
   enviarDemanda,
@@ -100,6 +100,9 @@ const demanda = (id: string, estado: string, descricao: string, tickets: object[
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
   }) as unknown as AgregadoDemanda;
 
 const mensagem = (role: string, texto: string, extra: object = {}) => ({
@@ -179,7 +182,7 @@ function cenario() {
 test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços públicos", () => {
   const { banco } = cenario();
   const ler = (id: string) => {
-    const cab = cabecalhoDaDemanda(banco, id);
+    const cab = cabecalhoDaSessao(banco, id);
     assert.ok(cab);
     return cab;
   };
@@ -191,8 +194,8 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
     ["I-300", undefined, "I-300.T1", "planejar"],
   );
   assert.deepEqual(
-    [planejar.sessao.estado, planejar.sessao.motivo, planejar.sessao.desde, planejar.sessao.modelo],
-    ["aguardando_humano", "conversa", "2026-01-01T01:00:00.000Z", undefined],
+    [planejar.sessao.estado, planejar.sessao.pendencia?.tipo, planejar.sessao.desde, planejar.sessao.modelo],
+    ["aguardando_humano", "dialogo_do_agente", "2026-01-01T01:00:00.000Z", undefined],
   );
   assert.equal(planejar.sessao.execucao, "e-s1-I-300");
   assert.equal(planejar.erro, undefined);
@@ -200,7 +203,7 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
   const rodando = ler("s2");
   assert.deepEqual([rodando.demanda, rodando.rodada, rodando.ticket], ["I-300", "I-300.R1", "I-300.T2"]);
   assert.deepEqual(
-    [rodando.sessao.estado, rodando.sessao.motivo, rodando.sessao.desde, rodando.sessao.modelo],
+    [rodando.sessao.estado, rodando.sessao.pendencia, rodando.sessao.desde, rodando.sessao.modelo],
     ["rodando", undefined, em, { provedor: "anthropic", nome: "claude-teste" }],
   );
   assert.deepEqual(
@@ -210,13 +213,16 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
 
   const falha = ler("s3");
   assert.deepEqual(
-    [falha.sessao.estado, falha.sessao.motivo, falha.erro],
-    ["aguardando_humano", "falha", "testes reprovaram"],
+    [falha.sessao.estado, falha.sessao.pendencia?.tipo, falha.erro],
+    ["aguardando_humano", "item_bloqueado", "testes reprovaram"],
   );
 
   assert.equal(ler("s4").sessao.estado, "terminada");
-  assert.deepEqual([ler("s5").sessao.estado, ler("s5").sessao.motivo], ["rodando", undefined]);
-  assert.deepEqual([ler("s301").sessao.estado, ler("s301").sessao.motivo], ["aguardando_humano", "gate_demanda"]);
+  assert.deepEqual([ler("s5").sessao.estado, ler("s5").sessao.pendencia], ["rodando", undefined]);
+  assert.deepEqual(
+    [ler("s301").sessao.estado, ler("s301").sessao.pendencia?.tipo],
+    ["aguardando_humano", "gate_humano"],
+  );
 });
 
 test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () => {
@@ -242,21 +248,45 @@ test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () =>
   const viva = { execucao: "e", ocupado: true, desde: "2026-02-01T00:00:00.000Z", dialogos: [] };
   const dialogo = { type: "extension_ui_request", id: "d", em: "2026-02-02T00:00:00.000Z" };
 
-  assert.deepEqual(calcular(carregada("s2"), { ...viva, dialogos: [dialogo] }), [
+  assert.deepEqual(estadoEDesdeDaSessao(carregada("s2"), { ...viva, dialogos: [dialogo] }), [
     "aguardando_humano",
-    "dialogo",
     dialogo.em,
   ]);
-  assert.deepEqual(calcular(carregada("s2"), viva), ["rodando", undefined, viva.desde]);
+  assert.deepEqual(estadoEDesdeDaSessao(carregada("s2"), viva), ["rodando", viva.desde]);
   // Interativa com a execução aberta e o pi esperando a próxima mensagem: conversa, não rodando.
   const aberta = carregada("s1");
   aberta.execucoes = aberta.execucoes.map((e) => ({ ...e, fim: null }));
-  assert.deepEqual(calcular(aberta, { ...viva, ocupado: false }), ["aguardando_humano", "conversa", viva.desde]);
+  assert.deepEqual(estadoEDesdeDaSessao(aberta, { ...viva, ocupado: false }), ["aguardando_humano", viva.desde]);
+});
+
+test("I-275: o gate do planejamento é a Pendência do planejamento, não a do gate da demanda", () => {
+  const { banco } = cenario();
+  const { sessao, pendencias } = encontrado(abrirChatDemanda(banco, "s301"), "sem chat", "x").cabecalho;
+  assert.deepEqual(
+    [sessao.pendencia?.tipo, sessao.pendencia?.item, sessao.pendencia?.motivo],
+    ["gate_humano", "I-301", "Aprovação do planejamento aguarda decisão"],
+  );
+  assert.deepEqual(
+    pendencias.map((p) => [p.tipo, p.item]),
+    [["gate_humano", "I-301"]],
+  );
+});
+
+test("o cabeçalho leva as Pendências da demanda inteira: o ticket bloqueado e a conversa", () => {
+  const { banco } = cenario();
+  const { pendencias } = encontrado(abrirChatDemanda(banco, "s1"), "sem chat", "x").cabecalho;
+  assert.deepEqual(
+    pendencias.map((p) => [p.tipo, p.item]),
+    [
+      ["item_bloqueado", "I-300.T3"],
+      ["dialogo_do_agente", "I-300.T1"],
+    ],
+  );
 });
 
 test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale terminada, qualquer que seja o ticket", () => {
   const { banco } = cenario();
-  const estadoDe = (id: string) => cabecalhoDaDemanda(banco, id)?.sessao.estado;
+  const estadoDe = (id: string) => cabecalhoDaSessao(banco, id)?.sessao.estado;
   for (const estado of ["concluida", "cancelada", "arquivada"]) {
     banco.prepare("UPDATE demanda SET estado = ? WHERE id = 'I-300'").run(estado);
     // Conversa de planejamento, ticket que falhou e autônoma parada: nenhuma espera mais o Auditor.
@@ -268,7 +298,7 @@ test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale te
 
 test("CA-7 e CA-14: id que não é de sessão da demanda não dá nada", () => {
   const { banco } = cenario();
-  assert.equal(cabecalhoDaDemanda(banco, "nao-existe"), undefined);
+  assert.equal(cabecalhoDaSessao(banco, "nao-existe"), undefined);
   assert.equal(abrirChatDemanda(banco, "nao-existe"), undefined);
   assert.equal(exportarHistoricoDemanda(banco, "nao-existe"), undefined);
 });
@@ -439,11 +469,12 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   const cancelar = chat.assinar((e) => ao_vivo.push(e));
 
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
-  const cab = cabecalhoDaDemanda(banco, sessao);
+  const cab = cabecalhoDaSessao(banco, sessao);
   assert.deepEqual(
-    [cab?.sessao.estado, cab?.sessao.motivo, cab?.sessao.dialogos[0]?.type],
-    ["aguardando_humano", "dialogo", "extension_ui_request"],
+    [cab?.sessao.estado, cab?.sessao.pendencia?.tipo, cab?.sessao.dialogos[0]?.type],
+    ["aguardando_humano", "dialogo_do_agente", "extension_ui_request"],
   );
+  assert.match(String(cab?.sessao.pendencia?.motivo), /^O agente pergunta: /);
   assert.equal(cab?.sessao.execucao, id);
   const fimDeMensagem = ao_vivo.filter((e) => e.type === "message_end");
   assert.ok(fimDeMensagem.some((e) => (e.message as { role: string }).role === "assistant"));
@@ -459,9 +490,12 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   cancelar();
   interromperExecucaoDemanda(banco, ref);
   await fim;
-  const parada = cabecalhoDaDemanda(banco, sessao);
+  const parada = cabecalhoDaSessao(banco, sessao);
   assert.equal(parada?.sessao.estado, "aguardando_humano");
-  assert.equal(parada.sessao.motivo, "conversa");
+  assert.deepEqual(
+    [parada.sessao.pendencia?.tipo, parada.sessao.pendencia?.motivo],
+    ["dialogo_do_agente", "A conversa da sessão aguarda o Auditor"],
+  );
 });
 
 test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abortar", async () => {
@@ -481,7 +515,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.throws(
     () => enviarDemanda(banco, sessao, "oi", "prompt", 5),
-    /aguardando_humano: dialogo e não recebe prompt/,
+    /aguardando_humano: dialogo_do_agente e não recebe prompt/,
   );
   const dialogo = String(condutor.situacao(sessao)?.dialogos[0]?.id);
   assert.equal(responderDialogoDemanda(banco, sessao, dialogo, { value: "alta" }), true);
@@ -495,7 +529,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.equal(abortarDemanda(banco, sessao), true);
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
-  assert.notEqual(cabecalhoDaDemanda(banco, sessao)?.sessao.estado, "rodando");
+  assert.notEqual(cabecalhoDaSessao(banco, sessao)?.sessao.estado, "rodando");
   interromperExecucaoDemanda(banco, ref);
   await fim;
 
@@ -534,10 +568,16 @@ test("CA-12: abortar sem execução em andamento avisa; órfã é interrompida; 
   // Execução aberta sem pi (serviço reiniciado): interrompe e falha o ticket.
   assert.throws(() => enviarDemanda(banco, "s2", "x", "steer", 5), /não tem pi rodando/);
   assert.equal(abortarDemanda(banco, "s2"), true);
-  assert.equal(cabecalhoDaDemanda(banco, "s2")?.sessao.motivo, "falha");
-  assert.throws(() => enviarDemanda(banco, "s3", "x", "prompt", 5), /falha e não recebe prompt/);
+  assert.equal(cabecalhoDaSessao(banco, "s2")?.sessao.pendencia?.tipo, "item_bloqueado");
+  assert.throws(
+    () => enviarDemanda(banco, "s3", "x", "prompt", 5),
+    /aguardando_humano: item_bloqueado e não recebe prompt/,
+  );
   assert.throws(() => enviarDemanda(banco, "s4", "x", "prompt", 5), /terminada e não recebe prompt/);
-  assert.throws(() => enviarDemanda(banco, "s301", "x", "prompt", 5), /gate_demanda/);
+  assert.throws(
+    () => enviarDemanda(banco, "s301", "x", "prompt", 5),
+    /aguardando_humano: gate_humano e não recebe prompt/,
+  );
   assert.throws(() => responderDialogoDemanda(banco, "s4", "d", { value: "x" }), /não tem pi rodando/);
   for (const f of [
     () => enviarDemanda(banco, "nao-existe", "x", "prompt", 5),

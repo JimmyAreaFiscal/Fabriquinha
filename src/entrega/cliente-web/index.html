@@ -7,7 +7,13 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/static/estilo.css" />
     <script type="importmap">
-      { "imports": { "markdown-it/browser": "/static/markdown-it.js" } }
+      {
+        "imports": {
+          "markdown-it/browser": "/static/markdown-it.js",
+          "/compartilhado/agora_no_navegador.ts": "/static/compartilhado/agora_no_navegador.ts",
+          "/compartilhado/caminhos.ts": "/static/compartilhado/caminhos.ts"
+        }
+      }
     </script>
     <script type="module" src="/static/app.ts"></script>
   </head>

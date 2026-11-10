@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
   abas,
@@ -11,7 +10,6 @@ import {
   type Escolhas,
   escolherProjeto,
   estadoDaDemanda,
-  ha,
   paginaDoProjeto,
   projetoNaoEncontrado,
   situacaoNaDemanda,
@@ -27,30 +25,41 @@ const projeto = (nome: string): ProjetoListado => ({
   verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
   chave_sonarqube: nome,
 });
+const DEMANDA_TERMINAL: readonly string[] = ["concluida", "arquivada", "cancelada"];
+const DEMANDA_SATISFAZ_DEPENDENCIA: readonly string[] = ["concluida", "arquivada"];
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 
 /** O mês corrente de `GET /api/metricas`, para os cards do Projeto. */
-const MES: MetricasMesDemanda = {
+const MES: MetricasDoMes = {
   mes: "2026-10",
   projeto: null,
   total: {
     execucoes: 3,
     falhas: 0,
     duracaoMs: 0,
-    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0 },
-    custo: { conhecido: 1.5, incompleto: false },
+    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0, total: 1500 },
+    custo: { conhecido: 1.5, trabalhosSemCusto: 0 },
+    textoDoCusto: "US$ 1,50",
     modelos: [],
   },
   niveis: [],
   demandas: { registradas: 2, concluidas: 1 },
   tickets: { criados: 4, concluidos: 3 },
   prs: { abertos: 1, mergeados: 0 },
-  nota: { media: null, notas: 0 },
-  retrabalho: { adicionadas: 40, alteradas: 10, porHumanos: 2 },
-  etapas: [],
+  etapas: [
+    {
+      etapa: "implementar",
+      metricas: [
+        {
+          definicao: { tipo: "alteracoes_posteriores", rotulo: "Alterações posteriores no código", fonte: "Commits" },
+          valor: { adicionadas: 40, alteradasPorHumanos: 2 },
+        },
+      ],
+    },
+  ],
 };
 
-const AGORA = new Date("2026-10-28T12:00:00.000Z");
+const AGORA = Date.parse("2026-10-28T12:00:00.000Z");
 const SEM_ESCOLHAS: Escolhas = {
   mostrar: { concluidas: false, arquivadas: false, canceladas: false },
   gavetas: new Map(),
@@ -70,9 +79,21 @@ const ticket = (
   ref,
   etapa,
   estado: status,
-  terminal: CICLO_DO_TICKET.ehTerminal(status),
-  satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(status),
+  terminal: ["concluido", "cancelado"].includes(status),
+  satisfazDependencia: status === "concluido",
   estadoAlteradoEm: "2026-10-28T11:55:00.000Z",
+  ...resto,
+});
+type Pendencia = DemandaDoProjeto["pendencias"][number];
+const pendencia = (tipo: Pendencia["tipo"], item: string, resto: Partial<Pendencia> = {}): Pendencia => ({
+  tipo,
+  item,
+  motivo: `Motivo de ${item}`,
+  acao_esperada: "decidir_gate",
+  desde: "2026-10-28T11:45:00.000Z",
+  demanda: item.split(".")[0] ?? item,
+  projeto: "loja <api>",
+  titulo: "t",
   ...resto,
 });
 const demanda = (id: string, estado: DemandaDoProjeto["estado"], resto: Partial<DemandaDoProjeto> = {}) =>
@@ -81,15 +102,16 @@ const demanda = (id: string, estado: DemandaDoProjeto["estado"], resto: Partial<
     titulo: `Demanda ${id}`,
     tipo: "funcionalidade",
     estado,
-    terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
-    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(estado),
-    estadoNaLinhaDoTempo: CICLO_DA_DEMANDA.satisfazDependencia(estado)
+    terminal: DEMANDA_TERMINAL.includes(estado),
+    satisfazDependencia: DEMANDA_SATISFAZ_DEPENDENCIA.includes(estado),
+    estadoNaLinhaDoTempo: DEMANDA_SATISFAZ_DEPENDENCIA.includes(estado)
       ? "concluida"
-      : CICLO_DA_DEMANDA.estaEmAndamento(estado)
+      : !DEMANDA_TERMINAL.includes(estado)
         ? estado
         : "entender_e_desenhar",
     estadoAlteradoEm: "2026-10-03T12:00:00",
     bloqueadaPor: [],
+    pendencias: [],
     rodadas: [],
     tickets: [],
     ...resto,
@@ -287,23 +309,22 @@ test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela p
   ]);
 });
 
-test("o estado da demanda: a falha antes do gate, o gate antes do que roda; encerrada sem cor", () => {
+test("o estado da demanda: o item bloqueado antes das demais Pendências, elas antes do que roda; encerrada sem cor", () => {
   const rodando = [ticket("I-1.T1", "planejar", "em_execucao")];
   assert.equal(estadoDaDemanda(demanda("I-1", "cancelada", { tickets: rodando })), "cancelada");
   assert.equal(estadoDaDemanda(demanda("I-1", "concluida")), undefined);
   assert.equal(estadoDaDemanda(demanda("I-1", "arquivada")), undefined);
-  assert.equal(
-    estadoDaDemanda(demanda("I-1", "gate_demanda", { tickets: [ticket("I-1.T1", "entender_e_desenhar", "falhou")] })),
-    "falha",
-  );
-  assert.equal(estadoDaDemanda(demanda("I-1", "gate_demanda", { tickets: rodando })), "aguarda");
-  assert.equal(estadoDaDemanda(demanda("I-1", "gate_planejamento")), "aguarda");
-  const rodada = (estado: DemandaDoProjeto["rodadas"][number]["estado"]) => ({ ref: "I-1.R1", titulo: "r", estado });
-  assert.equal(estadoDaDemanda(demanda("I-1", "em_execucao", { rodadas: [rodada("ajustar_resultado")] })), "aguarda");
-  assert.equal(
-    estadoDaDemanda(demanda("I-1", "em_execucao", { rodadas: [rodada("revisar_rodada")], tickets: rodando })),
-    "rodando",
-  );
+  const gate = pendencia("gate_humano", "I-1");
+  const bloqueado = pendencia("item_bloqueado", "I-1.T1");
+  assert.equal(estadoDaDemanda(demanda("I-1", "gate_demanda", { pendencias: [gate, bloqueado] })), "falha");
+  assert.equal(estadoDaDemanda(demanda("I-1", "gate_demanda", { pendencias: [gate], tickets: rodando })), "aguarda");
+  // O que a regra do servidor chama de Pendência colore a linha, seja qual for o tipo.
+  for (const tipo of ["dialogo_do_agente", "revisao_parada", "acao_externa", "despacho_parado"] as const) {
+    assert.equal(estadoDaDemanda(demanda("I-1", "em_execucao", { pendencias: [pendencia(tipo, "I-1")] })), "aguarda");
+  }
+  // Sem Pendência, o gate no estado da demanda e o ticket falho não colorem: a regra é só do servidor.
+  assert.equal(estadoDaDemanda(demanda("I-1", "gate_planejamento")), undefined);
+  assert.equal(estadoDaDemanda(demanda("I-1", "em_execucao", { tickets: rodando })), "rodando");
   assert.equal(estadoDaDemanda(demanda("I-1", "planejar")), undefined);
 });
 
@@ -315,7 +336,7 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
       bloqueadaPor: ["I-5", "I-6"],
       tickets: [
         ticket("I-7.T1", "entender_e_desenhar", "concluido"),
-        ticket("I-7.T2", "planejar", "em_execucao", { piAtivo: true }),
+        ticket("I-7.T2", "planejar", "em_execucao", { pi_ativo: true }),
       ],
     }),
   ]);
@@ -355,6 +376,7 @@ test("na execução, uma sub-linha por rodada com o endereço, o título, o PR e
         ticket("I-9.T2", "implementar", "em_execucao", { rodada: "I-9.R3" }),
         ticket("I-9.T3", "implementar", "concluido", { rodada: "I-9.R4" }),
       ],
+      pendencias: [pendencia("gate_humano", "I-9.R2", { rodada: "I-9.R2" })],
     }),
   ]);
   const linha = linhaDe(html, "I-9");
@@ -398,6 +420,7 @@ test("a falha: borda vermelha, gaveta aberta, a rodada falha e o destaque com o 
     demanda("I-3", "em_execucao", {
       rodadas: [{ ref: "I-3.R1", titulo: "r", estado: "implementar" }],
       tickets: [ticket("I-3.T1", "implementar", "falhou", { rodada: "I-3.R1", sessao: "s/1" })],
+      pendencias: [pendencia("item_bloqueado", "I-3.T1", { rodada: "I-3.R1" })],
     }),
   ]);
   assert.match(html, /class="pista-item falha"/);
@@ -424,7 +447,7 @@ test("a gaveta: etapa, endereço, título, status, modelo e o chat; a escolha do
           ticket("I-4.T4", "revisar_rodada", "cancelado"),
         ],
       }),
-      demanda("I-5", "gate_demanda"),
+      demanda("I-5", "gate_demanda", { pendencias: [pendencia("gate_humano", "I-5")] }),
     ],
     {
       ...SEM_ESCOLHAS,
@@ -461,6 +484,8 @@ test("a gaveta: etapa, endereço, título, status, modelo e o chat; a escolha do
   // I-4 sem estado abre porque o Auditor abriu; I-5 no gate fecha porque ele fechou.
   assert.match(html, /aria-expanded="true" aria-label="Tickets de I-4"/);
   assert.match(html, /class="pista-item aguarda fechada"/);
+  assert.doesNotMatch(linhaDe(html, "I-4"), /data-pendencia/);
+  assert.match(linhaDe(html, "I-5"), /<li data-pendencia="gate_humano" data-item="I-5">/);
   assert.match(linhaDe(html, "I-5"), /<p class="muted">Nenhum ticket ainda\.<\/p>/);
   assert.match(linhaDe(html, "I-5"), /0\/0<span class="trilho-p"><i style="width:0%">/);
 });
@@ -498,8 +523,31 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
   assert.match(linhaDe(html, "I-3"), /<div class="pista-estado"><\/div>/);
 });
 
-test("há quanto tempo: menos de 1 min, minutos, e horas com minutos, sem quebrar", () => {
-  assert.equal(ha("2026-10-28T11:59:30.000Z", AGORA), "há menos\u00a0de\u00a01\u00a0min");
-  assert.equal(ha("2026-10-28T11:15:00.000Z", AGORA), "há 45\u00a0min");
-  assert.equal(ha("2026-10-28T09:50:00.000Z", AGORA), "há 2\u00a0h\u00a010\u00a0min");
+test("a gaveta abre com um item por Pendência: tipo, item, motivo, há quanto tempo e o chat do diálogo", () => {
+  const html = pagina([
+    demanda("I-8", "em_execucao", {
+      rodadas: [{ ref: "I-8.R1", titulo: "r", estado: "ajustar_resultado" }],
+      pendencias: [
+        pendencia("dialogo_do_agente", "I-8.R1", { rodada: "I-8.R1", motivo: "Ajustes <aguardam>" }),
+        pendencia("acao_externa", "I-8", { sessao: "s/9" }),
+      ],
+    }),
+  ]);
+  const linhas = [
+    ...linhaDe(html, "I-8").matchAll(/<li data-pendencia="(\w+)" data-item="([\w.-]+)">([\s\S]*?)<\/li>/g),
+  ];
+  assert.deepEqual(
+    linhas.map((l) => [l[1], l[2]]),
+    [
+      ["dialogo_do_agente", "I-8.R1"],
+      ["acao_externa", "I-8"],
+    ],
+  );
+  assert.match(String(linhas[0]?.[3]), /diálogo<\/span>[\s\S]*Ajustes &#60;aguardam&#62;[\s\S]*há 15\u00a0min/);
+  assert.doesNotMatch(String(linhas[0]?.[3]), /href/);
+  assert.match(String(linhas[1]?.[3]), /ação externa<\/span>[\s\S]*href="\/sessions\/s%2F9"/);
+  // As Pendências da rodada colorem a sub-linha dela; sem rodada, só a linha da demanda.
+  assert.match(html, /class="pista-item aguarda"/);
+  assert.match(html, /<ol class="trilho-estados aguarda" aria-label="Fases da rodada I-8\.R1">/);
+  assert.match(html, /aria-expanded="true" aria-label="Tickets de I-8"/);
 });

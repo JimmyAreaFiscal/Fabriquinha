@@ -15,6 +15,9 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { descartarAlteracoes, exigirGit, naFilaDoProjeto, preparar, removerWorktrees } from "./worktree.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-worktree-")));
 after(() => {
@@ -68,19 +71,19 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
       `a preparação da worktree falhou em "echo tentando; test -f ${sinal}": saiu com código 1 ` +
         `(veja o log em ${c.log}; ela roda de novo na próxima execução)`;
 
-  await assert.rejects(preparar(c.worktree, comandos, c.log), falha);
+  await assert.rejects(preparar(ambiente, c.worktree, comandos, c.log), falha);
   assert.equal(existsSync(segundo), false);
   assert.match(c.lerLog(), /tentando\n.*preparação falhou: saiu com código 1\n$/s);
 
   writeFileSync(sinal, "");
-  await preparar(c.worktree, comandos, c.log);
+  await preparar(ambiente, c.worktree, comandos, c.log);
   assert.equal(existsSync(segundo), true);
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
 
 test("erro de sintaxe na preparação vai para o log", async () => {
   const c = cenario();
-  await assert.rejects(preparar(c.worktree, ["npm test ("], c.log), /saiu com código 2/);
+  await assert.rejects(preparar(ambiente, c.worktree, ["npm test ("], c.log), /saiu com código 2/);
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
@@ -88,7 +91,7 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   const c = cenario();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = preparar(c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
+  const pedido = preparar(ambiente, c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
   // O relógio falso anda um minuto por volta do laço de eventos real, depois que o comando começou.
   let minutos = 0;
   while (resultado === undefined) {
@@ -124,14 +127,14 @@ test("descarte: reset --hard + clean -fd mantém ignorados, remove o novo e anot
   writeFileSync(join(caminho, "rascunho-ç.md"), "");
   writeFileSync(join(caminho, ".gitignore"), "alterado\n");
 
-  assert.deepEqual(await descartarAlteracoes(caminho, c.log), ["pasta nova/", "rascunho-ç.md"]);
+  assert.deepEqual(await descartarAlteracoes(ambiente, caminho, c.log), ["pasta nova/", "rascunho-ç.md"]);
   assert.equal(existsSync(join(caminho, "node_modules", "pacote", "index.js")), true);
   assert.equal(existsSync(join(caminho, "rascunho-ç.md")), false);
   assert.equal(readFileSync(join(caminho, ".gitignore"), "utf8"), "node_modules/\n");
   assert.match(c.lerLog(), /descarte removeu: pasta nova\/, rascunho-ç\.md\n$/);
 
   const antes = c.lerLog();
-  assert.deepEqual(await descartarAlteracoes(caminho, c.log), []);
+  assert.deepEqual(await descartarAlteracoes(ambiente, caminho, c.log), []);
   assert.equal(c.lerLog(), antes);
 });
 
@@ -168,7 +171,7 @@ test("o descarte entra na mesma fila do projeto que a worktree", async () => {
     await new Promise((pronto) => setTimeout(pronto, 50));
     eventos.push("fila-");
   });
-  const descarte = descartarAlteracoes(caminho, c.log).then(() => eventos.push("descarte"));
+  const descarte = descartarAlteracoes(ambiente, caminho, c.log).then(() => eventos.push("descarte"));
   await Promise.all([ocupada, descarte]);
   assert.deepEqual(eventos, ["fila+", "fila-", "descarte"]);
 });

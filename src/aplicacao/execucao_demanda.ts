@@ -1,10 +1,11 @@
 // Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
-// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pelo fechamento (`fechamento_ticket.ts`).
+// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pela condução da etapa (`etapas/`).
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
@@ -27,22 +28,22 @@ import {
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
 } from "../nucleo/trabalho_agentico.ts";
-import { varrerBase } from "./retrabalho.ts";
+import { varrerCommitsHumanos } from "./metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
-import { anotar, pastasDoProcesso } from "../infra/registro.ts";
+import { anotar, noLog, pastasDoProcesso } from "../infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
-import { sinalNoGrupo } from "../infra/processo.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
-import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
+import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
@@ -61,8 +62,10 @@ export interface OpcoesExecucaoDemanda {
   iniciarEmSessaoNova?: boolean;
   /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
   mensagem?: string;
-  /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
-  fechar?: typeof fecharTicketDemanda;
+  /** O que fazer com o ticket depois do encerramento do processo; sem ele, quem conduz a etapa o fecha. */
+  fechar?: (banco: DatabaseSync, ref: TicketRef, resultado: { falha?: FalhaDaTentativa }) => Promise<void>;
+  /** O Espaço que a condução já criou (e se buscou a base); sem ele, a execução o cria. */
+  espaco?: { pasta: string; buscouBase: boolean };
 }
 
 interface Conducao {
@@ -74,14 +77,18 @@ interface Conducao {
   sessao: TrabalhoGerenciado;
   execucao: ProcessoDoTrabalho;
   opcoes: OpcoesExecucaoDemanda;
+  relogio: Relogio;
 }
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
-async function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+async function worktreeDoEspacoDoTicket(
+  { banco, ag, ticket, projeto, opcoes }: Conducao,
+  log: string,
+): Promise<string> {
   const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
-  const { pasta, buscouBase } = await ciclo.criar();
-  if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
+  const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
+  if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
 }
 
@@ -132,14 +139,16 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
     const worktree = await worktreeDoEspacoDoTicket(c, log);
+    // O agente enxerga o Espaço pelo Ambiente: no host local os caminhos são os do host.
+    const caminhoNoAmbiente = (caminhoNoHost: string): string => ambienteDoServico().caminhoNoAmbiente(caminhoNoHost);
     const prompt =
       opcoes.mensagem ??
       montarPromptDemanda({
         ag: c.ag,
         ticket: c.ticket,
         projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
-        worktree,
-        saida: join(dir, "saida"),
+        worktree: caminhoNoAmbiente(worktree),
+        saida: caminhoNoAmbiente(join(dir, "saida")),
         retomada: opcoes.retomada,
         ...(c.ticket.etapa === "revisar_rodada" && {
           perguntasDasRevisoesAnteriores: perguntasDosTicketsReprovadosDaRodada(c),
@@ -147,7 +156,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         commitsDosTickets: commitsDosTickets(c), // só as revisões leem
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,
-          caminho: caminhoArquivo(c.banco, a.sha256),
+          caminho: caminhoNoAmbiente(caminhoArquivo(c.banco, a.sha256)),
         })),
       });
     writeFileSync(join(dir, "prompt.md"), prompt);
@@ -167,6 +176,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       args,
       cwd: worktree,
       env: new HarnessPi().ambiente(raiz, dir, execucao.id),
+      banco: c.banco,
       log,
       prompt,
       limiteMin: opcoes.limiteMin,
@@ -175,6 +185,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
           execucao.configuracao_agente?.modelo,
           { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
           pergunta,
+          undefined,
+          { banco: c.banco, ticket: c.ref, execucao: execucao.id },
         ),
       aoLancar: (pgid) => {
         gravarGrupo(c, pgid);
@@ -188,20 +200,13 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   if (condutor.foiInterrompido(execucao.id)) falha = falhaInterrompidaPeloAuditor;
   else if (condutor.emParada()) falha = falhaPorServicoReiniciado;
   condutor.deixarDeAcompanhar(execucao.id);
-  encerrarProcessoDoTicket(c, falha !== undefined, log);
+  encerrarProcessoDoTicket(c, falha !== undefined, log, c.relogio);
   try {
-    await (opcoes.fechar ?? fecharTicketDemanda)(
-      c.banco,
-      c.ref,
-      { falha },
-      {
-        parada: () => condutor.emParada(),
-      },
-    );
+    await opcoes.fechar?.(c.banco, c.ref, { falha });
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {
-      falharTicketDemanda(c.banco, c.ref, falhaQueExigeOAuditor(`fechamento falhou: ${mensagem(error_)}`));
+      falharTicketDemanda(c.banco, c.ref, falhaQueExigeOAuditor(`fechamento falhou: ${mensagem(error_)}`), c.relogio);
     } catch (erroFalha) {
       anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
     }
@@ -220,6 +225,7 @@ export function iniciarExecucaoDemanda(
   banco: DatabaseSync,
   ref: TicketRef,
   opcoes: OpcoesExecucaoDemanda,
+  relogio: Relogio = relogioDoSistema,
 ): { id: string; fim: Promise<FalhaDaTentativa | undefined> } {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = encontrado(
@@ -236,7 +242,7 @@ export function iniciarExecucaoDemanda(
   const abrir = (trabalho_id: string): ProcessoDoTrabalho => ({
     id: randomUUID(),
     trabalho_id,
-    inicio: new Date().toISOString(),
+    inicio: relogio.agora(),
     falha: false,
     configuracao_agente: configuracaoAgente,
   });
@@ -268,7 +274,7 @@ export function iniciarExecucaoDemanda(
     }),
   );
   const fim = condutor.acompanhar(execucao.id, () =>
-    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }),
+    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes, relogio }),
   );
   return { id: execucao.id, fim };
 }
@@ -277,7 +283,11 @@ export function iniciarExecucaoDemanda(
  * Interrompe a execução aberta do ticket. Com condutor vivo, o SIGTERM no grupo faz o condutor gravar a falha; órfã
  * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
  */
-export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef): void {
+export function interromperExecucaoDemanda(
+  banco: DatabaseSync,
+  ref: TicketRef,
+  relogio: Relogio = relogioDoSistema,
+): void {
   const { execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.fim == null),
@@ -285,6 +295,10 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     "só se interrompe uma execução aberta",
   );
   if (condutor.interromper(execucao.id)) return;
-  if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
-  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar);
+  if (execucao.grupo_processo != null) {
+    const ambiente = ambienteDoServico();
+    // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
+    ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
+  }
+  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar, relogio);
 }

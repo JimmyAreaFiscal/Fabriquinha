@@ -3,7 +3,7 @@
 // achados e a conversa (o componente React do chat, carregado com import()) e liga Encaminhar e Abortar. Os testes de
 // ponta a ponta (e2e/avaliacoes.spec.ts) o exercitam no navegador.
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import { caminhoDaAvaliacao } from "../render.ts";
 import {

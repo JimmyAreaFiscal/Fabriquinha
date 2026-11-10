@@ -17,11 +17,12 @@ import {
   falhaQueExigeOAuditor,
   type ResultadoDaTentativa,
 } from "../nucleo/tentativa.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 
 const falhouEm = "2026-01-01T00:00:00.000Z";
-const minutosDepois = (minutos: number) => new Date(Date.parse(falhouEm) + minutos * 60_000);
+const minutosDepois = (minutos: number) => relogioFixo(new Date(Date.parse(falhouEm) + minutos * 60_000).toISOString());
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const tempoLimite: ResultadoDaTentativa = { tipo: "falha_infraestrutura", causa: "tempo_limite", motivo: "aguarde" };
 const cota: ResultadoDaTentativa = { tipo: "falha_infraestrutura", causa: "cota", motivo: "aguarde" };

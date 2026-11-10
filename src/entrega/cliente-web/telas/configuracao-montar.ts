@@ -2,16 +2,18 @@
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Modelo } from "../../../nucleo/configuracao_agente.ts";
 import type { Effort } from "../../../nucleo/primitivos.ts";
-import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
+import type { UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
+  ambiente,
+  confirmacaoDeEliminar,
   confirmacaoDeRemover,
   type Erros,
   errosDoZod,
-  type EstadoDaConfiguracao,
   ETAPAS,
   formularioDeProjeto,
   menu,
@@ -19,7 +21,6 @@ import {
   NOVO,
   type OpcoesDosUsuarios,
   pagina,
-  type ProjetoCadastrado,
   type ProjetoListado,
   projetoInexistente,
   rascunhoDe,
@@ -128,6 +129,60 @@ function montarModeloDasAvaliacoes(
         if (!signal.aborted)
           montarModeloDasAvaliacoes(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
       });
+  });
+}
+
+/** O que o formulário do Ambiente tem agora, no formato de `ConfiguracaoDoAmbiente`. */
+const lerAmbiente = (form: HTMLFormElement): EstadoDoAmbiente["configuracao"] => ({
+  tipo: valor(form, '[name="tipo"]') as EstadoDoAmbiente["configuracao"]["tipo"],
+  memoria_maxima_mb: Number(valor(form, '[name="memoria_maxima_mb"]')),
+  cpus: Number(valor(form, '[name="cpus"]')),
+  ociosidade_para_eliminar_min: Number(valor(form, '[name="ociosidade_para_eliminar_min"]')),
+});
+
+/** O Ambiente: salvar grava o tipo e os limites; Eliminar pede confirmação e o 409 do alocado vai para o aviso. */
+function montarAmbiente(
+  main: HTMLElement,
+  signal: AbortSignal,
+  menuHtml: string,
+  estado: EstadoDoAmbiente,
+  erros: Erros,
+): void {
+  main.innerHTML = pagina(menuHtml, ambiente(estado, erros));
+  const form = main.querySelector<HTMLFormElement>("[data-ambiente]");
+  form?.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const dados = lerAmbiente(form);
+    ocupar(form, "Salvando…");
+    api("/api/ambiente", postar(dados))
+      .then(() => montarConfiguracao(main, {}, signal))
+      .catch((error_: unknown) => {
+        if (!signal.aborted)
+          montarAmbiente(main, signal, menuHtml, { ...estado, configuracao: dados }, errosDe(error_));
+      });
+  });
+  main.querySelector(".conjunto-ambiente")?.addEventListener("click", (evento) => {
+    const id =
+      evento.target instanceof Element
+        ? evento.target.closest<HTMLElement>("[data-eliminar]")?.dataset.eliminar
+        : undefined;
+    if (id === undefined) return;
+    main.querySelector("[data-dialogo-eliminar]")?.remove();
+    main.querySelector(".painel-config")?.insertAdjacentHTML("beforeend", confirmacaoDeEliminar(id));
+    const dialogo = main.querySelector<HTMLDialogElement>("[data-dialogo-eliminar]");
+    dialogo?.showModal();
+    dialogo?.querySelector("[data-confirmar-eliminar]")?.addEventListener("click", (clique) => {
+      (clique.currentTarget as HTMLButtonElement).disabled = true;
+      api(`/api/ambiente/${encodeURIComponent(id)}`, { method: "DELETE" })
+        .then(() => {
+          dialogo.close();
+          return montarConfiguracao(main, {}, signal);
+        })
+        .catch((error_: unknown) => {
+          dialogo.close();
+          mostrarErro(error_);
+        });
+    });
   });
 }
 
@@ -316,6 +371,10 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
       await api<Modelo[]>("/api/modelos", { signal }),
       new Map(),
     );
+    return;
+  }
+  if (sel.tipo === "ambiente") {
+    montarAmbiente(main, signal, menuHtml, await api<EstadoDoAmbiente>("/api/ambiente", { signal }), new Map());
     return;
   }
   const salvo = sel.tipo === "projeto" ? projetos.find((p) => p.nome === sel.nome) : undefined;

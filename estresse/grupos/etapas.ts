@@ -24,9 +24,8 @@ import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
-import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
+import { type DepsDespacho, cicloDoDespacho } from "../../src/aplicacao/despacho.ts";
+import { interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
 import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
@@ -39,7 +38,7 @@ import { integrarPR } from "../../src/infra/repositorio/pr.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
 export const EXECUCOES = 5;
@@ -173,24 +172,6 @@ const escreve = (c: Cenario, ligado: boolean) => {
 // Evidências de uma IA externa que registra a demanda, como em integracao/apoio.ts.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const custos = {
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao: "ext",
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-};
 
 /** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
 async function demandaAprovada(c: Cenario): Promise<string> {
@@ -208,7 +189,6 @@ async function demandaAprovada(c: Cenario): Promise<string> {
     gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  submeter("custos_realizados", custos);
   gestao.enviar(c.banco, id, AUTOR, ctx);
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
   return id;
@@ -234,25 +214,20 @@ const verificacoes = (): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
 const deps: DepsDespacho = {
-  iniciarProcesso: (banco, t, opcoes) =>
-    iniciarExecucaoDemanda(banco, t, {
-      ...opcoes,
-      fechar: (b, ref, r) =>
-        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes()) }),
-    }),
+  implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes()) },
   verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
 };
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(despacharDemandas(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = despacharDemandas(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps);
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -343,7 +318,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = despacharDemandas(c.banco, c.config, deps);
+  const [fim] = cicloDoDespacho(c.banco, c.config, deps);
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

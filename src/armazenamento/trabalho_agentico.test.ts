@@ -2,16 +2,24 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { encerrarProcesso, iniciarProcesso, registrarUso, totalDoTicket } from "../nucleo/trabalho_agentico.ts";
+import { encerrarProcesso, iniciarProcesso, registrarUso } from "../nucleo/trabalho_agentico.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { migrar } from "./banco.ts";
+import { trabalhosComTituloDaDemanda } from "./historico_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
+  gravarTokenDoProcesso,
   processosAbertos,
+  processoVivoDoToken,
+  sessaoDeCadaTicketDaDemanda,
+  sessaoDeCadaTicketDasDemandas,
+  ticketDoTrabalho,
   ticketsComPiAtivo,
+  ticketsEmExecucaoSemProcesso,
+  trabalhosComTicketDaDemanda,
 } from "./trabalho_agentico.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -103,18 +111,15 @@ test("CA-10, CA-13, CA-14: FK ou CHECK desfazem a gravação inteira", () => {
   );
 });
 
-test("CA-15: carregar por demanda e o total do ticket sobre o que foi lido", () => {
+test("CA-15: carregar por demanda e o ticket sobre o que foi lido", () => {
   const b = banco();
   const ref2 = { demanda_id: "I-1", ticket_id: 2 };
-  const s = [sessao(), sessao("s2", 2)];
-  const e = [execucao(), execucao("e2", "s2")];
   const u = [uso({ custo: 1 }), uso({ execucao_id: "e2", tokens_entrada: 7 })];
   gravar(b, [sessao()], [execucao()], [u[0] as never]);
   gravar(b, [sessao("s2", 2)], [execucao("e2", "s2")], [u[1] as never], ref2);
   const ticket = carregarTrabalhosDoTicket(b, ref);
   assert.equal(ticket.sessoes.length, 1);
-  const antes = totalDoTicket(s, e, u, ref);
-  assert.deepEqual(totalDoTicket(ticket.sessoes, ticket.execucoes, ticket.usos, ref), antes);
+  assert.deepEqual(ticket.usos, [u[0]]);
   assert.equal(carregarTrabalhosDaDemanda(b, "I-1").usos.length, 2);
   comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: [...x.execucoes] }));
   assert.throws(
@@ -207,4 +212,111 @@ test("CA-10: execuções abertas de qualquer ticket, com grupo de processo nulo 
     { id: "e2", trabalho_id: "s1", demanda_id: "I-1", ticket_id: 1, grupo_processo: 4321 },
     { id: "e3", trabalho_id: "s2", demanda_id: "I-1", ticket_id: 2, grupo_processo: null },
   ]);
+});
+
+test("o ticket dono do trabalho e os trabalhos da demanda; id desconhecido volta sem ticket", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [], []);
+  gravar(b, [sessao("s2", 2)], [], [], noTicket2);
+  assert.deepEqual({ ...ticketDoTrabalho(b, "s2") }, noTicket2);
+  assert.equal(ticketDoTrabalho(b, "nao-existe"), undefined);
+  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-1"), [
+    { id: "s1", ...ref },
+    { id: "s2", ...noTicket2 },
+  ]);
+  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-2"), []);
+});
+
+test("tickets em execução de etapa que fecha depois da execução; ticket aberto ou de etapa fora da lista não entram", () => {
+  const b = banco();
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
+  b.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), [ref]);
+  b.exec("UPDATE ticket_demanda SET etapa = 'planejar' WHERE ticket_id = 1");
+  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
+});
+
+test("trabalhos do histórico com o título da demanda, filtrados por projeto, demanda e etapa", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [], []);
+  assert.deepEqual(trabalhosComTituloDaDemanda(b, {}), [{ id: "s1", titulo: "t" }]);
+  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "p", demanda: "I-1", etapa: "implementar" }).length, 1);
+  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "outro" }).length, 0);
+  assert.equal(trabalhosComTituloDaDemanda(b, { demanda: "I-2" }).length, 0);
+  assert.equal(trabalhosComTituloDaDemanda(b, { etapa: "planejar" }).length, 0);
+});
+
+test("sessaoDeCadaTicketDaDemanda devolve a sessão de cada ticket e, com mais de uma, a mais recente", () => {
+  const b = banco();
+  const nova = b.prepare(
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-1', ?, 'autonomo', 'c')",
+  );
+  nova.run("s-a", 1);
+  nova.run("s-b", 2);
+  nova.run("s-c", 1);
+  assert.deepEqual(
+    sessaoDeCadaTicketDaDemanda(b, "I-1"),
+    new Map([
+      [1, "s-c"],
+      [2, "s-b"],
+    ]),
+  );
+  assert.deepEqual(sessaoDeCadaTicketDaDemanda(b, "I-9"), new Map());
+});
+
+test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {
+  const b = banco();
+  b.exec(`INSERT INTO demanda VALUES ('I-2', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+      VALUES ('I-2', 1, 'implementar', 'aberto', ${T})`);
+  const nova = b.prepare(
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, 1, 'autonomo', 'c')",
+  );
+  nova.run("s-1", "I-1");
+  nova.run("s-2", "I-2");
+  assert.deepEqual(
+    sessaoDeCadaTicketDasDemandas(b, ["I-2", "I-1", "I-9"]),
+    new Map([
+      ["I-2", new Map([[1, "s-2"]])],
+      ["I-1", new Map([[1, "s-1"]])],
+      ["I-9", new Map()],
+    ]),
+  );
+});
+
+test("o token resolve só o processo vivo dono dele; encerrado, de outro e desconhecido não resolvem", () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao("e1"), execucao("e2")], []);
+  gravarTokenDoProcesso(b, "e1", "token-1");
+  gravarTokenDoProcesso(b, "e2", "token-2");
+
+  assert.equal(processoVivoDoToken(b, "token-1"), "e1");
+  assert.equal(processoVivoDoToken(b, "token-2"), "e2");
+  assert.equal(processoVivoDoToken(b, "desconhecido"), undefined);
+  assert.equal(processoVivoDoToken(b, ""), undefined);
+
+  // o upsert do ticket (encerrar) não apaga o hash, mas o processo terminado deixa de resolver
+  comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarProcesso(x.execucoes, "e1", em, false) }));
+  assert.equal(processoVivoDoToken(b, "token-1"), undefined);
+  assert.equal(processoVivoDoToken(b, "token-2"), "e2");
+});
+
+test("o banco guarda só o hash do token, e processo inexistente ou terminado não recebe token", () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao()], []);
+  gravarTokenDoProcesso(b, "e1", "segredo");
+  const hash = String(b.prepare("SELECT hash_do_token FROM processo_do_trabalho").get()?.hash_do_token);
+  assert.match(hash, /^[0-9a-f]{64}$/);
+  assert.notEqual(hash, "segredo");
+
+  assert.throws(() => {
+    gravarTokenDoProcesso(b, "inexistente", "t");
+  }, ErroDeRegra);
+  comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarProcesso(x.execucoes, "e1", em, false) }));
+  assert.throws(() => {
+    gravarTokenDoProcesso(b, "e1", "outro");
+  }, /já terminou/);
+  assert.throws(() => {
+    b.exec("UPDATE processo_do_trabalho SET hash_do_token = 'curto'");
+  }, /CHECK/);
 });

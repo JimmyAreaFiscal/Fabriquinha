@@ -7,7 +7,8 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../../nucleo/erros.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 import type { SessaoDeDemanda } from "./historico.ts";
@@ -64,10 +65,12 @@ function recusaDoEndereco(texto: string): string {
 async function sessoes(query: string): Promise<unknown> {
   const rota = ROTAS.find((r) => r.metodo === "GET" && casar(r.caminho, "/api/sessoes"));
   assert.ok(rota);
+  let valor: unknown;
   try {
-    return await rota.tratar({
+    valor = await rota.tratar({
       banco,
       agendador: { proximaBusca: () => new Date() },
+      relogio: relogioDoSistema,
       params: {},
       query: new URLSearchParams(query),
       corpo: undefined,
@@ -77,6 +80,9 @@ async function sessoes(query: string): Promise<unknown> {
   } catch (erro) {
     return traduzir(erro);
   }
+  assert.ok(rota.resposta, "GET /api/sessoes não declara o schema da resposta");
+  rota.resposta.parse(JSON.parse(JSON.stringify(valor)));
+  return valor;
 }
 
 const resumo = (lista: unknown) =>
@@ -135,7 +141,10 @@ test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => 
   );
   banco.exec("UPDATE processo_do_trabalho SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
   const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];
-  assert.deepEqual([s2?.sessao, s2?.estado, s2?.motivo, s2?.resultado], ["s2", "aguardando_humano", "falha", "falha"]);
+  assert.deepEqual(
+    [s2?.sessao, s2?.estado, s2?.pendencia?.tipo, s2?.resultado],
+    ["s2", "aguardando_humano", "item_bloqueado", "falha"],
+  );
 });
 
 test("filtro inválido dá 422", async () => {

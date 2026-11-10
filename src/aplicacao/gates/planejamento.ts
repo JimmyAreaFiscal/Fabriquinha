@@ -3,29 +3,22 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { Plano } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { lerPlanoGravado } from "../../nucleo/plano.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, logDaOperacao } from "../../infra/registro.ts";
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
-import { condutor } from "../trabalho/condutor.ts";
-import { varrerBase } from "../retrabalho.ts";
+import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../etapas/pi_vivo.ts";
+import { varrerCommitsHumanos } from "../metricas/varrer_commits_humanos.ts";
 
 const gate = GATES.gate_planejamento;
-const contexto = () => ({ agora: new Date().toISOString() });
-
-/** O pi vivo da última sessão do ticket de planejamento, se há. */
-function piVivoDoPlanejamento(banco: DatabaseSync, demanda_id: string, ticket_id: number) {
-  const { sessoes } = carregarTrabalhosDoTicket(banco, { demanda_id, ticket_id });
-  const atual = sessoes.at(-1);
-  return atual && condutor.situacao(atual.id);
-}
 
 /**
  * O Auditor reprova com motivo; a demanda volta a `planejar`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
@@ -37,18 +30,17 @@ export function reprovarGateDoPlanejamento(
   entrada: EntradaDoGate,
   ator: Ator,
   motivo: string,
+  relogio: Relogio,
 ): AgregadoDemanda {
   const { ticket_id } = gate.ancora(carregarDemanda(banco, endereco.demanda_id), endereco);
   const reprovado = comDemanda(banco, endereco.demanda_id, (ag) =>
-    gate.decidir(ag, endereco, entrada, ator, contexto()),
+    gate.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() }),
   );
-  const viva = piVivoDoPlanejamento(banco, endereco.demanda_id, ticket_id);
-  if (viva && !viva.ocupado) {
-    condutor.mandar(viva.execucao, {
-      type: "prompt",
-      message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}`,
-    });
-  }
+  mandarAoPiVivoOcioso(
+    banco,
+    { demanda_id: endereco.demanda_id, ticket_id },
+    `Planejamento reprovado pelo Auditor. Motivo: ${motivo}`,
+  );
   return reprovado;
 }
 
@@ -62,19 +54,20 @@ export async function aprovarGateDoPlanejamento(
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
+  relogio: Relogio,
 ): Promise<AgregadoDemanda> {
   const { demanda_id } = endereco;
   const ag = carregarDemanda(banco, demanda_id);
-  gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de tocar o git (estado, falha, plano ausente)
+  gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de tocar o git (estado, falha, plano ausente)
   const { ticket_id } = gate.ancora(ag, endereco);
-  const plano = Plano.parse(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
+  const plano = lerPlanoGravado(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
-    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico());
     const { buscouBase } = await ciclo.criar();
-    if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
@@ -95,9 +88,10 @@ export async function aprovarGateDoPlanejamento(
       throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
     }
   }
-  const aprovado = comDemanda(banco, demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
+  const aprovado = comDemanda(banco, demanda_id, (a) =>
+    gate.decidir(a, endereco, entrada, ator, { agora: relogio.agora() }),
+  );
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
-  const viva = piVivoDoPlanejamento(banco, demanda_id, ticket_id);
-  if (viva) condutor.encerrar(viva.execucao);
+  encerrarPiVivo(banco, { demanda_id, ticket_id });
   return aprovado;
 }

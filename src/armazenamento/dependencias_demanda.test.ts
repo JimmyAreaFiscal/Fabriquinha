@@ -5,12 +5,16 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
+import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { escrever, migrar } from "./banco.ts";
 import {
+  arestasDeDependencia,
+  demandaParaDependencia,
   dependentesNaoConcluidasDaDemanda,
+  dependentesNaoConcluidasDasDemandas,
+  gravarDependenciaDemanda,
   predecessorasDaDemanda,
-  registrarDependenciaDemanda,
+  predecessorasDasDemandas,
 } from "./dependencias_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -31,7 +35,9 @@ const banco = (demandas: Record<string, { projeto?: string; estado?: string; env
   }
   return b;
 };
-const arestas = (b: DatabaseSync) => b.prepare("SELECT * FROM dependencia_demanda").all().length;
+const registrarDependenciaDemanda = (b: DatabaseSync, demanda_id: string, depende_demanda_id: string) => {
+  gravarDependenciaDemanda(b, { demanda_id, depende_demanda_id });
+};
 
 test("CA-1 e CA-6: registra, entre projetos, e a consulta devolve a predecessora", () => {
   const b = banco({ "I-1": {}, "I-2": { projeto: "b" } });
@@ -39,30 +45,24 @@ test("CA-1 e CA-6: registra, entre projetos, e a consulta devolve a predecessora
   assert.deepEqual(predecessorasDaDemanda(b, "I-2"), [{ demanda_id: "I-1", estado: "entender_e_desenhar" }]);
 });
 
-test("CA-2 a CA-5: recusas não gravam nada", () => {
-  const b = banco({ "I-1": {}, "I-2": { enviada: 1 }, "I-3": {} });
-  assert.throws(() => {
-    registrarDependenciaDemanda(b, "I-2", "I-1");
-  }, /I-2.*já foi enviada/);
-  assert.throws(() => {
-    registrarDependenciaDemanda(b, "I-1", "I-1");
-  }, ErroDeRegra);
+test("arestasDeDependencia lê na ordem de gravação", () => {
+  const b = banco({ "I-1": {}, "I-2": {}, "I-3": {} });
   registrarDependenciaDemanda(b, "I-3", "I-1");
-  assert.throws(() => {
-    registrarDependenciaDemanda(b, "I-1", "I-3");
-  }, /ciclo/);
-  assert.equal(arestas(b), 1);
-  assert.equal(b.isTransaction, false);
+  registrarDependenciaDemanda(b, "I-2", "I-1");
+  assert.deepEqual(
+    arestasDeDependencia(b).map((a) => ({ ...a })),
+    [
+      { demanda_id: "I-3", depende_demanda_id: "I-1" },
+      { demanda_id: "I-2", depende_demanda_id: "I-1" },
+    ],
+  );
 });
 
-test("demanda inexistente, dona ou predecessora, dá ErroDeInexistente", () => {
-  const b = banco({ "I-1": {} });
-  assert.throws(() => {
-    registrarDependenciaDemanda(b, "I-9", "I-1");
-  }, ErroDeInexistente);
-  assert.throws(() => {
-    registrarDependenciaDemanda(b, "I-1", "I-9");
-  }, ErroDeInexistente);
+test("demandaParaDependencia diz se foi enviada; demanda inexistente dá ErroDeInexistente", () => {
+  const b = banco({ "I-1": {}, "I-2": { enviada: 1 } });
+  assert.deepEqual(demandaParaDependencia(b, "I-1"), { id: "I-1", enviada: false });
+  assert.deepEqual(demandaParaDependencia(b, "I-2"), { id: "I-2", enviada: true });
+  assert.throws(() => demandaParaDependencia(b, "I-9"), ErroDeInexistente);
 });
 
 test("CA-9 e CA-10: predecessora pendente até ser concluída ou arquivada", () => {
@@ -119,4 +119,25 @@ test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transaç
     outra.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("predecessorasDasDemandas e dependentesNaoConcluidasDasDemandas leem várias demandas de uma vez, na mesma ordem das de uma só", () => {
+  const b = banco({ "I-1": {}, "I-2": {}, "I-3": { estado: "concluida" }, "I-4": {} });
+  registrarDependenciaDemanda(b, "I-2", "I-1");
+  registrarDependenciaDemanda(b, "I-2", "I-3");
+  registrarDependenciaDemanda(b, "I-4", "I-2");
+  const ids = ["I-2", "I-1", "I-4"];
+  assert.deepEqual(predecessorasDasDemandas(b, ids), new Map(ids.map((id) => [id, predecessorasDaDemanda(b, id)])));
+  assert.deepEqual(predecessorasDasDemandas(b, ["I-2"]).get("I-2"), [
+    { demanda_id: "I-1", estado: "entender_e_desenhar" },
+    { demanda_id: "I-3", estado: "concluida" },
+  ]);
+  assert.deepEqual(
+    dependentesNaoConcluidasDasDemandas(b, ids),
+    new Map([
+      ["I-2", ["I-4"]],
+      ["I-1", ["I-2", "I-4"]],
+      ["I-4", []],
+    ]),
+  );
 });

@@ -1,18 +1,16 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
+import type { UsoDeclarado } from "../../armazenamento/uso_declarado.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../nucleo/espaco_de_trabalho.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../nucleo/schemas.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
+import { Uso } from "../../nucleo/uso.ts";
 import { lista, neutro } from "./pr.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
 
 const situacao = (incompleto: boolean) => (incompleto ? ("incompleto" as const) : ("conhecido" as const));
-
-interface CustoExterno {
-  sessoes: { ferramenta: string; sessao: string; linhas: { custo: number | null }[] }[];
-}
 
 function idEUrlDoPrDaRodada(ag: AgregadoDemanda, rodada: number): { id: string; url: string } | null {
   const pr = prDoEspaco(ag, rodada);
@@ -24,6 +22,7 @@ export function montarArvorePRs(
   sessoes: readonly TrabalhoGerenciado[],
   execucoes: readonly ProcessoDoTrabalho[],
   usos: readonly UsoModeloExecucao[],
+  usosDeclarados: readonly UsoDeclarado[],
 ): ArvorePRsCriteriosCustos {
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, ag.tickets);
   // Ticket conduzido sem agente (sem sessão) não consumiu nada: custo zero conhecido, não incompleto.
@@ -46,18 +45,16 @@ export function montarArvorePRs(
         etapa: t.etapa,
         custo: { valor: t.custo, situacao: situacao(t.custoIncompleto) },
       }));
-  const externos = ag.evidencias
-    .filter((e) => e.tipo === "custos_realizados")
-    .flatMap((e) => (e.dados as unknown as CustoExterno).sessoes)
-    .map(({ ferramenta, sessao, linhas }) => ({
-      ferramenta,
-      sessao,
-      custo: {
-        valor: linhas.reduce((n, l) => n + (l.custo ?? 0), 0),
-        // Linha sem custo (null) é desconhecida, nunca zero.
-        situacao: situacao(linhas.some((l) => l.custo === null)),
-      },
-    }));
+  const externos = usosDeclarados.map(({ ferramenta, sessao, linhas }) => ({
+    ferramenta,
+    sessao,
+    uso: Uso.de(linhas, 1),
+  }));
+  const custoExterno = (uso: Uso) => {
+    const { conhecido, trabalhosSemCusto } = uso.custo();
+    // Linha sem custo (null) é desconhecida, nunca zero.
+    return { valor: conhecido, situacao: situacao(trabalhosSemCusto > 0) };
+  };
   const prFinal = prDaDemanda(ag);
   // Sem parse: quem submete a evidência a valida pelo schema, e a recusa falha a Tentativa.
   return {
@@ -76,11 +73,8 @@ export function montarArvorePRs(
     custos: {
       internos: { valor: internos.total.custo, situacao: situacao(internos.total.custoIncompleto) },
       externos: {
-        sessoes: externos,
-        total: {
-          valor: externos.reduce((n, s) => n + s.custo.valor, 0),
-          situacao: situacao(externos.some((s) => s.custo.situacao === "incompleto")),
-        },
+        sessoes: externos.map(({ ferramenta, sessao, uso }) => ({ ferramenta, sessao, custo: custoExterno(uso) })),
+        total: custoExterno(externos.reduce((soma, e) => soma.somar(e.uso), Uso.vazio())),
       },
     },
   };

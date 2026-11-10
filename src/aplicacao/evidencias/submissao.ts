@@ -1,7 +1,9 @@
 // A guarda dos anexos de uma evidência (F3 §5, passos 4 e 6): origem, classe e limite de cada arquivo, e a guarda.
+import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
-import { basename, relative, sep } from "node:path";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { guardarArquivos } from "../../armazenamento/arquivos.ts";
 import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos } from "../../nucleo/schemas.ts";
@@ -91,11 +93,13 @@ const dentro = (raiz: string, alvo: string) => relative(raiz, alvo).split(sep)[0
  * ponytail: hard link passa. `ln /fora/segredo <worktree>/duro.txt` é aceito, porque o inode também está na
  * worktree; só um agente hostil, que já tem shell, faria isso. Se precisar, recusar `nlink > 1` ou rodar o agente
  * com outro usuário (F1 §8).
+ * `caminho` é o que as mensagens mostram; `abrirEm` é onde o arquivo está no host, e só difere quando o agente declara
+ * um caminho do Ambiente.
  */
-function abrir(caminho: string, origens: Origens): number {
+function abrir(caminho: string, origens: Origens, abrirEm: string = caminho): number {
   let fd: number;
   try {
-    fd = openSync(caminho, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    fd = openSync(abrirEm, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (error_) {
     const { code } = error_ as NodeJS.ErrnoException;
     if (code === "ELOOP") {
@@ -130,32 +134,59 @@ function abrir(caminho: string, origens: Origens): number {
   }
 }
 
+/** Um anexo a guardar: `caminho` é o que as mensagens mostram, `abrirEm` o do host e `sha256` o que o arquivo deve ter. */
+interface AnexoAAbrir {
+  readonly caminho: string;
+  readonly abrirEm: string;
+  readonly sha256?: string;
+}
+
+/** O SHA-256 dos `bytes` de `fd`, lido em blocos para não trazer um vídeo inteiro à memória. */
+function sha256Do(fd: number, bytes: number): string {
+  const hash = createHash("sha256");
+  const bloco = Buffer.alloc(MiB);
+  // `fd` é a cópia privada, com exatamente `bytes` bytes: a leitura nunca volta vazia antes do fim.
+  for (let lidos = 0; lidos < bytes;) {
+    const n = readSync(fd, bloco, 0, Math.min(MiB, bytes - lidos), lidos);
+    hash.update(bloco.subarray(0, n));
+    lidos += n;
+  }
+  return hash.digest("hex");
+}
+
 /**
  * Origem, classe e limite de cada arquivo, e a guarda; quantidade, nomes e regras cruzadas são do
  * `AvaliadorDeEvidencia`, que roda antes. A classe é conferida na cópia privada que `guardarArquivos` faz, e não no arquivo do
  * agente: o que fica guardado é o que foi validado.
  */
-export function guardarAnexos(
+function guardarAbertos(
   banco: DatabaseSync,
-  caminhos: readonly string[],
+  anexos: readonly AnexoAAbrir[],
   tipo: string,
   regra: RegraArquivos,
   origens: Origens,
 ): ArquivoEvidencia[] {
-  const abertos: { fd: number; caminho: string; nome: string }[] = [];
+  const abertos: { fd: number; caminho: string; nome: string; sha256?: string }[] = [];
   const classes: Classe[] = [];
   try {
-    for (const caminho of caminhos) {
+    for (const { caminho, abrirEm, sha256 } of anexos) {
       abertos.push({
-        fd: abrir(caminho, origens),
+        fd: abrir(caminho, origens, abrirEm),
         caminho,
         nome: basename(caminho),
+        sha256,
       });
     }
     return guardarArquivos(
       banco,
       abertos,
-      (copia, bytes, { caminho, nome }) => {
+      (copia, bytes, { caminho, nome, sha256 }) => {
+        if (sha256 !== undefined && sha256Do(copia, bytes) !== sha256) {
+          throw new ErroDeRegra(
+            `${caminho} não tem o SHA-256 enviado`,
+            "o arquivo mudou depois de lido; envie-o de novo",
+          );
+        }
         const { classe, mime } = classificar(caminho, copia, bytes);
         if (!regra.classes.includes(classe)) {
           throw new ErroDeRegra(
@@ -178,4 +209,74 @@ export function guardarAnexos(
   } finally {
     for (const { fd } of abertos) closeSync(fd);
   }
+}
+
+/** Guarda os anexos que o host abre pelo caminho (o CLI externo e a aula gerada pelo core). */
+export function guardarAnexos(
+  banco: DatabaseSync,
+  caminhos: readonly string[],
+  tipo: string,
+  regra: RegraArquivos,
+  origens: Origens,
+): ArquivoEvidencia[] {
+  return guardarAbertos(
+    banco,
+    caminhos.map((caminho) => ({ caminho, abrirEm: caminho })),
+    tipo,
+    regra,
+    origens,
+  );
+}
+
+/** Um anexo do agente: o caminho no Ambiente dele e o SHA-256 dos bytes que ele enviou (a entrega já os conferiu). */
+export interface AnexoEnviado {
+  readonly caminho: string;
+  readonly sha256: string;
+}
+
+/** Os anexos enviados e o Ambiente em que os caminhos declarados valem. */
+export interface AnexosEnviados {
+  readonly anexos: readonly AnexoEnviado[];
+  readonly ambiente: Ambiente;
+}
+
+/**
+ * O caminho no host de um caminho declarado no Ambiente: `caminhoNoAmbiente` só vai do host ao Ambiente, então a
+ * inversão passa pelas raízes permitidas. Fora delas, sai `undefined`.
+ */
+function caminhoDoHost(declarado: string, origens: Origens, ambiente: Ambiente): string | undefined {
+  for (const raizNoHost of [origens.worktree, origens.saida]) {
+    const raizNoAmbiente = ambiente.caminhoNoAmbiente(raizNoHost);
+    if (dentro(raizNoAmbiente, declarado)) return join(raizNoHost, relative(raizNoAmbiente, declarado));
+  }
+  return undefined;
+}
+
+/**
+ * Guarda os anexos que o agente enviou de dentro do Ambiente: inverte o caminho para o host, exige que esteja na worktree ou na saída e que o arquivo ali tenha o mesmo SHA-256, abrindo com
+ * `O_NOFOLLOW` como `guardarAnexos`. Assim o agente só anexa o que está no seu Espaço, e o que fica guardado é o
+ * arquivo do host.
+ */
+export function guardarAnexosEnviados(
+  banco: DatabaseSync,
+  { anexos, ambiente }: AnexosEnviados,
+  tipo: string,
+  regra: RegraArquivos,
+  origens: Origens,
+): ArquivoEvidencia[] {
+  const aAbrir = anexos.map(({ caminho, sha256 }) => {
+    if (!isAbsolute(caminho)) {
+      throw new ErroDeRegra(`${caminho} não é um caminho absoluto`, "informe o caminho completo do arquivo");
+    }
+    // O `open` lança TypeError (500) para byte nulo.
+    if (caminho.includes("\0")) {
+      throw new ErroDeRegra(`${JSON.stringify(caminho)} tem byte nulo no caminho`, "informe o caminho real do arquivo");
+    }
+    const abrirEm = caminhoDoHost(caminho, origens, ambiente);
+    if (abrirEm === undefined) {
+      throw new ErroDeRegra(`${caminho} está fora ${origens.fora}`, `copie-o para ${origens.copie}`);
+    }
+    return { caminho, abrirEm, sha256 };
+  });
+  return guardarAbertos(banco, aAbrir, tipo, regra, origens);
 }

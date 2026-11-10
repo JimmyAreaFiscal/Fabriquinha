@@ -4,12 +4,16 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarTrabalho, registrarUso, totalDoTicket } from "../src/nucleo/trabalho_agentico.ts";
-import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
+import { retomarTrabalho, registrarUso } from "../src/nucleo/trabalho_agentico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
-import { mesDe } from "../src/nucleo/periodo.ts";
-import { metricasDemandaPorMes } from "../src/aplicacao/periodo_demanda.ts";
+import { produtividadeDaRodada } from "../src/aplicacao/evidencias/produtividade_rodada.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
+import { metricasDasEtapas } from "../src/aplicacao/metricas/metricas_das_etapas.ts";
+import type { MetricaDeUso } from "../src/aplicacao/metricas/metrica_de_uso.ts";
+import type { ValorDe } from "../src/aplicacao/metricas/calculo_de_metrica.ts";
+import { metricasDosMeses, usoDaDemanda } from "../src/aplicacao/metricas/metricas_do_periodo.ts";
+import { mesDoInstante } from "../src/nucleo/relogio.ts";
+import type { EtapaTicket } from "../src/nucleo/primitivos.ts";
 import {
   abrirPortao,
   agente,
@@ -22,7 +26,7 @@ import {
   despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { AUTOR, ciclo, criarCenario, demanda, gravarLimiteParalelismo, ORIGENS_DOS_ANEXOS } from "./apoio.ts";
+import { ciclo, criarCenario, declararUso, demanda, gravarLimiteParalelismo } from "./apoio.ts";
 
 interface Ref {
   demanda_id: string;
@@ -91,30 +95,38 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     [primeira.id, "retomada"],
   );
   assert.equal(depois.usos.length, 3);
-  const total = totalDoTicket(depois.sessoes, depois.execucoes, depois.usos, ref);
-  assert.deepEqual([total.tokens_entrada, total.custo_conhecido, total.custo_incompleto], [60, 3, true]);
+  const { total } = produtividadeDaRodada(
+    depois.sessoes,
+    depois.execucoes,
+    depois.usos,
+    carregarDemanda(c.banco, id).tickets.filter((t) => t.ticket_id === ref.ticket_id),
+  );
+  assert.deepEqual([total.tokensEntrada, total.custo, total.custoIncompleto], [60, 3, true]);
 
-  const { total: demandaTotal } = metricasDaDemanda(c.banco, id);
+  const demandaTotal = usoDaDemanda(c.banco, id);
   assert.deepEqual(
-    demandaTotal.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    demandaTotal.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
     [
-      ["a", 30, 3],
-      ["b", 30, null],
+      ["p/a", 30, 3],
+      ["p/b", 30, null],
     ],
   );
-  assert.deepEqual(demandaTotal.custo, { conhecido: 3, incompleto: true });
+  assert.deepEqual(demandaTotal.custo, { conhecido: 3, trabalhosSemCusto: 1 });
 
   // A página Métricas lê o mesmo: as mesmas execuções (a retomada não duplica o uso) e o custo desconhecido sinalizado.
-  const meses = metricasDemandaPorMes(c.banco, { de: mesDe(new Date(primeira.inicio)), ate: mesDe(new Date()) });
+  const meses = metricasDosMeses(c.banco, {
+    de: mesDoInstante(primeira.inicio),
+    ate: mesDoInstante(new Date().toISOString()),
+  });
   assert.equal(
     meses.reduce((n, mes) => n + mes.total.execucoes, 0),
     demandaTotal.execucoes,
   );
   assert.deepEqual(
-    meses.flatMap((mes) => mes.total.modelos).map((m) => [m.modelo, m.entrada, m.custo]),
-    demandaTotal.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    meses.flatMap((mes) => mes.total.modelos).map((m) => [m.modelo, m.tokens_entrada, m.custo]),
+    demandaTotal.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
   );
-  assert.ok(meses.some((mes) => mes.total.custo.incompleto));
+  assert.ok(meses.some((mes) => mes.total.custo.trabalhosSemCusto > 0));
 });
 
 test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo externo fica no escopo dela e não aciona gate", async (t) => {
@@ -127,7 +139,14 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   await ciclo(c, despacho());
 
   // Rodada 1: revisão reprovada (devolução com correção); rodada 2: aprovada.
-  const correcao = { demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir", descricao: "d", caminhos: [] };
+  const correcao = {
+    demanda_id: id,
+    ticket_id: 1,
+    rodada_id: 1,
+    titulo: "Corrigir",
+    descricao: "d",
+    arquivos_previstos: [],
+  };
   await despacharComAgente(c, despacho(), async () => {
     await decidirComoRevisor(c, id, { resultado: "reprovado", motivo: "falta o caso X", correcoes: [correcao] }, 1);
     await decidirComoRevisor(c, id, { resultado: "aprovado" }, 2);
@@ -141,48 +160,8 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   ]);
 
   // Custo externo da demanda (IA que a registrou): uma sessão com custo conhecido e outra sem.
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      dados: {
-        sessoes: [
-          {
-            ferramenta: "claude",
-            sessao: "ext-1",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-                custo: 6.5,
-              },
-            ],
-          },
-          {
-            ferramenta: "claude",
-            sessao: "ext-2",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-              },
-            ],
-          },
-        ],
-      },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
-  );
+  declararUso(c, id, "ext-1", 6.5);
+  declararUso(c, id, "ext-2");
 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
   const vizinha = await demandaEmExecucao(c, [{ tickets: 1 }]);
@@ -195,57 +174,54 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   usar(c.banco, refVizinha, "e-vizinha", [["a", 999, 1_000_000]]);
 
   const antes = demanda(c, id);
-  const m = metricasDaDemanda(c.banco, id);
+  const usoDaEtapa = (etapa: EtapaTicket) =>
+    metricasDasEtapas(c.banco, { demandaId: id })
+      .get(etapa)
+      ?.find((m) => m.definicao.tipo === "uso")?.valor as ValorDe<MetricaDeUso>;
+  const total = usoDaDemanda(c.banco, id);
 
+  assert.deepEqual(usoDaEtapa("implementar").custo, { conhecido: 5, trabalhosSemCusto: 1 });
   assert.deepEqual(
-    m.rodadas.map((r) => [r.rodadaId, r.reprovacoes, r.custo]),
+    metricasDasEtapas(c.banco, { demandaId: id })
+      .get("revisar_rodada")
+      ?.map((m) => [m.definicao.tipo, m.valor]),
     [
-      [1, 1, { conhecido: 1, incompleto: false }],
-      [2, 0, { conhecido: 4, incompleto: true }],
+      ["uso", usoDaEtapa("revisar_rodada")],
+      ["exigencias_de_alteracao", { reprovacoes: 1 }],
+      ["bugs_nos_arquivos_revisados", { alteradasPorHumanos: 0 }],
     ],
   );
-  assert.deepEqual(m.total.custo, { conhecido: 5, incompleto: true });
-  // A única falha é o planejamento interrompido da própria demanda (sem rodada); a execução falha da vizinha não entra.
-  assert.deepEqual([m.total.falhas, m.semRodada.falhas, ...m.rodadas.map((r) => r.falhas)], [1, 1, 0, 0]);
+  assert.deepEqual(total.custo, { conhecido: 11.5, trabalhosSemCusto: 2 });
+  // A única falha é o planejamento interrompido da própria demanda; a execução falha da vizinha não entra.
+  assert.deepEqual([total.falhas, usoDaEtapa("planejar").falhas], [1, 1]);
   assert.deepEqual(
-    m.total.modelos.map((x) => [x.modelo, x.entrada]),
+    total.modelos.map((x) => [x.modelo, x.tokens_entrada]),
     [
-      ["a", 30],
-      ["b", 5],
+      ["p/a", 30],
+      ["p/b", 5],
+      ["x/m", 2],
     ],
   );
-  // O custo externo é um total à parte: não entra no interno de nenhuma rodada nem do total.
-  assert.deepEqual(m.custoExterno, { conhecido: 6.5, incompleto: true, sessoes: 2 });
-  assert.deepEqual(
-    m.rodadas.map((r) => r.custoExterno.sessoes),
-    [0, 0],
-  );
+  // O Uso declarado entra no total da demanda, mas só na Etapa de quem o declara; `custoExterno` continua à parte.
+  assert.deepEqual(usoDaEtapa("entender_e_desenhar").custoExterno, {
+    conhecido: 6.5,
+    trabalhosSemCusto: 1,
+    sessoes: 2,
+  });
+  assert.equal(usoDaEtapa("implementar").custoExterno.sessoes, 0);
 
-  // Custo externo de rodada: aparece na própria rodada, soma no total externo e não substitui o da demanda.
-  const linhaR2 = {
-    provedor: "x",
-    modelo: "m",
-    tokens_entrada: 1,
-    tokens_saida: 1,
-    tokens_cache_leitura: 0,
-    tokens_cache_escrita: 0,
-    custo: 7,
-  };
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      rodada_id: 2,
-      dados: { sessoes: [{ ferramenta: "claude", sessao: "ext-r2", linhas: [linhaR2] }] },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
+  // Uso declarado depois: é da demanda, então soma no total externo e não no custo interno de nenhuma outra Etapa.
+  declararUso(c, id, "ext-r2", 7);
+  assert.deepEqual(
+    usoDaEtapa("implementar").custo,
+    { conhecido: 5, trabalhosSemCusto: 1 },
+    "o externo não entra no custo interno",
   );
-  const comRodada = metricasDaDemanda(c.banco, id);
-  assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
-  assert.deepEqual(comRodada.rodadas[1].custo, m.rodadas[1]?.custo, "o externo não entra no custo interno");
-  assert.deepEqual(comRodada.custoExterno, { conhecido: 13.5, incompleto: true, sessoes: 3 });
+  assert.deepEqual(usoDaEtapa("entender_e_desenhar").custoExterno, {
+    conhecido: 13.5,
+    trabalhosSemCusto: 1,
+    sessoes: 3,
+  });
   assert.equal(atual(c, id, "implementar", 1).titulo, "Corrigir");
 
   // Métrica só lê: nenhuma estado, status ou decisão mudou, apesar do custo da vizinha.
@@ -254,5 +230,5 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     [depois.demanda.estado, depois.rodadas.map((r) => r.estado), depois.tickets.map((x) => x.estado), depois.decisoes],
     [antes.demanda.estado, antes.rodadas.map((r) => r.estado), antes.tickets.map((x) => x.estado), antes.decisoes],
   );
-  assert.equal(metricasDaDemanda(c.banco, vizinha).total.custo.conhecido, 1_000_000);
+  assert.equal(usoDaDemanda(c.banco, vizinha).custo.conhecido, 1_000_000);
 });

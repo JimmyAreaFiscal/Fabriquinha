@@ -3,10 +3,10 @@ import { basename } from "node:path";
 import { z } from "zod";
 import type { AgregadoDemanda, Demanda, TicketDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
-import { Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
 import type { Endereco } from "./item_de_trabalho.ts";
+import { PlanoProposto } from "./plano.ts";
 import type { Id } from "./primitivos.ts";
 import { Motivo, Slug, unicoPor } from "./primitivos.ts";
 import { Hospedagem } from "./projeto.ts";
@@ -19,7 +19,6 @@ import {
   ComandoRodado,
   ComprovacaoCriterios,
   Criterio,
-  CustosRealizados,
   daUltimaConcluida,
   DemonstracaoLimpeza,
   type EsquemaDeEvidencia,
@@ -58,7 +57,6 @@ export const TipoEvidencia = z.enum([
   "video_demonstracao",
   "relatorio_produtividade",
   "pr_aberto",
-  "custos_realizados",
   "plano",
   "testes_estresse",
   "analise_seguranca",
@@ -270,9 +268,8 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
     }),
     arquivos: Arquivos({ max: 0 }),
   },
-  custos_realizados: tipado({ dados: CustosRealizados, arquivos: Arquivos({ max: 0 }) }),
   // O cruzamento do plano com a demanda congelada é da camada que submete.
-  plano: tipado({ dados: Plano, arquivos: Arquivos({ max: 0 }) }),
+  plano: tipado({ dados: PlanoProposto, arquivos: Arquivos({ max: 0 }) }),
   testes_estresse: tipado({
     dados: TestesEstresse,
     arquivos: LOGS_OPCIONAIS,
@@ -404,8 +401,7 @@ export class AvaliadorDeEvidencia {
   }
 
   private avaliarOuLancarRecusa(ag: AgregadoDemanda, { tipo, dono, produtor, dados, anexos }: SubmissaoDeEvidencia) {
-    // O custo externo da rodada é o único dono de rodada, até a demanda 13 tirar custos_realizados de Evidência.
-    if (dono.demanda_id !== ag.demanda.id || (dono.rodada_id !== undefined && tipo !== "custos_realizados")) {
+    if (dono.demanda_id !== ag.demanda.id || dono.rodada_id !== undefined) {
       throw new ErroDeRegra(
         `a evidência ${tipo} tem dono errado: ${dono.toString()}`,
         `use a demanda ${ag.demanda.id} ou um ticket dela`,
@@ -450,12 +446,12 @@ export class AvaliadorDeEvidencia {
         "corrija o que a verificação apontou",
       );
     }
-    // Antes do envio só a autora submete; depois, a definição da demanda fica congelada, e só os custos seguem livres (§3).
+    // Antes do envio só a autora submete; depois, a definição da demanda fica congelada (§3).
     if (!ag.demanda.enviada) exigirAutoria(ag.demanda, produtor, "submeter evidência da");
-    else if (dono.rodada_id === undefined && dono.ticket_id === undefined && tipo !== "custos_realizados") {
+    else if (dono.ticket_id === undefined) {
       throw new ErroDeRegra(
         `a demanda ${ag.demanda.id} já foi enviada e a evidência ${tipo} da definição está congelada`,
-        "só custos_realizados e evidências de rodada ou ticket entram depois do envio",
+        "só evidências de ticket entram depois do envio",
       );
     }
     return { resultado: "aceita", dados: validos, veredito } satisfies Avaliacao;

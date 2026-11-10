@@ -10,6 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, before, beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { SEM_LINK } from "../nucleo/simulacao.ts";
 import { PACOTE } from "../infra/agente/pi.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -17,10 +18,11 @@ import { dirDaExecucaoSimulada } from "../infra/registro.ts";
 import { buscarProjeto } from "../armazenamento/projetos.ts";
 import { editarProjeto, registrarProjeto } from "./projeto/cadastro.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../armazenamento/simulacao.ts";
-import { conferirLink, executarTarefa } from "./executor.ts";
+import { conferirLink, executarTarefa, executarTarefaComConfiguracao } from "./executor.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-executor-"));
+const OPCOES = { timeoutMin: 1, relogio: relogioFixo("2026-05-01T12:00:00.000Z") };
 
 const ordem = join(base, "ordem");
 let piFalso: PiFalso;
@@ -103,7 +105,7 @@ test("conferirLink: qualquer resposta HTTP conta como no ar; conexão rejeitada,
 
 test("sem link do produto, executarTarefa lança antes de enfileirar (CA-10)", () => {
   const { banco, tarefa } = cenario("Registrar uma necessidade", 1, ["Dona Maria"], "");
-  assert.throws(() => executarTarefa(banco, tarefa, { timeoutMin: 1 }), { message: SEM_LINK });
+  assert.throws(() => executarTarefa(banco, tarefa, OPCOES), { message: SEM_LINK });
   assert.deepEqual(execucoes(banco), []);
   banco.close();
 });
@@ -111,7 +113,7 @@ test("sem link do produto, executarTarefa lança antes de enfileirar (CA-10)", (
 test("N execuções por usuário, uma por vez, todas concluídas com o relatório (CA-11 e CA-12)", async () => {
   writeFileSync(ordem, "");
   const { banco, tarefa, usuarios } = cenario("Registrar uma necessidade", 2, ["Dona Maria", "Seu João"]);
-  const fim = executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  const fim = executarTarefa(banco, tarefa, OPCOES);
   // Enfileirou já, de forma síncrona: nenhuma execução rodou ainda.
   assert.deepEqual(
     execucoes(banco).map((e) => e.status),
@@ -144,7 +146,7 @@ test("N execuções por usuário, uma por vez, todas concluídas com o relatóri
 test("o pi sobe com as ferramentas do navegador, o prompt da persona e o ambiente sem credenciais", async () => {
   writeFileSync(ordem, "");
   const { banco, tarefa } = cenario("Registrar uma necessidade", 1);
-  await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  await executarTarefa(banco, tarefa, OPCOES);
 
   const id = primeira(banco);
   const dir = dirDe(banco, id);
@@ -174,7 +176,7 @@ test("o anexo vai para a pasta da execução por hard link, com o nome original,
   writeFileSync(ordem, "");
   const { banco, tarefa, usuarios } = cenario("Registrar uma necessidade", 1);
   anexar(banco, usuarios[0]?.id ?? 0, "guia rápido.md", Buffer.from("# Guia\n"));
-  await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  await executarTarefa(banco, tarefa, OPCOES);
 
   const id = primeira(banco);
   const dir = dirDe(banco, id);
@@ -203,7 +205,7 @@ test("o PDF vira também <nome>.txt pelo pdftotext, que é o que vai como @arqui
   writeFileSync(ordem, "");
   const { banco, tarefa, usuarios } = cenario("Registrar uma necessidade", 1);
   anexar(banco, usuarios[0]?.id ?? 0, "manual.PDF", Buffer.from(PDF));
-  await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  await executarTarefa(banco, tarefa, OPCOES);
 
   const id = primeira(banco);
   const dir = dirDe(banco, id);
@@ -220,7 +222,7 @@ test("um PDF que o pdftotext não lê falha só a execução dele, com a mensage
   writeFileSync(ordem, "");
   const { banco, tarefa, usuarios } = cenario("Registrar uma necessidade", 2);
   anexar(banco, usuarios[0]?.id ?? 0, "quebrado.pdf", Buffer.from("isto não é um PDF"));
-  await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  await executarTarefa(banco, tarefa, OPCOES);
 
   const feitas = execucoes(banco);
   assert.deepEqual(
@@ -242,7 +244,7 @@ test("sem relatório válido a execução falha com a mensagem, e a seguinte rod
     piFalso.roteirizar([
       { simulacao: { relatorio: marca === "[lixo]" ? "isso não é json" : null, demoraMs: 40, registraArgs: true } },
     ]);
-    await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+    await executarTarefa(banco, tarefa, OPCOES);
     assert.deepEqual(
       execucoes(banco).map((e) => [e.status, e.erro, e.relatorio]),
       Array.from({ length: 2 }, () => ["falhou", "o agente não entregou o relatório", undefined]),
@@ -256,12 +258,27 @@ test("passado timeoutMin o pi é parado e a execução falha", async () => {
   writeFileSync(ordem, "");
   const { banco, tarefa } = cenario("Registrar [demora]", 1);
   piFalso.roteirizar([{ simulacao: { nuncaTermina: true, registraArgs: true } }]);
-  await executarTarefa(banco, tarefa, { timeoutMin: 0.001 });
+  await executarTarefa(banco, tarefa, { ...OPCOES, timeoutMin: 0.001 });
   assert.deepEqual(
     execucoes(banco).map((e) => [e.status, e.erro]),
     [["falhou", "passou do limite de 0.001 min e foi encerrado"]],
   );
   assert.equal(banco.prepare("SELECT pgid FROM execucao_simulada").get()?.pgid, null);
+  banco.close();
+});
+
+test("executarTarefaComConfiguracao usa o timeoutMin da Configuração e grava o instante do relógio", async () => {
+  writeFileSync(ordem, "");
+  const { banco, tarefa } = cenario("Registrar [demora]", 1);
+  banco.exec("PRAGMA ignore_check_constraints = ON"); // o mínimo da Configuração é 10 min; o teste não espera isso
+  banco.prepare("UPDATE configuracao SET timeout_min = 0.001").run();
+  piFalso.roteirizar([{ simulacao: { nuncaTermina: true, registraArgs: true } }]);
+  await executarTarefaComConfiguracao(banco, tarefa, OPCOES.relogio);
+  assert.deepEqual(
+    execucoes(banco).map((e) => [e.status, e.erro]),
+    [["falhou", "passou do limite de 0.001 min e foi encerrado"]],
+  );
+  assert.equal(banco.prepare("SELECT terminada_em FROM execucao_simulada").get()?.terminada_em, OPCOES.relogio.agora());
   banco.close();
 });
 
@@ -272,7 +289,7 @@ test("link fora do ar: a execução falha com a mensagem do CA-14, sem subir o p
   const { port } = portaFechada.address() as { port: number };
   await new Promise((pronto) => portaFechada.close(pronto));
   const { banco, tarefa } = cenario("Registrar uma necessidade", 2, ["Dona Maria"], `http://127.0.0.1:${String(port)}`);
-  await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  await executarTarefa(banco, tarefa, OPCOES);
 
   assert.deepEqual(
     execucoes(banco).map((e) => [e.status, e.erro]),
@@ -285,7 +302,7 @@ test("link fora do ar: a execução falha com a mensagem do CA-14, sem subir o p
 test("o link vale o do momento do Executar, mesmo que a Configuração mude no meio", async () => {
   writeFileSync(ordem, "");
   const { banco, tarefa } = cenario("Registrar uma necessidade", 2);
-  const fim = executarTarefa(banco, tarefa, { timeoutMin: 1 });
+  const fim = executarTarefa(banco, tarefa, OPCOES);
   const atual = buscarProjeto(banco, "p");
   assert.ok(atual);
   editarProjeto(banco, { ...atual, link_produto: "http://127.0.0.1:1" });
@@ -302,7 +319,7 @@ test("sem o binário do pi a execução falha por não ter entregue o relatório
   const original = process.env.FABRIQUINHA_PI;
   process.env.FABRIQUINHA_PI = join(base, "nao-existe");
   try {
-    await executarTarefa(banco, tarefa, { timeoutMin: 1 });
+    await executarTarefa(banco, tarefa, OPCOES);
   } finally {
     process.env.FABRIQUINHA_PI = original;
   }

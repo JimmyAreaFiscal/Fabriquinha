@@ -8,8 +8,10 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import { comoInstante, type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import { anotar } from "../registro.ts";
-import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
+import { LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
 /** Um PR da branch da demanda, como a hospedagem o lista. */
@@ -186,7 +188,7 @@ const LER_DE_NOVO = "leia o estado do PR de novo";
 const DataDaPlataforma = z.iso.datetime({ offset: true });
 /** A data da plataforma no formato do domínio, só no PR mergeado que a traz. */
 const mergeadoEm = (estado: PRNaHospedagem["estado"], data: string | null | undefined) =>
-  estado === "mergeado" && data ? { mergeadoEm: new Date(data).toISOString() } : {};
+  estado === "mergeado" && data ? { mergeadoEm: comoInstante(data) } : {};
 /** O SHA do merge, só no PR mergeado que o traz. */
 const mergeSha = (estado: PRNaHospedagem["estado"], sha: string | undefined) =>
   estado === "mergeado" && sha ? { mergeSha: sha } : {};
@@ -428,9 +430,13 @@ export async function publicarPRDe(
 }
 
 /** O estado do PR `id`, lido agora na plataforma. */
-export async function lerPR(projeto: Pick<Projeto, "raiz_git" | "hospedagem">, id: string): Promise<LeituraDoPR> {
+export async function lerPR(
+  projeto: Pick<Projeto, "raiz_git" | "hospedagem">,
+  id: string,
+  relogio: Relogio = relogioDoSistema,
+): Promise<LeituraDoPR> {
   const leitura = await CLIS[projeto.hospedagem].ler(projeto.raiz_git, id);
-  return { ...leitura, lidoEm: new Date().toISOString() };
+  return { ...leitura, lidoEm: relogio.agora() };
 }
 
 /**
