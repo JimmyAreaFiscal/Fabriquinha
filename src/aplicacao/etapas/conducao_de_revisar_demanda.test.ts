@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
+import { abrir, raizDo } from "../../armazenamento/banco.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../../infra/repositorio/worktree-demanda.ts";
 import { anotar } from "../../infra/registro.ts";
@@ -46,6 +48,9 @@ test("pi com falha deixa o ticket falhou e a demanda em revisar_demanda", async 
 
 test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
+  // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
+  const { porta } = await servir(abrir(raizDo(banco)));
+  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
   comDemanda(banco, "I-1", (ag) => ({
     ...ag,
     evidencias: [

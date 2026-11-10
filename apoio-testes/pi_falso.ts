@@ -290,9 +290,9 @@ interface Apoio {
   proximoPasso: () => PassoPi;
 }
 
-/** O CLI `fabriquinha` como o agente o chama, com o escopo da execução no ambiente. */
+/** O cliente empacotado `fabriquinha` como o agente o chama, com `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN` no ambiente. */
 const cliFabriquinha = (...args: string[]) =>
-  execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "composicao", "fabriquinha.ts"), ...args]);
+  execFileSync(process.execPath, [join(import.meta.dirname, "..", "pacote-pi", "bin", "fabriquinha"), ...args]);
 
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },

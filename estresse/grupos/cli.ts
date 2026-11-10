@@ -14,7 +14,7 @@ import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agenti
 import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demandas.ts";
 import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
-import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/armazenamento/trabalho_agentico.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 
@@ -32,25 +32,23 @@ const AUTOR = ["--ferramenta", "estresse", "--sessao", "s-estresse"];
 const HTML = "<!doctype html><p>Desenho</p>";
 const BUSY = /SQLITE_BUSY|database is locked/i;
 
+const CLI_EXTERNO = [
+  "--disable-warning=ExperimentalWarning",
+  join(import.meta.dirname, "../../src/composicao/fabriquinha.ts"),
+];
+const CLI_DO_AGENTE = [join(import.meta.dirname, "../../pacote-pi/bin/fabriquinha")];
+
 const nomeExterno = (palavras: readonly string[]) => `fabriquinha ${palavras.join(" ")}`;
 const nomeAgente = (palavras: readonly string[]) => `${nomeExterno(palavras)} (agente)`;
 
 /** Um processo `fabriquinha`; o tempo vai do `spawn` ao `close`. Lança com saída ≠ 0 ou com erro de banco ocupado. */
-async function processo(raiz: string, execucao: string, args: string[], cwd: string): Promise<number> {
+async function processo(programa: string[], env: NodeJS.ProcessEnv, args: string[], cwd: string): Promise<number> {
   const inicio = performance.now();
-  const filho = spawn(
-    process.execPath,
-    [
-      "--disable-warning=ExperimentalWarning",
-      join(import.meta.dirname, "../../src/composicao/fabriquinha.ts"),
-      ...args,
-    ],
-    {
-      cwd,
-      env: { ...process.env, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: execucao },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+  const filho = spawn(process.execPath, [...programa, ...args], {
+    cwd,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let saida = "";
   for (const s of [filho.stdout, filho.stderr]) s.on("data", (parte: Buffer) => (saida += parte.toString()));
   const [codigo] = (await once(filho, "close")) as [number | null];
@@ -63,6 +61,7 @@ async function processo(raiz: string, execucao: string, args: string[], cwd: str
 interface Agente {
   demanda: string;
   execucao: string;
+  token: string;
   ticket: string;
   rodada: string;
 }
@@ -130,6 +129,7 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
       }) as unknown as AgregadoDemanda,
   ).demanda.id;
   const execucao = `ex-${demanda}`;
+  const token = `token-${execucao}`;
   comTrabalhosDoTicket(banco, { demanda_id: demanda, ticket_id: 2 }, (e) => {
     const sessoes = criarTrabalho(e.sessoes, {
       id: `s-${execucao}`,
@@ -149,7 +149,8 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
       }),
     };
   });
-  return { demanda, execucao, ticket: `${demanda}.T2`, rodada: `${demanda}.R1` };
+  gravarTokenDoProcesso(banco, execucao, token);
+  return { demanda, execucao, token, ticket: `${demanda}.T2`, rodada: `${demanda}.R1` };
 }
 
 /** Semeia o ambiente e devolve uma ação por comando das duas tabelas. O orçamento de cada uma fica ao lado dela. */
@@ -224,7 +225,13 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     return {
       nome: nomeExterno(palavras),
       orcamento,
-      chamar: () => processo(amb.raiz, "", [...palavras, ...args(i++)], pasta),
+      chamar: () =>
+        processo(
+          CLI_EXTERNO,
+          { FABRIQUINHA_ROOT: amb.raiz, FABRIQUINHA_EXECUCAO: "" },
+          [...palavras, ...args(i++)],
+          pasta,
+        ),
     };
   };
   const doAgente = (
@@ -239,7 +246,12 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
       orcamento,
       chamar() {
         const a = agentes ? (agentes[i++] ?? leitura) : leitura;
-        return processo(amb.raiz, a.execucao, [...palavras, ...args(a)], pasta);
+        return processo(
+          CLI_DO_AGENTE,
+          { FABRIQUINHA_API: amb.base, FABRIQUINHA_TOKEN: a.token },
+          [...palavras, ...args(a)],
+          pasta,
+        );
       },
     };
   };

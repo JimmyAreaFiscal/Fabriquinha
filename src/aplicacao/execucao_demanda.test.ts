@@ -900,8 +900,8 @@ test("I-287: o pi recebe o token do processo e a URL da API; o token vale até o
   const token = variaveis.get("FABRIQUINHA_TOKEN") ?? "";
   assert.match(token, /^[0-9a-f]{64}$/);
   assert.equal(variaveis.get("FABRIQUINHA_API"), "http://127.0.0.1:9");
-  // o ambiente antigo continua nesta rodada
-  assert.equal(variaveis.get("FABRIQUINHA_EXECUCAO"), id);
+  assert.equal(variaveis.get("FABRIQUINHA_EXECUCAO"), undefined);
+  assert.equal(variaveis.get("FABRIQUINHA_ROOT"), undefined);
   assert.equal(processoVivoDoToken(banco, token), id);
   assert.equal(
     (banco.prepare("SELECT hash_do_token FROM processo_do_trabalho WHERE id = ?").get(id) as { hash_do_token: string })
