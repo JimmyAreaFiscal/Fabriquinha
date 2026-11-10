@@ -6,6 +6,7 @@ import type { ProcessoDoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import { encontrado } from "../nucleo/erros.ts";
+import { trabalhosComTituloDaDemanda } from "../armazenamento/historico_demanda.ts";
 import { cabecalhoDaSessao, type Estado, type PendenciaDoChat } from "./sessoes_demanda.ts";
 
 export type Resultado = "concluida" | "falha";
@@ -45,20 +46,7 @@ interface FiltroSessoesDemanda {
  * ponytail: calcula o estado de cada sessão pelo mesmo caminho do chat; filtrar o histórico no SQL quando pesar.
  */
 export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDemanda): SessaoDeDemanda[] {
-  const linhas = banco
-    .prepare(
-      `SELECT s.id, d.titulo FROM trabalho_agentico s
-         JOIN demanda d ON d.id = s.demanda_id
-         JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ticket_id = s.ticket_id
-        WHERE ($projeto IS NULL OR d.projeto = $projeto)
-          AND ($demanda IS NULL OR d.id = $demanda)
-          AND ($etapa IS NULL OR t.etapa = $etapa)
-        ORDER BY s.rowid`,
-    )
-    .all({ projeto: filtro.projeto ?? null, demanda: filtro.demanda ?? null, etapa: filtro.etapa ?? null }) as {
-    id: string;
-    titulo: string;
-  }[];
+  const linhas = trabalhosComTituloDaDemanda(banco, filtro);
   return linhas
     .map(({ id, titulo }): SessaoDeDemanda => {
       const { sessao, execucoes, ...resto } = encontrado(

@@ -167,3 +167,33 @@ export const ticketDoProcesso = (banco: DatabaseSync, execucao: string): z.infer
       "SELECT s.demanda_id, s.ticket_id FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.id = ?",
     )
     .get(execucao) as z.infer<typeof TicketRef> | undefined;
+
+/** O ticket dono do trabalho; `undefined` se o id não é de um trabalho agêntico. */
+export const ticketDoTrabalho = (banco: DatabaseSync, trabalhoId: string): z.infer<typeof TicketRef> | undefined =>
+  banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(trabalhoId) as
+    z.infer<typeof TicketRef> | undefined;
+
+/** Os trabalhos da demanda, cada um com o ticket dono. */
+export const trabalhosComTicketDaDemanda = (
+  banco: DatabaseSync,
+  demandaId: string,
+): (z.infer<typeof TicketRef> & { id: string })[] =>
+  banco
+    .prepare("SELECT id, demanda_id, ticket_id FROM trabalho_agentico WHERE demanda_id = ?")
+    .all(demandaId)
+    .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef> & { id: string });
+
+/**
+ * Os tickets `em_execucao` que nenhuma execução aberta segura: etapas cujo fechamento roda depois que a execução fecha
+ * (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também).
+ */
+export const ticketsEmExecucaoSemProcesso = (banco: DatabaseSync): z.infer<typeof TicketRef>[] =>
+  banco
+    .prepare(
+      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
+         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
+         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
+           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
+    )
+    .all()
+    .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef>);

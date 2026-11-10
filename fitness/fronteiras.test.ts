@@ -55,10 +55,7 @@ interface Excecao extends Achado {
 
 // Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
 const EXCECOES: Excecao[] = [
-  { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
-  { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
-  { arquivo: "aplicacao/trabalho/processo_do_ticket.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },

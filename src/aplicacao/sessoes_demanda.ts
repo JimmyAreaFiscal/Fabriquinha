@@ -23,7 +23,11 @@ import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
+import {
+  carregarTrabalhosDoTicket,
+  ticketDoTrabalho,
+  trabalhosComTicketDaDemanda,
+} from "../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
 import {
@@ -212,10 +216,6 @@ export interface Carregada {
 
 type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 
-/** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda. */
-const donoDaSessao = (banco: DatabaseSync, id: string): TicketRef | undefined =>
-  banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(id) as TicketRef | undefined;
-
 const ultimaDe = ({ sessao, execucoes }: Carregada, quando: "primeira" | "ultima" = "ultima"): ProcessoDoTrabalho =>
   encontrado(
     quando === "ultima" ? execucoes.at(-1) : execucoes[0],
@@ -302,9 +302,7 @@ function pendenciaDaSessao(
 
 /** As sessões da demanda paradas no diálogo ou na conversa: o que `pendenciasDaDemanda` pede dos trabalhos vivos. */
 function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda): TrabalhoVivo[] {
-  const sessoes = banco
-    .prepare("SELECT id, demanda_id, ticket_id FROM trabalho_agentico WHERE demanda_id = ?")
-    .all(ag.demanda.id) as (TicketRef & { id: string })[];
+  const sessoes = trabalhosComTicketDaDemanda(banco, ag.demanda.id);
   return sessoes
     .map((s) => carregar(banco, s, s.id, ag))
     .filter((c) => c.execucoes.length > 0)
@@ -413,7 +411,7 @@ function marcador(
 
 /** O cabeçalho da sessão da demanda; `undefined` se o id não é de uma sessão da demanda. */
 export function cabecalhoDaSessao(banco: DatabaseSync, id: string): CabecalhoDaSessao | undefined {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   return ref && montarCabecalhoDaSessao(carregar(banco, ref, id));
 }
 
@@ -424,7 +422,7 @@ const montarCabecalho = (banco: DatabaseSync, c: Carregada): CabecalhoDemanda =>
 
 /** A conversa do JSONL com o fluxo ao vivo; `undefined` se o id não é de uma sessão da demanda. */
 export function abrirChatDemanda(banco: DatabaseSync, id: string): ChatDemanda | undefined {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   if (!ref) return undefined;
   const raiz = raizDo(banco);
   const c = carregar(banco, ref, id);
@@ -450,7 +448,7 @@ export function exportarHistoricoDemanda(
   banco: DatabaseSync,
   id: string,
 ): { nome: string; markdown: string } | undefined {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   if (!ref) return undefined;
   const raiz = raizDo(banco);
   const c = carregar(banco, ref, id);
@@ -492,7 +490,7 @@ export function enviarDemanda(
   modo: ModoEnvio,
   limiteMin: number,
 ): boolean {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   if (!ref) return false;
   const c = carregar(banco, ref, id);
   const viva = condutor.situacao(id);
@@ -530,7 +528,7 @@ export function responderDialogoDemanda(
   dialogo: string,
   resposta: Parameters<CondutorDeTrabalhos["responder"]>[2],
 ): boolean {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   if (!ref) return false;
   condutor.responder(ultimaDe(carregar(banco, ref, id)).id, dialogo, resposta);
   return true;
@@ -538,7 +536,7 @@ export function responderDialogoDemanda(
 
 /** Aborta a execução em andamento (pi vivo: `abort`; aberta sem pi: interrupção); `false` se o id não é da demanda. */
 export function abortarDemanda(banco: DatabaseSync, id: string): boolean {
-  const ref = donoDaSessao(banco, id);
+  const ref = ticketDoTrabalho(banco, id);
   if (!ref) return false;
   const ultima = ultimaDe(carregar(banco, ref, id));
   if (condutor.situacao(id)) condutor.abortar(ultima.id);
