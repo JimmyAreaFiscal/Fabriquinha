@@ -6,7 +6,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { MotivoDeRecusa } from "../../nucleo/despacho.ts";
 import { Id } from "../../nucleo/primitivos.ts";
-import type { Parametros } from "../cliente-web/caminhos.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
+import type { Parametros } from "../compartilhado/caminhos.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
@@ -17,6 +18,7 @@ export interface Agendador {
 export interface Pedido {
   banco: DatabaseSync;
   agendador: Agendador;
+  relogio: Relogio;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;
   query: URLSearchParams;
@@ -34,6 +36,10 @@ export interface Rota {
   caminho: string;
   /** O valor devolvido sai como JSON 200; `undefined`, como 204. Erros saem pelo mapa do F7 §4.2. */
   tratar(pedido: Pedido): unknown;
+  /** O schema zod do contrato da resposta 2xx em JSON (`entrega/contrato`); o teste de rota confere o corpo por ele. Obrigatório, salvo `fluxoSse`, na última rodada da demanda. */
+  resposta?: z.ZodType;
+  /** A rota responde em fluxo SSE (`text/event-stream`): fica fora da conferência do contrato. */
+  fluxoSse?: true;
 }
 
 /** O ID de um `:parametro` do caminho. */

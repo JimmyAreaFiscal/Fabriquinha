@@ -2,7 +2,7 @@
 // desenha o conteúdo de cada pasta ou arquivo na primeira abertura dele. Não se atualiza sozinha: cada abertura relê o
 // git. Os testes de ponta a ponta (e2e/) a exercitam.
 import type { Heatmap } from "../../../infra/repositorio/heatmap.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, ErroDaApi, irPara } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { caminhoDoHeatmap, conteudo, erroDoHeatmap, paginaDoHeatmap, topoDoHeatmap } from "./heatmap.ts";

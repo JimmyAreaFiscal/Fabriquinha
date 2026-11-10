@@ -3,7 +3,7 @@
 // Os testes de ponta a ponta (e2e/) a exercitam.
 import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { ListaDoProjeto } from "../../http/rotas/projeto.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, elemento, irPara, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { mesDe } from "./metricas.ts";

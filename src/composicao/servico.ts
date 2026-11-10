@@ -90,8 +90,11 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       "request",
       servirWeb({
         banco: aberto,
+        raiz,
         porta,
         agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
+        relogio,
+        registrarErro: noLogDoServico,
       }),
     );
   } catch (error_) {

@@ -7,10 +7,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
 import type { MotivoDeRecusa } from "../src/nucleo/despacho.ts";
+import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { guardarBytes } from "../src/armazenamento/arquivos.ts";
 import { raizDo } from "../src/armazenamento/banco.ts";
 import { gravarAnexos } from "../src/armazenamento/evidencia_demanda.ts";
 import { servirWeb } from "../src/entrega/http/servidor.ts";
+import { noLog } from "../src/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,
@@ -60,7 +62,17 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
-  servidor.on("request", servirWeb({ banco, porta, agendador }));
+  servidor.on(
+    "request",
+    servirWeb({
+      banco,
+      raiz: raizDo(banco),
+      porta,
+      agendador,
+      relogio: relogioDoSistema,
+      registrarErro: noLog,
+    }),
+  );
   fechamentos.push(async () => {
     servidor.closeAllConnections();
     servidor.close();

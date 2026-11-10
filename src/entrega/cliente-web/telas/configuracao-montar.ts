@@ -3,7 +3,7 @@
 import type { Modelo } from "../../../nucleo/configuracao_agente.ts";
 import type { Effort } from "../../../nucleo/primitivos.ts";
 import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
