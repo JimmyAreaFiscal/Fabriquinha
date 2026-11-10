@@ -13,14 +13,14 @@ import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import { visaoDaDemanda } from "../../../aplicacao/consultas/visao_da_demanda.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import { carregarDemanda, listarDemandas, sessaoDeCadaTicketDaDemanda } from "../../../armazenamento/demandas.ts";
+import { carregarDemanda, listarDemandas } from "../../../armazenamento/demandas.ts";
 import { usoDaDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
 } from "../../../armazenamento/dependencias_demanda.ts";
 import { lerAnexo } from "../../../armazenamento/evidencia_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
+import { sessaoDeCadaTicketDaDemanda, ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 import { pendenciasDeUmaDemanda } from "./inicio.ts";
 

@@ -15,7 +15,7 @@ import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cada
 import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
+import { sessaoDeCadaTicketDaDemanda, ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
 import { type PendenciaDoInicio, pendenciasDasDemandas } from "./inicio.ts";
@@ -93,14 +93,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   const ag = carregarDemanda(banco, id);
   const etapas = buscarProjeto(banco, ag.demanda.projeto)?.etapas ?? [];
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
-  const sessoes = new Map(
-    (
-      banco.prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid").all(id) as {
-        ticket_id: number;
-        id: string;
-      }[]
-    ).map((s) => [s.ticket_id, s.id]),
-  );
+  const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
   const rodada = (rodada_id: number) => formatarRodadaRef({ demanda_id: id, rodada_id });
   const comPiAtivo = ticketsComPiAtivo(banco);
   return {
