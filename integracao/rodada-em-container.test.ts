@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -623,6 +623,28 @@ test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_
   assert.equal(codigo, 0);
 });
 
+test(
+  "o container não escreve a config nem os hooks do clone, e o git do host no clone não executa nada",
+  COM_DOCKER,
+  async (t) => {
+    const { c } = cenarioEmContainer(t);
+    await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const ambiente = ambienteAlocadoPara(c, "I-1.R1");
+    const marca = join(c.dir, "executado-no-host");
+    const noContainer = (script: string) =>
+      ambiente.executar({ programa: "sh", argumentos: ["-c", script], cwd: join(c.repo, ".git"), env: {} });
+
+    const config = await noContainer(`printf '[core]\\n\\tfsmonitor = "touch ${marca}; false"\\n' >> config`);
+    const hook = await noContainer("printf '#!/bin/sh\\n' > hooks/pre-commit");
+    assert.notEqual(config.codigo, 0);
+    assert.notEqual(hook.codigo, 0);
+
+    git(c.repo, "status");
+    assert.ok(!existsSync(marca), "o git do host no clone não executou o que o container tentou gravar");
+    assert.ok(!existsSync(join(c.repo, ".git", "hooks", "pre-commit")));
+  },
+);
+
 /** Um servidor TCP que escuta em todas as interfaces, para o container tentar alcançá-lo pelo `host.docker.internal`. */
 async function escutarNoHost(t: TestContext): Promise<number> {
   const servidor = createServer((conexao) => conexao.destroy()).listen(0, "0.0.0.0");
@@ -639,7 +661,7 @@ s.on("error", (erro) => { console.log(erro.code); process.exit(1); });
 setTimeout(() => { console.log("sem resposta"); process.exit(2); }, 5000);`;
 
 test(
-  "container: FABRIQUINHA_SAIDA é gravável, o pre-push que ele escreve não roda no push do core e só a porta da API do host é alcançável",
+  "container: FABRIQUINHA_SAIDA é gravável, ele não grava pre-push nos hooks do projeto e só a porta da API do host é alcançável",
   COM_DOCKER,
   async (t) => {
     const portaDaApi = await escutarNoHost(t);
@@ -660,20 +682,18 @@ test(
     assert.ok(execucao);
     assert.equal(readFileSync(join(pastasDoProcesso(c.raiz, execucao.id).dir, "saida", "prova"), "utf8"), "gravavel\n");
 
-    // O container escreve um pre-push no `.git` do projeto e liga o `core.hooksPath` a ele; o git do core não o executa.
+    // O container não consegue gravar um pre-push nos hooks do projeto; o push do core não executa nada.
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
     const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
     const marca = join(c.raiz, "execucoes", "pre-push-executou");
     const escreveOHook = await ambiente.executar({
-      programa: `hooks="$(git rev-parse --path-format=absolute --git-common-dir)/hooks" && mkdir -p "$hooks" && printf '#!/bin/sh\\necho executou >> ${marca}\\n' > "$hooks/pre-push" && chmod +x "$hooks/pre-push" && git config core.hooksPath "$hooks" && git hook run pre-push`,
+      programa: `hooks="$(git rev-parse --path-format=absolute --git-common-dir)/hooks" && mkdir -p "$hooks" && printf '#!/bin/sh\\necho executou >> ${marca}\\n' > "$hooks/pre-push" && chmod +x "$hooks/pre-push"`,
       noShell: true,
       argumentos: [],
       cwd,
       env: {},
     });
-    assert.equal(escreveOHook.codigo, 0, escreveOHook.saida);
-    assert.ok(existsSync(marca), "o hook funciona quando o git roda no container");
-    rmSync(marca);
+    assert.notEqual(escreveOHook.codigo, 0);
     git(c.repo, "branch", "nova");
     await exigirGit(c.repo, "push", "origin", "nova");
     assert.equal(existsSync(marca), false, "o git do core não executou o pre-push");

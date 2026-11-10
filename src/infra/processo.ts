@@ -88,31 +88,39 @@ export async function lancarSolto(comando: string, args: readonly string[], env:
 
 /**
  * O git do core roda no host com as credenciais, em repositórios que um container pode escrever (`.git/hooks`,
- * `.git/config`). Por isso hooks e fsmonitor ficam desligados, e `core.sshCommand` e `credential.helper` valem os do
- * sistema e do usuário do serviço (lidos fora de qualquer repositório), nunca os do repositório.
+ * `.git/config`). Por isso hooks e fsmonitor ficam desligados, e `core.sshCommand` e `credential.*.helper` valem os do
+ * sistema e do usuário do serviço, lidos como o git os leria dentro de `dir` (com os `includeIf` por diretório), mas
+ * sem os escopos do repositório.
  */
-async function lerConfigsFixasDoServico(): Promise<string[]> {
-  const lerDoServico = async (...args: string[]): Promise<string[]> =>
-    (await executar("git", ["-C", "/", "config", ...args], { limiteMs: LIMITE_COMANDO_MS })).saida
-      .split("\n")
-      .filter((linha) => linha !== "");
-  const [sshCommand] = await lerDoServico("--get", "core.sshCommand");
-  const credenciais = await lerDoServico("--get-all", "credential.helper");
+async function lerConfigsFixasDoServico(dir: string): Promise<string[]> {
+  const configs = (
+    await executar("git", ["-C", dir, "config", "--show-scope", "-z", "--list"], { limiteMs: LIMITE_COMANDO_MS })
+  ).saida
+    .split("\0")
+    // O -z separa o escopo, a chave e o valor assim: `escopo\0chave\nvalor\0`.
+    .reduce<{ escopo: string; chave: string; valor: string }[]>((lidas, campo, i, campos) => {
+      if (i % 2 === 1) {
+        const [chave = "", ...valor] = campo.split("\n");
+        lidas.push({ escopo: campos[i - 1] ?? "", chave, valor: valor.join("\n") });
+      }
+      return lidas;
+    }, []);
+  const doServico = configs.filter(({ escopo }) => escopo === "system" || escopo === "global");
+  const ehHelper = ({ chave }: { chave: string }) => /^credential\.(.*\.)?helper$/i.test(chave);
+  const sshCommand = doServico.findLast(({ chave }) => chave.toLowerCase() === "core.sshcommand")?.valor ?? "ssh";
+  // Valor vazio zera a lista da chave, inclusive o que o repositório definiu nela: zera toda chave vista e repete as do serviço.
+  const chavesDeHelper = new Set(["credential.helper", ...configs.filter(ehHelper).map(({ chave }) => chave)]);
   return [
     "-c",
     "core.hooksPath=/dev/null",
     "-c",
     "core.fsmonitor=false",
     "-c",
-    `core.sshCommand=${sshCommand ?? "ssh"}`,
-    // Valor vazio zera a lista, inclusive a que o repositório definiu.
-    ...["", ...credenciais].flatMap((helper) => ["-c", `credential.helper=${helper}`]),
+    `core.sshCommand=${sshCommand}`,
+    ...[...chavesDeHelper].flatMap((chave) => ["-c", `${chave}=`]),
+    ...doServico.filter(ehHelper).flatMap(({ chave, valor }) => ["-c", `${chave}=${valor}`]),
   ];
 }
-
-// Lidas uma vez por processo: a configuração do serviço não muda enquanto ele roda, e reler custaria 2 git por git.
-let configsFixasDoServicoLidas: Promise<string[]> | undefined;
-const configsFixasDoServico = (): Promise<string[]> => (configsFixasDoServicoLidas ??= lerConfigsFixasDoServico());
 
 /**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
@@ -121,7 +129,7 @@ const configsFixasDoServico = (): Promise<string[]> => (configsFixasDoServicoLid
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
-  const r = await executar("git", [...(await configsFixasDoServico()), "-C", dir, ...args], {
+  const r = await executar("git", [...(await lerConfigsFixasDoServico(dir)), "-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
     limiteMs,
   });

@@ -161,13 +161,15 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as sessõ
   assert.deepEqual(montagens, [
     mesmoCaminho(pastaDasWorktreesDoProjeto, "rw"),
     mesmoCaminho(join(raizGit, ".git"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "config"), "ro"),
+    mesmoCaminho(join(raizGit, ".git", "hooks"), "ro"),
     mesmoCaminho(join(raiz, "sessoes"), "rw"),
     mesmoCaminho(join(raiz, "execucoes"), "rw"),
     mesmoCaminho(pacote, "ro"),
     mesmoCaminho(dirDoPi, "rw"),
   ]);
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
-  assert.equal(run.filter((argumento) => argumento === "-v").length, 6);
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 8);
   assert.ok(!run.includes("--mount"));
   // O pi do container só tem o auth.json (nem o trust.json do usuário), e o banco da raiz não é montado.
   assert.deepEqual(readdirSync(dirDoPi), ["auth.json"]);
