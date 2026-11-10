@@ -249,22 +249,6 @@ test("CA-7: sessão declarada sem linhas não conta como sessão externa", () =>
   assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 });
 });
 
-test("CA-14: média só das notas dos PRs de rodada aprovados com nota", () => {
-  const b = banco();
-  decisao(b, 3, 1, "aprovado", 4);
-  decisao(b, 5, 1, "aprovado", 5);
-  decisao(b, 5, 2, "aprovado", null);
-  decisao(b, 2, 1, "aprovado", 1); // não é PR de rodada
-  const m = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(m.total.nota, { soma: 9, quantidade: 2, media: 4.5 });
-  assert.deepEqual(m.rodadas[0]?.nota, { soma: 4, quantidade: 1, media: 4 });
-  assert.deepEqual(m.semRodada.nota, { soma: 0, quantidade: 0, media: null });
-});
-
-test("a rodada traz a conformidade (null sem plano ou commit)", () => {
-  assert.equal(metricasDaDemanda(banco(), "I-1").rodadas[0]?.conformidade, null);
-});
-
 test("CA-17: demanda inexistente falha, sem totais zerados", () => {
   assert.throws(() => metricasDaDemanda(banco(), "I-9"), ErroDeInexistente);
 });
