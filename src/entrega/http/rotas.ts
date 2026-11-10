@@ -6,7 +6,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { MotivoDeRecusa } from "../../nucleo/despacho.ts";
 import { Id } from "../../nucleo/primitivos.ts";
-import type { Parametros } from "../cliente-web/caminhos.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
+import type { Parametros } from "../compartilhado/caminhos.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
@@ -17,6 +18,7 @@ export interface Agendador {
 export interface Pedido {
   banco: DatabaseSync;
   agendador: Agendador;
+  relogio: Relogio;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;
   query: URLSearchParams;
@@ -28,13 +30,20 @@ export interface Pedido {
   resposta: ServerResponse;
 }
 
-export interface Rota {
+interface RotaDaApi {
   metodo: "GET" | "POST" | "DELETE";
   /** Padrão do caminho, com `:parametro` por segmento (`casar`). */
   caminho: string;
   /** O valor devolvido sai como JSON 200; `undefined`, como 204. Erros saem pelo mapa do F7 §4.2. */
   tratar(pedido: Pedido): unknown;
 }
+
+/** Ou o schema zod do contrato da resposta 2xx (`entrega/contrato`; o teste de rota confere o corpo por ele), ou o fluxo SSE (`text/event-stream`), que fica fora da conferência. */
+export type Rota = RotaDaApi &
+  ({ resposta: z.ZodType; fluxoSse?: undefined } | { fluxoSse: true; resposta?: undefined });
+
+/** O schema da rota que não devolve JSON: 204, ou texto e arquivo que ela mesma escreve em `Pedido.resposta`. */
+export const SemCorpoEmJson = z.undefined();
 
 /** O ID de um `:parametro` do caminho. */
 export const IdDoCaminho = z.coerce.number().pipe(Id);

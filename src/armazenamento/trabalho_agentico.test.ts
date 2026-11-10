@@ -12,6 +12,8 @@ import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
   processosAbertos,
+  sessaoDeCadaTicketDaDemanda,
+  sessaoDeCadaTicketDasDemandas,
   ticketDoTrabalho,
   ticketsComPiAtivo,
   ticketsEmExecucaoSemProcesso,
@@ -240,4 +242,42 @@ test("trabalhos do histórico com o título da demanda, filtrados por projeto, d
   assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "outro" }).length, 0);
   assert.equal(trabalhosComTituloDaDemanda(b, { demanda: "I-2" }).length, 0);
   assert.equal(trabalhosComTituloDaDemanda(b, { etapa: "planejar" }).length, 0);
+});
+
+test("sessaoDeCadaTicketDaDemanda devolve a sessão de cada ticket e, com mais de uma, a mais recente", () => {
+  const b = banco();
+  const nova = b.prepare(
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-1', ?, 'autonomo', 'c')",
+  );
+  nova.run("s-a", 1);
+  nova.run("s-b", 2);
+  nova.run("s-c", 1);
+  assert.deepEqual(
+    sessaoDeCadaTicketDaDemanda(b, "I-1"),
+    new Map([
+      [1, "s-c"],
+      [2, "s-b"],
+    ]),
+  );
+  assert.deepEqual(sessaoDeCadaTicketDaDemanda(b, "I-9"), new Map());
+});
+
+test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {
+  const b = banco();
+  b.exec(`INSERT INTO demanda VALUES ('I-2', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+      VALUES ('I-2', 1, 'implementar', 'aberto', ${T})`);
+  const nova = b.prepare(
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, 1, 'autonomo', 'c')",
+  );
+  nova.run("s-1", "I-1");
+  nova.run("s-2", "I-2");
+  assert.deepEqual(
+    sessaoDeCadaTicketDasDemandas(b, ["I-2", "I-1", "I-9"]),
+    new Map([
+      ["I-2", new Map([[1, "s-2"]])],
+      ["I-1", new Map([[1, "s-1"]])],
+      ["I-9", new Map()],
+    ]),
+  );
 });

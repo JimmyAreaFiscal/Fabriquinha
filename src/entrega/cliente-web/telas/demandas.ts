@@ -1,8 +1,8 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
 import { ROTULO_DA_ETAPA } from "../rotulos.ts";
-import type { EtapaTicket, EstadoDemanda, EstadoRodada } from "../../../nucleo/primitivos.ts";
-import type { PendenciaDoInicio } from "../../http/rotas/inicio.ts";
+import type { EtapaTicket, EstadoDemanda } from "../../../nucleo/primitivos.ts";
+import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaDemanda,
@@ -10,28 +10,12 @@ import {
   escapar,
   APARENCIA_DO_ESTADO_DA_DEMANDA,
   APARENCIA_DO_ESTADO_DA_RODADA,
-  PILULA_DO_ESTADO_DO_TICKET,
   pilulaDoEstadoDoTicket,
   rotuloDoEstadoDoTicket,
 } from "../render.ts";
 import { EM_ALERTA, ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 
-/** @testes tipo que o teste usa para montar a entrada */
-export interface DemandaDoQuadro {
-  id: string;
-  projeto: string;
-  titulo: string;
-  estado: EstadoDemanda;
-  terminal: boolean;
-  rodadas: { ref: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
-  bloqueios: { demanda_id: string; estado: EstadoDemanda }[];
-  /** O que a demanda tem parado esperando o Auditor, como o servidor derivou. */
-  pendencias: PendenciaDoInicio[];
-}
-export interface DadosDoQuadro {
-  demandas: DemandaDoQuadro[];
-  trabalho: { ref: string; etapa: EtapaTicket; rodada?: string; pi_ativo?: true }[];
-}
+type DemandaDoBoard = BoardDeDemandas["demandas"][number];
 
 export const pilula = ([rotulo, classe]: readonly [string, string]): string =>
   `<span class="pill ${classe}">${rotulo}</span>`;
@@ -41,12 +25,12 @@ const linkExterno = (url: string, texto: string): string =>
     ? `<a class="link" href="${escapar(url)}" target="_blank" rel="noopener">${texto} ↗</a>`
     : texto;
 
-const rodada = (r: DemandaDoQuadro["rodadas"][number]): string => {
+const rodada = (r: DemandaDoBoard["rodadas"][number]): string => {
   const pr = r.pr ? ` ${linkExterno(r.pr.url, `PR #${escapar(r.pr.id)}`)}` : "";
   return `<li><span class="id">${escapar(r.ref)}</span> ${pilula(APARENCIA_DO_ESTADO_DA_RODADA[r.estado])}${pr}</li>`;
 };
 
-function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
+function cartao(d: DemandaDoBoard, todas: readonly DemandaDoBoard[]): string {
   const marcas = [
     ...d.pendencias.map(
       (p) =>
@@ -72,7 +56,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
   </article>`;
 }
 
-export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
+export function quadro({ demandas, trabalho }: BoardDeDemandas): string {
   const ativo = trabalho.map(
     (t) =>
       `<li><span class="id">${escapar(t.ref)}</span> ${ROTULO_DA_ETAPA[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
@@ -89,61 +73,6 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
 }
 
 // ——— página da demanda (só leitura) ———
-
-type EstadoTicket = keyof typeof PILULA_DO_ESTADO_DO_TICKET;
-export interface DadosDaPagina {
-  /** O que a demanda tem parado esperando o Auditor, como o servidor derivou. */
-  pendencias: PendenciaDoInicio[];
-  demanda: {
-    id: string;
-    projeto: string;
-    titulo: string;
-    tipo: string;
-    descricao: string;
-    estado: EstadoDemanda;
-    terminal: boolean;
-    arquivavel: boolean;
-  };
-  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo. */
-  uso: { textoDoCusto: string };
-  rodadas: {
-    ref: string;
-    titulo: string;
-    estado: EstadoRodada;
-    pr?: { id: string; url: string };
-    /** O endereço do ticket atual de cada etapa que a rodada já teve. */
-    ticket_atual_por_etapa: Partial<Record<keyof typeof ROTULO_DA_ETAPA, string>>;
-  }[];
-  tickets: {
-    ref: string;
-    etapa: EtapaTicket;
-    estado: EstadoTicket;
-    satisfaz_dependencia: boolean;
-    elegivel: boolean;
-    sessao?: string;
-    pi_ativo?: true;
-    rodada?: string;
-    titulo?: string;
-    instrucao?: string;
-    motivo?: string;
-  }[];
-  decisoes: { ticket: string; resultado: "aprovado" | "reprovado"; nota?: number; motivo?: string; por: string }[];
-  evidencias: {
-    tipo: string;
-    rodada?: string;
-    ticket?: string;
-    dados: unknown;
-    anexos: { nome: string; classe: string; link: string }[];
-  }[];
-  encerramento: {
-    passos: { passo: "verificacao" | "pr" | "integracao"; feito: boolean }[];
-    limpeza_pendente: string[];
-    falha?: { etapa: "check_final" | "integracao" | "limpeza"; motivo: string };
-    aguardando_merge?: { url: string };
-  };
-  dependencias: { demanda_id: string; estado: EstadoDemanda }[];
-  dependentes: { demanda_id: string; titulo: string; estado: EstadoDemanda }[];
-}
 
 /** O tipo da evidência como a página o mostra; o que não está aqui sai com a chave legível. */
 const TIPO_DA_EVIDENCIA: Record<string, string> = {
@@ -178,7 +107,7 @@ const ESTADO_DO_PASSO = {
   falhou: ["Falhou", "pill-falha"],
 } as const;
 
-type Pagina = DadosDaPagina;
+type Pagina = PaginaDaDemanda;
 type Evidencia = Pagina["evidencias"][number];
 
 const DECISAO = { aprovado: ["Aprovado", "pill-ok"], reprovado: ["Reprovado", "pill-falha"] } as const;
@@ -722,7 +651,7 @@ function linhaDoTempo(p: Pagina): string {
  * A página em mesa: a lateral fixa com o que aguarda o Auditor e o contexto da demanda; ao centro, o gate do estado, a
  * linha do tempo e o encerramento. Na aprovação da demanda, o próprio gate já mostra a descrição e os critérios.
  */
-export function pagina(p: DadosDaPagina): string {
+export function pagina(p: PaginaDaDemanda): string {
   const { demanda: d } = p;
   const naAprovacao = d.estado === "gate_demanda";
   const evidenciasDaDemanda = chipsDasEvidencias(

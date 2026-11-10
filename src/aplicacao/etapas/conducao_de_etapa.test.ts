@@ -5,13 +5,15 @@ import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
 import { anotar } from "../../infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
+
+const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 
 test("só se conduz o endereço de um ticket", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
-  const conducao = new ConducaoDeRevisarDemanda({ banco, relogio: instanteAtual, condutor, registro: anotar });
+  const conducao = new ConducaoDeRevisarDemanda({ banco, relogio: RELOGIO, condutor, registro: anotar });
   await assert.rejects(conducao.conduzir(Endereco.daRodada("I-1", 1)), /I-1.R1 não é um ticket/);
 });
 
@@ -28,7 +30,7 @@ test("o limite informado nas deps é o que o agente recebe; sem ele vale o timeo
     timeoutDaConfiguracao = configuracao(banco).timeoutMin;
     await new ConducaoDeRevisarDemanda({
       banco,
-      relogio: instanteAtual,
+      relogio: RELOGIO,
       condutor,
       registro: anotar,
       limiteMin,

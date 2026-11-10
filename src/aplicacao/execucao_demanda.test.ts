@@ -22,7 +22,7 @@ import {
 } from "../nucleo/tentativa.ts";
 import { anotar } from "../infra/registro.ts";
 import { ConducaoDeImplementar } from "./etapas/conducao_de_implementar.ts";
-import { instanteAtual } from "./relogio.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
@@ -148,9 +148,12 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 /** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
 const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
-  new ConducaoDeImplementar({ banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
-    Endereco.doTicket("I-1", ticket_id),
-  );
+  new ConducaoDeImplementar({
+    banco,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  }).conduzir(Endereco.doTicket("I-1", ticket_id));
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {
@@ -361,6 +364,14 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
     },
   ]);
   assert.ok(existsSync(join(c.raiz, "execucoes", `E-${id}`, "prompt.md")));
+});
+
+test("o início e o fim da execução vêm do relógio", async () => {
+  const { banco, sessoes } = await cenario();
+  const instante = "2031-05-06T07:08:09.000Z";
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }, relogioFixo(instante)).fim;
+  const [execucao] = sessoes(1).execucoes;
+  assert.deepEqual([execucao?.inicio, execucao?.fim], [instante, instante]);
 });
 
 test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async () => {

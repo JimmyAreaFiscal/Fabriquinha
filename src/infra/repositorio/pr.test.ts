@@ -8,6 +8,7 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import type { Hospedagem } from "../../nucleo/projeto.ts";
 import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { integrarPR, lerPR, PADROES_DA_ESPERA_DO_PR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
@@ -387,8 +388,8 @@ test("lerPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Az
     const projeto = { raiz_git: c.repo, hospedagem: tipo };
     hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
     const ler = async () => {
-      const { lidoEm, ...resto } = await lerPR(projeto, "1");
-      assert.ok(Math.abs(Date.parse(lidoEm) - Date.now()) < 60_000, "lidoEm é agora");
+      const { lidoEm, ...resto } = await lerPR(projeto, "1", relogioFixo("2026-01-02T03:04:05.000Z"));
+      assert.equal(lidoEm, "2026-01-02T03:04:05.000Z");
       return resto;
     };
     assert.deepEqual(await ler(), { estado: "aberto", url: `${url}1` });

@@ -45,8 +45,6 @@ function autorDe({ opcoes }: EntradaDoComando, { env }: DepsDoCli): Ator {
   throw new ErroDeUso(`falta ${faltam.join(" e ")}`);
 }
 
-const agora = () => ({ agora: new Date().toISOString() });
-
 /** Texto longo de um arquivo, ou do stdin com `-`. */
 const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
   arquivo === "-" ? text(stdin) : Promise.resolve(readFileSync(arquivo, "utf8"));
@@ -101,7 +99,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         descricao: await ler(opcoes.descricao as string, deps.stdin),
         dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
-      return deps.comBanco((banco) => visao(banco, registrar(banco, dados, autor, agora()).demanda.id));
+      return deps.comBanco((banco) =>
+        visao(banco, registrar(banco, dados, autor, { agora: deps.relogio.agora() }).demanda.id),
+      );
     },
   },
   {
@@ -183,7 +183,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const id = idDe(String(entrada.posicionais[0]));
       const autor = autorDe(entrada, deps);
       return deps.comBanco((banco) => {
-        enviar(banco, id, autor, agora());
+        enviar(banco, id, autor, { agora: deps.relogio.agora() });
         return visao(banco, id);
       });
     },

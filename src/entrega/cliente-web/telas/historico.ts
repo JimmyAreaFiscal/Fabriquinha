@@ -2,8 +2,8 @@
 // agrupadas por dia e a prévia da escolhida, com o fim da conversa e as ações. O texto que vem do servidor passa
 // sempre por `escapar`; o das mensagens, pelo `markdown-it` sem HTML.
 import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type { DadosDoChatDemanda } from "../../http/rotas/chat.ts";
-import type { Resultado, SessaoDeDemanda } from "../../http/rotas/historico.ts";
+import type { DadosDoChatDemanda } from "../../contrato/chat.ts";
+import type { Resultado, SessaoDeDemanda } from "../../contrato/historico.ts";
 import { markdown } from "../markdown.ts";
 import { caminhoDaSessao, diaMes, duracao, escapar, hora, MODO_DA_SESSAO, plural, rotuloDoModelo } from "../render.ts";
 import { type Bloco, blocos, ferramenta, type MensagemPi, modeloDe, textoDe } from "./chat.ts";
@@ -56,23 +56,34 @@ export function consulta(f: Filtros): string {
 
 export const contagem = (n: number): string => plural(n, "sessão", "sessões");
 
+const FORMATO_DATA = new Intl.DateTimeFormat("pt-BR", { year: "numeric", month: "numeric", day: "numeric" });
+
+/** O ano e o número do dia no calendário, na data do fuso do navegador: a diferença entre dois deles conta dias inteiros. */
+function diaCivil(instante: number): [ano: number, dias: number] {
+  const partes = FORMATO_DATA.formatToParts(instante);
+  const [ano = 0, mes = 1, dia = 1] = ["year", "month", "day"].map((tipo) =>
+    Number(partes.find((p) => p.type === tipo)?.value),
+  );
+  return [ano, Date.UTC(ano, mes - 1, dia) / 86_400_000];
+}
+
 /** O dia da sessão, no fuso do navegador: `Hoje`, `Ontem` ou `09/10` (com o ano, se não é o de agora). */
 /** @testes função pura da tela, testada sem montar o DOM */
-export function dia(instante: string, agora: Date): string {
-  const d = new Date(instante);
-  const meiaNoite = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const dias = Math.round((meiaNoite(agora) - meiaNoite(d)) / 86_400_000);
+export function dia(instante: string, agora: number): string {
+  const [anoDaSessao, diasDaSessao] = diaCivil(Date.parse(instante));
+  const [anoDeAgora, diasDeAgora] = diaCivil(agora);
+  const dias = diasDeAgora - diasDaSessao;
   if (dias === 0) return "Hoje";
   if (dias === 1) return "Ontem";
-  const ano = d.getFullYear() === agora.getFullYear() ? "" : `/${String(d.getFullYear())}`;
-  return `${diaMes(d)}${ano}`;
+  const ano = anoDaSessao === anoDeAgora ? "" : `/${String(anoDaSessao)}`;
+  return `${diaMes(instante)}${ano}`;
 }
 
 const pilula = (r: Resultado): string => `<span class="pill ${RESULTADOS[r][1]}">${RESULTADOS[r][0]}</span>`;
 
 const linha = (s: SessaoDeDemanda, selecionada: string): string =>
   `<button type="button" class="linha" data-sel="${escapar(s.sessao)}" aria-selected="${String(s.sessao === selecionada)}">` +
-  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">${s.ticket}</span>` +
+  `<span class="hora">${hora(s.desde)}</span><span class="id">${s.ticket}</span>` +
   `<span class="meio">${escapar(s.titulo)} <span class="muted">· ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</span></span>` +
   `<span class="esconde">${pilula(s.resultado)}</span></button>`;
 
@@ -80,7 +91,7 @@ const linha = (s: SessaoDeDemanda, selecionada: string): string =>
  * A lista (F7 §4.4, item 2), já da mais recente para a mais antiga, agrupada por dia, com o lugar da prévia da
  * `selecionada` ao lado. Sem sessões, a frase de lista vazia.
  */
-export function listaDoHistorico(lista: readonly SessaoDeDemanda[], selecionada: string, agora: Date): string {
+export function listaDoHistorico(lista: readonly SessaoDeDemanda[], selecionada: string, agora: number): string {
   if (lista.length === 0) return '<p class="muted">Nenhuma sessão com esses filtros.</p>';
   const dias = Map.groupBy(lista, (s) => dia(s.desde, agora));
   const secoes = [...dias].map(
@@ -128,7 +139,7 @@ const pedaco = (p: Pedaco): string =>
  * A prévia (F7 §4.4, item 3): demanda, ticket e título, projeto, etapa e modo, resultado, término e duração (a soma
  * das execuções), modelo, mensagens e o fim da conversa; **Abrir o chat** e **Exportar**.
  */
-export function previa(s: SessaoDeDemanda, d: DadosDoChatDemanda, agora: Date): string {
+export function previa(s: SessaoDeDemanda, d: DadosDoChatDemanda, agora: number): string {
   const sessao = encodeURIComponent(s.sessao);
   const durou = d.execucoes.reduce((soma, e) => soma + (e.fim ? Date.parse(e.fim) - Date.parse(e.inicio) : 0), 0);
   const fim = fimDaConversa(d);
@@ -138,7 +149,7 @@ export function previa(s: SessaoDeDemanda, d: DadosDoChatDemanda, agora: Date): 
     `<dt>Projeto</dt><dd>${escapar(s.projeto)}</dd>` +
     `<dt>Etapa</dt><dd>${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</dd>` +
     `<dt>Resultado</dt><dd>${pilula(s.resultado)}</dd>` +
-    `<dt>Terminada</dt><dd>${dia(s.desde, agora)} ${hora(new Date(s.desde))} · durou ${duracao(durou)}</dd>` +
+    `<dt>Terminada</dt><dd>${dia(s.desde, agora)} ${hora(s.desde)} · durou ${duracao(durou)}</dd>` +
     `<dt>Modelo</dt><dd>${rotuloDoModelo(modeloDe(d, d.conversa))}</dd>` +
     `<dt>Mensagens</dt><dd>${String(mensagens(d).length)}</dd></dl>` +
     `<div class="trecho"><span class="quem">fim da conversa</span>${fim.length ? fim.map(pedaco).join("") : '<span class="muted">sem mensagens</span>'}</div>` +

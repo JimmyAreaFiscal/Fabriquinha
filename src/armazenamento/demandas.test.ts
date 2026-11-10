@@ -11,11 +11,12 @@ import { registrarDemanda } from "../nucleo/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
 import {
   carregarDemanda,
+  carregarDemandas,
   carregarEscopoDoProcesso,
   comDemanda,
   criarDemandaNova,
   listarDemandas,
-  sessaoDeCadaTicketDaDemanda,
+  situacaoDasDemandas,
 } from "./demandas.ts";
 import { abrirTrabalhoDoAgente, gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
@@ -657,20 +658,27 @@ test("carregarEscopoDoProcesso traz o ticket, a sessão e o projeto da execuçã
   assert.equal(carregarEscopoDoProcesso(b, "inexistente"), undefined);
 });
 
-test("sessaoDeCadaTicketDaDemanda devolve a sessão de cada ticket e, com mais de uma, a mais recente", () => {
+test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na mesma quantidade com 1 ou 3 ids", () => {
   const b = comBase();
-  const nova = b.prepare(
-    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-1', ?, 'autonomo', 'c')",
-  );
-  nova.run("s-a", 1);
-  nova.run("s-b", 2);
-  nova.run("s-c", 1);
+  const preparacoesDe = (ids: string[]) => {
+    const original = b.prepare.bind(b);
+    let preparacoes = 0;
+    b.prepare = (sql) => (preparacoes++, original(sql));
+    carregarDemandas(b, ids);
+    b.prepare = original;
+    return preparacoes;
+  };
+  assert.deepEqual(carregarDemandas(b, ["I-1", "I-1"]), [carregarDemanda(b, "I-1"), carregarDemanda(b, "I-1")]);
+  assert.equal(preparacoesDe(["I-1", "I-1", "I-1"]), preparacoesDe(["I-1"]));
+  assert.throws(() => carregarDemandas(b, ["I-9"]), ErroDeInexistente);
+});
+
+test("situacaoDasDemandas devolve só o id e o estado das demandas do projeto pedido", () => {
+  const b = comBase();
+  const { estado } = carregarDemanda(b, "I-1").demanda;
   assert.deepEqual(
-    sessaoDeCadaTicketDaDemanda(b, "I-1"),
-    new Map([
-      [1, "s-c"],
-      [2, "s-b"],
-    ]),
+    situacaoDasDemandas(b, "p").map((linha) => ({ ...linha })),
+    [{ id: "I-1", estado }],
   );
-  assert.deepEqual(sessaoDeCadaTicketDaDemanda(b, "I-9"), new Map());
+  assert.deepEqual(situacaoDasDemandas(b, "outro"), []);
 });

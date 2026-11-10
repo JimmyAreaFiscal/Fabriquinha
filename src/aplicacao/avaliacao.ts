@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import { metricasDasEtapas } from "./metricas/metricas_das_etapas.ts";
 import { colunasDoModelo, lerUsoDoPi } from "../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo, escrever } from "../armazenamento/banco.ts";
@@ -24,6 +25,7 @@ import {
   vincularAchado,
 } from "../armazenamento/avaliacoes.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
+import { configuracao } from "../armazenamento/servico.ts";
 import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import {
@@ -47,7 +49,7 @@ interface EscopoDaAvaliacao {
   pedido?: string;
 }
 
-export type EstadoDaAvaliacao = "rodando" | "concluida";
+type EstadoDaAvaliacao = "rodando" | "concluida";
 
 const dirDaAvaliacao = (raiz: string, id: string): string => join(raiz, "avaliacoes", id);
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -182,6 +184,12 @@ function promptDaAvaliacao(dir: string, e: EscopoDaAvaliacao): string {
   ].join("\n");
 }
 
+/** A ociosidade e o modelo das avaliações da Configuração de agora. */
+const opcoesDaConfiguracao = (banco: DatabaseSync): OpcoesDaAuditoria => {
+  const { ociosidadeMin, modeloAuditoria } = configuracao(banco);
+  return { ociosidadeMin, modelo: modeloAuditoria };
+};
+
 /**
  * Valida o escopo, grava a avaliação, prepara `<raiz>/avaliacoes/<id>/` e sobe o pi; resolve com o id no primeiro
  * `agent_start`. Se o pi não sobe, não sobra avaliação, pasta nem JSONL, e o erro leva a causa (CA-17).
@@ -189,7 +197,8 @@ function promptDaAvaliacao(dir: string, e: EscopoDaAvaliacao): string {
 export async function iniciarAvaliacao(
   banco: DatabaseSync,
   escopo: EscopoDaAvaliacao,
-  opcoes: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria = opcoesDaConfiguracao(banco),
+  relogio: Relogio = relogioDoSistema,
 ): Promise<string> {
   const demandas = demandasDoEscopo(banco, escopo);
   const raiz = raizDo(banco);
@@ -204,7 +213,7 @@ export async function iniciarAvaliacao(
       de: escopo.de,
       ate: escopo.ate,
       pedido,
-      criada_em: new Date().toISOString(),
+      criada_em: relogio.agora(),
       demandas,
     });
     prepararPasta(banco, dir, escopo, demandas);
@@ -265,7 +274,12 @@ export function abrir(banco: DatabaseSync, id: string) {
 }
 
 /** A pergunta do Auditor: ao pi vivo e ocioso, ou a um pi novo na mesma sessão e pasta. */
-export function enviarNaAvaliacao(banco: DatabaseSync, id: string, mensagem: string, opcoes: OpcoesDaAuditoria): void {
+export function enviarNaAvaliacao(
+  banco: DatabaseSync,
+  id: string,
+  mensagem: string,
+  opcoes: OpcoesDaAuditoria = opcoesDaConfiguracao(banco),
+): void {
   abrirAvaliacao(banco, id);
   const raiz = raizDo(banco);
   enviarNaConversa(id, mensagem, (prompt) => void subir(raiz, id, prompt, opcoes, conducao(banco, raiz, id)));
@@ -280,7 +294,12 @@ export const abortarAvaliacao = (id: string): void => {
  * Encaminha o achado como demanda nova (tipo funcionalidade, em registro), com o vínculo nos dois sentidos: o
  * `demanda_id` do achado e a origem da demanda (`avaliacao` / `<id>#<n>`). Recusa o achado já encaminhado (CA-14).
  */
-export function encaminharAchado(banco: DatabaseSync, id: string, achadoId: number): AgregadoDemanda {
+export function encaminharAchado(
+  banco: DatabaseSync,
+  id: string,
+  achadoId: number,
+  relogio: Relogio = relogioDoSistema,
+): AgregadoDemanda {
   return escrever(banco, () => {
     const avaliacao = abrirAvaliacao(banco, id);
     const achado = avaliacao.achados.find((a) => a.achado_id === achadoId);
@@ -301,7 +320,7 @@ export function encaminharAchado(banco: DatabaseSync, id: string, achadoId: numb
         descricao: `${achado.descricao}\n\nEvidência: ${achado.evidencia}\n\nOrigem: avaliação ${id}, achado ${String(achadoId)}.`,
       },
       { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#${String(achadoId)}` },
-      { agora: new Date().toISOString() },
+      { agora: relogio.agora() },
     );
     vincularAchado(banco, id, achadoId, ag.demanda.id);
     return ag;

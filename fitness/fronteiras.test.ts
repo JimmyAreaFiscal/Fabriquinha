@@ -14,24 +14,44 @@ const MODULO_CLIENTE_WEB = "entrega/cliente-web";
 const QUALQUER_EXTERNO = () => true;
 const SO_ZOD_E_PATH = (alvo: string) => alvo === "zod" || alvo === "node:path";
 
+// O pacote de um especificador externo: `react-dom/client` → `react-dom`, `@assistant-ui/react/x` → `@assistant-ui/react`.
+const pacoteDe = (alvo: string): string =>
+  alvo
+    .split("/")
+    .slice(0, alvo.startsWith("@") ? 2 : 1)
+    .join("/");
+const PACOTES_DO_NAVEGADOR = new Set(["react-dom", "@assistant-ui/react", "markdown-it"]);
+
 interface RegraDoModulo {
   modulosPermitidos: string[];
   externoPermitido: (alvo: string) => boolean;
-  somenteImportDeTipo?: boolean;
+  /** Módulos de que só se importa tipo (`import type`), apagado na execução; o valor fica fora de `modulosPermitidos`. */
+  modulosSoComoTipo?: string[];
 }
 
 const MATRIZ: Record<string, RegraDoModulo> = {
   nucleo: { modulosPermitidos: [], externoPermitido: SO_ZOD_E_PATH },
   armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  aplicacao: { modulosPermitidos: ["nucleo", "armazenamento", "infra"], externoPermitido: QUALQUER_EXTERNO },
-  "entrega/http": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  aplicacao: {
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", "entrega/contrato"],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  // Puro: importável pelo servidor e pelo navegador.
+  "entrega/compartilhado": { modulosPermitidos: [], externoPermitido: () => false },
+  // Os tipos e schemas da API: só o núcleo e o zod. O cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  "entrega/contrato": { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
+  "entrega/http": {
+    modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
   "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  // Roda no navegador: de fora de si, só tipos (apagados na execução) e o markdown-it, servido em /static/ pelo import map.
+  // Roda no navegador: de valor, só o `entrega/compartilhado` (o `casar`); do contrato e do núcleo, só `import type`;
+  // de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes, que a matriz não lê).
   [MODULO_CLIENTE_WEB]: {
-    modulosPermitidos: [],
-    externoPermitido: (alvo) => alvo === "markdown-it/browser",
-    somenteImportDeTipo: true,
+    modulosPermitidos: ["entrega/compartilhado"],
+    modulosSoComoTipo: ["entrega/contrato", "nucleo"],
+    externoPermitido: (alvo) => PACOTES_DO_NAVEGADOR.has(pacoteDe(alvo)),
   },
   composicao: {
     modulosPermitidos: [
@@ -41,6 +61,8 @@ const MATRIZ: Record<string, RegraDoModulo> = {
       "aplicacao",
       "entrega/http",
       "entrega/cli",
+      "entrega/compartilhado",
+      "entrega/contrato",
       MODULO_CLIENTE_WEB,
     ],
     externoPermitido: QUALQUER_EXTERNO,
@@ -57,45 +79,8 @@ interface Excecao extends Achado {
   demanda: string;
 }
 
-// Cada exceção cita a demanda (04 a 26) que a remove: 20 limpa entrega/http.
-const EXCECOES: Excecao[] = [
-  { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/chat.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/harness_pi.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  {
-    arquivo: "entrega/http/rotas/demandas.ts",
-    import: "../../../armazenamento/dependencias_demanda.ts",
-    demanda: "20",
-  },
-  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/evidencia_demanda.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../infra/repositorio/heatmap.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
-  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/commits_humanos.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../../armazenamento/banco.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/servidor.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
-];
+// Cada exceção cita a demanda (04 a 26) que a remove. Vazia: a 20 limpou entrega/http e nada mais ficou pendente.
+const EXCECOES: Excecao[] = [];
 
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
@@ -173,7 +158,8 @@ function acharViolacoesEArestas(src: string): { violacoes: Achado[]; arestas: Ar
         moduloAlvo === undefined
           ? regra.externoPermitido(alvo)
           : moduloAlvo === modulo || regra.modulosPermitidos.includes(moduloAlvo);
-      const tipoBasta = regra.somenteImportDeTipo === true && soDeTipo.has(alvo);
+      const tipoBasta =
+        moduloAlvo !== undefined && regra.modulosSoComoTipo?.includes(moduloAlvo) === true && soDeTipo.has(alvo);
       const achado = { arquivo, import: alvo };
       if (!permitido && !tipoBasta) violacoes.push(achado);
       if (moduloAlvo !== undefined && moduloAlvo !== modulo)
@@ -251,11 +237,10 @@ test("toda exceção cita arquivo, import e uma demanda de 04 a 26", () => {
   }
 });
 
-test("só restam as exceções da demanda 20 (entrega/http)", () => {
-  const daDemanda20 = EXCECOES.filter(
-    ({ arquivo, demanda }) => demanda === "20" && arquivo.startsWith("entrega/http/"),
-  );
-  assert.deepEqual(EXCECOES, daDemanda20);
+test("a lista de exceções está vazia: entrega/http não importa armazenamento nem chama .prepare(", () => {
+  assert.deepEqual(EXCECOES, []);
+  const daHttp = acharViolacoes(SRC, []).filter(({ arquivo }) => arquivo.startsWith("entrega/http/"));
+  assert.deepEqual(daHttp.map(descrever), []);
 });
 
 test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
@@ -281,19 +266,32 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "aplicacao/ok.ts":
       'import { a } from "../armazenamento/ok.ts";\nimport { b } from "../infra/ok.ts";\nconst achou = /a/.exec(texto);\n',
     "infra/ok.ts": 'import { spawn } from "node:child_process";\nimport { z } from "../nucleo/ok.ts";\n',
-    "entrega/http/ok.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
-    "entrega/cliente-web/ok.ts": 'import type { A } from "../../aplicacao/ok.ts";\nimport { b } from "./sub.ts";\n',
+    "entrega/compartilhado/ok.ts": "export const c = 1;\n",
+    "entrega/contrato/ok.ts": 'import { z } from "zod";\nimport { Id } from "../../nucleo/ok.ts";\n',
+    "entrega/http/ok.ts":
+      'import { a } from "../../aplicacao/ok.ts";\nimport { c } from "../compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\n',
+    "entrega/cliente-web/ok.ts":
+      'import type { N } from "../../nucleo/ok.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "../compartilhado/ok.ts";\n',
     "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
-    "entrega/cliente-web/markdown.ts": 'import markdownit from "markdown-it/browser";\n',
+    "entrega/cliente-web/pacotes.ts":
+      'import markdownit from "markdown-it/browser";\nimport { createRoot } from "react-dom/client";\nimport { useThread } from "@assistant-ui/react";\n',
     "composicao/ok.ts": 'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\n',
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
-    "entrega/cliente-web/aplicacao.ts":
-      'import { a } from "../../aplicacao/ok.ts";\nimport type { B } from "../../aplicacao/ok.ts";\n',
-    "entrega/cliente-web/markdown_inteiro.ts": 'import markdownit from "markdown-it";\n',
-    "entrega/cliente-web/markdown_subcaminho.ts": 'import x from "markdown-it/browser/x";\n',
+    "entrega/compartilhado/impuro.ts":
+      'import { z } from "../../nucleo/ok.ts";\nimport { readFileSync } from "node:fs";\n',
+    "entrega/contrato/impuro.ts":
+      'import { readFileSync } from "node:fs";\nimport { a } from "../../armazenamento/ok.ts";\n',
+    "entrega/cliente-web/aplicacao_tipo.ts": 'import type { B } from "../../aplicacao/ok.ts";\n',
+    "entrega/cliente-web/aplicacao_valor.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
+    "entrega/cliente-web/contrato_valor.ts": 'import { Resposta } from "../contrato/ok.ts";\n',
+    "entrega/cliente-web/nucleo_valor.ts": 'import { n } from "../../nucleo/ok.ts";\n',
     "entrega/cliente-web/lodash.ts": 'import _ from "lodash";\n',
+    "entrega/cliente-web/node.ts": 'import { readFileSync } from "node:fs";\n',
+    "entrega/cliente-web/react_puro.ts": 'import { useState } from "react";\n',
+    "entrega/cliente-web/node.test.ts":
+      'import { test } from "node:test";\nimport { a } from "../../aplicacao/ok.ts";\n',
     "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
     "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
     "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
@@ -310,14 +308,76 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
-      "entrega/cliente-web/aplicacao.ts importa ../../aplicacao/ok.ts",
+      "entrega/cliente-web/aplicacao_tipo.ts importa ../../aplicacao/ok.ts",
+      "entrega/cliente-web/aplicacao_valor.ts importa ../../aplicacao/ok.ts",
+      "entrega/compartilhado/impuro.ts importa ../../nucleo/ok.ts",
+      "entrega/compartilhado/impuro.ts importa node:fs",
+      "entrega/contrato/impuro.ts importa ../../armazenamento/ok.ts",
+      "entrega/contrato/impuro.ts importa node:fs",
+      "entrega/cliente-web/contrato_valor.ts importa ../contrato/ok.ts",
       "entrega/cliente-web/lodash.ts importa lodash",
-      "entrega/cliente-web/markdown_inteiro.ts importa markdown-it",
-      "entrega/cliente-web/markdown_subcaminho.ts importa markdown-it/browser/x",
+      "entrega/cliente-web/node.ts importa node:fs",
+      "entrega/cliente-web/nucleo_valor.ts importa ../../nucleo/ok.ts",
+      "entrega/cliente-web/react_puro.ts importa react",
       "infra/armazenamento.ts importa ../armazenamento/ok.ts",
       "nucleo/fs.ts importa node:fs",
     ].sort(),
   );
+});
+
+// O relógio é do `composicao` (que o injeta) e de `nucleo/relogio.ts`: `new Date(` em qualquer outro .ts de src/ (cliente web
+// e compartilhado inclusive) lê a hora ou faz conta de calendário fora dele. Os *.test.ts (já fora da lista) e *_cenario.ts ficam de fora.
+const ARQUIVO_DO_RELOGIO = "nucleo/relogio.ts";
+
+function acharNewDateForaDoRelogio(src: string): string[] {
+  return listarArquivosDeProducao(src)
+    .filter(
+      (arquivo) =>
+        arquivo !== ARQUIVO_DO_RELOGIO && !arquivo.startsWith("composicao/") && !arquivo.endsWith("_cenario.ts"),
+    )
+    .filter((arquivo) => {
+      const chamadas: ts.Node[] = [];
+      const visitar = (no: ts.Node): void => {
+        if (ts.isNewExpression(no) && ts.isIdentifier(no.expression) && no.expression.text === "Date")
+          chamadas.push(no);
+        ts.forEachChild(no, visitar);
+      };
+      visitar(ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest));
+      return chamadas.length > 0;
+    })
+    .map((arquivo) => `${arquivo} chama new Date(`);
+}
+
+test("new Date( só em composicao/ e nucleo/relogio.ts", () => {
+  assert.deepEqual(acharNewDateForaDoRelogio(SRC), []);
+});
+
+test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio.ts e aceita o resto", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-relogio-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    [ARQUIVO_DO_RELOGIO]: "export const agora = () => new Date().toISOString();\n",
+    "composicao/servico.ts": "const batida = new Date(inicio);\n",
+    "aplicacao/ruim.ts": "const agora = new Date().toISOString();\n",
+    "entrega/cliente-web/ruim.ts": "const ano = new Date(instante).getFullYear();\n",
+    "entrega/compartilhado/ruim.ts": "export const dia = (i: string) => new Date(i);\n",
+    "aplicacao/inocente.ts":
+      "// new Date() em comentário\nconst d = Date.parse(x);\nconst n = Date.now();\nconst o = new Datas();\n",
+    "aplicacao/ruim.test.ts": "const d = new Date();\n",
+    "aplicacao/ruim_cenario.ts": "const d = new Date();\n",
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharNewDateForaDoRelogio(raiz).sort(), [
+    "aplicacao/ruim.ts chama new Date(",
+    "entrega/cliente-web/ruim.ts chama new Date(",
+    "entrega/compartilhado/ruim.ts chama new Date(",
+  ]);
 });
 
 // Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.

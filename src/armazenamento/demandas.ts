@@ -1,12 +1,13 @@
 // Repositório do agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4): carrega e grava só a diferença.
 // Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { Ator } from "../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import type { EstadoDemanda } from "../nucleo/primitivos.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import { escrever, novoId } from "./banco.ts";
 import { lerEmSnapshot } from "./snapshot.ts";
@@ -271,12 +272,15 @@ function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined
   }
 }
 
-function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined {
-  const demanda = banco.prepare("SELECT * FROM demanda WHERE id = ?").get(id);
+function carregar(
+  banco: DatabaseSync,
+  id: string,
+  preparar: (sql: string) => StatementSync = (sql) => banco.prepare(sql),
+): AgregadoDemanda | undefined {
+  const demanda = preparar("SELECT * FROM demanda WHERE id = ?").get(id);
   if (!demanda) return undefined;
-  const filhas = (tabela: string) =>
-    banco.prepare(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(id);
-  const enc = banco.prepare("SELECT * FROM encerramento_demanda WHERE demanda_id = ?").get(id);
+  const filhas = (tabela: string) => preparar(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(id);
+  const enc = preparar("SELECT * FROM encerramento_demanda WHERE demanda_id = ?").get(id);
   return AgregadoDemanda.parse({
     ...(enc && {
       encerramento: semNulos({
@@ -297,10 +301,7 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
       enviada: demanda.enviada === 1,
     },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
-    pull_requests: banco
-      .prepare("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid")
-      .all(id)
-      .map(semNulos),
+    pull_requests: preparar("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid").all(id).map(semNulos),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
     tickets: filhas("ticket_demanda").map((t) => semNulos(linhaComConfiguracaoAgente(comAtor(t, "criado_por")))),
@@ -351,6 +352,23 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
 }
 
 /**
+ * Os agregados de `ids`, na ordem pedida, lidos num snapshot só e com cada SQL preparado uma vez, não uma por demanda;
+ * demanda inexistente dá `ErroDeInexistente`.
+ * @testes o teste exercita direto; a produção a usa só dentro do módulo (a consulta que a usa vem em seguida)
+ */
+export function carregarDemandas(banco: DatabaseSync, ids: readonly string[]): AgregadoDemanda[] {
+  const preparados = new Map<string, StatementSync>();
+  const preparar = (sql: string) => {
+    const preparado = preparados.get(sql) ?? banco.prepare(sql);
+    preparados.set(sql, preparado);
+    return preparado;
+  };
+  return lerEmSnapshot(banco, () =>
+    ids.map((id) => encontrado(carregar(banco, id, preparar), `a demanda ${id} não existe`, "confira o id da demanda")),
+  );
+}
+
+/**
  * As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra) e, com
  * `soNaoTerminadas`, só as que não terminaram (o Início).
  */
@@ -365,9 +383,19 @@ export function listarDemandas(
         ? ""
         : "WHERE estado <> 'arquivada'";
     const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
-    return ids.map((l) => existente(banco, String(l.id)));
+    return carregarDemandas(
+      banco,
+      ids.map((l) => String(l.id)),
+    );
   });
 }
+
+/** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
+export const situacaoDasDemandas = (banco: DatabaseSync, projeto: string): { id: string; estado: EstadoDemanda }[] =>
+  banco.prepare("SELECT id, estado FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(projeto) as {
+    id: string;
+    estado: EstadoDemanda;
+  }[];
 
 /**
  * Demanda nova: a persistência só aloca o ID da sequência `issue` (D09); `montar` monta o agregado com ele. Erro em
@@ -433,12 +461,3 @@ export function carregarEscopoDoProcesso(banco: DatabaseSync, execucao: string):
     }
   );
 }
-
-/** O id da sessão de cada ticket da demanda; com mais de uma no ticket, vale a mais recente. */
-export const sessaoDeCadaTicketDaDemanda = (banco: DatabaseSync, id: string): Map<number, string> =>
-  new Map(
-    banco
-      .prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid")
-      .all(id)
-      .map((s) => [Number(s.ticket_id), String(s.id)]),
-  );

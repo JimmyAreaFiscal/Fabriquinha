@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { MotivoDeRecusa } from "../nucleo/despacho.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { relogioDoSistema } from "../nucleo/relogio.ts";
 import { varrerCommitsHumanos } from "../aplicacao/metricas/varrer_commits_humanos.ts";
 import { abrir } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
@@ -49,10 +50,14 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   const pedida = portaDoServico();
   // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
   montarAmbienteDoServico(new AmbienteHostLocal());
+  const relogio = relogioDoSistema;
+  const noLogDoServico = (erro: unknown): void => {
+    noLog(erro, relogio);
+  };
   // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
   let minutos = 0;
   /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */
-  let batida = Date.now();
+  let batida = Date.parse(relogio.agora());
   /**
    * Uma etapa despachada terminou depois do último ciclo: o trabalho que ela liberou (a revisão depois da
    * implementação, o encerramento depois da revisão...) é buscado na batida seguinte, sem esperar o intervalo inteiro.
@@ -80,13 +85,16 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
-    condutor.recuperarNaSubida(aberto);
+    condutor.recuperarNaSubida(aberto, relogio);
     web.on(
       "request",
       servirWeb({
         banco: aberto,
+        raiz,
         porta,
         agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
+        relogio,
+        registrarErro: noLogDoServico,
       }),
     );
   } catch (error_) {
@@ -100,13 +108,13 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
   const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => {
     if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
-    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes()));
+    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio));
   };
   montarConjuntoDoServico(conjuntoSeContainer);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
   // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.
-  await conjuntoSeContainer()?.reconciliarNaSubida().catch(noLog);
+  await conjuntoSeContainer()?.reconciliarNaSubida().catch(noLogDoServico);
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
@@ -117,7 +125,8 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
    * em cada; guardar a última tentativa se o log incomodar.
    */
   async function varrerVencidos(): Promise<void> {
-    for (const projeto of projetosAVarrer(banco)) await varrerCommitsHumanos(banco, projeto).catch(noLog);
+    for (const projeto of projetosAVarrer(banco, relogio))
+      await varrerCommitsHumanos(banco, projeto).catch(noLogDoServico);
   }
 
   /**
@@ -126,14 +135,14 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
    * a batida nunca espera o git, e uma varredura só começa quando a anterior terminou.
    */
   function ciclo(): void {
-    batida = Date.now();
+    batida = Date.parse(relogio.agora());
     try {
       const c = configuracao(banco);
       const conjunto = conjuntoSeContainer();
       if (conjunto && !eliminacaoDeOciosos)
         eliminacaoDeOciosos = conjunto
-          .eliminarOciosos(new Date().toISOString())
-          .catch(noLog)
+          .eliminarOciosos(relogio.agora())
+          .catch(noLogDoServico)
           .finally(() => {
             eliminacaoDeOciosos = undefined;
           });
@@ -142,25 +151,25 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       minutos = 0;
       etapaTerminou = false;
       varredura ??= varrerVencidos()
-        .catch(noLog)
+        .catch(noLogDoServico)
         .finally(() => {
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c))
+      for (const fim of cicloDoDespacho(banco, c, {}, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
     } catch (error_) {
-      noLog(error_);
+      noLogDoServico(error_);
     }
   }
-  const relogio = setInterval(ciclo, 60_000);
+  const intervaloDoCiclo = setInterval(ciclo, 60_000);
 
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco));
+      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), {}, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
@@ -175,7 +184,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     proximaBusca,
     async parar() {
       condutor.marcarParada();
-      clearInterval(relogio);
+      clearInterval(intervaloDoCiclo);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
       web.closeAllConnections();

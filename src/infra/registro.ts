@@ -3,6 +3,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Id } from "../nucleo/primitivos.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 
 /** `<raiz>/simulacoes/<n>`: anexos, sessão, log e `saida/` da execução simulada `n` (F8 §4). */
 export const dirDaExecucaoSimulada = (raiz: string, execucao: Id): string => join(raiz, "simulacoes", String(execucao));
@@ -20,11 +21,11 @@ export function logDaOperacao(raiz: string, nome: string): string {
 }
 
 /** Uma linha com horário no log da execução (o `log` da pasta dela). */
-export const anotar = (log: string, texto: string): void => {
-  appendFileSync(log, `${new Date().toISOString()} ${texto}\n`);
+export const anotar = (log: string, texto: string, relogio: Relogio = relogioDoSistema): void => {
+  appendFileSync(log, `${relogio.agora()} ${texto}\n`);
 };
 
 /** O log do serviço é o stderr, que o systemd guarda (F4 §2). */
-export const noLog = (erro: unknown): void => {
-  console.error(`${new Date().toISOString()} fabriquinha:`, erro);
+export const noLog = (erro: unknown, relogio: Relogio = relogioDoSistema): void => {
+  console.error(`${relogio.agora()} fabriquinha:`, erro);
 };

@@ -2,19 +2,26 @@
 // evidência, enviar e arquivar, uma transação por operação. A web e o CLI chamam estas funções; as regras são do domínio.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Ator } from "../nucleo/ator.ts";
-import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { registrarDependencia } from "../nucleo/dependencia_demanda.ts";
-import { ErroDeRegra } from "../nucleo/erros.ts";
+import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { exigirAutoria } from "../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA } from "../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import type { Relogio } from "../nucleo/relogio.ts";
 import { CustosRealizados } from "../nucleo/schemas.ts";
-import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "../nucleo/transicoes_demanda.ts";
+import {
+  type ContextoDemanda,
+  editarDemanda,
+  enviarDemanda,
+  reabrirTicket,
+  registrarDemanda,
+} from "../nucleo/transicoes_demanda.ts";
 import { escrever } from "../armazenamento/banco.ts";
-import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda, criarDemandaNova, situacaoDasDemandas } from "../armazenamento/demandas.ts";
 import {
   arestasDeDependencia,
   demandaParaDependencia,
@@ -85,6 +92,37 @@ export const enviar = (banco: DatabaseSync, id: string, autor: Ator, ctx: Contex
 
 export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
+
+/** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
+export const arquivarConcluidas = (
+  banco: DatabaseSync,
+  projeto: string,
+  relogio: Relogio,
+  orientacaoProjetoInexistente: string,
+): { arquivadas: number } => {
+  projetoExistente(banco, projeto, orientacaoProjetoInexistente);
+  const concluidas = situacaoDasDemandas(banco, projeto).filter((d) => d.estado === "concluida");
+  for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: relogio.agora() });
+  return { arquivadas: concluidas.length };
+};
+
+/** Só o Auditor reabre o ticket falho, com a instrução para a sessão que o retomar; devolve o ticket já aberto. */
+export const reabrir = (
+  banco: DatabaseSync,
+  demandaId: string,
+  entrada: { ticket_id: number; instrucao: string },
+  ator: Ator,
+  relogio: Relogio,
+): TicketDemanda => {
+  const ag = traduzir(() =>
+    comDemanda(banco, demandaId, (a) => reabrirTicket(a, entrada, ator, { agora: relogio.agora() })),
+  );
+  return existe(
+    ag.tickets.find((t) => t.ticket_id === entrada.ticket_id),
+    "ticket não encontrado",
+    "confira o endereço",
+  );
+};
 
 /** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto e as dependentes saem junto (D08). */
 export const cancelar = (

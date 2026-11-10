@@ -34,7 +34,7 @@ interface Soma {
 
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const NIVEIS = ["execucao", "sessao", "ticket", "rodada", "demanda", "projeto"] as const;
-export type Nivel = (typeof NIVEIS)[number];
+type Nivel = (typeof NIVEIS)[number];
 
 const CHAVE_DO_NIVEL: Record<Nivel, (e: ExecucaoNoPeriodo) => string> = {
   execucao: (e) => e.execucao,
@@ -46,11 +46,13 @@ const CHAVE_DO_NIVEL: Record<Nivel, (e: ExecucaoNoPeriodo) => string> = {
 };
 
 /** Uma Etapa com os valores das Métricas que o catálogo declara para ela. */
+/** @testes o teste exercita direto; a produção o usa só dentro do módulo */
 export interface MetricasDaEtapa {
   etapa: EtapaTicket;
   metricas: ValorDaMetrica[];
 }
 
+/** @testes o teste de rota tipa o corpo da resposta com ele */
 export interface MetricasDoMes {
   mes: string;
   /** `null` = todos os projetos. */
@@ -66,7 +68,7 @@ export interface MetricasDoMes {
   prs: { abertos: number; mergeados: number };
 }
 
-export interface MetricasDaDemandaNoPeriodo extends Soma {
+interface MetricasDaDemandaNoPeriodo extends Soma {
   demanda: string;
   projeto: string;
   titulo: string;
@@ -80,6 +82,7 @@ export interface MetricasDaDemandaNoPeriodo extends Soma {
 }
 
 /** As demandas do período e o Uso somado de todas, que é o que o rodapé da tabela mostra. */
+/** @testes o teste de rota tipa o corpo da resposta com ele */
 export interface MetricasPorDemanda {
   demandas: MetricasDaDemandaNoPeriodo[];
   total: Soma & { conformidade: number | null; nota: number | null };

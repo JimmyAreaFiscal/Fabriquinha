@@ -1,6 +1,7 @@
 // Configuração SDLC do projeto no DOM: lê a API, desenha com as funções puras de sdlc.ts, Adicionar e Remover sem
 // rede, Salvar com os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { ConfiguracaoSdlcDoProjeto } from "../../contrato/sdlc.ts";
 import { api, ErroDaApi, mostrarErro } from "../dom.ts";
 import {
   adicionar,
@@ -15,7 +16,6 @@ import {
   type Linha,
   paraProjeto,
   remover,
-  type Resposta,
   vazio,
 } from "./sdlc.ts";
 
@@ -46,7 +46,7 @@ function ler(form: HTMLFormElement): Estado {
 
 export async function montarSdlc(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   const nome = params.projeto ?? "";
-  const { configurada, configuracao, cursor_commit_humano } = await api<Resposta>(
+  const { configurada, configuracao, cursor_commit_humano } = await api<ConfiguracaoSdlcDoProjeto>(
     `/api/projetos/${encodeURIComponent(nome)}/configuracao-sdlc`,
     { signal },
   );
@@ -79,7 +79,7 @@ export async function montarSdlc(main: HTMLElement, params: Parametros, signal: 
       const corpo = paraProjeto(lido, nome);
       const botao = form.querySelector<HTMLButtonElement>('[type="submit"]');
       if (botao) botao.disabled = true;
-      api<Resposta>(`/api/projetos/${encodeURIComponent(nome)}/configuracao-sdlc`, {
+      api<ConfiguracaoSdlcDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/configuracao-sdlc`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(corpo),

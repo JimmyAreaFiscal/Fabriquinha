@@ -1,21 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MetricaDeAlteracoesPosteriores } from "../../../aplicacao/metricas/metrica_de_alteracoes_posteriores.ts";
-import { MetricaDeAprovacoesEReprovacoes } from "../../../aplicacao/metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
-import { MetricaDeBugsNosArquivosRevisados } from "../../../aplicacao/metricas/metrica_de_bugs_nos_arquivos_revisados.ts";
-import { MetricaDeConformidade } from "../../../aplicacao/metricas/metrica_de_conformidade.ts";
-import { MetricaDeExigenciasDeAlteracao } from "../../../aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts";
-import { MetricaDeNotaHumana } from "../../../aplicacao/metricas/metrica_de_nota_humana.ts";
-import { MetricaDeUso } from "../../../aplicacao/metricas/metrica_de_uso.ts";
-import type {
-  MetricasDaDemandaNoPeriodo,
-  MetricasDaEtapa,
-  MetricasDoMes,
-  Nivel,
-} from "../../../aplicacao/metricas/metricas_do_periodo.ts";
-import { CATALOGO_DE_ETAPAS } from "../../../nucleo/etapa.ts";
 import type { TipoMetrica } from "../../../nucleo/metrica.ts";
-import { EtapaTicket } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
+import type { MetricasDasDemandas, MetricasDoMes } from "../../contrato/metricas.ts";
 import {
   cardsDoMes,
   contarMeses,
@@ -44,6 +31,8 @@ const texto = (html: string) =>
     .replaceAll(/\s+/g, " ")
     .trim();
 
+type MetricasDaDemandaNoPeriodo = MetricasDasDemandas["demandas"][number];
+type Nivel = MetricasDoMes["niveis"][number]["nivel"];
 type Soma = Omit<MetricasDoMes["total"], "modelos">;
 
 const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheEscrita = 0, execucoes = 0): Soma => ({
@@ -55,17 +44,48 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   textoDoCusto: `US$ ${custo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
 });
 
-const DEFINICOES = Object.fromEntries(
-  [
-    new MetricaDeUso(),
-    new MetricaDeAprovacoesEReprovacoes(),
-    new MetricaDeConformidade(),
-    new MetricaDeAlteracoesPosteriores(),
-    new MetricaDeExigenciasDeAlteracao(),
-    new MetricaDeBugsNosArquivosRevisados(),
-    new MetricaDeNotaHumana(),
-  ].map((calculo) => [calculo.tipo, calculo.definicao]),
-) as Record<TipoMetrica, MetricasDaEtapa["metricas"][number]["definicao"]>;
+const DEFINICOES: Record<TipoMetrica, { tipo: TipoMetrica; rotulo: string; fonte: string }> = {
+  uso: { tipo: "uso", rotulo: "Uso", fonte: "Uso" },
+  aprovacoes_e_reprovacoes: {
+    tipo: "aprovacoes_e_reprovacoes",
+    rotulo: "Reprovações no Gate",
+    fonte: "Gate da demanda",
+  },
+  conformidade_com_o_plano: {
+    tipo: "conformidade_com_o_plano",
+    rotulo: "Conformidade do PR com o plano",
+    fonte: "Plano × arquivos alterados",
+  },
+  alteracoes_posteriores: {
+    tipo: "alteracoes_posteriores",
+    rotulo: "Alterações posteriores no código",
+    fonte: "Commits humanos posteriores na base",
+  },
+  exigencias_de_alteracao: {
+    tipo: "exigencias_de_alteracao",
+    rotulo: "Exigências de alteração",
+    fonte: "Decisões de reprovação e Tentativas",
+  },
+  bugs_nos_arquivos_revisados: {
+    tipo: "bugs_nos_arquivos_revisados",
+    rotulo: "Bugs nos arquivos revisados",
+    fonte: "Commits humanos posteriores na base",
+  },
+  nota_humana: { tipo: "nota_humana", rotulo: "Nota humana", fonte: "Gate do PR" },
+};
+
+/** As Métricas de cada Etapa, na ordem do fluxo da demanda. */
+const METRICAS_DAS_ETAPAS: Record<EtapaTicket, TipoMetrica[]> = {
+  entender_e_desenhar: ["uso", "aprovacoes_e_reprovacoes"],
+  planejar: ["uso", "conformidade_com_o_plano"],
+  implementar: ["uso", "alteracoes_posteriores"],
+  revisar_rodada: ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"],
+  encerrar_rodada: ["uso", "nota_humana"],
+  ajustar_resultado: ["uso"],
+  revisar_demanda: ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"],
+  encerrar_demanda: ["uso"],
+  resolver_conflito: ["uso"],
+};
 
 /** O valor de cada Métrica quando a Etapa não tem nada a mostrar. */
 const USO_VAZIO = { ...consumo(0), modelos: [], custoExterno: { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 } };
@@ -89,14 +109,14 @@ const uso = (custo: number, execucoes = 0, entrada = 0, resto: Record<string, un
 type ValoresDasEtapas = Partial<Record<EtapaTicket, Partial<Record<TipoMetrica, unknown>>>>;
 
 /** As nove Etapas, cada uma com as Métricas que o catálogo declara para ela, com os `valores` dados e zero no resto. */
-const etapas = (valores: ValoresDasEtapas = {}): MetricasDaEtapa[] =>
-  EtapaTicket.options.map((etapa) => ({
+const etapas = (valores: ValoresDasEtapas = {}): MetricasDoMes["etapas"] =>
+  (Object.keys(METRICAS_DAS_ETAPAS) as EtapaTicket[]).map((etapa) => ({
     etapa,
-    metricas: CATALOGO_DE_ETAPAS[etapa].metricas.map((tipo) => ({
+    metricas: METRICAS_DAS_ETAPAS[etapa].map((tipo) => ({
       definicao: DEFINICOES[tipo],
       valor: valores[etapa]?.[tipo] ?? VALORES_VAZIOS[tipo],
     })),
-  }));
+  })) as MetricasDoMes["etapas"];
 
 /** Um mês com custo, contagens e nota; a implementação concentra o custo e os tokens, como o total do mês. */
 function mes(
@@ -161,11 +181,14 @@ const DADOS: DadosDasMetricas = {
   atual: "2026-10",
 };
 
+// O mês sai no fuso do navegador; aqui, um fuso fixo.
+process.env.TZ = "America/Sao_Paulo";
+
 test("meses: somar, contar, o do instante, o rótulo e o período padrão", () => {
   assert.equal(somarMeses("2026-10", -11), "2025-11");
   assert.equal(somarMeses("2026-12", 1), "2027-01");
   assert.equal(contarMeses("2025-11", "2026-10"), 12);
-  assert.equal(mesDe(new Date(2026, 0, 31, 23, 59)), "2026-01");
+  assert.equal(mesDe(Date.parse("2026-01-31T23:59:00-03:00")), "2026-01");
   assert.equal(rotuloMes("2026-03"), "mar/26");
   assert.deepEqual(periodoPadrao("2026-10"), { de: "2025-11", ate: "2026-10", foco: "2026-10" });
   // O foco fica enquanto o período o contém; fora dele, vai para o último mês.

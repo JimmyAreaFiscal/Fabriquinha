@@ -15,6 +15,7 @@ import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { type Pendencia, pendenciasDaDemanda, type TrabalhoVivo } from "../nucleo/pendencia.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -41,7 +42,7 @@ import {
 import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
-export type Estado = "rodando" | "aguardando_humano" | "terminada";
+type Estado = "rodando" | "aguardando_humano" | "terminada";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
 type ModoEnvio = "prompt" | "steer" | "follow_up";
@@ -156,7 +157,7 @@ export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
 }
 
 /** A Pendência como o chat a leva: `item` pelo endereço público (D09). */
-export type PendenciaDoChat = Omit<Pendencia, "item"> & { item: string };
+type PendenciaDoChat = Omit<Pendencia, "item"> & { item: string };
 
 const pendenciaDoChat = (p: Pendencia): PendenciaDoChat => ({ ...p, item: p.item.toString() });
 
@@ -175,7 +176,7 @@ interface InfoSessaoDemanda {
 }
 
 /** A execução como o chat a mostra: o motivo da falha é o da Tentativa que ela abriu. */
-export type ExecucaoDoChat = ProcessoDoTrabalho & { motivo?: string };
+type ExecucaoDoChat = ProcessoDoTrabalho & { motivo?: string };
 
 /** O que o Histórico lê da sessão; demanda, rodada e ticket pelo endereço público (D09). */
 interface CabecalhoDaSessao {
@@ -192,7 +193,7 @@ interface CabecalhoDaSessao {
 }
 
 /** O que a barra de estado e as linhas do sistema do chat leem: a sessão e as Pendências da demanda dela. */
-export interface CabecalhoDemanda extends CabecalhoDaSessao {
+interface CabecalhoDemanda extends CabecalhoDaSessao {
   pendencias: PendenciaDoChat[];
 }
 
@@ -290,11 +291,14 @@ function pendenciaDaSessao(
   c: Carregada,
   viva: Situacao | undefined,
   estadoEDesde: [Estado, Instante],
+  relogio: Relogio,
 ): PendenciaDoChat | undefined {
   if (estadoEDesde[0] !== "aguardando_humano") return undefined;
   const vivo = trabalhoVivoDaSessao(c, viva, estadoEDesde);
   // Agendador ligado: o despacho parado não segura sessão nenhuma.
-  const pendencias = pendenciasDaDemanda(c.ag, vivo ? [vivo] : [], c.ag.pull_requests, true);
+  const pendencias = pendenciasDaDemanda(c.ag, vivo ? [vivo] : [], c.ag.pull_requests, true, {
+    agora: relogio.agora(),
+  });
   const daSessao =
     pendencias.find((p) => p.item.ticket_id === c.ticket.ticket_id) ?? pendencias.find((p) => p.tipo === "gate_humano");
   return pendenciaDoChat(encontrado(daSessao, `a sessão ${c.sessao.id} espera sem Pendência`, "confira o banco"));
@@ -313,23 +317,23 @@ function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda): Trab
 }
 
 /** As Pendências da demanda, as mesmas do Início, para o chat mostrar o que a demanda espera do Auditor. */
-function pendenciasDoChat(banco: DatabaseSync, ag: AgregadoDemanda): PendenciaDoChat[] {
+function pendenciasDoChat(banco: DatabaseSync, ag: AgregadoDemanda, relogio: Relogio): PendenciaDoChat[] {
   const predecessorasSatisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ag.demanda.id)).length === 0;
   return pendenciasDaDemanda(
     ag,
     trabalhosVivosDaDemanda(banco, ag),
     ag.pull_requests,
     configuracao(banco).agendadorAtivo,
-    { predecessorasSatisfeitas },
+    { agora: relogio.agora(), predecessorasSatisfeitas },
   ).map(pendenciaDoChat);
 }
 
-function montarCabecalhoDaSessao(c: Carregada): CabecalhoDaSessao {
+function montarCabecalhoDaSessao(c: Carregada, relogio: Relogio): CabecalhoDaSessao {
   const { ag, ticket, sessao, execucoes } = c;
   const viva = condutor.situacao(sessao.id);
   const estadoEDesde = estadoEDesdeDaSessao(c, viva);
   const [estado, desde] = estadoEDesde;
-  const pendencia = pendenciaDaSessao(c, viva, estadoEDesde);
+  const pendencia = pendenciaDaSessao(c, viva, estadoEDesde, relogio);
   const ultima = ultimaDe(c);
   return {
     origem: "demanda",
@@ -410,32 +414,41 @@ function marcador(
 }
 
 /** O cabeçalho da sessão da demanda; `undefined` se o id não é de uma sessão da demanda. */
-export function cabecalhoDaSessao(banco: DatabaseSync, id: string): CabecalhoDaSessao | undefined {
+export function cabecalhoDaSessao(
+  banco: DatabaseSync,
+  id: string,
+  relogio: Relogio = relogioDoSistema,
+): CabecalhoDaSessao | undefined {
   const ref = ticketDoTrabalho(banco, id);
-  return ref && montarCabecalhoDaSessao(carregar(banco, ref, id));
+  return ref && montarCabecalhoDaSessao(carregar(banco, ref, id), relogio);
 }
 
-const montarCabecalho = (banco: DatabaseSync, c: Carregada): CabecalhoDemanda => ({
-  ...montarCabecalhoDaSessao(c),
-  pendencias: pendenciasDoChat(banco, c.ag),
+const montarCabecalho = (banco: DatabaseSync, c: Carregada, relogio: Relogio): CabecalhoDemanda => ({
+  ...montarCabecalhoDaSessao(c, relogio),
+  pendencias: pendenciasDoChat(banco, c.ag, relogio),
 });
 
 /** A conversa do JSONL com o fluxo ao vivo; `undefined` se o id não é de uma sessão da demanda. */
-export function abrirChatDemanda(banco: DatabaseSync, id: string): ChatDemanda | undefined {
+export function abrirChatDemanda(
+  banco: DatabaseSync,
+  id: string,
+  relogio: Relogio = relogioDoSistema,
+): ChatDemanda | undefined {
   const ref = ticketDoTrabalho(banco, id);
   if (!ref) return undefined;
   const raiz = raizDo(banco);
   const c = carregar(banco, ref, id);
   const marcar = marcador(raiz, c);
   return {
-    cabecalho: montarCabecalho(banco, c),
+    cabecalho: montarCabecalho(banco, c, relogio),
     conversa: lerConversa(raiz, id).map((e) => ({
       ...(e as EntradaDemanda),
       ...marcar((e as EntradaDemanda).message),
     })),
     assinar: (ouvinte) =>
       condutor.assinar(id, (evento) => {
-        if (evento.type === "estado") ouvinte({ type: "estado", ...montarCabecalho(banco, carregar(banco, ref, id)) });
+        if (evento.type === "estado")
+          ouvinte({ type: "estado", ...montarCabecalho(banco, carregar(banco, ref, id), relogio) });
         else if (evento.type === "message_end") {
           ouvinte({ ...evento, ...marcador(raiz, carregar(banco, ref, id))(evento.message) });
         } else ouvinte(evento);
@@ -488,7 +501,8 @@ export function enviarDemanda(
   id: string,
   texto: string,
   modo: ModoEnvio,
-  limiteMin: number,
+  limiteMin = configuracao(banco).ociosidadeMin,
+  relogio: Relogio = relogioDoSistema,
 ): boolean {
   const ref = ticketDoTrabalho(banco, id);
   if (!ref) return false;
@@ -496,7 +510,7 @@ export function enviarDemanda(
   const viva = condutor.situacao(id);
   const estadoEDesde = estadoEDesdeDaSessao(c, viva);
   const [estado] = estadoEDesde;
-  const tipoDaPendencia = pendenciaDaSessao(c, viva, estadoEDesde)?.tipo;
+  const tipoDaPendencia = pendenciaDaSessao(c, viva, estadoEDesde, relogio)?.tipo;
   const rotulo = tipoDaPendencia ? `${estado}: ${tipoDaPendencia}` : estado;
   // Diálogo aberto só se responde; sem ele, a Pendência do ticket é a conversa.
   const emConversa = tipoDaPendencia === "dialogo_do_agente" && !viva?.dialogos.length;
@@ -510,7 +524,7 @@ export function enviarDemanda(
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
   if (estado === "rodando" || viva) condutor.mandar(ultimaDe(c).id, { type: modo, message: texto });
   else if (c.ticket.etapa === "ajustar_resultado") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
-  else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto });
+  else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto }, relogio);
   return true;
 }
 

@@ -207,7 +207,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const ticket = this.ticketDe(endereco);
     comDemanda(banco, ticket.demanda_id, (ag) =>
       this.concluirRodada(
-        concluirTicketImplementar(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio()),
+        concluirTicketImplementar(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, { agora: relogio.agora() }),
         ticket,
       ),
     );
@@ -220,7 +220,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
       (t) => t.rodada_id === rodada_id && t.etapa === "implementar" && t.estado !== "concluido",
     );
     return rodada?.estado === "implementar" && !pendente
-      ? concluirImplementacoesRodada(ag, { demanda_id, rodada_id }, FABRIQUINHA, this.deps.relogio())
+      ? concluirImplementacoesRodada(ag, { demanda_id, rodada_id }, FABRIQUINHA, { agora: this.deps.relogio.agora() })
       : ag;
   }
 }

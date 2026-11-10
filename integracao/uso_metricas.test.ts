@@ -12,7 +12,7 @@ import { metricasDasEtapas } from "../src/aplicacao/metricas/metricas_das_etapas
 import type { MetricaDeUso } from "../src/aplicacao/metricas/metrica_de_uso.ts";
 import type { ValorDe } from "../src/aplicacao/metricas/calculo_de_metrica.ts";
 import { metricasDosMeses, usoDaDemanda } from "../src/aplicacao/metricas/metricas_do_periodo.ts";
-import { mesDe } from "../src/nucleo/periodo.ts";
+import { mesDoInstante } from "../src/nucleo/relogio.ts";
 import type { EtapaTicket } from "../src/nucleo/primitivos.ts";
 import {
   abrirPortao,
@@ -114,7 +114,10 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   assert.deepEqual(demandaTotal.custo, { conhecido: 3, trabalhosSemCusto: 1 });
 
   // A página Métricas lê o mesmo: as mesmas execuções (a retomada não duplica o uso) e o custo desconhecido sinalizado.
-  const meses = metricasDosMeses(c.banco, { de: mesDe(new Date(primeira.inicio)), ate: mesDe(new Date()) });
+  const meses = metricasDosMeses(c.banco, {
+    de: mesDoInstante(primeira.inicio),
+    ate: mesDoInstante(new Date().toISOString()),
+  });
   assert.equal(
     meses.reduce((n, mes) => n + mes.total.execucoes, 0),
     demandaTotal.execucoes,

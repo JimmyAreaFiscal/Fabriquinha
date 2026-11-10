@@ -8,6 +8,7 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { schemaDoTipo } from "../../nucleo/evidencia.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 
 const pasta = mkdtempSync(join(tmpdir(), "fabriquinha-comando-"));
@@ -76,6 +77,7 @@ test("um Comando recebe a entrada já lida e as dependências do processo", asyn
     stdout: { write: () => true },
     stderr: { write: () => true },
     raiz: "/raiz",
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     comBanco: <T>(usar: (aberto: DatabaseSync) => T | Promise<T>) => Promise.resolve(usar(banco)),
     iniciarServico: () => Promise.reject(new Error("não sobe")),
     abrirNoNavegador: () => Promise.resolve(),

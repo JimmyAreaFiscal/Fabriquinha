@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { heatmapDo, lerLog, prsDos, type NoDoHeatmap } from "./heatmap.ts";
+import { heatmapDo, lerLog, prsDos } from "./heatmap.ts";
+
+type NoDoHeatmap = Awaited<ReturnType<typeof heatmapDo>>["raiz"];
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-heatmap-")));
 after(() => {
@@ -16,7 +18,7 @@ writeFileSync(join(base, "gitconfig"), "[user]\n\tname = Auditor\n\temail = audi
 process.env.GIT_CONFIG_GLOBAL = join(base, "gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-const AGORA = new Date("2026-10-13T12:00:00Z");
+const AGORA = "2026-10-13T12:00:00.000Z";
 /** O instante de `meses` meses antes de AGORA (ISO), mais `dias` dias. */
 const atras = (meses: number, dias = 0): string => {
   const d = new Date(AGORA);
@@ -36,7 +38,7 @@ function repositorio() {
     })
       .toString()
       .trim();
-  git(AGORA.toISOString(), "init", "-q", "-b", "main");
+  git(AGORA, "init", "-q", "-b", "main");
   /** Grava `arquivos` (caminho → conteúdo) e commita em `data`. */
   const commitar = (data: string, mensagem: string, arquivos: Record<string, string | null>) => {
     for (const [caminho, conteudo] of Object.entries(arquivos)) {
@@ -51,7 +53,7 @@ function repositorio() {
     git(data, "commit", "-q", "-m", mensagem);
     return git(data, "rev-parse", "HEAD");
   };
-  const publicar = () => git(AGORA.toISOString(), "update-ref", "refs/remotes/origin/main", "HEAD");
+  const publicar = () => git(AGORA, "update-ref", "refs/remotes/origin/main", "HEAD");
   return { repo, git, commitar, publicar };
 }
 

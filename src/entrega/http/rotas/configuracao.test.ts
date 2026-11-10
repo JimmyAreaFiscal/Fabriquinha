@@ -13,10 +13,11 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 import { Projeto } from "../../../nucleo/projeto.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
@@ -77,10 +78,12 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
   for (const rota of ROTAS) {
     const params = rota.metodo === metodo ? casar(rota.caminho, caminho) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => PROXIMA },
+        relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
         corpo,
@@ -90,6 +93,12 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     } catch (erro) {
       return traduzir(erro);
     }
+    // CA-3: o corpo 2xx em JSON passa pelo schema do contrato da rota; sem schema, o teste nomeia a rota.
+    if (valor !== undefined) {
+      assert.ok(rota.resposta, `${rota.metodo} ${rota.caminho} sem schema de resposta em entrega/contrato`);
+      rota.resposta.parse(valor);
+    }
+    return valor;
   }
   throw new Error(`${metodo} ${caminho} não existe`);
 }
@@ -138,6 +147,7 @@ test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuçõ
   });
   const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15, modeloAuditoria: null };
   assert.deepEqual(await chamar("POST", "/api/configuracao", salvo), { ...salvo, proximaBusca: PROXIMA.toISOString() });
+  assert.deepEqual(await chamar("GET", "/api/configuracao"), { ...salvo, proximaBusca: PROXIMA.toISOString() });
 });
 
 test("modelo das avaliações: o par listado pelo pi grava; o que o pi não lista dá 422 e mantém o anterior; o igual ao gravado não chama o pi", async () => {

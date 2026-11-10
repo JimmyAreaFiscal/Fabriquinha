@@ -7,6 +7,7 @@ import type { ParseArgsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 export class ErroDeUso extends Error {}
@@ -31,6 +32,8 @@ export interface DepsDoCli {
   readonly stderr: { write(texto: string): unknown };
   /** A raiz da Fabriquinha (`$FABRIQUINHA_ROOT` ou a padrão). */
   readonly raiz: string;
+  /** A hora dos comandos que gravam. */
+  readonly relogio: Relogio;
   /** O banco da raiz para um comando, desligado no fim. */
   comBanco<T>(usar: (banco: DatabaseSync) => T | Promise<T>): Promise<T>;
   iniciarServico(): Promise<ServicoEmExecucao>;

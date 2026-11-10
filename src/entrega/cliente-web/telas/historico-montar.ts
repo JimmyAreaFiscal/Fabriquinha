@@ -1,9 +1,10 @@
 // Histórico (F7 §4.4) no DOM: lê as sessões terminadas com os filtros, desenha a lista com as funções puras de
 // historico.ts, mostra a prévia da escolhida. Não se atualiza sozinho: o que terminou fica
 // terminado. Os testes de ponta a ponta (e2e/historico.spec.ts) o exercitam.
-import type { DadosDoChatDemanda } from "../../http/rotas/chat.ts";
-import type { SessaoDeDemanda } from "../../http/rotas/historico.ts";
-import type { Parametros } from "../caminhos.ts";
+import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { DadosDoChatDemanda } from "../../contrato/chat.ts";
+import type { SessaoDeDemanda } from "../../contrato/historico.ts";
 import { api, avisar, elemento, mostrarErro } from "../dom.ts";
 import { verSaida } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";
@@ -30,7 +31,7 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
   async function carregarPrevia(s: SessaoDeDemanda): Promise<void> {
     const dados = await api<DadosDoChatDemanda>(`/api/sessoes/${encodeURIComponent(s.sessao)}`, { signal });
     const lugar = lista.querySelector("[data-previa]");
-    if (s.sessao === selecionada && lugar) lugar.innerHTML = previa(s, dados, new Date());
+    if (s.sessao === selecionada && lugar) lugar.innerHTML = previa(s, dados, agoraNoNavegador());
   }
 
   /** A lista com a selecionada (ou a mais recente) marcada, e a prévia dela. */
@@ -38,7 +39,7 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
     const sel = sessoes.find((s) => s.sessao === selecionada) ?? sessoes[0];
     selecionada = sel?.sessao ?? "";
     total.textContent = contagem(sessoes.length);
-    lista.innerHTML = listaDoHistorico(sessoes, selecionada, new Date());
+    lista.innerHTML = listaDoHistorico(sessoes, selecionada, agoraNoNavegador());
     if (sel) carregarPrevia(sel).catch(mostrarErro);
   }
 

@@ -19,7 +19,8 @@ import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.
 import type { Tentativa } from "../src/nucleo/tentativa.ts";
 import { comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { executarFabriquinha } from "../src/composicao/cli.ts";
-import { pagina, type DadosDaPagina } from "../src/entrega/cliente-web/telas/demandas.ts";
+import type { PaginaDaDemanda } from "../src/entrega/contrato/demanda.ts";
+import { pagina } from "../src/entrega/cliente-web/telas/demandas.ts";
 
 const ticket = Endereco.doTicket("I-206", 3);
 const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({
@@ -75,7 +76,7 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
   assert.equal((JSON.parse(saida) as { motivo?: string }).motivo, "motivo B");
 
   const { pedir } = await servir(banco);
-  const demanda = (await pedir("/api/demandas/I-206")).json<DadosDaPagina>();
+  const demanda = (await pedir("/api/demandas/I-206")).json<PaginaDaDemanda>();
   assert.equal(demanda.tickets.find((t) => t.ref === "I-206.T3")?.motivo, "motivo B");
   const html = pagina(demanda);
   assert.match(html, /Motivo da falha:<\/strong> motivo B/);

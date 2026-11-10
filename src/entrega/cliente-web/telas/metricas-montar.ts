@@ -1,8 +1,9 @@
 // Métricas (F7 §4.4) no DOM: lê os projetos e o período, desenha com as funções puras de metricas.ts, mede a área do
 // gráfico de evolução, mostra a dica ao passar o mouse e troca o foco, a métrica, a ordem e a tabela sem reler a API.
 // Não se atualiza sozinha. Os testes de ponta a ponta (e2e/) a exercitam.
-import type { MetricasDoMes, MetricasPorDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
-import type { Parametros } from "../caminhos.ts";
+import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { MetricasDasDemandas, MetricasDoMes } from "../../contrato/metricas.ts";
 import { api, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
@@ -24,7 +25,7 @@ const FOCAVEIS = ["data-mes", "data-metrica", "data-ordem", "data-tabela", "data
 
 /** A página `/metrics`; os ouvintes saem com `signal`, quando o Auditor sai dela. */
 export function montarMetricas(main: HTMLElement, _params: Parametros, signal: AbortSignal): void {
-  const atual = mesDe(new Date());
+  const atual = mesDe(agoraNoNavegador());
   const estado: EstadoDasMetricas = {
     projeto: "",
     ...periodoPadrao(atual),
@@ -60,7 +61,7 @@ export function montarMetricas(main: HTMLElement, _params: Parametros, signal: A
     const [lista, meses, { demandas, total: totalDasDemandas }] = await Promise.all([
       projetos,
       api<MetricasDoMes[]>(`/api/metricas?${q.toString()}`, { signal }),
-      api<MetricasPorDemanda>(`/api/metricas/demandas?${q.toString()}`, { signal }),
+      api<MetricasDasDemandas>(`/api/metricas/demandas?${q.toString()}`, { signal }),
     ]);
     if (meu !== pedido) return;
     dados = { projetos: lista.map((p) => p.nome), meses, demandas, totalDasDemandas, atual };

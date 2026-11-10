@@ -13,7 +13,7 @@ interface NovaAvaliacao {
   demandas: string[];
 }
 
-export interface Achado {
+interface Achado {
   achado_id: number;
   titulo: string;
   descricao: string;
@@ -32,7 +32,7 @@ interface UsoAvaliacao {
   custo: number | null;
 }
 
-export interface ResumoAvaliacao {
+interface ResumoAvaliacao {
   id: string;
   projeto: string;
   de: string;
@@ -41,16 +41,25 @@ export interface ResumoAvaliacao {
   criada_em: string;
 }
 
-/** As demandas do projeto com alguma sessão terminada entre `de` e `ate` (AAAA-MM-DD, inclusivas). */
-export const demandasComSessaoNoPeriodo = (banco: DatabaseSync, projeto: string, de: string, ate: string): string[] =>
+/** As demandas do projeto, com o título, que têm alguma sessão terminada entre `de` e `ate` (AAAA-MM-DD, inclusivas); numa leitura só. */
+export const demandasComTituloComSessaoNoPeriodo = (
+  banco: DatabaseSync,
+  projeto: string,
+  de: string,
+  ate: string,
+): { id: string; titulo: string }[] =>
   (
     banco
       .prepare(
-        `SELECT DISTINCT d.id FROM demanda d JOIN trabalho_agentico s ON s.demanda_id = d.id JOIN processo_do_trabalho e ON e.trabalho_id = s.id
-         WHERE d.projeto = ? AND substr(e.fim, 1, 10) BETWEEN ? AND ? ORDER BY d.id`,
+        `SELECT DISTINCT d.id, d.titulo FROM demanda d JOIN trabalho_agentico s ON s.demanda_id = d.id JOIN processo_do_trabalho e ON e.trabalho_id = s.id
+       WHERE d.projeto = ? AND substr(e.fim, 1, 10) BETWEEN ? AND ? ORDER BY d.id`,
       )
-      .all(projeto, de, ate) as { id: string }[]
-  ).map((l) => l.id);
+      .all(projeto, de, ate) as { id: string; titulo: string }[]
+  ).map(({ id, titulo }) => ({ id, titulo }));
+
+/** As demandas do projeto com alguma sessão terminada entre `de` e `ate` (AAAA-MM-DD, inclusivas). */
+export const demandasComSessaoNoPeriodo = (banco: DatabaseSync, projeto: string, de: string, ate: string): string[] =>
+  demandasComTituloComSessaoNoPeriodo(banco, projeto, de, ate).map((l) => l.id);
 
 export function criarAvaliacao(banco: DatabaseSync, a: NovaAvaliacao): void {
   escrever(banco, () => {

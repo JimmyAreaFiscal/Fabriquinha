@@ -1,7 +1,7 @@
 // Servidor web do F7 §4.1 e §7 (web) contra o serviço de verdade, numa raiz temporária e numa porta livre.
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -11,6 +11,8 @@ import { iniciarServico, type Servico } from "../../composicao/servico.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { registrarProjeto } from "../../aplicacao/projeto/cadastro.ts";
 import { criarUsuarioSimulado, usuariosSimulados } from "../../armazenamento/simulacao.ts";
+import ts from "typescript";
+import { SemCorpoEmJson } from "./rotas.ts";
 import { ROTAS } from "./servidor.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-web-"));
@@ -257,6 +259,15 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
     /"markdown-it\/browser": "\/static\/markdown-it.js"/,
   );
 
+  // O casar compartilhado, que o import map do index.html aponta para o cliente achar em /compartilhado/.
+  const compartilhado = await pedir("/static/compartilhado/caminhos.ts");
+  assert.equal(compartilhado.headers["content-type"], "text/javascript; charset=utf-8");
+  assert.match(compartilhado.texto, /export function casar\(/);
+  assert.match(
+    readFileSync(join(import.meta.dirname, "..", "cliente-web", "index.html"), "utf8"),
+    /"\/compartilhado\/caminhos.ts": "\/static\/compartilhado\/caminhos.ts"/,
+  );
+
   const css = await pedir("/static/estilo.css");
   assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
   assert.match(css.texto, /url\("fontes\/plex-sans-400\.woff2"\)/);
@@ -270,6 +281,7 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
 
   for (const caminho of [
     "/static/render.test.ts",
+    "/static/compartilhado/caminhos.test.ts",
     "/static/index.html",
     "/static/fontes/OFL.txt",
     "/static/nada.ts",
@@ -331,10 +343,11 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
 
 test("rota que devolve nada dá 204; a que responde sozinha fica como está; erro inesperado dá 500 no log; erro depois de responder corta a conexão", async (t) => {
   const extras = [
-    { metodo: "GET", caminho: "/api/teste/nada", tratar: () => undefined },
+    { metodo: "GET", caminho: "/api/teste/nada", tratar: () => undefined, resposta: SemCorpoEmJson },
     {
       metodo: "GET",
       caminho: "/api/teste/texto",
+      resposta: SemCorpoEmJson,
       tratar: ({ resposta }) => {
         resposta.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }).end("log");
         return "ignorado";
@@ -343,6 +356,7 @@ test("rota que devolve nada dá 204; a que responde sozinha fica como está; err
     {
       metodo: "GET",
       caminho: "/api/teste/quebra",
+      resposta: SemCorpoEmJson,
       tratar: () => {
         throw new Error("disco cheio");
       },
@@ -350,6 +364,7 @@ test("rota que devolve nada dá 204; a que responde sozinha fica como está; err
     {
       metodo: "GET",
       caminho: "/api/teste/meio",
+      fluxoSse: true,
       tratar: ({ resposta }) => {
         resposta.writeHead(200, { "Content-Type": "text/event-stream" });
         resposta.write("data: 1\n\n");
@@ -380,4 +395,51 @@ test("parar não espera conexão aberta: um pedido pela metade (como o SSE) é c
   await servico.parar();
   await fechou;
   servico = await iniciarServico(raiz);
+});
+
+const PASTA_DAS_ROTAS = join(import.meta.dirname, "rotas");
+
+/** De cada rota declarada em rotas/*.ts: o texto do `resposta:` e o texto do teste irmão (`<arquivo>.test.ts`). */
+function lerContratoDeCadaRotaDeclarada(): Map<string, { schema: string; textoDoTeste: string }> {
+  const declaradas = new Map<string, { schema: string; textoDoTeste: string }>();
+  for (const arquivo of readdirSync(PASTA_DAS_ROTAS).filter((nome) => !nome.endsWith(".test.ts"))) {
+    const caminho = join(PASTA_DAS_ROTAS, arquivo);
+    const fonte = ts.createSourceFile(caminho, readFileSync(caminho, "utf8"), ts.ScriptTarget.Latest, true);
+    const textoDoTeste = readFileSync(caminho.replace(/\.ts$/, ".test.ts"), "utf8");
+    const visitar = (no: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(no)) {
+        const texto = (nome: string): string | undefined => {
+          const propriedade = no.properties.find((candidata) => candidata.name?.getText() === nome);
+          return propriedade && ts.isPropertyAssignment(propriedade) ? propriedade.initializer.getText() : undefined;
+        };
+        const [metodo, rota] = [texto("metodo"), texto("caminho")];
+        if (metodo && rota)
+          declaradas.set(`${JSON.parse(metodo) as string} ${JSON.parse(rota) as string}`, {
+            schema: texto("resposta") ?? "",
+            textoDoTeste,
+          });
+      }
+      ts.forEachChild(no, visitar);
+    };
+    visitar(fonte);
+  }
+  return declaradas;
+}
+
+// shortcut: o teste de contrato é achado pelo texto (`Schema.parse(` ou `rota.resposta.parse(` no teste irmão da rota), não por execução; upgrade: registrar em tempo de execução se a conferência passar a ser compartilhada entre arquivos.
+test("CA-3: toda rota /api/* que responde JSON tem schema de contrato e um teste que passa o corpo 2xx por ele", () => {
+  const declaradas = lerContratoDeCadaRotaDeclarada();
+  const semContrato = ROTAS.filter(
+    (rota) => rota.caminho.startsWith("/api/") && !rota.fluxoSse && rota.resposta !== SemCorpoEmJson,
+  ).flatMap((rota) => {
+    const nome = `${rota.metodo} ${rota.caminho}`;
+    if (!(rota.resposta as unknown)) return [`${nome}: sem schema de resposta em entrega/contrato`];
+    const { schema, textoDoTeste } = declaradas.get(nome) ?? { schema: "", textoDoTeste: "" };
+    const conferePorLaco = textoDoTeste.includes(".resposta.parse(");
+    const conferePeloSchema = (schema.match(/\b[A-Z]\w*/g) ?? []).some((identificador) =>
+      new RegExp(`\\b${identificador}[\\w.()]*\\.parse\\(`).test(textoDoTeste),
+    );
+    return conferePorLaco || conferePeloSchema ? [] : [`${nome}: nenhum teste passa o corpo 2xx pelo parse do schema`];
+  });
+  assert.deepEqual(semContrato, []);
 });

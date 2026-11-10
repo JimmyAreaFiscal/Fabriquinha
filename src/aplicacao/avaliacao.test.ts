@@ -7,6 +7,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { metricasDasEtapas } from "./metricas/metricas_das_etapas.ts";
 import {
   abortarAvaliacao,
@@ -108,7 +109,9 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   const metricas = () => JSON.stringify([...metricasDasEtapas(banco, { demandaId: "I-10" })]);
   const antes = metricas();
   piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
-  const id = await iniciarAvaliacao(banco, { ...escopo, demandas: ["I-10", "I-10"] }, opcoes);
+  const instante = "2031-05-06T07:08:09.000Z";
+  const relogio = relogioFixo(instante);
+  const id = await iniciarAvaliacao(banco, { ...escopo, demandas: ["I-10", "I-10"] }, opcoes, relogio);
   await ate(
     () => banco.prepare("SELECT count(*) AS n FROM achado_avaliacao").get()?.n === 2,
     "a importação dos achados",
@@ -138,6 +141,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   const av = abrirAv(banco, id);
   assert.deepEqual(av.demandas, ["I-10"]);
   assert.equal(av.pedido, "");
+  assert.equal(av.criada_em, instante);
   assert.equal(av.achados.length, 2);
   assert.equal(av.uso[0]?.custo, 0.5);
   assert.equal(metricas(), antes);
@@ -163,7 +167,8 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   await ate(() => banco.prepare("SELECT chamadas FROM uso_avaliacao").get()?.chamadas === 2, "o uso regravado");
   assert.equal(registro().find((r) => r.comando?.message === "e o custo?")?.comando?.type, "prompt");
 
-  const demanda = encaminharAchado(banco, id, 1);
+  const demanda = encaminharAchado(banco, id, 1, relogio);
+  assert.equal(demanda.demanda.estado_alterado_em, instante);
   assert.equal(demanda.demanda.estado, "entender_e_desenhar");
   assert.equal(demanda.demanda.titulo, "Achado 1");
   assert.equal(demanda.demanda.projeto, "loja");

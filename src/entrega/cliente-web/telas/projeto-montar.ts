@@ -1,9 +1,10 @@
 // Página do projeto (F7 §4.4) no DOM: escolhe o projeto, lê as demandas com os filtros e o mês corrente dele, desenha
 // com as funções puras de projeto.ts, abre e fecha as gavetas e arquiva as concluídas. O app.ts a redesenha a cada 5 s.
 // Os testes de ponta a ponta (e2e/) a exercitam.
-import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
-import type { ListaDoProjeto } from "../../http/rotas/projeto.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
+import type { ListaDoProjeto } from "../../contrato/projeto.ts";
+import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, elemento, irPara, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { mesDe } from "./metricas.ts";
@@ -72,7 +73,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   lembrar(nome);
   const mostrar = filtrosLembrados();
   const filtro = new URLSearchParams(Object.entries(mostrar).map(([chave, valor]) => [chave, String(valor)]));
-  const atual = mesDe(new Date());
+  const atual = mesDe(agoraNoNavegador());
   const [lista, [mes]] = await Promise.all([
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/demandas?${filtro.toString()}`, { signal }),
     api<[MetricasDoMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
@@ -83,7 +84,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   if (filtroMudou || document.activeElement?.matches("[data-projeto]") || main.querySelector("dialog[open]")) return;
 
   const rolagem = main.querySelector(".pista-rola")?.scrollLeft ?? 0;
-  main.innerHTML = paginaDoProjeto(projetos, nome, lista, mes, { mostrar, gavetas }, new Date());
+  main.innerHTML = paginaDoProjeto(projetos, nome, lista, mes, { mostrar, gavetas }, agoraNoNavegador());
   const rola = main.querySelector(".pista-rola");
   const topo = main.querySelector(".pista-topo");
   if (rola && topo) {

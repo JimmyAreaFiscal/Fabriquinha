@@ -2,17 +2,11 @@
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
 import type { NomeGate } from "../../../nucleo/agregado_demanda.ts";
-import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
-import type { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type {
-  CartaoDoBoard,
-  ColunaDoBoard,
-  DadosDoInicio,
-  PendenciaDoInicio,
-  SessaoRodando,
-} from "../../http/rotas/inicio.ts";
+import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio, SessaoRodando } from "../../contrato/inicio.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
+import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../contrato/despacho.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
@@ -40,24 +34,6 @@ export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string
 
 /** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
 export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
-
-/** O JSON de uma resposta do servidor: os Endereços saem pelo texto público (`I-1.T2`). */
-type EmJson<T> = T extends Endereco
-  ? string
-  : T extends readonly (infer Item)[]
-    ? EmJson<Item>[]
-    : T extends object
-      ? { [Chave in keyof T]: EmJson<T[Chave]> }
-      : T;
-
-/** O `MotivoDeRecusa` como `GET /api/despacho` e `POST .../executar` o devolvem. */
-export type MotivoDeRecusaEmJson = EmJson<MotivoDeRecusa>;
-
-/** Um item parado do último ciclo do Despacho, como `GET /api/despacho` o devolve. */
-export interface RecusaDoDespacho {
-  item: string;
-  motivo: MotivoDeRecusaEmJson;
-}
 
 const ROTULO_DO_GATE: Record<NomeGate, string> = {
   gate_demanda: "aprovação da demanda",
@@ -119,7 +95,7 @@ const comEnderecosInteiros = (texto: string): string =>
   escapar(texto).replaceAll(/\bI-\d+(?:\.[RT]\d+)?\b/g, '<span class="endereco">$&</span>');
 
 /** Cartão de uma Pendência; o cartão inteiro abre o chat da sessão ou a página da demanda, onde se resolve. */
-function cartaoDaPendencia(p: PendenciaDoInicio, agora: Date): string {
+function cartaoDaPendencia(p: PendenciaDoInicio, agora: number): string {
   const rotulo = ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo];
   const emAlerta = EM_ALERTA.has(p.tipo);
   const destino = p.sessao === undefined ? caminhoDaDemanda(p.demanda) : caminhoDaSessao(p.sessao);
@@ -133,7 +109,7 @@ function cartaoDaPendencia(p: PendenciaDoInicio, agora: Date): string {
 }
 
 /** Linha de uma sessão rodando: o que o agente faz, como o processo vivo diz; sem ele, o título ou a etapa do ticket. */
-function linhaDaSessaoRodando(s: SessaoRodando, agora: Date): string {
+function linhaDaSessaoRodando(s: SessaoRodando, agora: number): string {
   return `<a class="rodando-linha" href="${caminhoDaSessao(s.sessao)}">
     <span class="pill pill-rodando">${MODO_DA_SESSAO[s.modo]}</span>
     <span class="id">${escapar(s.demanda)}</span>
@@ -155,7 +131,7 @@ function linhaDoItemParado({ item, motivo }: RecusaDoDespacho): string {
 }
 
 /** As marcas do cartão, em HTML (cada uma num texto só, que quebra entre as palavras) e sem repetir: em execução, aguarda você e bloqueada por I-x (que não quebra no hífen). */
-function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
+function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: number) {
   const marcas = new Map<string, [classe: string, pill: string]>();
   for (const s of dados.rodando.filter((x) => enderecoDe(x) === c.ref)) {
     // No cartão estreito a marca quebra entre as palavras; da duração do `ha()`, só "menos de" se separa do "1 min".
@@ -175,7 +151,7 @@ function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
   return [...marcas];
 }
 
-function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): string {
+function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: number): string {
   const marcas = marcasDoCartao(c, dados, agora);
   const classes = ["cartao", ...new Set(marcas.map(([, [classe]]) => classe))].join(" ");
   const pills = marcas.map(([html, [, pill]]) => `<span class="pill ${pill}"><span>${html}</span></span>`).join("");
@@ -184,13 +160,13 @@ function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): str
   return `<a class="${classes}" href="${caminhoDaDemanda(c.demanda)}">
     <div class="cartao-topo"><span class="id">${escapar(c.ref)}</span><span class="tag">${escapar(c.projeto)}</span></div>
     <div class="cartao-titulo">${comEnderecosInteiros(c.titulo)}</div>
-    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}${mais}</div>` : ""}
+    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${nomeDoEstadoDoTicket(t.estado, t.pi_ativo)}${mais}</div>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
 }
 
 /** Board: uma coluna por estado, agrupadas sob as 5 etapas; as de gate hachuradas e marcadas "gate". */
-function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
+function colunasDoBoard(dados: DadosDoInicio, agora: number): string {
   const coluna = ([chave, nome]: readonly [ColunaDoBoard, string]) => {
     const cartoes = dados.board.filter((c) => c.coluna === chave);
     const gate = GATES.has(chave);
@@ -208,7 +184,7 @@ function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
 }
 
 /** A página `/home`: a frase do mês, Aguarda você (da espera mais antiga para a mais nova), Rodando (com os itens parados) e o board. */
-export function inicio(dados: DadosDoInicio, agora: Date, recusas: readonly RecusaDoDespacho[]): string {
+export function inicio(dados: DadosDoInicio, agora: number, recusas: readonly RecusaDoDespacho[]): string {
   const { aguarda, rodando } = dados;
   return `<div class="cabeca-pagina"><h1>Início</h1></div>
   ${fraseDoMes(dados.mes)}

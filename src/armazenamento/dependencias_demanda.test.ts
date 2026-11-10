@@ -11,8 +11,10 @@ import {
   arestasDeDependencia,
   demandaParaDependencia,
   dependentesNaoConcluidasDaDemanda,
+  dependentesNaoConcluidasDasDemandas,
   gravarDependenciaDemanda,
   predecessorasDaDemanda,
+  predecessorasDasDemandas,
 } from "./dependencias_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -117,4 +119,25 @@ test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transaç
     outra.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("predecessorasDasDemandas e dependentesNaoConcluidasDasDemandas leem várias demandas de uma vez, na mesma ordem das de uma só", () => {
+  const b = banco({ "I-1": {}, "I-2": {}, "I-3": { estado: "concluida" }, "I-4": {} });
+  registrarDependenciaDemanda(b, "I-2", "I-1");
+  registrarDependenciaDemanda(b, "I-2", "I-3");
+  registrarDependenciaDemanda(b, "I-4", "I-2");
+  const ids = ["I-2", "I-1", "I-4"];
+  assert.deepEqual(predecessorasDasDemandas(b, ids), new Map(ids.map((id) => [id, predecessorasDaDemanda(b, id)])));
+  assert.deepEqual(predecessorasDasDemandas(b, ["I-2"]).get("I-2"), [
+    { demanda_id: "I-1", estado: "entender_e_desenhar" },
+    { demanda_id: "I-3", estado: "concluida" },
+  ]);
+  assert.deepEqual(
+    dependentesNaoConcluidasDasDemandas(b, ids),
+    new Map([
+      ["I-2", ["I-4"]],
+      ["I-1", ["I-2", "I-4"]],
+      ["I-4", []],
+    ]),
+  );
 });

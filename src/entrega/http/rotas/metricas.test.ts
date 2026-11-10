@@ -6,7 +6,8 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { MetricasDoMes, MetricasPorDemanda } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
@@ -32,10 +33,12 @@ async function chamar(endereco: string): Promise<unknown> {
   for (const rota of ROTAS) {
     const params = rota.metodo === "GET" ? casar(rota.caminho, url.pathname) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        relogio: relogioDoSistema,
         params,
         query: url.searchParams,
         corpo: undefined,
@@ -45,6 +48,9 @@ async function chamar(endereco: string): Promise<unknown> {
     } catch (erro) {
       return traduzir(erro);
     }
+    assert.ok(rota.resposta, `GET ${rota.caminho} não declara o schema da resposta`);
+    rota.resposta.parse(JSON.parse(JSON.stringify(valor)));
+    return valor;
   }
   throw new Error(`GET ${endereco} não existe`);
 }

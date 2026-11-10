@@ -8,9 +8,8 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { raizDo } from "../../armazenamento/banco.ts";
-import { noLog } from "../../infra/registro.ts";
-import { casar } from "../cliente-web/caminhos.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
+import { casar } from "../compartilhado/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
 import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacoes.ts";
@@ -42,6 +41,7 @@ export const ROTAS: Rota[] = [
 ];
 
 const CLIENTE = join(import.meta.dirname, "../cliente-web");
+const COMPARTILHADO = join(import.meta.dirname, "../compartilhado");
 const COOKIE = "fabriquinha";
 const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
 const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
@@ -55,14 +55,19 @@ const TIPOS: Record<string, string> = {
 };
 
 /**
- * Os arquivos que o navegador pode pedir, com o caminho e o tipo: os de `cliente/` dos tipos acima, sem testes, e o
- * `markdown-it` do navegador, que o import map do `index.html` resolve.
+ * Os arquivos que o navegador pode pedir, com o caminho e o tipo: os de `cliente-web/` e de `compartilhado/` (em
+ * `compartilhado/…`, que o import map do `index.html` aponta) dos tipos acima, sem testes, e o `markdown-it` do navegador.
  */
 const ESTATICOS = new Map([
-  ...readdirSync(CLIENTE, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
-    const tipo = TIPOS[extname(arquivo)];
-    return tipo && !arquivo.endsWith(".test.ts") ? [[arquivo, [join(CLIENTE, arquivo), tipo]] as const] : [];
-  }),
+  ...[
+    { pasta: CLIENTE, prefixo: "" },
+    { pasta: COMPARTILHADO, prefixo: "compartilhado/" },
+  ].flatMap(({ pasta, prefixo }) =>
+    readdirSync(pasta, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
+      const tipo = TIPOS[extname(arquivo)];
+      return tipo && !arquivo.endsWith(".test.ts") ? [[prefixo + arquivo, [join(pasta, arquivo), tipo]] as const] : [];
+    }),
+  ),
   ["markdown-it.js", [fileURLToPath(import.meta.resolve("markdown-it/browser")), "text/javascript; charset=utf-8"]],
 ]);
 
@@ -147,18 +152,23 @@ const cookie = (pedido: IncomingMessage): string | undefined =>
 
 interface Web {
   banco: DatabaseSync;
+  /** A pasta de dados do serviço, onde vai o `web.url`. */
+  raiz: string;
   porta: number;
   agendador: Agendador;
+  relogio: Relogio;
+  /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
+  registrarErro: (erro: unknown) => void;
 }
 
 /**
  * Gera o token desta subida (32 bytes aleatórios), grava o link de entrada em `<raiz>/web.url` com `0600` e devolve o
  * tratador das requisições. Reiniciar o serviço troca o token e invalida o cookie dos navegadores.
  */
-export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
+export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErro }: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
-  const arquivo = join(raizDo(banco), "web.url");
+  const arquivo = join(raiz, "web.url");
   // Escrito ao lado e renomeado: quem lê nunca vê o arquivo vazio ou pela metade. O temporário é recriado: o modo só
   // vale na criação.
   const temporario = `${arquivo}.novo`;
@@ -199,6 +209,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
       const valor: unknown = await rota.tratar({
         banco,
         agendador,
+        relogio,
         params,
         query: url.searchParams,
         corpo,
@@ -234,7 +245,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
   return (pedido, resposta) => {
     atender(pedido, resposta).catch((error_: unknown) => {
       const [status, mensagem] = traduzir(error_);
-      if (status === 500) noLog(error_);
+      if (status === 500) registrarErro(error_);
       // A rota que já começou a responder (SSE, download) e falhou no meio só pode cortar a conexão.
       if (resposta.headersSent) resposta.destroy();
       else json(resposta, status, { erro: mensagem });

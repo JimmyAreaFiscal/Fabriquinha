@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../nucleo/erros.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { escopoDoProcessoAberto, exigirTicket, type ProcessoDoAgente, reconferirExecucao } from "./escopo.ts";
@@ -14,6 +15,7 @@ export function criarTicketCorretivo(
   banco: DatabaseSync,
   processo: ProcessoDoAgente,
   pedido: { readonly rodada: string; readonly titulo: string | undefined },
+  relogio: Relogio = relogioDoSistema,
 ) {
   const agente = escopoDoProcessoAberto(banco, processo);
   const { demanda_id } = agente;
@@ -42,7 +44,7 @@ export function criarTicketCorretivo(
         correcoes: [{ demanda_id, rodada_id, ticket_id: 1, titulo, descricao: titulo }],
       },
       agente.ator,
-      { agora: new Date().toISOString() },
+      { agora: relogio.agora() },
     );
   });
   const novos = depois.tickets.filter((t) => !ticketsAntes.has(t.ticket_id));

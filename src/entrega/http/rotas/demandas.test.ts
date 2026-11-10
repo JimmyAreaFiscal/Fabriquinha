@@ -8,6 +8,7 @@ import { gravarAnexos } from "../../../armazenamento/evidencia_demanda.ts";
 import { gravarUsoDeclarado } from "../../../armazenamento/uso_declarado.ts";
 import { metricasDasDemandasDoPeriodo } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";
+import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
 
 interface Anexo {
   nome: string;
@@ -76,6 +77,7 @@ test("CA-1: o board traz a I-206 com o estado dela", async () => {
   const r = await pedir("/api/demandas");
   assert.equal(r.status, 200);
   const i206 = r.json<Board>().demandas.find((d) => d.id === "I-206");
+  assert.deepEqual(BoardDeDemandas.parse(r.json()), r.json());
   assert.deepEqual([i206?.projeto, i206?.titulo, i206?.estado], ["loja", "demanda I-206", "em_execucao"]);
 });
 
@@ -97,7 +99,9 @@ test("CA-3: as duas rodadas da I-206 com o estado de cada uma e o PR aberto da R
 
 test("CA-3: a página traz o PR só da rodada em gate; a R1 concluída, com PR integrado, fica sem", async () => {
   const { pedir } = await cenarioDemandas();
-  const { rodadas } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  const r = await pedir("/api/demandas/I-206");
+  assert.deepEqual(PaginaDaDemanda.parse(r.json()), r.json());
+  const { rodadas } = r.json<Pagina>();
   assert.deepEqual(
     rodadas.map((r) => [r.ref, r.pr]),
     [
