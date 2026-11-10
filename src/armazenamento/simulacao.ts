@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { encontrado, ErroDeInexistente, ErroDeRegra, existe } from "../nucleo/erros.ts";
-import type { Id } from "../nucleo/primitivos.ts";
+import type { Id, Instante } from "../nucleo/primitivos.ts";
 import {
   NomeDoAnexo,
   type NovaTarefa,
@@ -11,11 +11,12 @@ import {
   SEM_LINK,
   type StatusExecucaoSimulada,
 } from "../nucleo/simulacao.ts";
+import { relogioDoSistema } from "../nucleo/relogio.ts";
 import { guardarBytes } from "./arquivos.ts";
 import { escrever } from "./banco.ts";
 import { projetoExistente } from "./projetos.ts";
 
-interface Anexo {
+export interface Anexo {
   nome: string;
   sha256: string;
   bytes: number;
@@ -136,8 +137,13 @@ export function removerAnexo(banco: DatabaseSync, usuario: Id, nome: string): vo
 }
 
 /** Cria a Tarefa do projeto e a aloca aos Usuários Simulados dele; usuário de outro projeto é rejeitado. */
-export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, { texto, n, usuarios }: NovaTarefa): Tarefa {
-  const criadaEm = new Date().toISOString();
+export function criarTarefa(
+  banco: DatabaseSync,
+  nomeDoProjeto: string,
+  { texto, n, usuarios }: NovaTarefa,
+  // Os preparos de e2e e estresse criam Tarefa sem passar o instante; o serviço sempre o passa, do relógio injetado.
+  criadaEm: Instante = relogioDoSistema.agora(),
+): Tarefa {
   const id = escrever(banco, () => {
     doProjeto(banco, nomeDoProjeto);
     const alocar = [...new Set(usuarios)];
@@ -239,8 +245,7 @@ type Marca =
   | { status: "falhou"; erro: string };
 
 /** Leva a execução ao novo status; ao terminar (concluída ou falhou), grava o fim e solta o `pgid`. */
-export function marcar(banco: DatabaseSync, id: Id, marca: Marca): void {
-  const agora = new Date().toISOString();
+export function marcar(banco: DatabaseSync, id: Id, marca: Marca, agora: Instante): void {
   const terminou = marca.status !== "em_andamento";
   banco
     .prepare(
@@ -268,7 +273,7 @@ export function gravarPgid(banco: DatabaseSync, id: Id, pgid: number): void {
  * Reinício do serviço (F4 §7): toda execução simulada pendente é de uma instância anterior. Marca-as `falhou` com o
  * `erro` e devolve os `pgid` dos pi que ficaram rodando, para quem chama matar.
  */
-export function falharPendentes(banco: DatabaseSync, erro: string): number[] {
+export function falharPendentes(banco: DatabaseSync, erro: string, agora: Instante): number[] {
   return escrever(banco, () => {
     const pgids = banco
       .prepare(`SELECT pgid FROM execucao_simulada WHERE ${PENDENTES} AND pgid IS NOT NULL`)
@@ -279,7 +284,7 @@ export function falharPendentes(banco: DatabaseSync, erro: string): number[] {
         `UPDATE execucao_simulada SET status = 'falhou', erro = ?, relatorio = NULL, pgid = NULL, terminada_em = ?
          WHERE ${PENDENTES}`,
       )
-      .run(erro, new Date().toISOString());
+      .run(erro, agora);
     return pgids;
   });
 }

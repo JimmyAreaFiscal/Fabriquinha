@@ -8,6 +8,7 @@ import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import type { Id } from "../../nucleo/primitivos.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import {
   type CausaDeInfraestrutura,
   type FalhaDaTentativa,
@@ -362,14 +363,14 @@ export class CondutorDeTrabalhos {
    * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, de
    * cada avaliação e de cada execução simulada pendente (que falha); os processos dos tickets se encerram com falha.
    */
-  recuperarNaSubida(banco: DatabaseSync): void {
+  recuperarNaSubida(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): void {
     const gruposDosTickets = processosAbertos(banco).flatMap((p) =>
       p.grupo_processo === null ? [] : [p.grupo_processo],
     );
     const grupos = [
       ...gruposDosTickets,
       ...recolherGruposDasAvaliacoes(banco),
-      ...falharPendentes(banco, falhaPorServicoReiniciado.motivo),
+      ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
     ];
     const { id: ambiente_id } = ambienteDoServico();
     // ponytail: o host local sinaliza na hora; com Ambiente remoto a recuperação passa a esperar os sinais (demanda 24).

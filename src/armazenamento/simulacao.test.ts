@@ -41,6 +41,7 @@ function novoBanco(): DatabaseSync {
 }
 
 const MARIA = { nome: "Dona Maria", descricao: "Contadora de 60 anos, pouca familiaridade com sistemas web" };
+const AGORA = "2026-05-01T12:00:00.000Z";
 const sha = (conteudo: string) => createHash("sha256").update(conteudo).digest("hex");
 
 test("criarUsuarioSimulado grava e usuariosSimulados lista só os do projeto, na ordem de criação", () => {
@@ -151,27 +152,31 @@ test("criarTarefa grava e tarefas lista só as do projeto, com os usuários aloc
   const joao = criarUsuarioSimulado(banco, "fabriquinha", { nome: "Seu João", descricao: "Gerente" });
   const dona = criarUsuarioSimulado(banco, "outro", MARIA);
 
-  const primeira = criarTarefa(banco, "fabriquinha", {
-    texto: "Registrar uma necessidade",
-    n: 3,
-    usuarios: [joao.id, maria.id, maria.id],
-  });
-  const segunda = criarTarefa(banco, "fabriquinha", { texto: "Ver o histórico", n: 1, usuarios: [maria.id] });
-  criarTarefa(banco, "outro", { texto: "Outra", n: 2, usuarios: [dona.id] });
+  const primeira = criarTarefa(
+    banco,
+    "fabriquinha",
+    {
+      texto: "Registrar uma necessidade",
+      n: 3,
+      usuarios: [joao.id, maria.id, maria.id],
+    },
+    AGORA,
+  );
+  const segunda = criarTarefa(banco, "fabriquinha", { texto: "Ver o histórico", n: 1, usuarios: [maria.id] }, AGORA);
+  criarTarefa(banco, "outro", { texto: "Outra", n: 2, usuarios: [dona.id] }, AGORA);
 
   assert.deepEqual(primeira, {
     id: primeira.id,
     projeto: "fabriquinha",
     texto: "Registrar uma necessidade",
     n: 3,
-    criadaEm: primeira.criadaEm,
+    criadaEm: AGORA,
     usuarios: [
       { id: maria.id, nome: "Dona Maria" },
       { id: joao.id, nome: "Seu João" },
     ],
     execucoes: [],
   });
-  assert.ok(!Number.isNaN(Date.parse(primeira.criadaEm)));
   assert.deepEqual(tarefas(banco, "fabriquinha"), [primeira, segunda]);
   assert.equal(tarefas(banco, "outro").length, 1);
   banco.close();
@@ -182,14 +187,14 @@ test("criarTarefa recusa usuário de outro projeto e projeto inexistente, sem gr
   const maria = criarUsuarioSimulado(banco, "fabriquinha", MARIA);
   const alheio = criarUsuarioSimulado(banco, "outro", MARIA);
   assert.throws(
-    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [maria.id, alheio.id] }),
+    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [maria.id, alheio.id] }, AGORA),
     (erro) =>
       erro instanceof ErroDeRegra &&
       erro.message ===
         `o Usuário Simulado ${String(alheio.id)} não é do projeto fabriquinha (aloque só usuários simulados do projeto)`,
   );
   assert.throws(
-    () => criarTarefa(banco, "fantasma", { texto: "t", n: 1, usuarios: [maria.id] }),
+    () => criarTarefa(banco, "fantasma", { texto: "t", n: 1, usuarios: [maria.id] }, AGORA),
     (erro) =>
       erro instanceof ErroDeInexistente && erro.message === "o projeto fantasma não existe (confira o nome do projeto)",
   );
@@ -208,11 +213,16 @@ function comTarefa(n: number, nomes = ["Dona Maria"], link = "https://demo.exemp
   const usuarios = nomes.map((nome) =>
     criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: MARIA.descricao }),
   );
-  const tarefa = criarTarefa(banco, "fabriquinha", {
-    texto: "Registrar uma necessidade",
-    n,
-    usuarios: usuarios.map((u) => u.id),
-  });
+  const tarefa = criarTarefa(
+    banco,
+    "fabriquinha",
+    {
+      texto: "Registrar uma necessidade",
+      n,
+      usuarios: usuarios.map((u) => u.id),
+    },
+    AGORA,
+  );
   return { banco, tarefa: tarefa.id, usuarios };
 }
 
@@ -256,12 +266,12 @@ test("enfileirar recusa Tarefa sem link do produto (CA-10), com pendente e Taref
     erro instanceof ErroDeRegra &&
     erro.message === "a Tarefa já está em execução (espere ela terminar para executar de novo)";
   assert.throws(() => enfileirar(banco, tarefa), pendente);
-  marcar(banco, execucoes[0] ?? 0, { status: "em_andamento" });
+  marcar(banco, execucoes[0] ?? 0, { status: "em_andamento" }, AGORA);
   assert.throws(() => enfileirar(banco, tarefa), pendente);
   assert.equal(tarefas(banco, "fabriquinha")[0]?.execucoes.length, 1);
 
   // Terminada, a Tarefa pode ser executada de novo, e as execuções se somam.
-  marcar(banco, execucoes[0] ?? 0, { status: "falhou", erro: "x" });
+  marcar(banco, execucoes[0] ?? 0, { status: "falhou", erro: "x" }, AGORA);
   enfileirar(banco, tarefa);
   assert.deepEqual(
     tarefas(banco, "fabriquinha")[0]?.execucoes.map((e) => e.status),
@@ -279,7 +289,7 @@ test("marcar leva a execução de na_fila a em_andamento e a concluída ou falho
     ...banco.prepare("SELECT status, iniciada_em, terminada_em, pgid FROM execucao_simulada WHERE id = ?").get(id),
   });
 
-  marcar(banco, a, { status: "em_andamento" });
+  marcar(banco, a, { status: "em_andamento" }, AGORA);
   gravarPgid(banco, a, 4321);
   assert.deepEqual(linha(a), {
     status: "em_andamento",
@@ -287,18 +297,18 @@ test("marcar leva a execução de na_fila a em_andamento e a concluída ou falho
     terminada_em: null,
     pgid: 4321,
   });
-  assert.ok(!Number.isNaN(Date.parse(String(linha(a).iniciada_em))));
+  assert.equal(linha(a).iniciada_em, AGORA);
 
-  marcar(banco, a, { status: "concluida", relatorio });
-  marcar(banco, b, { status: "em_andamento" });
-  marcar(banco, b, { status: "falhou", erro: "Não foi possível abrir o link do produto" });
+  marcar(banco, a, { status: "concluida", relatorio }, AGORA);
+  marcar(banco, b, { status: "em_andamento" }, AGORA);
+  marcar(banco, b, { status: "falhou", erro: "Não foi possível abrir o link do produto" }, AGORA);
   assert.deepEqual(linha(a), {
     status: "concluida",
     iniciada_em: linha(a).iniciada_em,
     terminada_em: linha(a).terminada_em,
     pgid: null,
   });
-  assert.ok(!Number.isNaN(Date.parse(String(linha(a).terminada_em))));
+  assert.equal(linha(a).terminada_em, AGORA);
   assert.deepEqual(
     tarefas(banco, "fabriquinha")[0]?.execucoes.map(({ id, status, relatorio: r, erro }) => ({ id, status, r, erro })),
     [
@@ -313,13 +323,14 @@ test("marcar leva a execução de na_fila a em_andamento e a concluída ou falho
 test("falharPendentes falha só as pendentes, devolve os pgid dos pi vivos e deixa as terminadas", () => {
   const { banco, tarefa } = comTarefa(4);
   const [a, b, c, d] = enfileirar(banco, tarefa).execucoes as [number, number, number, number];
-  marcar(banco, a, { status: "em_andamento" });
+  marcar(banco, a, { status: "em_andamento" }, AGORA);
   gravarPgid(banco, a, 777);
-  marcar(banco, b, { status: "concluida", relatorio: { usabilidade: [], bugs: [] } });
-  marcar(banco, c, { status: "falhou", erro: "antes" });
+  marcar(banco, b, { status: "concluida", relatorio: { usabilidade: [], bugs: [] } }, AGORA);
+  marcar(banco, c, { status: "falhou", erro: "antes" }, AGORA);
   gravarPgid(banco, d, 888); // na_fila com pgid não existe de verdade, mas o que importa é o status
 
-  assert.deepEqual(falharPendentes(banco, "serviço reiniciado").sort(), [777, 888]);
+  assert.deepEqual(falharPendentes(banco, "serviço reiniciado", AGORA).sort(), [777, 888]);
+  assert.equal(banco.prepare("SELECT terminada_em FROM execucao_simulada WHERE id = ?").get(d)?.terminada_em, AGORA);
   assert.deepEqual(
     tarefas(banco, "fabriquinha")[0]?.execucoes.map((e) => [e.status, e.erro]),
     [
@@ -330,7 +341,7 @@ test("falharPendentes falha só as pendentes, devolve os pgid dos pi vivos e dei
     ],
   );
   assert.equal(banco.prepare("SELECT count(*) AS n FROM execucao_simulada WHERE pgid IS NOT NULL").get()?.n, 0);
-  assert.deepEqual(falharPendentes(banco, "outra vez"), []);
+  assert.deepEqual(falharPendentes(banco, "outra vez", AGORA), []);
   banco.close();
 });
 

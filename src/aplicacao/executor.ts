@@ -7,10 +7,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
+import type { Relogio } from "../nucleo/relogio.ts";
 import { LINK_FORA_DO_AR, RelatorioSimulacao } from "../nucleo/simulacao.ts";
 import { PACOTE } from "../infra/agente/pi.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
+import { configuracao } from "../armazenamento/servico.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { ambienteSemCredenciais } from "../infra/ambiente/ambiente.ts";
@@ -20,6 +22,8 @@ import { condutor } from "./trabalho/condutor.ts";
 interface OpcoesDaSimulacao {
   /** Tempo máximo de cada execução, em minutos (o mesmo da execução autônoma, F4 §3). */
   timeoutMin: number;
+  /** De onde vem o instante que as execuções gravam ao mudar de status. */
+  relogio: Relogio;
 }
 
 const FERRAMENTAS = "ver_tela,clicar,digitar,tecla,rolar,relatar";
@@ -82,11 +86,16 @@ async function lerRelatorio(arquivo: string): Promise<RelatorioSimulacao | undef
 }
 
 /** Uma execução, do `em_andamento` ao `concluida` ou `falhou`. Erro que sobe daqui o chamador grava como `falhou`. */
-async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin: number): Promise<void> {
+async function executarUma(
+  banco: DatabaseSync,
+  id: Id,
+  link: string,
+  { timeoutMin, relogio }: OpcoesDaSimulacao,
+): Promise<void> {
   const { texto, usuario } = paraRodar(banco, id);
-  marcar(banco, id, { status: "em_andamento" });
+  marcar(banco, id, { status: "em_andamento" }, relogio.agora());
   if (!(await conferirLink(link))) {
-    marcar(banco, id, { status: "falhou", erro: LINK_FORA_DO_AR });
+    marcar(banco, id, { status: "falhou", erro: LINK_FORA_DO_AR }, relogio.agora());
     return;
   }
   const dir = dirDaExecucaoSimulada(raizDo(banco), id);
@@ -124,11 +133,17 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
     },
   });
   if (falhaPorTempoLimite) {
-    marcar(banco, id, { status: "falhou", erro: `passou do limite de ${String(timeoutMin)} min e foi encerrado` });
+    const erro = `passou do limite de ${String(timeoutMin)} min e foi encerrado`;
+    marcar(banco, id, { status: "falhou", erro }, relogio.agora());
     return;
   }
   const relatorio = await lerRelatorio(join(saida, "relatorio.json"));
-  marcar(banco, id, relatorio ? { status: "concluida", relatorio } : { status: "falhou", erro: SEM_RELATORIO });
+  marcar(
+    banco,
+    id,
+    relatorio ? { status: "concluida", relatorio } : { status: "falhou", erro: SEM_RELATORIO },
+    relogio.agora(),
+  );
 }
 
 /**
@@ -137,15 +152,20 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
  * de uma execução vira o `falhou` dela e as seguintes seguem. Só rejeita se o banco falhar.
  * ponytail: a fila é por Tarefa; duas Tarefas executadas juntas rodam em paralelo. Uma fila global se o Chromium pesar.
  */
-export function executarTarefa(banco: DatabaseSync, tarefa: Id, { timeoutMin }: OpcoesDaSimulacao): Promise<void> {
+/** @testes os testes variam o tempo máximo; a produção usa `executarTarefaComConfiguracao` */
+export function executarTarefa(banco: DatabaseSync, tarefa: Id, opcoes: OpcoesDaSimulacao): Promise<void> {
   const { execucoes, link } = enfileirar(banco, tarefa);
   return (async () => {
     for (const id of execucoes) {
       try {
-        await executarUma(banco, id, link, timeoutMin);
+        await executarUma(banco, id, link, opcoes);
       } catch (error_) {
-        marcar(banco, id, { status: "falhou", erro: mensagem(error_) });
+        marcar(banco, id, { status: "falhou", erro: mensagem(error_) }, opcoes.relogio.agora());
       }
     }
   })();
 }
+
+/** O Executar da Simulação: `executarTarefa` com o tempo máximo da Configuração. */
+export const executarTarefaComConfiguracao = (banco: DatabaseSync, tarefa: Id, relogio: Relogio): Promise<void> =>
+  executarTarefa(banco, tarefa, { timeoutMin: configuracao(banco).timeoutMin, relogio });
