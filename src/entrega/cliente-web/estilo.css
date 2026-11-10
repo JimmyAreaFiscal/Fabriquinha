@@ -2448,6 +2448,89 @@ svg.barras :not(.hit) {
   }
 }
 
+/* Por etapa: uma seção por Etapa do catálogo, em grade de 3 colunas; o subgrid alinha cabeçalho, Métricas de Sucesso e
+   Uso entre as seções da mesma linha. */
+.etapas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.etapa-metricas {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  padding-bottom: var(--s-3);
+}
+.etapa-metricas .grafico-cabeca {
+  margin-bottom: var(--s-3);
+}
+.metricas-sucesso {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-content: start;
+  gap: var(--s-3) var(--s-4);
+  padding-bottom: var(--s-3);
+}
+.metricas-sucesso > .muted {
+  font-size: var(--fs-sm);
+}
+/* Cada métrica ocupa 4 linhas do subgrid: rótulo, valor, média e fonte ficam alinhados entre as métricas vizinhas,
+   mesmo quando um rótulo quebra em duas linhas. */
+.metrica-sucesso {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  align-items: start;
+  min-width: 0;
+}
+.uso-etapa {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.etapa-metricas .kpi-valor small {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--muted);
+}
+.etapa-metricas .fonte {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.uso-etapa {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.modelos-etapa {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.tabela-demandas td.muted,
+.uso-modelo .nome small {
+  white-space: nowrap;
+}
+.modelos-etapa > .muted {
+  font-size: var(--fs-sm);
+}
+.kpis .kpi-valor small.sem-custo,
+.etapa-metricas .kpi-valor small.sem-custo {
+  color: var(--open);
+}
+@media (max-width: 1100px) {
+  .etapas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .etapas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Configuração SDLC do projeto: grade de linhas com rótulo de 18 px, controles de 34 px e o erro em posição absoluta
    sob o controle, com o espaço reservado na célula, de modo que o erro nunca desloque a linha. */
 .link-sdlc {

@@ -34,3 +34,6 @@ export abstract class CalculoDeMetrica<Valor> {
   /** Lê o recorte uma vez e devolve como o valor sai de cada Etapa. */
   protected abstract medir(banco: DatabaseSync, recorte: Recorte): (etapa: EtapaTicket) => Valor;
 }
+
+/** O valor que um cálculo devolve em cada Etapa que declara a Métrica. */
+export type ValorDe<Calculo> = Calculo extends CalculoDeMetrica<infer Valor> ? Valor : never;

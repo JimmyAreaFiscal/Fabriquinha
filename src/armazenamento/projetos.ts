@@ -236,7 +236,7 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   ).map((a) => a.sha256);
 
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
-  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, retrabalho, achado) saem ou
+  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, commit humano posterior, achado) saem ou
   // são soltas, para não deixar FK pendurada.
   banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
   apagar("uso_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);

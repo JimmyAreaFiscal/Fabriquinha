@@ -12,7 +12,7 @@ export class MetricaDeNotaHumana extends CalculoDeMetrica<{
   /** `null` sem nota. */
   media: number | null;
 }> {
-  readonly definicao = { tipo: "nota_humana", rotulo: "Nota humana (1–5)", fonte: "Gate do PR" } as const;
+  readonly definicao = { tipo: "nota_humana", rotulo: "Nota humana", fonte: "Gate do PR" } as const;
 
   protected medir(banco: DatabaseSync, recorte: Recorte) {
     const decisoes = decisoesDoRecorte(banco, recorte);

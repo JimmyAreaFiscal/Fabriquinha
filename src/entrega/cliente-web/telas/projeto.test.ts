@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
@@ -30,7 +30,7 @@ const projeto = (nome: string): ProjetoListado => ({
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 
 /** O mês corrente de `GET /api/metricas`, para os cards do Projeto. */
-const MES: MetricasMesDemanda = {
+const MES: MetricasDoMes = {
   mes: "2026-10",
   projeto: null,
   total: {
@@ -46,9 +46,17 @@ const MES: MetricasMesDemanda = {
   demandas: { registradas: 2, concluidas: 1 },
   tickets: { criados: 4, concluidos: 3 },
   prs: { abertos: 1, mergeados: 0 },
-  nota: { media: null, notas: 0 },
-  retrabalho: { adicionadas: 40, alteradas: 10, porHumanos: 2 },
-  etapas: [],
+  etapas: [
+    {
+      etapa: "implementar",
+      metricas: [
+        {
+          definicao: { tipo: "alteracoes_posteriores", rotulo: "Alterações posteriores no código", fonte: "Commits" },
+          valor: { adicionadas: 40, alteradasPorHumanos: 2 },
+        },
+      ],
+    },
+  ],
 };
 
 const AGORA = new Date("2026-10-28T12:00:00.000Z");

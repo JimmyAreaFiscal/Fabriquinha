@@ -28,7 +28,7 @@ test("a nota humana existe só em encerrar_rodada, com a única média das notas
   assert.deepEqual([...valores.keys()], ["encerrar_rodada"]);
   assert.deepEqual(new MetricaDeNotaHumana().definicao, {
     tipo: "nota_humana",
-    rotulo: "Nota humana (1–5)",
+    rotulo: "Nota humana",
     fonte: "Gate do PR",
   });
 });

@@ -1,11 +1,37 @@
 // Tokens, modelo e custo de cada Etapa, do Uso medido nas execuções e do Uso declarado das sessões externas.
 import type { DatabaseSync } from "node:sqlite";
-import { execucoesDoRecorte, usoDeclaradoDoRecorte, usoDoRecorte } from "../../armazenamento/metricas_demanda.ts";
+import {
+  type DonoDaLinha,
+  execucoesDoRecorte,
+  type UsoDaExecucao,
+  usoDeclaradoDoRecorte,
+  usoDoRecorte,
+} from "../../armazenamento/metricas_demanda.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import type { EtapaTicket } from "../../nucleo/primitivos.ts";
-import { type LinhaDeUso, textoDoCusto } from "../../nucleo/uso.ts";
-import { usoDeclaradoDe, usoPorExecucao } from "../demanda.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "../../nucleo/uso.ts";
 import { CalculoDeMetrica } from "./calculo_de_metrica.ts";
+
+/** A linha de `uso_modelo_execucao` como Uso; o banco não guarda as chamadas do uso medido, por isso 0. */
+const linhaDeUsoDoBanco = (u: Omit<UsoDaExecucao, keyof DonoDaLinha>): LinhaDeUso => ({
+  modelo: `${u.provedor}/${u.modelo}`,
+  tokens_entrada: u.entrada,
+  tokens_saida: u.saida,
+  tokens_cache_leitura: u.cacheLeitura,
+  tokens_cache_escrita: u.cacheEscrita,
+  custo: u.custo,
+  chamadas: 0,
+});
+
+/** O Uso das execuções, cada uma um Trabalho: o custo desconhecido conta uma sessão sem custo por execução. */
+export const usoPorExecucao = (uso: Omit<UsoDaExecucao, keyof DonoDaLinha>[]): Uso =>
+  [...Map.groupBy(uso, (u) => u.execucao).values()]
+    .map((daExecucao) => Uso.de(daExecucao.map(linhaDeUsoDoBanco), 1))
+    .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
+
+/** O Uso declarado, cada sessão externa um Trabalho. */
+export const usoDeclaradoDe = (declarado: { linhas: LinhaDeUso[] }[]): Uso =>
+  declarado.map((d) => Uso.de(d.linhas, 1)).reduce((total, daSessao) => total.somar(daSessao), Uso.vazio());
 
 // shortcut: o Uso declarado não tem Etapa e conta em entender_e_desenhar, a de executor externo; dar Etapa à declaração se houver sessão externa de outra.
 const ETAPA_DO_USO_DECLARADO: EtapaTicket = "entender_e_desenhar";
@@ -25,7 +51,7 @@ export class MetricaDeUso extends CalculoDeMetrica<{
   /** A parte do custo vinda das sessões externas declaradas, já somada em `custo`. */
   custoExterno: { conhecido: number; trabalhosSemCusto: number; sessoes: number };
 }> {
-  readonly definicao = { tipo: "uso", rotulo: "Tokens, modelo e custo", fonte: "Uso" } as const;
+  readonly definicao = { tipo: "uso", rotulo: "Uso", fonte: "Uso" } as const;
 
   protected medir(banco: DatabaseSync, recorte: Recorte) {
     const execucoesPorEtapa = Map.groupBy(execucoesDoRecorte(banco, recorte), (e) => e.etapa);

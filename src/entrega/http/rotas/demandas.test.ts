@@ -6,7 +6,7 @@ import { guardarBytes } from "../../../armazenamento/arquivos.ts";
 import { comDemanda } from "../../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../../armazenamento/evidencia_demanda.ts";
 import { gravarUsoDeclarado } from "../../../armazenamento/uso_declarado.ts";
-import { metricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import { metricasDasDemandasDoPeriodo } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 
 interface Anexo {
@@ -261,7 +261,7 @@ test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sess�
   });
   const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   // O Uso declarado entra no mês do registro da demanda, que o cenário fixa no passado.
-  const linha = metricasPorDemanda(banco, { de: "2000-01", ate: agoraIso.slice(0, 7) }).demandas.find(
+  const linha = metricasDasDemandasDoPeriodo(banco, { de: "2000-01", ate: agoraIso.slice(0, 7) }).demandas.find(
     (d) => d.demanda === "I-206",
   );
   assert.equal(uso.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");

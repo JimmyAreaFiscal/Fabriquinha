@@ -115,7 +115,7 @@ const deTicket = (sha: string, ticket: number, origem: number, linhas: number) =
   linhas,
 });
 
-test("retrabalho: A cria um arquivo, B reescreve 3 linhas e acrescenta 5; espera retrabalho(B, A, 3), e de novo dá o mesmo", async () => {
+test("alteração posterior: A cria um arquivo, B reescreve 3 linhas e acrescenta 5; espera a linha (B, A, 3), e de novo dá o mesmo", async () => {
   const c = cenario();
   c.commitar({ "a.txt": linhas(...DEZ) }, 1);
   const b = c.commitar(
@@ -130,7 +130,7 @@ test("retrabalho: A cria um arquivo, B reescreve 3 linhas e acrescenta 5; espera
   c.banco.close();
 });
 
-test("retrabalho entre vários tickets: cada ticket de origem vira uma linha, e só acrescentar não conta", async () => {
+test("alteração posterior entre vários tickets: cada ticket de origem vira uma linha, e só acrescentar não conta", async () => {
   const c = cenario();
   c.commitar({ "a.txt": linhas("a1", "a2", "a3") }, 1);
   c.commitar({ "b.txt": linhas("b1", "b2") }, 2);
@@ -146,7 +146,7 @@ test("retrabalho entre vários tickets: cada ticket de origem vira uma linha, e 
 const porSha = (x: { commit_alterador: string }, y: { commit_alterador: string }) =>
   x.commit_alterador.localeCompare(y.commit_alterador);
 
-test("linha de commit humano é ignorada; um ticket nunca conta retrabalho sobre si mesmo", async () => {
+test("linha de commit humano é ignorada; um ticket nunca conta alteração posterior sobre si mesmo", async () => {
   const c = cenario();
   c.commitar({ "humano.txt": linhas("A1", "h2", "h3") }, 1);
   const b = c.commitar({ "humano.txt": linhas("B1", "B2", "h3") }, 2);
@@ -209,7 +209,7 @@ test("varrerBase sem cursor só grava o sha atual de origin/<base> e não conta 
   c.banco.close();
 });
 
-test("commit humano na base reescreve 2 linhas de A: retrabalho(commit, null, autor, A, 2) e cursor avançado", async () => {
+test("commit humano na base reescreve 2 linhas de A: (commit, null, autor, A, 2) e cursor avançado", async () => {
   const c = cenario();
   await varrerCommitsHumanos(c.banco, "loja");
   const antes = c.cursor();

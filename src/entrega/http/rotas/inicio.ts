@@ -16,7 +16,7 @@ import { ultimasRecusas } from "../../../aplicacao/despacho.ts";
 import { condutor, type Situacao } from "../../../aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { mesDe } from "../../../nucleo/periodo.ts";
-import { type MetricasMesDemanda, metricasDemandaPorMes } from "../../../aplicacao/periodo_demanda.ts";
+import { type MetricasDoMes, metricasDosMeses } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { listarDemandas } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../../../armazenamento/servico.ts";
@@ -74,7 +74,7 @@ export interface CartaoDoBoard {
 }
 
 export interface DadosDoInicio {
-  mes: MetricasMesDemanda;
+  mes: MetricasDoMes;
   aguarda: PendenciaDoInicio[];
   rodando: SessaoRodando[];
   /** As demandas em andamento, que o board distribui nos cartões. */
@@ -239,7 +239,7 @@ export function pendenciasDeUmaDemanda(
 export function inicio(banco: DatabaseSync, situacaoDa = situacaoDoCondutor, agora = new Date()): DadosDoInicio {
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.
-  const [doMes] = metricasDemandaPorMes(banco, { de: mes, ate: mes }) as [MetricasMesDemanda];
+  const [doMes] = metricasDosMeses(banco, { de: mes, ate: mes }) as [MetricasDoMes];
   const demandas = listarDemandas(banco, { soNaoTerminadas: true });
   // Só as sessões das demandas em andamento: calcular o estado de todas as do banco custa segundos.
   const sessoes = demandas.flatMap((ag) => sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id }));

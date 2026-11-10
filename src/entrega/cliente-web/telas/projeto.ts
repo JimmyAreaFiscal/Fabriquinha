@@ -2,7 +2,7 @@
 // filtros, e uma linha por demanda com a linha do tempo dos estados, as rodadas da execução e a gaveta de tickets. O DOM
 // e a rede ficam em projeto-montar.ts.
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
 import {
   caminhoDaDemanda,
@@ -348,7 +348,7 @@ export function paginaDoProjeto(
   projetos: readonly ProjetoListado[],
   nome: string,
   { demandas, contagem }: ListaDoProjeto,
-  mes: MetricasMesDemanda,
+  mes: MetricasDoMes,
   escolhas: Escolhas,
   agora: Date,
 ): string {

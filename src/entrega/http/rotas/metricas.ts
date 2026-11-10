@@ -1,8 +1,8 @@
-// Rotas das métricas (F7 §4.2): a visão por mês e a por demanda, lidas das tabelas da demanda, num período de no máximo 24 meses.
+// Rotas das métricas (F7 §4.2): a visão por mês, com as Métricas de cada Etapa, e a por demanda, lidas das tabelas da demanda, num período de no máximo 24 meses.
 import { z } from "zod";
 import { Slug } from "../../../nucleo/primitivos.ts";
 import { Mes, mesDe, somarMeses } from "../../../nucleo/periodo.ts";
-import { metricasDemandaPorMes, metricasPorDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import { metricasDasDemandasDoPeriodo, metricasDosMeses } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Sem `ate`, o mês corrente no fuso do serviço; sem `de`, os 11 meses antes de `ate`; sem `projeto`, todos. */
@@ -18,11 +18,11 @@ export const ROTAS_DAS_METRICAS: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/metricas",
-    tratar: ({ banco, query }) => metricasDemandaPorMes(banco, filtro(query)),
+    tratar: ({ banco, query }) => metricasDosMeses(banco, filtro(query)),
   },
   {
     metodo: "GET",
     caminho: "/api/metricas/demandas",
-    tratar: ({ banco, query }) => metricasPorDemanda(banco, filtro(query)),
+    tratar: ({ banco, query }) => metricasDasDemandasDoPeriodo(banco, filtro(query)),
   },
 ];
