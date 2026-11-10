@@ -12,7 +12,7 @@ function bancoNaVersao46(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
   banco.exec(ESQUEMA_V36);
   banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE)}`);
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_46 - VERSAO_LINHA_DE_BASE));
   banco.exec(`
     PRAGMA foreign_keys = ON;
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('loja', '/r1', 'main', 'github', 'k1');
