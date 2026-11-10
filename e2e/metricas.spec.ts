@@ -102,7 +102,7 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
 
 /**
  * Sobre o `semear`: a rodada 1 de I-1, com o Gate da demanda (uma reprovação e uma aprovação), a revisão que exigiu
- * alteração, o PR aprovado com nota 4, o plano da rodada (a.ts e b.ts) e o commit que alterou só a.ts, em 10 linhas, 3
+ * alteração, a devolução do ticket 5, o Gate do PR reprovado e depois aprovado com nota 4, o plano da rodada (a.ts e b.ts) e o commit que alterou só a.ts, em 10 linhas, 3
  * delas reescritas por uma pessoa.
  */
 function semearMetricasDeSucesso(raiz: string): void {
@@ -135,7 +135,10 @@ function semearMetricasDeSucesso(raiz: string): void {
       ${ticket(5, "implementar", "1")};
     INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES
       ${decisao(2, 1, "gate_demanda", "reprovado", "NULL")}, ${decisao(2, 2, "gate_demanda", "aprovado", "NULL")},
-      ${decisao(3, 1, "gate_revisao_rodada", "reprovado", "NULL")}, ${decisao(4, 1, "gate_pr", "aprovado", "4")};
+      ${decisao(3, 1, "gate_revisao_rodada", "reprovado", "NULL")}, ${decisao(4, 1, "gate_pr", "reprovado", "NULL")},
+      ${decisao(4, 2, "gate_pr", "aprovado", "4")};
+    INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, motivo)
+      VALUES ('I-1', 5, 1, '${em(M0)}', '${em(M0)}', 'reprovacao', 'corrija o teste');
     INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
       VALUES ('I-1', 1, 'aprovacao_do_planejamento', 'fabriquinha', '${em(M2)}', '${JSON.stringify(plano)}');
     INSERT INTO commit_ticket_demanda VALUES ('${sha("c")}', 'I-1', 5, 'm', '${em(M0)}');
@@ -174,7 +177,7 @@ test("uma seção por Etapa, com o título e as Métricas de Sucesso que o catá
     /Alterações posteriores no código\s*3 de 10 linhas adicionadas\s*média [\s\S]*Commits humanos posteriores na base/,
   );
   for (const [titulo, reprovacoes] of [
-    ["Revisar rodada", "1 reprovação"],
+    ["Revisar rodada", "3 reprovações"],
     ["Revisar demanda", "0 reprovações"],
   ] as const) {
     await expect(metrica(titulo, "Exigências")).toContainText(
@@ -192,7 +195,13 @@ test("uma seção por Etapa, com o título e as Métricas de Sucesso que o catá
 
   // O vocabulário: Reprovação e Gate, nunca Recusado nem Devolução.
   await expect(pagina.getByText("Reprovações no Gate")).toBeVisible();
-  await expect(pagina.getByText("1 reprovação", { exact: true }).first()).toBeVisible();
+  await expect(pagina.getByText("3 reprovações", { exact: true }).first()).toBeVisible();
+  // A Reprovação do Gate da demanda, a devolução e as Decisões reprovadas das revisões e do PR: 1 + 1 + 1 + 1.
+  const colunaReprovacoes = pagina.locator(".tabela-demandas th", { hasText: /^Reprovações/ });
+  const posicao = await colunaReprovacoes.evaluate((th) => [...(th.parentElement?.children ?? [])].indexOf(th));
+  await expect(pagina.locator(".tabela-demandas tbody tr", { hasText: "I-1" }).locator("td").nth(posicao)).toHaveText(
+    "4",
+  );
   await expect(pagina.getByRole("columnheader", { name: "Reprovações" })).toBeVisible();
   await expect(pagina.getByText("nota: média do Gate do PR")).toBeVisible();
   await expect(pagina.getByText(/Recusad|Devolu/)).toHaveCount(0);
