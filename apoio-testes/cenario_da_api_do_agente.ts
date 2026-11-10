@@ -24,6 +24,9 @@ import {
   montarTicket,
 } from "./cenarios_de_demanda.ts";
 
+// Os testes do cliente do agente (que não importa o armazenamento) dão o token ao processo por aqui.
+export { gravarTokenDoProcesso };
+
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const fechamentos: (() => Promise<void>)[] = [];
