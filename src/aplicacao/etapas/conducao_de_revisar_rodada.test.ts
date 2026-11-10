@@ -57,7 +57,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
           "--motivo",
           "falta teste",
           "--correcoes",
-          JSON.stringify([{ ticket_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] }]),
+          JSON.stringify([{ ticket_id: 1, titulo: "corrige", descricao: "d", arquivos_previstos: [], depende: [] }]),
         ],
       ],
     },

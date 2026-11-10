@@ -3,9 +3,10 @@
 import { z } from "zod";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
-import { branchRodada, Plano, RodadaRef } from "./demanda.ts";
+import { branchRodada, RodadaRef } from "./demanda.ts";
 import { ErroDeRegra, existe } from "./erros.ts";
 import { proximoIdDeRodada, proximoIdDeTicket } from "./item_de_trabalho.ts";
+import { completarArquivosPrevistos, PlanoProposto } from "./plano.ts";
 import type { Instante } from "./primitivos.ts";
 
 // A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
@@ -35,7 +36,7 @@ function exigirDemanda(ag: AgregadoDemanda, demanda_id: string): void {
 /** Acrescenta ao agregado os tickets `implementar` abertos do plano (e, se `novasRodadas`, as suas rodadas e vínculos). */
 function acrescentar(
   ag: AgregadoDemanda,
-  plano: Plano,
+  plano: PlanoProposto,
   criado_por: Ator,
   agora: Instante,
   novasRodadas: boolean,
@@ -80,7 +81,9 @@ function acrescentar(
     ],
     caminhos_ticket: [
       ...ag.caminhos_ticket,
-      ...tickets.flatMap((x) => x.caminhos.map((caminho) => ({ demanda_id, ticket_id: t(x.ticket_id), caminho }))),
+      ...tickets.flatMap((x) =>
+        x.arquivos_previstos.map((caminho) => ({ demanda_id, ticket_id: t(x.ticket_id), caminho })),
+      ),
     ],
     ...(novasRodadas && {
       rodadas: [
@@ -112,7 +115,7 @@ function acrescentar(
 }
 
 /**
- * Tickets corretivos de uma rodada existente. `tickets` segue `Plano.shape.tickets` com IDs locais (renumerados depois do
+ * Tickets corretivos de uma rodada existente. `tickets` segue `PlanoProposto.shape.tickets` com IDs locais (renumerados depois do
  * maior ticket_id atual); dependências só entre eles e todos na rodada indicada. Status e etapa são sempre aberto/implementar.
  */
 export function materializarCorrecoesRodada(
@@ -130,7 +133,7 @@ export function materializarCorrecoesRodada(
       "use uma rodada da demanda",
     );
   }
-  const lista = ler(Plano.shape.tickets, tickets);
+  const lista = ler(PlanoProposto.shape.tickets, tickets);
   if (lista.length === 0) {
     throw new ErroDeRegra("a lista de correções está vazia", "informe ao menos um ticket corretivo");
   }
@@ -141,10 +144,13 @@ export function materializarCorrecoesRodada(
       "todos os tickets devem citar a rodada indicada",
     );
   }
-  const plano = ler(Plano, {
+  // Rodada e Demanda levam a união dos arquivos dos tickets corretivos: a inclusão vale por construção.
+  const arquivosDosTickets = [...new Set(lista.flatMap((t) => t.arquivos_previstos))];
+  const plano = ler(PlanoProposto, {
     demanda_id: ref.demanda_id,
     criterios: [],
-    rodadas: [{ ...ref, titulo: "correções", e2e: false }],
+    arquivos_previstos: arquivosDosTickets,
+    rodadas: [{ ...ref, titulo: "correções", e2e: false, arquivos_previstos: arquivosDosTickets }],
     tickets: lista,
   });
   return acrescentar(ag, plano, criado_por, agora, false);
@@ -160,7 +166,7 @@ export function materializarRodadasCorretivas(
   criado_por: Ator,
   agora: Instante,
 ): AgregadoDemanda {
-  const p = ler(Plano, plano);
+  const p = ler(PlanoProposto, completarArquivosPrevistos(plano));
   exigirDemanda(ag, p.demanda_id);
   if (p.rodadas.length === 0) {
     throw new ErroDeRegra("o plano corretivo não tem rodadas", "informe ao menos uma rodada com um ticket");

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Ator, AtorExterno } from "./ator.ts";
 import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
-import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
+import { branchDemanda, branchRodada, CaminhoPrevisto, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import { PullRequest, prDoEscopo } from "./espaco_de_trabalho.ts";
 import { TipoEvidencia } from "./evidencia.ts";
@@ -78,7 +78,7 @@ const PullRequestDoEspaco = PullRequest.extend({ rodada_id: Id.optional(), atual
 const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
 const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
 const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
-const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
+const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoPrevisto });
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
 const IdDono = Id.nullish().transform((v) => v ?? undefined);

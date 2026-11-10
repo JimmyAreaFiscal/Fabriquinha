@@ -1,6 +1,6 @@
 // Leituras de só leitura para as métricas do SDLC por demandas (comparacao-sdlc-implementacao.md §8).
 import type { DatabaseSync } from "node:sqlite";
-import { Plano } from "../nucleo/demanda.ts";
+import { lerPlanoGravado } from "../nucleo/plano.ts";
 
 export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =>
   banco.prepare("SELECT 1 FROM demanda WHERE id = ?").get(demandaId) !== undefined;
@@ -22,8 +22,8 @@ export function caminhosPlanejadosDaRodada(
     )
     .get(demandaId) as { dados: string } | undefined;
   if (!l) return undefined;
-  const plano = Plano.parse(JSON.parse(l.dados));
-  return plano.tickets.filter((t) => t.rodada_id === rodadaId).flatMap((t) => t.caminhos);
+  const plano = lerPlanoGravado(JSON.parse(l.dados));
+  return plano.tickets.filter((t) => t.rodada_id === rodadaId).flatMap((t) => t.arquivos_previstos);
 }
 
 export interface ArquivoDaRodada {

@@ -3,10 +3,10 @@ import { basename } from "node:path";
 import { z } from "zod";
 import type { AgregadoDemanda, Demanda, TicketDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
-import { Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
 import type { Endereco } from "./item_de_trabalho.ts";
+import { PlanoProposto } from "./plano.ts";
 import type { Id } from "./primitivos.ts";
 import { Motivo, Slug, unicoPor } from "./primitivos.ts";
 import { Hospedagem } from "./projeto.ts";
@@ -272,7 +272,7 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
   },
   custos_realizados: tipado({ dados: CustosRealizados, arquivos: Arquivos({ max: 0 }) }),
   // O cruzamento do plano com a demanda congelada é da camada que submete.
-  plano: tipado({ dados: Plano, arquivos: Arquivos({ max: 0 }) }),
+  plano: tipado({ dados: PlanoProposto, arquivos: Arquivos({ max: 0 }) }),
   testes_estresse: tipado({
     dados: TestesEstresse,
     arquivos: LOGS_OPCIONAIS,

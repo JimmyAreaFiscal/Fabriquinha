@@ -41,7 +41,9 @@ const plano = (criterios: string[]) => ({
   demanda_id: "I-1",
   criterios,
   rodadas: [{ demanda_id: "I-1", rodada_id: 1, titulo: "r", e2e: false, criterios, depende: [] }],
-  tickets: [{ demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d", caminhos: [], depende: [] }],
+  tickets: [
+    { demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d", arquivos_previstos: [], depende: [] },
+  ],
 });
 
 function cenario(agregado: Parameters<typeof gravarAgregadoPronto>[1]) {

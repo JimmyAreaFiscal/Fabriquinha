@@ -5,11 +5,12 @@ import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_dem
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
-import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
+import { branchDemanda, branchRodada, DemandaId, formatarTicketRef } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria } from "./evidencia.ts";
 import { pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
+import { lerPlanoGravado, PlanoProposto } from "./plano.ts";
 import { Id, type Instante, Markdown, Slug, Titulo } from "./primitivos.ts";
 import {
   comReaberturaDoAuditor,
@@ -129,7 +130,7 @@ function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
 }
 
 /** O plano submetido, guardado como evidência do ticket de planejamento. */
-export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
+export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): PlanoProposto {
   const evidencia = ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket.ticket_id);
   if (evidencia === undefined) {
     throw new ErroDeRegra(
@@ -137,18 +138,18 @@ export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plan
       "o agente de planejamento o submete antes",
     );
   }
-  return Plano.parse(evidencia.dados);
+  return lerPlanoGravado(evidencia.dados);
 }
 
 /**
- * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `Plano` e
+ * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `PlanoProposto` e
  * citar só `CA-n` da definição congelada. Devolve o plano e o ticket de planejamento, ou lança a recusa.
  */
 export function validarPlano(
   ag: AgregadoDemanda,
   entrada: unknown,
   ator: Ator,
-): { plano: Plano; ticket: TicketDemanda } {
+): { plano: PlanoProposto; ticket: TicketDemanda } {
   const { demanda } = ag;
   const ticket = ticketPlanejamento(ag);
   if (ator.tipo !== "agente") {
@@ -159,7 +160,7 @@ export function validarPlano(
   }
   CICLO_DA_DEMANDA.exigir(demanda, "planejar");
   exigirSemFalha(ag, "planejar");
-  const plano = Plano.safeParse(entrada);
+  const plano = PlanoProposto.safeParse(entrada);
   if (!plano.success) {
     throw new ErroDeRegra(
       `plano inválido: ${plano.error.issues.map((i) => i.message).join("; ")}`,
@@ -245,7 +246,7 @@ export function materializarPlano(ag: AgregadoDemanda, planejamento: TicketDeman
       t.depende.map((d) => ({ demanda_id, ticket_id: id(t.ticket_id), depende_ticket_id: id(d.ticket_id) })),
     ),
     caminhos_ticket: planos.flatMap((t) =>
-      t.caminhos.map((caminho) => ({ demanda_id, ticket_id: id(t.ticket_id), caminho })),
+      t.arquivos_previstos.map((caminho) => ({ demanda_id, ticket_id: id(t.ticket_id), caminho })),
     ),
   });
 }

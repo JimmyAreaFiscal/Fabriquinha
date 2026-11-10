@@ -24,6 +24,12 @@ interface DiferencaIntencional {
 }
 
 const MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO = "I-269.R4: o texto cita o campo do projeto pelo nome novo, branch_base";
+const MOTIVO_ARQUIVOS_PREVISTOS =
+  "I-280.R1: o campo `caminhos` do ticket passa a se chamar `arquivos_previstos`, o mesmo nome dos três níveis do plano";
+const MOTIVO_TRES_NIVEIS =
+  "I-280.R1: o plano prevê `arquivos_previstos` na demanda, na rodada e no ticket (Ticket ⊆ Rodada ⊆ Demanda), e mudança de rumo é correção do Plano";
+const TRES_NIVEIS_NO_PLANEJAR =
+  "   Os arquivos previstos existem em três níveis: `arquivos_previstos` na demanda, em cada rodada e em cada ticket. Todo arquivo previsto do ticket está na sua rodada e todo arquivo previsto da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda); o plano que viola isso é recusado na submissão, com o arquivo e o nível no motivo.\n   Depois da aprovação não há replanejamento: mudança de rumo é correção do Plano, nunca um plano novo.\n";
 const MOTIVO_NOME_NOVO = "o fluxo de issues foi desligado (cutover de 2026-10-28), e o texto passa a falar de demanda";
 const MOTIVO_REVISOES_ANTERIORES =
   "I-294: a revisar_rodada recebe as revisões anteriores da rodada e confere primeiro os motivos, sem reabrir o decidido";
@@ -301,6 +307,64 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de,
     para,
     motivo: MOTIVO_VEREDITO_DO_PARECER,
+  })),
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: '"caminhos": ["src/a.ts"]',
+    para: '"arquivos_previstos": ["src/a.ts"]',
+    motivo: MOTIVO_ARQUIVOS_PREVISTOS,
+  })),
+  ...(
+    [
+      ["cada um com seus critérios e caminhos.", "cada um com seus critérios e arquivos previstos."],
+      ["com dependências e caminhos.\n", "com dependências e arquivos previstos.\n"],
+      ["fica só para a revisão da demanda.\n", "fica só para a revisão da demanda.\n" + TRES_NIVEIS_NO_PLANEJAR],
+    ] as const
+  ).flatMap(([de, para]) =>
+    emPromptETexto("planejar").map((arquivo) => ({ arquivo, de, para, motivo: MOTIVO_TRES_NIVEIS })),
+  ),
+  ...emPromptETexto("implementar").flatMap((arquivo) =>
+    (
+      [
+        ["só nos caminhos do ticket", "só nos arquivos previstos do ticket"],
+        ["fora dos seus caminhos,", "fora dos seus arquivos previstos,"],
+        ["mexa em caminhos de outros tickets", "mexa em arquivos previstos de outros tickets"],
+      ] as const
+    ).map(([de, para]) => ({ arquivo, de, para, motivo: MOTIVO_TRES_NIVEIS })),
+  ),
+  ...(
+    [
+      ["com os `caminhos` (arquivos", "com os `arquivos_previstos` (arquivos"],
+      ["fora dos `caminhos` dos tickets", "fora dos `arquivos_previstos` dos tickets"],
+      [
+        "o PR dela é o que o Auditor revisa.\n",
+        "o PR dela é o que o Auditor revisa.\n8. Os `arquivos_previstos` existem nos três níveis: todo arquivo previsto do ticket está na sua rodada e todo arquivo previsto da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda).\n   O plano que viola isso é recusado na submissão, com o arquivo e o nível no motivo.\n   Depois da aprovação não há replanejamento: mudança de rumo é correção do Plano, nunca um plano novo.\n",
+      ],
+      [
+        "- `demanda_id` e `criterios`: a demanda (`I-206`) e todos os seus `CA-n`.\n- `rodadas`: `demanda_id`, `rodada_id`, `titulo`, `e2e`, `criterios`, `depende`.\n- `tickets`: `demanda_id`, `ticket_id`, `rodada_id`, `titulo`, `descricao`, `caminhos`, `depende`.",
+        "- `demanda_id`, `criterios` e `arquivos_previstos`: a demanda (`I-206`), todos os seus `CA-n` e os arquivos que o trabalho todo toca.\n- `rodadas`: `demanda_id`, `rodada_id`, `titulo`, `e2e`, `criterios`, `arquivos_previstos`, `depende`.\n- `tickets`: `demanda_id`, `ticket_id`, `rodada_id`, `titulo`, `descricao`, `arquivos_previstos`, `depende`.",
+      ],
+      [
+        '  "criterios": ["CA-1", "CA-2"],\n  "rodadas": [\n    { "demanda_id": "I-206", "rodada_id": 1, "titulo": "Cadastro", "e2e": false, "criterios": ["CA-1"], "depende": [] },',
+        '  "criterios": ["CA-1", "CA-2"],\n  "arquivos_previstos": ["src/cadastro/**", "src/listagem/**"],\n  "rodadas": [\n    {\n      "demanda_id": "I-206",\n      "rodada_id": 1,\n      "titulo": "Cadastro",\n      "e2e": false,\n      "criterios": ["CA-1"],\n      "arquivos_previstos": ["src/cadastro/**"],\n      "depende": []\n    },',
+      ],
+      [
+        '      "criterios": ["CA-2"],\n',
+        '      "criterios": ["CA-2"],\n      "arquivos_previstos": ["src/listagem/**"],\n',
+      ],
+      ['"caminhos": ["src/cadastro/**"]', '"arquivos_previstos": ["src/cadastro/**"]'],
+      ['"caminhos": ["src/listagem/**"]', '"arquivos_previstos": ["src/listagem/**"]'],
+      [
+        "- [ ] Os `caminhos` cobrem os `arquivosPrevistos` do desenho, e nada do `foraDeEscopo` entra no plano.\n",
+        "- [ ] Os `arquivos_previstos` cobrem os `arquivosPrevistos` do desenho, e nada do `foraDeEscopo` entra no plano.\n- [ ] Todo arquivo previsto do ticket está na sua rodada e todo o da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda).\n",
+      ],
+      ["- [ ] Os `caminhos` de rodadas", "- [ ] Os `arquivos_previstos` de rodadas"],
+    ] as const
+  ).map(([de, para]) => ({
+    arquivo: "textos/pacote-pi/skills/artefato-plano/SKILL.md.txt",
+    de,
+    para,
+    motivo: MOTIVO_TRES_NIVEIS,
   })),
 ];
 
