@@ -5,35 +5,21 @@ import { readFileSync, realpathSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
-import { z } from "zod";
-import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
-import { carregarDemanda } from "../../armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
+import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
+import {
+  type Comando,
+  type DepsDoCli,
+  type EntradaDoComando,
+  ErroDeUso,
+  lerJsonDoArquivo,
+  schemaJsonDoTipo,
+} from "./comando.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
-
-/** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
-export class ErroDeUso extends Error {}
-
-interface ChamadaExterna {
-  readonly banco: DatabaseSync;
-  readonly env: NodeJS.ProcessEnv;
-  readonly stdin: NodeJS.ReadableStream;
-  readonly pos: readonly string[];
-  readonly op: Readonly<Record<string, string | string[] | undefined>>;
-}
-
-export interface ComandoExterno {
-  readonly palavras: readonly string[];
-  readonly argumentos: readonly string[];
-  readonly opcoesDeUso?: string;
-  readonly opcoes?: ParseArgsOptionsConfig;
-  rodar(c: ChamadaExterna): unknown;
-}
 
 const IDENTIDADE: ParseArgsOptionsConfig = { ferramenta: { type: "string" }, sessao: { type: "string" } };
 const USO_IDENTIDADE = "[--ferramenta <f>] [--sessao <s>]";
@@ -48,9 +34,9 @@ function idDe(texto: string): string {
 }
 
 /** O Ator externo: a ferramenta e a sessão de origem, da opção ou, sem ela, de `FABRIQUINHA_FERRAMENTA` e `FABRIQUINHA_SESSAO`. */
-function autorDe({ op, env }: ChamadaExterna): Ator {
-  const ferramenta = (op.ferramenta as string | undefined) ?? env.FABRIQUINHA_FERRAMENTA;
-  const sessao = (op.sessao as string | undefined) ?? env.FABRIQUINHA_SESSAO;
+function autorDe({ opcoes }: EntradaDoComando, { env }: DepsDoCli): Ator {
+  const ferramenta = (opcoes.ferramenta as string | undefined) ?? env.FABRIQUINHA_FERRAMENTA;
+  const sessao = (opcoes.sessao as string | undefined) ?? env.FABRIQUINHA_SESSAO;
   if (ferramenta && sessao) return { tipo: "externo", ferramenta, sessao };
   const faltam = [
     ...(ferramenta ? [] : ["a ferramenta de origem (--ferramenta ou FABRIQUINHA_FERRAMENTA)"]),
@@ -67,18 +53,14 @@ const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
 function visao(banco: DatabaseSync, id: string) {
-  const ag = carregarDemanda(banco, id);
-  const anexos = banco.prepare(
-    `SELECT a.caminho, a.sha256 FROM arquivo_evidencia a JOIN evidencia_demanda e ON e.id = a.evidencia_id
-      WHERE e.demanda_id = ? AND e.tipo = ? ORDER BY a.ordem`,
-  );
+  const { agregado, predecessoras, evidencias } = visaoDaDemanda(banco, id);
   return {
-    ...demandaParaCli(ag.demanda),
-    dependencias: predecessorasDaDemanda(banco, id).map((p) => p.demanda_id),
-    evidencias: ag.evidencias.map((e) => ({
-      tipo: e.tipo,
-      em: e.em,
-      arquivos: anexos.all(id, e.tipo).map((a) => ({ nome: a.caminho, sha256: a.sha256 })),
+    ...demandaParaCli(agregado.demanda),
+    dependencias: predecessoras.map((p) => p.demanda_id),
+    evidencias: evidencias.map(({ evidencia, anexos }) => ({
+      tipo: evidencia.tipo,
+      em: evidencia.em,
+      arquivos: anexos.map((a) => ({ nome: a.nome, sha256: a.sha256 })),
     })),
   };
 }
@@ -91,69 +73,75 @@ function tipoDe(texto: string): TipoDaDemanda {
   return tipo;
 }
 
-export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
+export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
   {
-    palavras: ["demanda", "registrar"],
-    argumentos: [],
+    nome: "demanda registrar",
+    posicionais: [],
     opcoesDeUso: `--projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]... ${USO_IDENTIDADE}`,
-    opcoes: {
-      ...IDENTIDADE,
-      projeto: { type: "string" },
-      titulo: { type: "string" },
-      tipo: { type: "string" },
-      descricao: { type: "string" },
-      dep: { type: "string", multiple: true },
+    argumentos: {
+      options: {
+        ...IDENTIDADE,
+        projeto: { type: "string" },
+        titulo: { type: "string" },
+        tipo: { type: "string" },
+        descricao: { type: "string" },
+        dep: { type: "string", multiple: true },
+      },
     },
-    async rodar(c) {
-      const faltando = ["projeto", "titulo", "tipo", "descricao"].find((o) => c.op[o] === undefined);
+    async executar(entrada, deps) {
+      const { opcoes } = entrada;
+      const faltando = ["projeto", "titulo", "tipo", "descricao"].find((o) => opcoes[o] === undefined);
       if (faltando !== undefined) throw new ErroDeUso(`falta --${faltando}`);
-      const autor = autorDe(c);
-      const { projeto, titulo, tipo } = c.op;
-      const entrada = {
+      const autor = autorDe(entrada, deps);
+      const { projeto, titulo, tipo } = opcoes;
+      const dados = {
         projeto,
         titulo,
         tipo,
-        descricao: await ler(c.op.descricao as string, c.stdin),
-        dependencias: ((c.op.dep ?? []) as string[]).map(idDe),
+        descricao: await ler(opcoes.descricao as string, deps.stdin),
+        dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
-      return visao(c.banco, registrar(c.banco, entrada, autor, agora()).demanda.id);
+      return deps.comBanco((banco) => visao(banco, registrar(banco, dados, autor, agora()).demanda.id));
     },
   },
   {
-    palavras: ["demanda", "editar"],
-    argumentos: ["I-<n>"],
+    nome: "demanda editar",
+    posicionais: ["I-<n>"],
     opcoesDeUso: `[--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->] ${USO_IDENTIDADE}`,
-    opcoes: { ...IDENTIDADE, titulo: { type: "string" }, tipo: { type: "string" }, descricao: { type: "string" } },
-    async rodar(c) {
-      const id = idDe(String(c.pos[0]));
-      const autor = autorDe(c);
-      const arquivo = c.op.descricao as string | undefined;
-      const entrada = {
-        titulo: c.op.titulo,
-        tipo: c.op.tipo,
-        descricao: arquivo === undefined ? undefined : await ler(arquivo, c.stdin),
+    argumentos: {
+      options: { ...IDENTIDADE, titulo: { type: "string" }, tipo: { type: "string" }, descricao: { type: "string" } },
+    },
+    async executar(entrada, deps) {
+      const { posicionais, opcoes } = entrada;
+      const id = idDe(String(posicionais[0]));
+      const autor = autorDe(entrada, deps);
+      const arquivo = opcoes.descricao as string | undefined;
+      const dados = {
+        titulo: opcoes.titulo,
+        tipo: opcoes.tipo,
+        descricao: arquivo === undefined ? undefined : await ler(arquivo, deps.stdin),
       };
-      editar(c.banco, id, entrada, autor);
-      return visao(c.banco, id);
+      return deps.comBanco((banco) => {
+        editar(banco, id, dados, autor);
+        return visao(banco, id);
+      });
     },
   },
   {
-    palavras: ["demanda", "evidencia"],
-    argumentos: ["I-<n>", "<tipo>"],
+    nome: "demanda evidencia",
+    posicionais: ["I-<n>", "<tipo>"],
     opcoesDeUso: `--dados <arquivo.json|-> [--arquivo <caminho>]... ${USO_IDENTIDADE}`,
-    opcoes: { ...IDENTIDADE, dados: { type: "string" }, arquivo: { type: "string", multiple: true } },
-    async rodar(c) {
-      const id = idDe(String(c.pos[0]));
-      const tipo = tipoDe(String(c.pos[1]));
-      const autor = autorDe(c);
-      const arquivo = c.op.dados as string | undefined;
+    argumentos: {
+      options: { ...IDENTIDADE, dados: { type: "string" }, arquivo: { type: "string", multiple: true } },
+    },
+    async executar(entrada, deps) {
+      const { posicionais, opcoes } = entrada;
+      const id = idDe(String(posicionais[0]));
+      const tipo = tipoDe(String(posicionais[1]));
+      const autor = autorDe(entrada, deps);
+      const arquivo = opcoes.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
-      let dados: unknown;
-      try {
-        dados = JSON.parse(await ler(arquivo, c.stdin));
-      } catch (error_) {
-        throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
-      }
+      const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
       // A pasta do comando é a única origem dos anexos.
       const pasta = realpathSync(process.cwd());
       const origens = {
@@ -162,37 +150,39 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
         fora: "da pasta do comando",
         copie: `a pasta do comando (${pasta})`,
       };
-      const arquivos = (c.op.arquivo ?? []) as string[];
-      const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, origens);
-      return { ...visao(c.banco, id), avisos };
+      const arquivos = (opcoes.arquivo ?? []) as string[];
+      return deps.comBanco((banco) => {
+        const { avisos } = submeterEvidencia(banco, id, { tipo, dados, arquivos }, autor, origens);
+        return { ...visao(banco, id), avisos };
+      });
     },
   },
   {
-    palavras: ["demanda", "enviar"],
-    argumentos: ["I-<n>"],
+    nome: "demanda enviar",
+    posicionais: ["I-<n>"],
     opcoesDeUso: USO_IDENTIDADE,
-    opcoes: IDENTIDADE,
-    rodar(c) {
-      const id = idDe(String(c.pos[0]));
-      enviar(c.banco, id, autorDe(c), agora());
-      return visao(c.banco, id);
+    argumentos: { options: IDENTIDADE },
+    executar(entrada, deps) {
+      const id = idDe(String(entrada.posicionais[0]));
+      const autor = autorDe(entrada, deps);
+      return deps.comBanco((banco) => {
+        enviar(banco, id, autor, agora());
+        return visao(banco, id);
+      });
     },
   },
   {
-    palavras: ["demanda", "ver"],
-    argumentos: ["I-<n>"],
+    nome: "demanda ver",
+    posicionais: ["I-<n>"],
     opcoesDeUso: USO_IDENTIDADE,
-    opcoes: IDENTIDADE,
-    rodar: ({ banco, pos }) => visao(banco, idDe(String(pos[0]))),
+    argumentos: { options: IDENTIDADE },
+    executar: ({ posicionais }, deps) => deps.comBanco((banco) => visao(banco, idDe(String(posicionais[0])))),
   },
   {
-    palavras: ["demanda", "schema"],
-    argumentos: ["<tipo>"],
+    nome: "demanda schema",
+    posicionais: ["<tipo>"],
     opcoesDeUso: USO_IDENTIDADE,
-    opcoes: IDENTIDADE,
-    rodar({ pos }) {
-      const { dados, arquivos } = schemaDoTipo(tipoDe(String(pos[0])));
-      return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
-    },
+    argumentos: { options: IDENTIDADE },
+    executar: ({ posicionais }) => Promise.resolve(schemaJsonDoTipo(tipoDe(String(posicionais[0])))),
   },
 ];

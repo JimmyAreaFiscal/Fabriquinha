@@ -15,7 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
-import { principal } from "../../src/entrega/cli/cli.ts";
+import { executarFabriquinha } from "../../src/composicao/cli.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/nucleo/primitivos.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
@@ -241,7 +241,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
 async function rodarCli(env: NodeJS.ProcessEnv, args: string[]): Promise<string> {
   let saida = "";
   let erro = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([""]),
     stdout: { write: (t: string) => (saida += t) },

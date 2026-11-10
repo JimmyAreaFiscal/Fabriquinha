@@ -1,4 +1,4 @@
-// O commit de um ticket e o que ele mudou por arquivo (F5 §4, §7), sem banco: as migrações também usam o status.
+// O commit de um ticket e o que ele mudou por arquivo (F5 §4, §7), sem banco: o armazenamento, a infra e as migrações usam os mesmos tipos.
 import { z } from "zod";
 
 /** Adicionado, modificado, removido ou renomeado (F5 §7). */

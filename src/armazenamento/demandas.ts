@@ -379,3 +379,41 @@ export const comDemanda = (
     aposGravar?.(depois);
     return depois;
   });
+
+/** A execução do agente com o trabalho, o ticket e o projeto dela; `fim` é nulo enquanto a execução está aberta. */
+interface EscopoDoProcessoNoBanco {
+  readonly fim: string | null;
+  readonly sessao: string;
+  readonly demanda_id: string;
+  readonly ticket_id: number;
+  readonly projeto: string;
+}
+
+/** O escopo de `execucao`, aberta ou terminada, ou `undefined` se ela não está em `processo_do_trabalho`. */
+export function carregarEscopoDoProcesso(banco: DatabaseSync, execucao: string): EscopoDoProcessoNoBanco | undefined {
+  const linha = banco
+    .prepare(
+      `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id, d.projeto
+         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id JOIN demanda d ON d.id = s.demanda_id
+        WHERE e.id = ?`,
+    )
+    .get(execucao);
+  return (
+    linha && {
+      fim: linha.fim === null ? null : String(linha.fim),
+      sessao: String(linha.sessao),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+      projeto: String(linha.projeto),
+    }
+  );
+}
+
+/** O id da sessão de cada ticket da demanda; com mais de uma no ticket, vale a mais recente. */
+export const sessaoDeCadaTicketDaDemanda = (banco: DatabaseSync, id: string): Map<number, string> =>
+  new Map(
+    banco
+      .prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid")
+      .all(id)
+      .map((s) => [Number(s.ticket_id), String(s.id)]),
+  );

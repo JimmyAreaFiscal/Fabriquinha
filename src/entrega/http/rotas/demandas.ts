@@ -8,15 +8,16 @@ import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
+import { visaoDaDemanda } from "../../../aplicacao/consultas/visao_da_demanda.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
-import { carregarDemanda, listarDemandas } from "../../../armazenamento/demandas.ts";
+import { carregarDemanda, listarDemandas, sessaoDeCadaTicketDaDemanda } from "../../../armazenamento/demandas.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
 } from "../../../armazenamento/dependencias_demanda.ts";
-import { anexosDaDemanda, lerAnexo } from "../../../armazenamento/evidencia_demanda.ts";
+import { lerAnexo } from "../../../armazenamento/evidencia_demanda.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 import { pendenciasDeUmaDemanda } from "./inicio.ts";
@@ -99,23 +100,13 @@ const passosDoEncerramento = (ag: AgregadoDemanda) => {
 
 /** `GET /api/demandas/:id`: a página da demanda. */
 function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
-  const ag = carregarDemanda(banco, String(params.id));
+  const { agregado: ag, predecessoras, evidencias } = visaoDaDemanda(banco, String(params.id));
   const { id } = ag.demanda;
   const { demanda } = ag;
   const { ticket, rodada } = ref(id);
-  const anexos = anexosDaDemanda(banco, id);
   const achado = achadoDaDemanda(banco, id);
-  // Uma leitura por demanda; com mais de uma sessão no ticket, vale a mais recente.
-  const sessoes = new Map(
-    (
-      banco.prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid").all(id) as {
-        ticket_id: number;
-        id: string;
-      }[]
-    ).map((s) => [s.ticket_id, s.id]),
-  );
+  const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
   const comPiAtivo = ticketsComPiAtivo(banco);
-  const predecessoras = predecessorasDaDemanda(banco, id);
   const elegiveis = new Set(
     selecionarTrabalho(
       ag,
@@ -174,26 +165,24 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       ...d,
       por: por.tipo,
     })),
-    evidencias: ag.evidencias.map((e) => ({
+    evidencias: evidencias.map(({ evidencia: e, anexos }) => ({
       tipo: e.tipo,
       ...(e.rodada_id !== undefined && { rodada: rodada(e.rodada_id) }),
       ...(e.ticket_id !== undefined && { ticket: ticket(e.ticket_id) }),
       em: e.em,
       dados: e.dados,
-      anexos: anexos
-        .filter((a) => a.tipo === e.tipo && a.rodada_id === e.rodada_id && a.ticket_id === e.ticket_id)
-        .map((a) => {
-          const dono = new URLSearchParams({ tipo: a.tipo });
-          if (a.rodada_id !== undefined) dono.set("rodada", String(a.rodada_id));
-          if (a.ticket_id !== undefined) dono.set("ticket", String(a.ticket_id));
-          return {
-            nome: a.nome,
-            classe: classeDoMime(a.mime),
-            mime: a.mime,
-            bytes: a.bytes,
-            link: `/api/demandas/${id}/anexos/${a.sha256}?${dono.toString()}`,
-          };
-        }),
+      anexos: anexos.map((a) => {
+        const dono = new URLSearchParams({ tipo: a.tipo });
+        if (a.rodada_id !== undefined) dono.set("rodada", String(a.rodada_id));
+        if (a.ticket_id !== undefined) dono.set("ticket", String(a.ticket_id));
+        return {
+          nome: a.nome,
+          classe: classeDoMime(a.mime),
+          mime: a.mime,
+          bytes: a.bytes,
+          link: `/api/demandas/${id}/anexos/${a.sha256}?${dono.toString()}`,
+        };
+      }),
     })),
     encerramento: passosDoEncerramento(ag),
     dependencias: predecessoras,
