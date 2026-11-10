@@ -145,6 +145,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     const worktree = await worktreeDoEspacoDoTicket(c, espaco, log);
     // O agente enxerga o Espaço pelo Ambiente (o container, depois de alocado): no host local os caminhos são os do host.
     const ambiente = ambienteDoEspaco(espaco);
+    // O container só enxerga a pasta do processo e a da sessão que o core pôs nas pastas montadas dele.
+    ambiente.abrigarProcesso(dir, sessao.id);
     const caminhoNoAmbiente = (caminhoNoHost: string): string => ambiente.caminhoNoAmbiente(caminhoNoHost);
     const prompt =
       opcoes.mensagem ??

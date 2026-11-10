@@ -20,15 +20,17 @@ import {
 } from "../../armazenamento/ambientes.ts";
 import { configuracaoDoAmbiente } from "../../armazenamento/servico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../infra/agente/pi.ts";
-import { AmbienteContainer, dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
-import type { GeradorDeAmbientes, Montagens } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
+import { AmbienteContainer } from "../../infra/ambiente/container/ambiente_container.ts";
+import type { Copias, GeradorDeAmbientes, Montagens } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
+import { recolherParaOEspaco } from "../../infra/ambiente/container/pastas_do_ambiente.ts";
 
 const MS_POR_MINUTO = 60_000;
 
-/** O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha e a porta da API do agente. */
+/** O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha, a porta da API do agente e o home do usuário, de onde o container copia o `.claude` e o `.codex`. */
 interface ServicoDoConjunto {
   raiz: string;
   porta_da_api: number;
+  home_do_usuario: string;
 }
 
 function comoAmbienteContainer(
@@ -39,7 +41,7 @@ function comoAmbienteContainer(
     id,
     container_id,
     bin_do_pacote: join(PACOTE, "bin"),
-    dir_do_pi: dirDoPiDoAmbiente(raiz, id),
+    raiz,
     url_da_api: `http://host.docker.internal:${String(porta_da_api)}`,
   });
 }
@@ -98,16 +100,16 @@ export class ConjuntoDeAmbientes {
     if (jaAlocado) return comoAmbienteContainer(jaAlocado, servico);
     const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
     if (livreReaproveitado) return comoAmbienteContainer(livreReaproveitado, servico);
-    const montagens = {
+    const montagens: Montagens = {
       // O container volta ao conjunto e serve a outra demanda do projeto: monta a pasta do projeto, não a de uma demanda.
       pastaDasWorktreesDoProjeto: dirname(pastaDaDemanda(servico.raiz, projeto.nome, espaco.dono.demanda_id)),
       raiz_git: projeto.raiz_git,
       raiz: servico.raiz,
       pacote: PACOTE,
-      auth_json: join(dirDoPiDoAuditor(), "auth.json"),
     };
+    const copias: Copias = { dir_do_pi: dirDoPiDoAuditor(), home_do_usuario: servico.home_do_usuario };
     return comoAmbienteContainer(
-      await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens),
+      await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias),
       servico,
     );
   }
@@ -121,6 +123,8 @@ export class ConjuntoDeAmbientes {
   async #limparEDevolver(ambiente: AmbienteGravado): Promise<void> {
     let estadoDepoisDaLiberacao: "livre" | "sujo" = "livre";
     try {
+      // As sessões e execuções do Espaço saem do container antes de ele servir a outro Espaço.
+      recolherParaOEspaco(this.#servicoObrigatorio().raiz, ambiente.id, String(ambiente.alocado_para));
       await this.#gerador.limpar(ambiente);
     } catch {
       estadoDepoisDaLiberacao = "sujo";
@@ -187,8 +191,15 @@ export class ConjuntoDeAmbientes {
     alocadoPara: string,
     portaDaApi: number,
     montagens: Montagens,
+    copias: Copias,
   ): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), portaDaApi, montagens);
+    const criado = await this.#gerador.criar(
+      imagem,
+      configuracaoDoAmbiente(this.#banco),
+      portaDaApi,
+      montagens,
+      copias,
+    );
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,

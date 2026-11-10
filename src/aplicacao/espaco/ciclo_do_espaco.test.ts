@@ -180,6 +180,7 @@ function cenarioComContainer() {
   const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
     raiz: c.raiz,
     porta_da_api: 4999,
+    home_do_usuario: c.raiz,
   });
   const registro = { raiz: c.raiz, log: c.log };
   const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };

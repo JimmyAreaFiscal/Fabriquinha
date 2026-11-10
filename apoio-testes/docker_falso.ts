@@ -5,7 +5,8 @@
 //   `create`, `start`, `ps`, `inspect`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
-//   trocada por uma pasta do estado; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
+//   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
+//   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
@@ -53,9 +54,13 @@ export interface DockerFalso {
   semearContainer: (semente: { id?: string; imagem?: string; rotulos?: Record<string, string> }) => ContainerFalso;
   /** Cria uma imagem que já está na máquina. */
   semearImagem: (nome: string) => void;
+  /** O `HOME` do container `id` no host: onde as cópias feitas por `tar` foram extraídas. */
+  homeDoContainer: (id: string) => string;
   /** Faz todo comando do docker (`run`, `exec`...) falhar com esta mensagem e código 1. */
   falharComando: (comando: string, mensagem: string) => void;
 }
+
+const homeDoContainer = (dir: string, id: string) => join(dir, "homes", id);
 
 const codificar = (nome: string) => Buffer.from(nome).toString("hex");
 
@@ -107,6 +112,7 @@ export function instalarDockerFalso(dir: string): DockerFalso {
     containers: () => lerContainers(dir),
     imagens: () => readdirSync(imagens).map((arquivo) => Buffer.from(arquivo, "hex").toString()),
     semearContainer,
+    homeDoContainer: (id) => homeDoContainer(dir, id),
     semearImagem: (nome) => {
       writeFileSync(join(imagens, codificar(nome)), "");
     },
@@ -139,6 +145,7 @@ function simularProcessoDoContainer(
 ): void {
   const pastaDosPids = join(dir, "pids", container.id);
   mkdirSync(pastaDosPids, { recursive: true });
+  mkdirSync(homeDoContainer(dir, container.id), { recursive: true });
   const cwd = opcoes["-w"]?.[0];
   if (cwd !== undefined && !existsSync(cwd))
     sair(126, `OCI runtime exec failed: chdir to cwd ("${cwd}") set in config.process.cwd: no such file or directory`);
@@ -146,7 +153,7 @@ function simularProcessoDoContainer(
   const doArquivo = arquivoDeEnv === undefined ? [] : readFileSync(arquivoDeEnv, "utf8").split("\n").filter(Boolean);
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? "",
-    HOME: "/root",
+    HOME: homeDoContainer(dir, container.id),
     HOSTNAME: container.id.slice(0, 12),
     ...Object.fromEntries(
       doArquivo.map((linha): [string, string] => [linha.split("=")[0] ?? "", linha.split("=").slice(1).join("=")]),
@@ -258,7 +265,11 @@ function executarDockerFalso(): void {
     const [shell, opcaoC, roteiro = ""] = programa;
     if (shell === "cat" && opcaoC === "/etc/hosts")
       for (const hospedeiro of container.hospedeiros) console.log(`172.17.0.1\t${hospedeiro.split(":")[0] ?? ""}`);
-    if (shell === "sh" && opcaoC === "-c" && roteiro.includes(PASTA_DOS_PIDS_NO_CONTAINER))
+    if (
+      shell === "sh" &&
+      opcaoC === "-c" &&
+      [PASTA_DOS_PIDS_NO_CONTAINER, "tar -x"].some((marca) => roteiro.includes(marca))
+    )
       simularProcessoDoContainer(dir, container, programa, opcoes, sair);
   } else if (comando === "rm") {
     const container = achar(args.at(-1) ?? "");

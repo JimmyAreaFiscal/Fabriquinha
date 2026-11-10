@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -325,9 +325,9 @@ test(
     const sessoesDosPis = inicios.map((entrada) => entrada.argv?.[entrada.argv.indexOf("--session-id") + 1]);
     assert.deepEqual(sessoesDosPis, [sessao, sessao]);
 
-    // O JSONL do pi do container é o que o core lê em `R/sessoes`.
+    // O JSONL do pi do container é o que o core lê em `R/sessoes/<sessão>`, pasta que só a sessão dele monta.
     assert.deepEqual(
-      readdirSync(join(c.raiz, "sessoes")).filter((nome) => nome.endsWith(`_${sessao}.jsonl`)).length,
+      readdirSync(join(c.raiz, "sessoes", sessao)).filter((nome) => nome.endsWith(`_${sessao}.jsonl`)).length,
       1,
     );
     const conversa = lerConversa(c.raiz, sessao).map((entrada) => (entrada as { message?: unknown }).message);
@@ -408,9 +408,9 @@ test(
     condutor.encerrar(execucao.id);
     await fim;
 
-    const arquivo = readdirSync(join(c.raiz, "sessoes")).find((nome) => nome.endsWith(`_${sessao}.jsonl`));
+    const arquivo = readdirSync(join(c.raiz, "sessoes", sessao)).find((nome) => nome.endsWith(`_${sessao}.jsonl`));
     assert.ok(arquivo);
-    const noJsonl = usoDoJsonlPorModelo(join(c.raiz, "sessoes", arquivo));
+    const noJsonl = usoDoJsonlPorModelo(join(c.raiz, "sessoes", sessao, arquivo));
     const gravado = carregarTrabalhosDoTicket(c.banco, ticket).usos.filter((u) => u.execucao_id === execucao.id);
     assert.deepEqual(gravado.map((u) => `${u.modelo_provedor}/${u.modelo_nome}`).sort(), [...noJsonl.keys()].sort());
     for (const u of gravado) {
@@ -504,6 +504,55 @@ test(
     for (const nome of ["FABRIQUINHA_API", "PI_CODING_AGENT_DIR", ...Object.keys(daFabriquinha)])
       assert.ok(nomes.includes(nome), `o env do container tem ${nome}`);
     assert.ok(variaveis.PATH?.startsWith(`${join(PACOTE, "bin")}:`), "pacote-pi/bin vem à frente no PATH");
+  },
+);
+
+test(
+  "o container enxerga só as sessões e execuções do próprio Espaço, e recebe cópias do pi, do .claude e do .codex",
+  COM_DOCKER,
+  async (t) => {
+    const { c } = cenarioEmContainer(t);
+    for (const [pasta, arquivo] of [
+      [".claude", "CLAUDE.md"],
+      [".codex", "config.toml"],
+    ] as const) {
+      mkdirSync(join(c.raiz, pasta), { recursive: true });
+      writeFileSync(join(c.raiz, pasta, arquivo), `copia de ${pasta}`);
+    }
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const espaco = Endereco.daRodada(id, 1).toString();
+    const ambiente = ambienteAlocadoPara(c, espaco);
+    // Uma sessão e uma execução de outro Espaço, no caminho de sempre do core (o container ainda não as abrigou).
+    mkdirSync(join(c.raiz, "sessoes", "sessao-de-outro-espaco"), { recursive: true });
+    mkdirSync(join(c.raiz, "execucoes", "E-de-outro-espaco"), { recursive: true });
+    mkdirSync(join(c.raiz, "execucoes", "E-propria"), { recursive: true });
+    ambiente.abrigarProcesso(join(c.raiz, "execucoes", "E-propria"), "sessao-propria");
+
+    const { codigo, saida } = await ambiente.executar({
+      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; test -f $HOME/.pi/agent/auth.json && echo tem-auth`,
+      argumentos: [],
+      cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
+      env: {},
+      noShell: true,
+    });
+
+    assert.equal(codigo, 0);
+    assert.match(saida, /sessao-propria/);
+    assert.match(saida, /E-propria/);
+    assert.doesNotMatch(saida, /de-outro-espaco/);
+    assert.match(saida, /copia de \.claude/);
+    assert.match(saida, /copia de \.codex/);
+    assert.match(saida, /tem-auth/);
+    // As montagens do container são exatamente estas, e nenhuma delas é o home, o ~/.pi ou a pasta inteira de sessões.
+    const binds = (
+      JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
+        HostConfig: { Binds: string[] };
+      }[]
+    )[0]?.HostConfig.Binds;
+    const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
+    assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
+    assert.ok(!origens.some((origem) => /\/\.(pi|claude|codex)/.test(origem ?? "")));
+    assert.equal(binds?.length, 7);
   },
 );
 

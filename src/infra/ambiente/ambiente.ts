@@ -77,4 +77,9 @@ export interface Ambiente {
   /** Também serve à recuperação da subida, com o identificador gravado antes do reinício. */
   sinalizar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): Promise<void>;
   caminhoNoAmbiente(caminhoNoHost: string): string;
+  /**
+   * Põe a pasta do processo (`E-<id>`) e a pasta da sessão do pi onde o Ambiente as enxerga, antes de o processo
+   * nascer. No host local elas já estão ao alcance; no container, só as pastas montadas nele ficam visíveis.
+   */
+  abrigarProcesso(pastaDaExecucao: string, sessao: string): void;
 }

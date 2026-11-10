@@ -5,21 +5,21 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
-import { AmbienteContainer, dirDoPiDoAmbiente } from "./ambiente_container.ts";
+import { AmbienteContainer } from "./ambiente_container.ts";
+import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-container-")));
 const caminhoOriginal = process.env.PATH;
 const dirDoDockerFalso = join(base, "docker");
 const docker = instalarDockerFalso(dirDoDockerFalso);
 const binDoPacote = join(base, "pacote-pi", "bin");
-const dirDoPi = dirDoPiDoAmbiente(base, "amb-1");
 const urlDaApi = "http://host.docker.internal:3000";
 const { id: containerId } = docker.semearContainer({});
 const ambiente = new AmbienteContainer({
   id: "amb-1",
   container_id: containerId,
   bin_do_pacote: binDoPacote,
-  dir_do_pi: dirDoPi,
+  raiz: base,
   url_da_api: urlDaApi,
 });
 
@@ -100,9 +100,11 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
       "PI_CODING_AGENT_DIR",
     ],
   );
-  assert.equal(variaveis.HOME, "/root");
+  const homeDoContainer = docker.homeDoContainer(containerId);
+  assert.equal(variaveis.HOME, homeDoContainer);
   assert.equal(variaveis.FABRIQUINHA_API, urlDaApi); // o 127.0.0.1 do core não chega do container
-  assert.equal(variaveis.PI_CODING_AGENT_DIR, dirDoPi);
+  // O pi lê a cópia que a criação do container fez no home dele, e não o diretório do host.
+  assert.equal(variaveis.PI_CODING_AGENT_DIR, join(homeDoContainer, ".pi", "agent"));
   assert.equal(variaveis.FABRIQUINHA_TOKEN, "token-do-ticket");
   assert.equal(variaveis.ANTHROPIC_API_KEY, "chave-do-provedor");
   // O pacote vai à frente do PATH da imagem, e o PATH do core não passa.
@@ -201,7 +203,7 @@ test("executar: container que não roda devolve a falha do docker exec", async (
     id: "amb-2",
     container_id: "inexistente",
     bin_do_pacote: binDoPacote,
-    dir_do_pi: dirDoPi,
+    raiz: base,
     url_da_api: urlDaApi,
   });
   const saida = await parado.executar(comando("true", []));
@@ -289,4 +291,14 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
 test("o caminho no ambiente é o do host (mesmos caminhos nas montagens)", () => {
   assert.equal(ambiente.caminhoNoAmbiente("/a/b"), "/a/b");
   assert.deepEqual([ambiente.id, ambiente.tipo], ["amb-1", "container"]);
+});
+
+test("abrigarProcesso: a pasta do processo e a da sessão vão para as pastas do container, e o caminho do host aponta para elas", () => {
+  const pastaDaExecucao = join(base, "execucoes", "E-7");
+  mkdirSync(join(pastaDaExecucao, "saida"), { recursive: true });
+  ambiente.abrigarProcesso(pastaDaExecucao, "sessao-7");
+  const { execucoes, sessoes } = pastasDoAmbiente(base, "amb-1");
+  assert.ok(existsSync(join(execucoes, "E-7", "saida")), "a execução está na pasta do container");
+  assert.equal(realpathSync(pastaDaExecucao), join(execucoes, "E-7"));
+  assert.equal(realpathSync(join(base, "sessoes", "sessao-7")), join(sessoes, "sessao-7"));
 });

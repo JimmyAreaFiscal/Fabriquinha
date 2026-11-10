@@ -131,7 +131,7 @@ test("exec com -w e --env-file roda o roteiro no host só com o env do arquivo, 
   delete process.env.SEGREDO_DO_HOST;
   assert.equal(executado.status, 4);
   assert.match(executado.stdout, /^DE_DENTRO=valor=com=igual$/m);
-  assert.match(executado.stdout, /^HOME=\/root$/m);
+  assert.match(executado.stdout, new RegExp(`^HOME=${falso.homeDoContainer(id)}$`, "m"));
   assert.match(executado.stdout, new RegExp(`^HOSTNAME=${id.slice(0, 12)}$`, "m"));
   assert.ok(!executado.stdout.includes("SEGREDO_DO_HOST"));
   assert.ok(executado.stdout.endsWith(`${base}\n`));

@@ -234,6 +234,7 @@ export async function iniciarAvaliacao(
   } catch (error_) {
     const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
     if (jsonl) rmSync(jsonl);
+    rmSync(join(raiz, "sessoes", id), { recursive: true, force: true }); // a pasta própria da sessão
     apagarAvaliacao(banco, id);
     rmSync(dir, { recursive: true, force: true });
     throw error_;

@@ -102,6 +102,7 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
   const conjunto = new ConjuntoDeAmbientes(c.banco, gerador, relogioDoSistema, {
     raiz: c.raiz,
     porta_da_api: portaDaApi,
+    home_do_usuario: c.raiz,
   });
   montarConjuntoDoServico(() => conjunto);
   const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git"));

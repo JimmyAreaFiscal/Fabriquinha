@@ -1,6 +1,7 @@
 // O serviço de longa duração (F4 §2, §4, §7): a porta como trava de instância única e o web (F7 §4), o reinício que
 // encerra as execuções de uma instância anterior, o agendador e o "Executar agora" da demanda.
 import { rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -90,6 +91,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio, {
       raiz,
       porta_da_api: porta,
+      home_do_usuario: homedir(),
     }));
   };
   let aberto: DatabaseSync | undefined;

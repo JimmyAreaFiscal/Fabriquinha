@@ -17,7 +17,7 @@ import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
 import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
-import { AmbienteContainer, dirDoPiDoAmbiente } from "../ambiente/container/ambiente_container.ts";
+import { AmbienteContainer } from "../ambiente/container/ambiente_container.ts";
 import { arquivosDe, commitar } from "./commit.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -173,7 +173,7 @@ test("no container, o hook roda com o env limpo, sem diretório vazio de gh e az
     id: "amb-commit",
     container_id,
     bin_do_pacote: join(base, "pacote-pi", "bin"),
-    dir_do_pi: dirDoPiDoAmbiente(base, "amb-commit"),
+    raiz: base,
     url_da_api: "http://host.docker.internal:3000",
   });
   process.env.SSH_AUTH_SOCK = "/tmp/ssh-do-host";
