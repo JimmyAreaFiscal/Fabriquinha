@@ -5,6 +5,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { ErroDeRegra, encontrado } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 import { escrever } from "./banco.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, unknown>;
@@ -13,17 +14,6 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
-
-/** Lê sem abrir transação dentro de `escrever`; fora dela, num snapshot só. */
-function noSnapshot<T>(banco: DatabaseSync, leitura: () => T): T {
-  const propria = !banco.isTransaction;
-  if (propria) banco.exec("BEGIN");
-  try {
-    return leitura();
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
-}
 
 const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente";
 
@@ -69,7 +59,7 @@ function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
 
 /** O projeto, ou `undefined` se não existe; lido num snapshot só. */
 export function buscarProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  return noSnapshot(banco, () => {
+  return lerEmSnapshot(banco, () => {
     const linha = banco.prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto WHERE nome = ?`).get(nome);
     return linha && montarProjeto(banco, linha);
   });
@@ -92,7 +82,7 @@ export function carregarProjeto(banco: DatabaseSync, nome: string): Projeto {
 
 /** Todos os projetos, em ordem de nome. */
 export function listarProjetos(banco: DatabaseSync): Projeto[] {
-  return noSnapshot(banco, () =>
+  return lerEmSnapshot(banco, () =>
     banco
       .prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto ORDER BY nome`)
       .all()

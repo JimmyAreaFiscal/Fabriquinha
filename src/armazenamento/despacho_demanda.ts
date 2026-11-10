@@ -7,6 +7,7 @@ import { CICLO_DA_DEMANDA, etapaDoEstado } from "../nucleo/ciclos.ts";
 import { EstadoDemanda } from "../nucleo/primitivos.ts";
 import { carregarDemanda } from "./demandas.ts";
 import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 
 // Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
 // cuja Etapa é a do ticket que eles esperam, não a do estado.
@@ -25,20 +26,9 @@ interface DemandaParaDespacho {
   predecessoras_satisfeitas: boolean;
 }
 
-/** Roda `ler` num snapshot só; dentro de `escrever` a leitura já é parte da transação. */
-function noSnapshot<T>(banco: DatabaseSync, ler: () => T): T {
-  const propria = !banco.isTransaction;
-  if (propria) banco.exec("BEGIN");
-  try {
-    return ler();
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
-}
-
 /** Demandas em planejamento, execução, revisão da demanda e encerramento, com o agregado e se as predecessoras já satisfazem. */
 export const demandasParaDespacho = (banco: DatabaseSync): DemandaParaDespacho[] =>
-  noSnapshot(banco, () =>
+  lerEmSnapshot(banco, () =>
     banco
       .prepare(`SELECT id FROM demanda WHERE estado IN ${ESTADOS_LIDOS} ORDER BY rowid`)
       .all()

@@ -8,6 +8,7 @@ import {
 import { encontrado } from "../nucleo/erros.ts";
 import { EstadoDemanda } from "../nucleo/primitivos.ts";
 import { escrever } from "./banco.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 
 const arestas = (banco: DatabaseSync) =>
   banco
@@ -47,9 +48,7 @@ export function predecessorasDaDemanda(
 
 /** As dependentes de `id` (diretas e indiretas) que ainda não terminaram, lidas num snapshot só. */
 export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: string): string[] {
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
-  if (propria) banco.exec("BEGIN");
-  try {
+  return lerEmSnapshot(banco, () => {
     const estados = new Map(
       banco
         .prepare("SELECT id, estado FROM demanda")
@@ -57,7 +56,5 @@ export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: strin
         .map((l) => [l.id as string, EstadoDemanda.parse(l.estado)]),
     );
     return dependentesNaoConcluidas(arestas(banco), estados, id);
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
+  });
 }
