@@ -19,10 +19,10 @@ import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { schemaDoTipo } from "../nucleo/evidencia.ts";
 import { caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { conferirEncerramentoRodada } from "./encerramento_rodada.ts";
-import { instanteAtual } from "./relogio.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 
 const conferir = (banco: Parameters<typeof conferirEncerramentoRodada>[0], ref: typeof REF) =>
-  conferirEncerramentoRodada(banco, instanteAtual, ref);
+  conferirEncerramentoRodada(banco, relogioFixo("2026-01-01T00:00:00.000Z"), ref);
 
 test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda, nunca para a base, e a rodada fica no gate", async () => {
   const { c, banco, ag, ticket, evidencia, noRemoto, rodada } = await cenario();

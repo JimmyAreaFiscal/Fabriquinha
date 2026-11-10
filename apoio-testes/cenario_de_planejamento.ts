@@ -11,7 +11,7 @@ import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { ConducaoDePlanejar } from "../src/aplicacao/etapas/conducao_de_planejar.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
-import { instanteAtual } from "../src/aplicacao/relogio.ts";
+import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
 import { registrarDependenciaDemanda } from "../src/aplicacao/gestao_demandas.ts";
@@ -177,7 +177,7 @@ export const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plan
 /** Conduz o `planejar` da demanda I-1 até o fim da execução, com a ociosidade do pi limitada a `minutos`. */
 export function planejar(banco: DatabaseSync, minutos: number): Promise<void> {
   limitarTempoDoPi(banco, minutos);
-  return new ConducaoDePlanejar({ banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
+  return new ConducaoDePlanejar({ banco, relogio: relogioDoSistema, condutor, registro: anotar }).conduzir(
     Endereco.doTicket("I-1", 1),
   );
 }

@@ -17,7 +17,7 @@ import {
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { anotar } from "../../infra/registro.ts";
 import { falharTicketDemanda } from "../fechamento_ticket.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
 import { conferirPromptComFoto } from "../fotos_retorno/conferir_foto.ts";
@@ -198,7 +198,12 @@ test("o pi que falha não falha o ticket: a execução falha e o ticket segue em
 
 test("ConducaoDePlanejar instanciada com as dependências recusa o ticket concluído sem criar sessão", async () => {
   const { banco, sessoes } = cenarioDePlanejamento({ estadoDoTicket: "concluido" });
-  const conducao = new ConducaoDePlanejar({ banco, relogio: instanteAtual, condutor, registro: anotar });
+  const conducao = new ConducaoDePlanejar({
+    banco,
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  });
   await assert.rejects(conducao.conduzir(Endereco.doTicket("I-1", 1)), /está concluido e não pode ser iniciado/);
   assert.equal(sessoes().sessoes.length, 0);
 });

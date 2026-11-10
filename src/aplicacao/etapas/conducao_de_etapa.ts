@@ -24,12 +24,12 @@ import type { anotar } from "../../infra/registro.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao_demanda.ts";
-import type { instanteAtual } from "../relogio.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 import type { CondutorDeTrabalhos } from "../trabalho/condutor.ts";
 
 export interface DepsDaConducao {
   banco: DatabaseSync;
-  relogio: typeof instanteAtual;
+  relogio: Relogio;
   condutor: CondutorDeTrabalhos;
   registro: typeof anotar;
   /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
@@ -51,7 +51,7 @@ export abstract class ConducaoDeEtapa {
   protected reservar(ticket: TicketDemanda): void {
     const { banco, relogio } = this.deps;
     comDemanda(banco, ticket.demanda_id, (ag) =>
-      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, relogio(), true),
+      reservarTicket(ag, { ticket_id: ticket.ticket_id }, FABRIQUINHA, { agora: relogio.agora() }, true),
     );
   }
 
@@ -67,7 +67,7 @@ export abstract class ConducaoDeEtapa {
   protected falhar(ticket: TicketDemanda, falha: FalhaDaTentativa): Promise<void> {
     const { banco, relogio } = this.deps;
     comDemanda(banco, ticket.demanda_id, (ag) =>
-      registrarFalhaTicket(ag, { ticket_id: ticket.ticket_id, falha }, relogio()),
+      registrarFalhaTicket(ag, { ticket_id: ticket.ticket_id, falha }, { agora: relogio.agora() }),
     );
     return Promise.resolve();
   }
@@ -180,7 +180,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   private devolver(ticket: TicketDemanda, instrucao: string): void {
     const { banco, relogio } = this.deps;
     comDemanda(banco, ticket.demanda_id, (ag) =>
-      devolverTicket(ag, { ticket_id: ticket.ticket_id, instrucao }, FABRIQUINHA, relogio()),
+      devolverTicket(ag, { ticket_id: ticket.ticket_id, instrucao }, FABRIQUINHA, { agora: relogio.agora() }),
     );
   }
 }

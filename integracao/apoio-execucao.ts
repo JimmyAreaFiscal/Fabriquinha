@@ -11,7 +11,7 @@ import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../src/aplicacao/despacho.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { ConducaoDePlanejar } from "../src/aplicacao/etapas/conducao_de_planejar.ts";
-import { instanteAtual } from "../src/aplicacao/relogio.ts";
+import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/infra/registro.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
@@ -70,9 +70,12 @@ export interface RodadaPlano {
 export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPlano[]): Promise<void> {
   pi.roteirizar([{ uso: null }]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
-  const fim = new ConducaoDePlanejar({ banco: c.banco, relogio: instanteAtual, condutor, registro: anotar }).conduzir(
-    Endereco.doTicket(id, 2),
-  );
+  const fim = new ConducaoDePlanejar({
+    banco: c.banco,
+    relogio: relogioDoSistema,
+    condutor,
+    registro: anotar,
+  }).conduzir(Endereco.doTicket(id, 2));
   await esperar(() => pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
   interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;

@@ -38,7 +38,7 @@ import { ConducaoDeResolverConflito } from "./etapas/conducao_de_resolver_confli
 import { ConducaoDeRevisarDemanda } from "./etapas/conducao_de_revisar_demanda.ts";
 import { ConducaoDeRevisarRodada } from "./etapas/conducao_de_revisar_rodada.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { instanteAtual } from "./relogio.ts";
+import { relogioDoSistema } from "../nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
 
@@ -76,7 +76,7 @@ const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => unde
 const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao): DepsDaConducao => ({
   banco,
   limiteMin: timeoutMin,
-  relogio: instanteAtual,
+  relogio: relogioDoSistema,
   condutor,
   registro: anotar,
 });

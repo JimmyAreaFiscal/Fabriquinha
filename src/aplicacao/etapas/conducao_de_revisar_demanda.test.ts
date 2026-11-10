@@ -7,7 +7,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../../infra/repositorio/worktree-demanda.ts";
 import { anotar } from "../../infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 
@@ -15,7 +15,7 @@ type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 3);
 
 const conducao = (banco: Banco) =>
-  new ConducaoDeRevisarDemanda({ banco, relogio: instanteAtual, condutor, registro: anotar });
+  new ConducaoDeRevisarDemanda({ banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar });
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
