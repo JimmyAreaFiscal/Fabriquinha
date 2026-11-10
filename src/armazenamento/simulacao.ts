@@ -31,7 +31,7 @@ export interface UsuarioSimulado {
 }
 
 /** Uma vez que um Usuário Simulado fez a Tarefa (F8 §4): o `relatorio` só vem na concluída e o `erro`, na que falhou. */
-export interface ExecucaoSimulada {
+interface ExecucaoSimulada {
   id: Id;
   usuario: Id;
   usuarioNome: string;

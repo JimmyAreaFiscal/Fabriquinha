@@ -73,7 +73,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   lembrar(nome);
   const mostrar = filtrosLembrados();
   const filtro = new URLSearchParams(Object.entries(mostrar).map(([chave, valor]) => [chave, String(valor)]));
-  const atual = mesDe(new Date(agoraNoNavegador()));
+  const atual = mesDe(agoraNoNavegador());
   const [lista, [mes]] = await Promise.all([
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/demandas?${filtro.toString()}`, { signal }),
     api<[MetricasDoMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),

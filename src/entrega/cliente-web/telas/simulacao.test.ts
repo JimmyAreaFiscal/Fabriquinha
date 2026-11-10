@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ExecucaoSimulada, Tarefa, UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
+import type { Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { errosDoZod, type ProjetoListado } from "./configuracao.ts";
 import {
   caminhoDaSimulacao,
@@ -129,6 +129,8 @@ test("cada Tarefa vira um cartão com o texto, N e os alocados (CA-7); sem Taref
   assert.match(html, /<span class="tag">N = 3<\/span>/);
   assert.match(html, /alocada a <b>Dona Maria<\/b>, <b>Seu João<\/b>/);
 });
+
+type ExecucaoSimulada = Tarefa["execucoes"][number];
 
 const execucao = (id: number, extra: Partial<ExecucaoSimulada> = {}): ExecucaoSimulada => ({
   id,

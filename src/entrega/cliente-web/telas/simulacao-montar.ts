@@ -1,8 +1,8 @@
 // Simulação (F7 §4.4, F8) no DOM: lê a API, desenha com as funções puras de simulacao.ts, cria a Tarefa, com os erros
 // do 422 ao lado dos campos, executa e abre o relatório. Enquanto há execução pendente, relê as Tarefas a cada 3 s. Os
 // testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Tarefa, UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { abrirCaixa, api, ErroDaApi, mostrarErro } from "../dom.ts";
 import { type Erros, errosDoZod, type ProjetoListado } from "./configuracao.ts";
 import { lembrar, ultimoVisto } from "./projeto-montar.ts";

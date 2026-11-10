@@ -23,13 +23,6 @@ export interface Estado {
 
 export type GrupoDeLista = "fitness" | "linguagens" | "e2e" | "globs";
 
-/** `GET /api/projetos/:nome/configuracao-sdlc`. */
-export interface Resposta {
-  configurada: boolean;
-  configuracao: Projeto;
-  cursor_commit_humano?: string;
-}
-
 export const CAMPOS_DO_PROJETO = ["branch_base", "chave_sonarqube", "raiz_git", "hospedagem", "cursor"] as const;
 
 /** Os grupos de linhas: campo, rótulo e se o texto é de código (fonte mono). */

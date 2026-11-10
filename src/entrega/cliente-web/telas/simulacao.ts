@@ -3,9 +3,11 @@
 // simulacao-montar.ts.
 import type { Id } from "../../../nucleo/primitivos.ts";
 import type { RelatorioSimulacao, StatusExecucaoSimulada } from "../../../nucleo/simulacao.ts";
-import type { ExecucaoSimulada, Tarefa, UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
+import type { Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { escapar } from "../render.ts";
 import { type Erros, idDe, marca, type ProjetoListado } from "./configuracao.ts";
+
+type ExecucaoSimulada = Tarefa["execucoes"][number];
 
 export const caminhoDaSimulacao = (nome: string): string => `/simulation/${encodeURIComponent(nome)}`;
 

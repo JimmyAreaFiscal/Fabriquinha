@@ -2,6 +2,7 @@
 // São só tipos e schemas: quem monta o valor é a consulta, quem o valida na saída é o teste de rota.
 import { z } from "zod";
 import { Mes } from "../../nucleo/periodo.ts";
+import type { TipoMetrica } from "../../nucleo/metrica.ts";
 import { EtapaTicket, Slug } from "../../nucleo/primitivos.ts";
 
 /** Sem `projeto`, todos; sem `ate`, o mês corrente; sem `de`, os 11 meses antes de `ate`. */
@@ -80,6 +81,12 @@ const ValorDaMetrica = z.union([
   metrica("nota_humana", z.object({ soma: Numero, quantidade: Contagem, media: Numero.nullable() })),
 ]);
 
+/** O valor que a Métrica de Sucesso do tipo `Tipo` carrega. */
+export type ValorDaMetricaDoTipo<Tipo extends TipoMetrica> = Extract<
+  z.infer<typeof ValorDaMetrica>,
+  { definicao: { tipo: Tipo } }
+>["valor"];
+
 /** As Métricas de um mês, de todos os projetos ou de um. */
 export const MetricasDoMes = z.object({
   mes: Mes,
@@ -125,3 +132,4 @@ export const MetricasDasDemandas = z.object({
   ),
   total: SomaDeUso.extend({ conformidade: Numero.nullable(), nota: Numero.nullable() }),
 });
+export type MetricasDasDemandas = z.infer<typeof MetricasDasDemandas>;

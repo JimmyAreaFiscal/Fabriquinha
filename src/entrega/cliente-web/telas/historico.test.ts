@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ProcessoDoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
-import type { DadosDoChatDemanda } from "../../http/rotas/chat.ts";
-import type { SessaoDeDemanda } from "../../http/rotas/historico.ts";
+import type { DadosDoChatDemanda } from "../../contrato/chat.ts";
+import type { SessaoDeDemanda } from "../../contrato/historico.ts";
 import type { Entrada } from "./chat.ts";
 import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
 process.env.TZ = "America/Sao_Paulo";
 
-const AGORA = new Date("2026-10-12T15:00:00.000Z");
+const AGORA = Date.parse("2026-10-12T15:00:00.000Z");
 
 const sessao = (s: Partial<SessaoDeDemanda> = {}): SessaoDeDemanda => ({
   sessao: "a1/b2",

@@ -193,7 +193,7 @@ interface CabecalhoDaSessao {
 }
 
 /** O que a barra de estado e as linhas do sistema do chat leem: a sessão e as Pendências da demanda dela. */
-export interface CabecalhoDemanda extends CabecalhoDaSessao {
+interface CabecalhoDemanda extends CabecalhoDaSessao {
   pendencias: PendenciaDoChat[];
 }
 
