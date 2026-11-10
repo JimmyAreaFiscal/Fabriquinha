@@ -45,7 +45,7 @@ const MOTIVO_RODADAS_EM_CADEIA =
 const MOTIVO_VERIFICACOES_JA_FEITAS =
   "otimização: a revisão usa os testes, as fitness e o Sonar que a Fabriquinha já rodou no commit, sem sleep de espera";
 const LINHA_DO_ESTRESSE =
-  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho_demanda.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).";
+  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).";
 const USE_AS_VERIFICACOES_JA_FEITAS =
   ' Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).';
 const SECAO_VERIFICACOES_JA_FEITAS =
@@ -124,6 +124,51 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de,
     para,
     motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
+  })),
+  ...(
+    [
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "`custos_realizados` (obrigatória) traz o uso desta sessão do Claude Code, somado do transcript por modelo.",
+        "O Uso desta sessão do Claude Code, somado do transcript por modelo, é declarado com `fabriquinha demanda uso` (não é evidência nem trava o envio).",
+      ],
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "fabriquinha demanda evidencia I-<n> custos_realizados --dados custos.json",
+        "fabriquinha demanda uso I-<n> --dados custos.json",
+      ],
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "Depois do envio, só `custos_realizados` aceita nova submissão;",
+        "Depois do envio, só `fabriquinha demanda uso` aceita nova submissão (até a demanda terminar);",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "(`criterios_aceite`, `desenho_solucao` e `custos_realizados` são obrigatórias)",
+        "(`criterios_aceite` e `desenho_solucao` são obrigatórias)",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "fabriquinha demanda evidencia I-30 custos_realizados --dados custos.json\n```\n",
+        "```\n",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "`custos.json` (sessões externas; omita `custo` se desconhecido, nunca ponha 0):",
+        "Declarar o Uso das sessões externas (opcional; vale até a demanda terminar, repetir a mesma sessão não duplica):\n\n```\nfabriquinha demanda uso I-30 --dados custos.json\n```\n\n`custos.json` (omita `custo` se desconhecido, nunca ponha 0):",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "Depois do envio só `custos_realizados` aceita nova submissão;",
+        "Depois do envio só `fabriquinha demanda uso` aceita nova submissão;",
+      ],
+    ] as const
+  ).map(([arquivo, de, para]) => ({
+    arquivo,
+    de,
+    para,
+    motivo:
+      "I-278: custos_realizados deixa de ser Evidência e vira o Uso declarado, pelo comando `fabriquinha demanda uso`",
   })),
   {
     arquivo: "textos/skills/registrar-necessidade/SKILL.md.txt",

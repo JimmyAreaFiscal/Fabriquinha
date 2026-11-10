@@ -17,17 +17,12 @@ const NOME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_NOME = 64;
 const MAX_DESCRICAO = 1024;
 const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submeter"];
-/** A evidência da demanda que a ferramenta de fora submete sem skill: os custos vêm da própria sessão dela. */
-const SEM_SKILL: readonly string[] = ["custos_realizados"];
 /** Skills do fluxo externo (CLI da ferramenta de fora): não são de evidência de agente e têm forma própria. */
 const EXTERNAS = ["demanda-externa"];
 /** As evidências de produtor agente das etapas e as da demanda (produtor externo), que a ferramenta de fora registra. */
 const DE_ARTEFATO = new Set(
   TipoEvidencia.options
-    .filter(
-      (tipo) =>
-        CATALOGO_ETAPAS.some((c) => c.tipo === tipo && c.produtor !== "fabriquinha") && !SEM_SKILL.includes(tipo),
-    )
+    .filter((tipo) => CATALOGO_ETAPAS.some((c) => c.tipo === tipo && c.produtor !== "fabriquinha"))
     .map(skillDoTipo),
 );
 

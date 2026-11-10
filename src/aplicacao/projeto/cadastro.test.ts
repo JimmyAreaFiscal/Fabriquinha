@@ -543,6 +543,7 @@ const TABELAS_DEMANDA = [
   "processo_do_trabalho",
   "trabalho_agentico",
   "trabalho_nao_gerenciado",
+  "uso_declarado",
   "decisao_ticket",
   "arquivo_evidencia",
   "evidencia_historico",
@@ -594,6 +595,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');
     INSERT INTO limpeza_pendente_encerramento VALUES ('${d}', 'x');
     INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
+    INSERT INTO uso_declarado VALUES ('pi', '${d}x', '${d}', '[]');
     INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
     INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);

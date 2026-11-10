@@ -17,7 +17,7 @@ import {
 import { recolherGruposDasAvaliacoes } from "../../armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../armazenamento/simulacao.ts";
 import { processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
-import { HarnessPi, type RodarComando } from "../../infra/agente/harness_pi.ts";
+import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/agente/harness_pi.ts";
 import type { EventoPi } from "../../infra/agente/pi.ts";
 import type { IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
 import { anotar, noLog } from "../../infra/registro.ts";
@@ -378,15 +378,15 @@ export class CondutorDeTrabalhos {
   }
 
   /**
-   * A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas nem sessão, no ambiente sem credenciais dos
-   * outros modos. Devolve a resposta, ou `undefined` se o pi falhou ou passou de `limiteMs`.
+   * A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas, no ambiente sem credenciais dos outros
+   * modos. Devolve a resposta e o Uso dela, ou `undefined` se o pi falhou ou passou de `limiteMs`.
    */
   consultar(
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
     rodar?: RodarComando,
-  ): Promise<string | undefined> {
+  ): Promise<RespostaDaConsulta | undefined> {
     return this.harness.perguntar(prompt, modelo, limiteMs, rodar);
   }
 

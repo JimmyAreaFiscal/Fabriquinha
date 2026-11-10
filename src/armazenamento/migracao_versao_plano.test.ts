@@ -7,7 +7,7 @@ import { migrar } from "./banco.ts";
 import { planoDaDemanda } from "./metricas_demanda.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
-const VERSAO_47 = VERSAO_LINHA_DE_BASE + 11;
+const VERSAO_48 = VERSAO_LINHA_DE_BASE + 12;
 const EM = "2026-01-01T00:00:00.000Z";
 const APROVADO_EM = "2026-01-02T00:00:00.000Z";
 
@@ -53,11 +53,11 @@ const TICKETS_DA_I_1 = [
   [11, "implementar", 2, "'agente'", "'E-dem'", "'rodada nova g'"],
 ] as const;
 
-function bancoNaVersao46(): DatabaseSync {
+function bancoNaVersao47(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
   banco.exec(ESQUEMA_V36);
   banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE)}`);
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - 1 - VERSAO_LINHA_DE_BASE));
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - 1 - VERSAO_LINHA_DE_BASE));
   banco.exec(`
     PRAGMA foreign_keys = ON;
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('loja', '/r1', 'main', 'github', 'k1');
@@ -111,11 +111,11 @@ const contar = (banco: DatabaseSync, tabela: string): number =>
 const versoes = (banco: DatabaseSync, demanda: string) =>
   banco.prepare("SELECT * FROM versao_plano WHERE demanda_id = ? ORDER BY numero").all(demanda);
 
-test("a migração 47 grava a versão 1 igual à evidência aprovada e só nas demandas com plano materializado", () => {
-  const banco = bancoNaVersao46();
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+test("a migração 48 grava a versão 1 igual à evidência aprovada e só nas demandas com plano materializado", () => {
+  const banco = bancoNaVersao47();
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
-  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_47);
+  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_48);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
   assert.equal(contar(banco, "sqlite_temp_master"), 0, "a tabela de trabalho não fica no banco");
   const [primeira] = versoes(banco, "I-1");
@@ -132,9 +132,9 @@ test("a migração 47 grava a versão 1 igual à evidência aprovada e só nas d
   banco.close();
 });
 
-test("a migração 47 reconstrói uma correção por origem, autor e rodada, e a revisão da demanda traz as rodadas novas", () => {
-  const banco = bancoNaVersao46();
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+test("a migração 48 reconstrói uma correção por origem, autor e rodada, e a revisão da demanda traz as rodadas novas", () => {
+  const banco = bancoNaVersao47();
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
   const [, ...correcoes] = versoes(banco, "I-1");
   assert.deepEqual(
@@ -173,8 +173,8 @@ test("a migração 47 reconstrói uma correção por origem, autor e rodada, e a
 });
 
 test("a Conformidade vê o mesmo plano: o original é a referência e as correções são os extras", () => {
-  const banco = bancoNaVersao46();
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+  const banco = bancoNaVersao47();
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
   const [original, ...correcoes] = versoes(banco, "I-1").map((v) => JSON.parse(String(v.dados)) as unknown);
   const plano = new Plano(
@@ -186,8 +186,8 @@ test("a Conformidade vê o mesmo plano: o original é a referência e as correç
   banco.close();
 });
 
-test("a migração 47 preenche os arquivos de rodada e demanda pela união dos caminho_ticket, sem mexer no resto", () => {
-  const banco = bancoNaVersao46();
+test("a migração 48 preenche os arquivos de rodada e demanda pela união dos caminho_ticket, sem mexer no resto", () => {
+  const banco = bancoNaVersao47();
   const antes = Object.fromEntries(
     ["demanda", "rodada", "ticket_demanda", "caminho_ticket", "evidencia_demanda", "decisao_ticket"].map((t) => [
       t,
@@ -196,7 +196,7 @@ test("a migração 47 preenche os arquivos de rodada e demanda pela união dos c
   );
   assert.equal(contar(banco, "arquivo_previsto_rodada") + contar(banco, "arquivo_previsto_demanda"), 0);
 
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
   for (const [tabela, quantas] of Object.entries(antes)) assert.equal(contar(banco, tabela), quantas, tabela);
   const caminhos = (sql: string): string[] =>
@@ -266,8 +266,8 @@ function conformidadeDoCaminhoAntigo(banco: DatabaseSync, demanda: string, rodad
   return { percentual: (comuns / (comuns + ausentes.length + extras.length)) * 100, ausentes, extras };
 }
 
-test("a Conformidade da demanda concluída com tickets corretivos é a mesma antes e depois da migração 47", () => {
-  const banco = bancoNaVersao46();
+test("a Conformidade da demanda concluída com tickets corretivos é a mesma antes e depois da migração 48", () => {
+  const banco = bancoNaVersao47();
   const commits: [number, string][] = [
     [2, "src/a.ts"],
     [5, "src/c.ts"],
@@ -285,7 +285,7 @@ test("a Conformidade da demanda concluída com tickets corretivos é a mesma ant
   const antes = conformidadeDoCaminhoAntigo(banco, "I-1", 1);
   assert.deepEqual(antes.extras, ["src/c.ts", "src/d.ts", "src/e.ts"], "as correções são extras");
 
-  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+  migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
   const depois = conformidadeDaRodada(banco, "I-1", 1, planoDaDemanda(banco, "I-1"));
   assert.deepEqual(

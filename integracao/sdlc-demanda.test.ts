@@ -8,7 +8,7 @@ import { ErroDeEscopo } from "../src/nucleo/erros.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
-import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { registrarDependenciaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
@@ -34,7 +34,7 @@ const pi = instalarPiFalso(base);
 
 /** O planejamento é uma sessão interativa: dispara o ciclo, espera o pi receber o prompt e interrompe a execução. */
 async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<void> {
-  const fins = despacharDemandas(c.banco, c.config);
+  const fins = cicloDoDespacho(c.banco, c.config);
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
   await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
   const ref = { demanda_id: id, ticket_id: 2 };
@@ -53,7 +53,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.
   assert.throws(
     () => gestao.enviar(c.banco, id, AUTOR, CTX),
-    (e: Error) => e.message.includes("desenho_solucao, custos_realizados"),
+    (e: Error) => e.message.includes("desenho_solucao"),
   );
   assert.equal(demanda(c, id).demanda.enviada, false);
   assert.equal(demanda(c, id).demanda.estado, "entender_e_desenhar");
@@ -65,7 +65,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(gestao.editar(c.banco, id, { titulo: "Corrigido" }, AUTOR).demanda.titulo, "Corrigido");
   assert.throws(() => gestao.enviar(c.banco, id, OUTRA_SESSAO, CTX), ErroDeEscopo);
 
-  // Completo: congela a definição e registra a origem (ferramenta e sessão) e a sessão externa dos custos.
+  // Completo: congela a definição e registra a origem (ferramenta e sessão).
   submeterObrigatorias(c, id);
   const enviada = gestao.enviar(c.banco, id, AUTOR, CTX).demanda;
   assert.equal(enviada.estado, "gate_demanda");
@@ -76,7 +76,6 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
     () => submeter("criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
   );
-  assert.equal(c.banco.prepare("SELECT count(*) AS n FROM trabalho_nao_gerenciado WHERE demanda_id = ?").get(id)?.n, 1);
   assert.equal(pi.prompts().length, 0);
 });
 
@@ -99,7 +98,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
     demanda(c, reprovada).tickets.map((x) => [x.etapa, x.estado]),
     [["entender_e_desenhar", "cancelado"]],
   );
-  assert.equal(despacharDemandas(c.banco, c.config).length, 0);
+  assert.equal(cicloDoDespacho(c.banco, c.config).length, 0);
   assert.equal(pi.prompts().length, 0);
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
@@ -131,7 +130,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   // A, de outro projeto, ainda espera a decisão; B (deste projeto) já foi aprovada, mas depende de A.
   const a = demandaEnviada(c, undefined, "outro");
   const b = await demandaAprovada(c, [a]);
-  assert.equal(despacharDemandas(c.banco, c.config).length, 0);
+  assert.equal(cicloDoDespacho(c.banco, c.config).length, 0);
   assert.equal(pi.prompts().length, 0);
   assert.deepEqual(
     demanda(c, b).tickets.map((x) => [x.etapa, x.estado]),

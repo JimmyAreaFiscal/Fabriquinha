@@ -2,6 +2,8 @@
 // cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
+import { processosAbertos } from "../src/armazenamento/trabalho_agentico.ts";
 import { projeto } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {
@@ -12,6 +14,7 @@ import {
   semearGateDaDemanda,
   semearPaginaDaDemanda,
   semearPlanejamento,
+  semearPlanejamentoComPi,
   semearPrDaRodada,
   registrarCorrecaoDaSessao,
   semearTicketAberto,
@@ -360,6 +363,38 @@ test.describe("CA-26", () => {
       /Sessão pi ativa|Em execução \(sistema\)/,
     );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
+  });
+});
+
+test.describe("I-281 CA-3", () => {
+  test.use({ roteiroDoPi: roteiroDoPiParado });
+  test("Executar agora com o limite de paralelismo ocupado mostra o motivo da recusa e não cria execução", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    projeto(fabriquinha.raiz, "UPDATE configuracao SET limite_paralelismo = 1");
+    semearTicketAberto(fabriquinha.raiz);
+    semearPlanejamentoComPi(fabriquinha.raiz, "Exportar pedidos em CSV");
+    // O planejamento da I-230 ocupa a única vaga; o pi parado a mantém ocupada.
+    await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-230.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
+
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    const [resposta] = await Promise.all([
+      pagina.waitForResponse((r) => r.url().endsWith("/api/demandas/tickets/I-216.T1/executar")),
+      pagina.getByRole("button", { name: "Executar agora" }).click(),
+    ]);
+    expect(await resposta.json()).toEqual({ tipo: "limite_de_paralelismo", em_uso: 1, limite: 1 });
+    await expect(pagina.locator("[data-aviso]")).toHaveText("Limite de paralelismo cheio: 1 de 1 em uso");
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(1);
+    const banco = abrir(fabriquinha.raiz);
+    expect(processosAbertos(banco).map(({ demanda_id, ticket_id }) => `${demanda_id}.T${String(ticket_id)}`)).toEqual([
+      "I-230.T1",
+    ]);
+    banco.close();
   });
 });
 

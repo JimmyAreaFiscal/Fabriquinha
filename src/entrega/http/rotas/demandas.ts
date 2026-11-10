@@ -4,14 +4,16 @@ import { z } from "zod";
 import { type AgregadoDemanda, prDaDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
+import { predecessorasPendentes } from "../../../nucleo/dependencia_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
+import { Despacho, prontosParaExecutarAgora } from "../../../nucleo/despacho.ts";
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../../armazenamento/demandas.ts";
+import { metricasDaDemanda } from "../../../aplicacao/demanda.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
@@ -116,10 +118,13 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   );
   const comPiAtivo = ticketsComPiAtivo(banco);
   const predecessoras = predecessorasDaDemanda(banco, id);
+  const { modelos, custo, textoDoCusto } = metricasDaDemanda(banco, id).total;
   const elegiveis = new Set(
-    selecionarTrabalho(
-      ag,
-      predecessoras.every((p) => satisfazDependencia(p.estado)),
+    prontosParaExecutarAgora(
+      new Despacho().selecionar({
+        demandas: [{ agregado: ag, predecessoras_pendentes: predecessorasPendentes(predecessoras) }],
+        vivos: [], // só a retomada do planejamento depende do trabalho vivo, e ela não é do Auditor
+      }),
     ).map((t) => t.ticket_id),
   );
   return {
@@ -135,6 +140,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
       arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
+    uso: { modelos, custo, textoDoCusto },
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoGateDaRodada(ag, r.rodada_id);
       return {
@@ -157,9 +163,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
         etapa: t.etapa,
         estado: t.estado,
         satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
-        // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
-        elegivel:
-          elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
+        elegivel: elegiveis.has(t.ticket_id),
         ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
         ...(comPiAtivo.has(ticket(t.ticket_id)) && { pi_ativo: true }),
         ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),

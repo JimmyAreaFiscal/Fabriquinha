@@ -6,13 +6,13 @@ import { migrar } from "./banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
 const EM = "2026-01-01T00:00:00.000Z";
-const VERSAO_46 = VERSAO_LINHA_DE_BASE + 10;
+const VERSAO_47 = VERSAO_LINHA_DE_BASE + 11;
 
-function bancoNaVersao46(): DatabaseSync {
+function bancoNaVersao47(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
   banco.exec(ESQUEMA_V36);
   banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE)}`);
-  migrar(banco, MIGRACOES.slice(0, VERSAO_46 - VERSAO_LINHA_DE_BASE));
+  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
   banco.exec(`
     PRAGMA foreign_keys = ON;
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('loja', '/r1', 'main', 'github', 'k1');
@@ -29,9 +29,9 @@ const inserirVersao = (banco: DatabaseSync, campos: string, valores: string): vo
   );
 };
 
-test("a migração 46 cria o Plano com versões e os arquivos previstos de rodada e demanda, sem linha nas demandas que existem", () => {
-  const banco = bancoNaVersao46();
-  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_46);
+test("a migração 47 cria o Plano com versões e os arquivos previstos de rodada e demanda, sem linha nas demandas que existem", () => {
+  const banco = bancoNaVersao47();
+  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_47);
   for (const tabela of ["versao_plano", "arquivo_previsto_rodada", "arquivo_previsto_demanda"]) {
     assert.equal(banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);
   }
@@ -39,7 +39,7 @@ test("a migração 46 cria o Plano com versões e os arquivos previstos de rodad
 });
 
 test("versao_plano aceita cada origem do núcleo e recusa origem desconhecida, agente sem trabalho e rodada inexistente", () => {
-  const banco = bancoNaVersao46();
+  const banco = bancoNaVersao47();
   OrigemDaVersao.options.forEach((origem, i) => {
     banco.exec(
       `INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados) VALUES ('I-1', ${String(i + 1)}, '${origem}', 'fabriquinha', '${EM}', '{}')`,

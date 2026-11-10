@@ -998,11 +998,11 @@ ALTER TABLE processo_do_trabalho ADD COLUMN ambiente_id TEXT NOT NULL DEFAULT 'h
 `;
 
 /**
- * A 46 dá lugar ao Plano com versões e aos arquivos previstos nos três níveis (CONCEITOS.md §10): `versao_plano` (a 1 é o
+ * A 47 dá lugar ao Plano com versões e aos arquivos previstos nos três níveis (CONCEITOS.md §10): `versao_plano` (a 1 é o
  * plano aprovado; as seguintes, as correções, com o `dados` de cada uma) e `arquivo_previsto_rodada` e
  * `arquivo_previsto_demanda`, ao lado do `caminho_ticket`. Só cria as tabelas; as demandas que já existem seguem sem linha.
  */
-const MIGRACAO_46_VERSOES_DO_PLANO = `
+const MIGRACAO_47_VERSOES_DO_PLANO = `
 CREATE TABLE arquivo_previsto_rodada (
     demanda_id TEXT NOT NULL,
     rodada_id  INTEGER NOT NULL,
@@ -1032,7 +1032,7 @@ CREATE TABLE versao_plano (
 `;
 
 /**
- * A 47 preenche, nas demandas que já têm plano aprovado, o que a 46 criou vazio. A versão 1 do Plano é a evidência `plano`
+ * A 48 preenche, nas demandas que já têm plano aprovado, o que a 47 criou vazio. A versão 1 do Plano é a evidência `plano`
  * do ticket `planejar` (a que o gate aprovou; sem aprovação gravada, a mais recente), copiada como está: os `caminhos` do
  * ticket seguem lá e quem lê o plano gravado os completa. Os `implementar` além dos tickets do plano são os corretivos, e
  * cada grupo vira uma correção (a partir da versão 2): a origem sai de quem criou o ticket (a Fabriquinha: conferência do
@@ -1042,7 +1042,7 @@ CREATE TABLE versao_plano (
  * tickets corretivos não entra nos dados. Os arquivos previstos da rodada e da demanda são a união dos `caminho_ticket`:
  * a inclusão Ticket ⊆ Rodada ⊆ Demanda vale por construção.
  */
-const MIGRACAO_47_PLANO_DAS_DEMANDAS_ANTIGAS = `
+const MIGRACAO_48_PLANO_DAS_DEMANDAS_ANTIGAS = `
 INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
 SELECT demanda_id, 1, 'aprovacao_do_planejamento', 'fabriquinha', criada_em, dados FROM (
   SELECT e.demanda_id, e.dados, COALESCE(a.em, e.em) AS criada_em,
@@ -1124,6 +1124,57 @@ JOIN ticket_demanda t ON t.demanda_id = c.demanda_id AND t.ticket_id = c.ticket_
 INSERT INTO arquivo_previsto_demanda (demanda_id, caminho) SELECT DISTINCT demanda_id, caminho FROM caminho_ticket;
 `;
 
+/** Um número da linha de `custos_realizados` como `LinhaDeUso`: o que não for número vira 0 (tokens) ou `null` (custo). */
+const NUMERO_DA_LINHA_EXTERNA = (campo: string, senao: string) =>
+  `CASE WHEN json_type(l.value, '$.${campo}') IN ('integer', 'real') THEN json_extract(l.value, '$.${campo}') ELSE ${senao} END`;
+
+/**
+ * A 46 cria `uso_declarado`, o Uso que a ferramenta externa declara de uma sessão (`linhas` é uma lista de `LinhaDeUso`),
+ * e tira `custos_realizados` de `evidencia_demanda`. Cada sessão de `trabalho_nao_gerenciado` (a dona pela regra atual:
+ * a primeira demanda que a informou) vira uma linha com todas as linhas que as `custos_realizados` da demanda dona
+ * trazem para ela, a evidência malformada ficando de fora como antes. `modelo` é `provedor/modelo` e `chamadas` é 0, que
+ * a ferramenta externa não informa. `trabalho_nao_gerenciado` passa a apontar para o Uso declarado.
+ */
+const MIGRACAO_46_USO_DECLARADO = `
+CREATE TABLE uso_declarado (
+    ferramenta TEXT NOT NULL,
+    sessao     TEXT NOT NULL,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    linhas     TEXT NOT NULL CHECK (json_valid(linhas) AND json_type(linhas) = 'array'),
+    PRIMARY KEY (ferramenta, sessao)
+  );
+INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas)
+  SELECT x.ferramenta, x.sessao, x.demanda_id, COALESCE((
+    SELECT json_group_array(json(linha)) FROM (
+      SELECT json_object(
+          'modelo', COALESCE(json_extract(l.value, '$.provedor'), '') || '/' || COALESCE(json_extract(l.value, '$.modelo'), ''),
+          'tokens_entrada', ${NUMERO_DA_LINHA_EXTERNA("tokens_entrada", "0")},
+          'tokens_saida', ${NUMERO_DA_LINHA_EXTERNA("tokens_saida", "0")},
+          'tokens_cache_leitura', ${NUMERO_DA_LINHA_EXTERNA("tokens_cache_leitura", "0")},
+          'tokens_cache_escrita', ${NUMERO_DA_LINHA_EXTERNA("tokens_cache_escrita", "0")},
+          'custo', ${NUMERO_DA_LINHA_EXTERNA("custo", "NULL")},
+          'chamadas', 0) AS linha
+      FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
+      WHERE e.demanda_id = x.demanda_id AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
+        AND json_type(e.dados, '$.sessoes') = 'array' AND json_type(s.value, '$.linhas') = 'array'
+        AND json_extract(s.value, '$.ferramenta') = x.ferramenta AND json_extract(s.value, '$.sessao') = x.sessao
+      ORDER BY e.rowid, s.key, l.key)), '[]')
+  FROM trabalho_nao_gerenciado x ORDER BY x.rowid;
+CREATE TABLE trabalho_nao_gerenciado_nova (
+    ferramenta TEXT NOT NULL,
+    sessao     TEXT NOT NULL,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    PRIMARY KEY (ferramenta, sessao),
+    FOREIGN KEY (ferramenta, sessao) REFERENCES uso_declarado(ferramenta, sessao)
+  );
+INSERT INTO trabalho_nao_gerenciado_nova SELECT ferramenta, sessao, demanda_id FROM trabalho_nao_gerenciado ORDER BY rowid;
+DROP TABLE trabalho_nao_gerenciado;
+ALTER TABLE trabalho_nao_gerenciado_nova RENAME TO trabalho_nao_gerenciado;
+DELETE FROM arquivo_evidencia WHERE evidencia_id IN (SELECT id FROM evidencia_demanda WHERE tipo = 'custos_realizados');
+DELETE FROM evidencia_historico WHERE evidencia_id IN (SELECT id FROM evidencia_demanda WHERE tipo = 'custos_realizados');
+DELETE FROM evidencia_demanda WHERE tipo = 'custos_realizados';
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -1135,6 +1186,7 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_43_PULL_REQUEST,
   MIGRACAO_44_EVIDENCIA_ACEITA,
   MIGRACAO_45_AMBIENTE_EM_CONTAINER,
-  MIGRACAO_46_VERSOES_DO_PLANO,
-  MIGRACAO_47_PLANO_DAS_DEMANDAS_ANTIGAS,
+  MIGRACAO_46_USO_DECLARADO,
+  MIGRACAO_47_VERSOES_DO_PLANO,
+  MIGRACAO_48_PLANO_DAS_DEMANDAS_ANTIGAS,
 ];

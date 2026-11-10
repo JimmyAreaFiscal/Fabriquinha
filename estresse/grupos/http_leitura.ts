@@ -203,6 +203,7 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
   const periodo = "projeto=loja&de=2026-01-01&ate=2026-12-31";
   return [
     acao("/api/inicio", "/api/inicio", 151),
+    acao("/api/despacho", "/api/despacho", 15),
     acao("/api/sessoes", "/api/sessoes?escopo=ativas", 52),
     acao("/api/configuracao", "/api/configuracao", 15),
     acao("/api/ambiente", "/api/ambiente", 15),

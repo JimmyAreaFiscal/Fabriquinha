@@ -141,6 +141,10 @@ test("sem plano original, sem caminhos planejados ou sem commit: null", () => {
   const sem = banco(null);
   commit(sem, 2, [["a", "M"]]);
   assert.equal(conformidadeDaRodada(sem, "I-1", 1), null);
+  // A correção sem plano aprovado antes (demanda antiga sem evidência `plano`) não é lida como o original.
+  sem.exec(`INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
+    VALUES ('I-1', 1, 'ajustar_resultado', 'auditor', ${T}, '{}')`);
+  assert.equal(conformidadeDaRodada(sem, "I-1", 1), null);
   const corretiva = banco();
   commit(corretiva, 4, [["a", "M"]]);
   assert.equal(conformidadeDaRodada(corretiva, "I-1", 2), null);

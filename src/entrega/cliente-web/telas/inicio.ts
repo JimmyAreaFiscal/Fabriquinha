@@ -1,6 +1,9 @@
 // Início (F7 §4.4; comparacao-sdlc §9.1) como funções puras: a frase do mês, o que aguarda o Auditor, o que roda e o
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
+import type { NomeGate } from "../../../nucleo/agregado_demanda.ts";
+import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
+import type { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import type {
   CartaoDoBoard,
@@ -37,6 +40,48 @@ export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string
 
 /** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
 export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
+
+/** O JSON de uma resposta do servidor: os Endereços saem pelo texto público (`I-1.T2`). */
+type EmJson<T> = T extends Endereco
+  ? string
+  : T extends readonly (infer Item)[]
+    ? EmJson<Item>[]
+    : T extends object
+      ? { [Chave in keyof T]: EmJson<T[Chave]> }
+      : T;
+
+/** O `MotivoDeRecusa` como `GET /api/despacho` e `POST .../executar` o devolvem. */
+export type MotivoDeRecusaEmJson = EmJson<MotivoDeRecusa>;
+
+/** Um item parado do último ciclo do Despacho, como `GET /api/despacho` o devolve. */
+export interface RecusaDoDespacho {
+  item: string;
+  motivo: MotivoDeRecusaEmJson;
+}
+
+const ROTULO_DO_GATE: Record<NomeGate, string> = {
+  gate_demanda: "aprovação da demanda",
+  gate_planejamento: "aprovação do planejamento",
+  gate_pr: "aprovação do PR",
+  gate_revisao_rodada: "revisão da rodada",
+  gate_revisao_demanda: "revisão da demanda",
+};
+
+/** O texto de cada tipo de `MotivoDeRecusa`: por que o item não foi despachado. O `tsc` exige os seis tipos. */
+const ROTULO_DO_MOTIVO_DE_RECUSA: {
+  [Tipo in MotivoDeRecusaEmJson["tipo"]]: (motivo: Extract<MotivoDeRecusaEmJson, { tipo: Tipo }>) => string;
+} = {
+  limite_de_paralelismo: (m) => `Limite de paralelismo cheio: ${String(m.em_uso)} de ${String(m.limite)} em uso`,
+  dependencia_pendente: (m) => `Aguarda ${m.aguarda.join(", ")}`,
+  gate_aguardando: (m) => `Aguarda a ${ROTULO_DO_GATE[m.gate]}`,
+  ocupado: (m) => `Ocupado por ${m.por}`,
+  bloqueado: (m) => `Bloqueado: ${m.motivo}`,
+  aguarda_acao_externa: () => "Aguarda o merge do PR na plataforma",
+};
+
+/** O motivo da recusa em texto puro; quem o põe no HTML o escapa. */
+export const textoDoMotivoDeRecusa = (motivo: MotivoDeRecusaEmJson): string =>
+  (ROTULO_DO_MOTIVO_DE_RECUSA[motivo.tipo] as (m: MotivoDeRecusaEmJson) => string)(motivo);
 
 /** As colunas do board, na ordem do processo; as de gate ficam hachuradas e marcadas "gate". */
 const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
@@ -99,6 +144,16 @@ function linhaDaSessaoRodando(s: SessaoRodando, agora: Date): string {
   </a>`;
 }
 
+/** Linha de um item parado: o ticket e o motivo de o Despacho não o ter despachado; abre a página da demanda. */
+function linhaDoItemParado({ item, motivo }: RecusaDoDespacho): string {
+  const demanda = item.slice(0, item.indexOf(".T"));
+  return `<a class="rodando-linha" href="${caminhoDaDemanda(demanda)}">
+    <span class="pill pill-neutro">parado</span>
+    <span class="id">${escapar(demanda)}</span>
+    <span class="titulo"><span class="mono">${escapar(item)}</span> — ${escapar(textoDoMotivoDeRecusa(motivo))}</span>
+  </a>`;
+}
+
 /** As marcas do cartão, em HTML (cada uma num texto só, que quebra entre as palavras) e sem repetir: em execução, aguarda você e bloqueada por I-x (que não quebra no hífen). */
 function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
   const marcas = new Map<string, [classe: string, pill: string]>();
@@ -152,8 +207,8 @@ function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
   );
 }
 
-/** A página `/home`: a frase do mês, Aguarda você (da espera mais antiga para a mais nova), Rodando e o board. */
-export function inicio(dados: DadosDoInicio, agora: Date): string {
+/** A página `/home`: a frase do mês, Aguarda você (da espera mais antiga para a mais nova), Rodando (com os itens parados) e o board. */
+export function inicio(dados: DadosDoInicio, agora: Date, recusas: readonly RecusaDoDespacho[]): string {
   const { aguarda, rodando } = dados;
   return `<div class="cabeca-pagina"><h1>Início</h1></div>
   ${fraseDoMes(dados.mes)}
@@ -164,6 +219,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
   <section class="bloco bloco-rodando" aria-labelledby="titulo-rodando">
     <div class="secao-titulo"><h2 id="titulo-rodando">Rodando</h2><span class="muted">${String(rodando.length)}</span></div>
     ${rodando.length > 0 ? `<div class="rodando-linhas superficie">${rodando.map((s) => linhaDaSessaoRodando(s, agora)).join("")}</div>` : '<p class="muted vazio">Nenhuma sessão rodando.</p>'}
+    ${recusas.length > 0 ? `<div class="rodando-linhas superficie">${recusas.map(linhaDoItemParado).join("")}</div>` : ""}
   </section>
   <section class="bloco" aria-labelledby="titulo-board">
     <div class="secao-titulo"><h2 id="titulo-board">Board</h2><span class="muted">${plural(dados.quantidadeEmAndamento, "demanda", "demandas")} em andamento</span></div>

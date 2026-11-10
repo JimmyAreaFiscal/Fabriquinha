@@ -514,29 +514,17 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
 test("árvore de PRs inválida falha a Tentativa, sem gravar evidência nem concluir", async () => {
   const c = await cenario();
-  // Custo externo negativo: o total da árvore sai negativo, que o schema recusa.
-  comDemanda(c.banco, D, (a) => ({
-    ...a,
-    evidencias: [
-      {
-        demanda_id: D,
-        tipo: "custos_realizados",
-        autor: FABRIQUINHA,
-        dados: { sessoes: [{ ferramenta: "claude", sessao: "s1", linhas: [{ custo: -5 }] }] },
-        em,
-      },
-    ] as never,
-  }));
+  // Ferramenta externa vazia: a árvore sai com sessão sem ferramenta, que o schema recusa.
+  c.banco
+    .prepare("INSERT INTO uso_declarado (ferramenta, sessao, demanda_id, linhas) VALUES ('', 's1', ?, '[]')")
+    .run(D);
   await conduzir(c.banco);
 
   const ag = await integrarComoHumano(c);
 
   assert.equal(c.ticket()?.estado, "falhou");
-  assert.match(c.motivo() ?? "", /custo/);
-  assert.deepEqual(
-    ag.evidencias.map((e) => e.tipo),
-    ["custos_realizados"],
-  );
+  assert.match(c.motivo() ?? "", /ferramenta/);
+  assert.deepEqual(ag.evidencias, []);
   assert.equal(ag.demanda.estado, "encerrar_demanda");
 });
 

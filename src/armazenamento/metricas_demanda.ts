@@ -8,16 +8,19 @@ export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =
 export const rodadaExiste = (banco: DatabaseSync, demandaId: string, rodadaId: number): boolean =>
   banco.prepare("SELECT 1 FROM rodada WHERE demanda_id = ? AND rodada_id = ?").get(demandaId, rodadaId) !== undefined;
 
-/** O Plano montado das versões gravadas (a 1 é o original aprovado, as outras são as correções); `undefined` sem plano materializado. */
+/**
+ * O Plano montado das versões gravadas (o original é a da aprovação do planejamento, as outras são as correções);
+ * `undefined` sem plano aprovado, como na demanda antiga sem evidência `plano` que recebeu correção depois.
+ */
 export function planoDaDemanda(banco: DatabaseSync, demandaId: string): Plano | undefined {
   const [original, ...correcoes] = banco
-    .prepare("SELECT dados FROM versao_plano WHERE demanda_id = ? ORDER BY numero")
+    .prepare("SELECT origem, dados FROM versao_plano WHERE demanda_id = ? ORDER BY numero")
     .all(demandaId)
-    .map((l) => JSON.parse(l.dados as string) as unknown);
-  if (original === undefined) return undefined;
+    .map((l) => ({ origem: l.origem, dados: JSON.parse(l.dados as string) as unknown }));
+  if (original?.origem !== "aprovacao_do_planejamento") return undefined;
   return new Plano(
-    lerPlanoGravado(original),
-    correcoes.map((c) => CorrecaoDoPlano.parse(c)),
+    lerPlanoGravado(original.dados),
+    correcoes.map((c) => CorrecaoDoPlano.parse(c.dados)),
   );
 }
 
@@ -58,6 +61,7 @@ export interface DonoDaLinha {
 }
 
 export interface UsoDaExecucao extends DonoDaLinha {
+  execucao: string;
   provedor: string;
   modelo: string;
   entrada: number;
@@ -90,7 +94,7 @@ const NO_TICKET = "JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ti
 export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecucao[] =>
   banco
     .prepare(
-      `SELECT ${DONO}, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
+      `SELECT ${DONO}, u.execucao_id, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
          u.tokens_cache_leitura, u.tokens_cache_escrita, u.custo
        FROM uso_modelo_execucao u
        JOIN processo_do_trabalho e ON e.id = u.execucao_id
@@ -101,6 +105,7 @@ export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecu
     .map((l) => ({
       etapa: l.etapa as string,
       rodadaId: rodadaDe(l),
+      execucao: l.execucao_id as string,
       provedor: l.modelo_provedor as string,
       modelo: l.modelo_nome as string,
       entrada: Number(l.tokens_entrada),
@@ -154,29 +159,26 @@ export const rodadasDaDemanda = (banco: DatabaseSync, demandaId: string): number
 interface LinhaExterna {
   ferramenta: string;
   sessao: string;
-  /** Rodada dona da evidência; `null` = a própria demanda. */
+  /** Sempre `null`: o Uso declarado é da demanda, não de uma rodada. */
   rodadaId: number | null;
   /** `null` = desconhecido. */
   custo: number | null;
 }
 
-/** Linhas de `custos_realizados` da demanda e das rodadas dela (evidência sem ticket) das sessões externas cuja dona é a demanda; evidência malformada não conta (o banco já garante JSON válido). */
+/** Linhas do Uso declarado das sessões externas cuja dona é a demanda. */
 export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string): LinhaExterna[] =>
   banco
     .prepare(
-      `SELECT x.ferramenta, x.sessao, e.rodada_id, json_extract(l.value, '$.custo') AS custo
-       FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
-       JOIN trabalho_nao_gerenciado x ON x.demanda_id = e.demanda_id
-         AND x.ferramenta = json_extract(s.value, '$.ferramenta') AND x.sessao = json_extract(s.value, '$.sessao')
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
-         AND json_type(e.dados, '$.sessoes') = 'array'
-         AND json_type(s.value, '$.linhas') = 'array'`,
+      `SELECT u.ferramenta, u.sessao, json_extract(l.value, '$.custo') AS custo
+       FROM uso_declarado u, json_each(u.linhas) l
+       WHERE u.demanda_id = ?
+       ORDER BY u.rowid, l.key`,
     )
     .all(demandaId)
     .map((l) => ({
       ferramenta: l.ferramenta as string,
       sessao: l.sessao as string,
-      rodadaId: rodadaDe(l),
+      rodadaId: null,
       custo: typeof l.custo === "number" ? l.custo : null,
     }));
 
@@ -237,7 +239,7 @@ export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Execu
       duracaoMs: Number(l.duracao_ms),
     }));
 
-export type UsoNoPeriodo = Omit<UsoDaExecucao, keyof DonoDaLinha> & { execucao: string };
+export type UsoNoPeriodo = Omit<UsoDaExecucao, keyof DonoDaLinha>;
 
 export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriodo[] =>
   banco

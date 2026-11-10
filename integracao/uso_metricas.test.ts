@@ -4,9 +4,10 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarTrabalho, registrarUso, totalDoTicket } from "../src/nucleo/trabalho_agentico.ts";
-import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
+import { retomarTrabalho, registrarUso } from "../src/nucleo/trabalho_agentico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
+import { produtividadeDaRodada } from "../src/aplicacao/evidencias/produtividade_rodada.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
 import { mesDe } from "../src/nucleo/periodo.ts";
 import { metricasDemandaPorMes } from "../src/aplicacao/periodo_demanda.ts";
@@ -22,7 +23,7 @@ import {
   despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { AUTOR, ciclo, criarCenario, demanda, gravarLimiteParalelismo, ORIGENS_DOS_ANEXOS } from "./apoio.ts";
+import { ciclo, criarCenario, declararUso, demanda, gravarLimiteParalelismo } from "./apoio.ts";
 
 interface Ref {
   demanda_id: string;
@@ -91,18 +92,23 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     [primeira.id, "retomada"],
   );
   assert.equal(depois.usos.length, 3);
-  const total = totalDoTicket(depois.sessoes, depois.execucoes, depois.usos, ref);
-  assert.deepEqual([total.tokens_entrada, total.custo_conhecido, total.custo_incompleto], [60, 3, true]);
+  const { total } = produtividadeDaRodada(
+    depois.sessoes,
+    depois.execucoes,
+    depois.usos,
+    carregarDemanda(c.banco, id).tickets.filter((t) => t.ticket_id === ref.ticket_id),
+  );
+  assert.deepEqual([total.tokensEntrada, total.custo, total.custoIncompleto], [60, 3, true]);
 
   const { total: demandaTotal } = metricasDaDemanda(c.banco, id);
   assert.deepEqual(
-    demandaTotal.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    demandaTotal.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
     [
-      ["a", 30, 3],
-      ["b", 30, null],
+      ["p/a", 30, 3],
+      ["p/b", 30, null],
     ],
   );
-  assert.deepEqual(demandaTotal.custo, { conhecido: 3, incompleto: true });
+  assert.deepEqual(demandaTotal.custo, { conhecido: 3, trabalhosSemCusto: 1 });
 
   // A página Métricas lê o mesmo: as mesmas execuções (a retomada não duplica o uso) e o custo desconhecido sinalizado.
   const meses = metricasDemandaPorMes(c.banco, { de: mesDe(new Date(primeira.inicio)), ate: mesDe(new Date()) });
@@ -111,10 +117,10 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     demandaTotal.execucoes,
   );
   assert.deepEqual(
-    meses.flatMap((mes) => mes.total.modelos).map((m) => [m.modelo, m.entrada, m.custo]),
-    demandaTotal.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+    meses.flatMap((mes) => mes.total.modelos).map((m) => [m.modelo, m.tokens_entrada, m.custo]),
+    demandaTotal.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
   );
-  assert.ok(meses.some((mes) => mes.total.custo.incompleto));
+  assert.ok(meses.some((mes) => mes.total.custo.trabalhosSemCusto > 0));
 });
 
 test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo externo fica no escopo dela e não aciona gate", async (t) => {
@@ -148,48 +154,8 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   ]);
 
   // Custo externo da demanda (IA que a registrou): uma sessão com custo conhecido e outra sem.
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      dados: {
-        sessoes: [
-          {
-            ferramenta: "claude",
-            sessao: "ext-1",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-                custo: 6.5,
-              },
-            ],
-          },
-          {
-            ferramenta: "claude",
-            sessao: "ext-2",
-            linhas: [
-              {
-                provedor: "x",
-                modelo: "m",
-                tokens_entrada: 1,
-                tokens_saida: 1,
-                tokens_cache_leitura: 0,
-                tokens_cache_escrita: 0,
-              },
-            ],
-          },
-        ],
-      },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
-  );
+  declararUso(c, id, "ext-1", 6.5);
+  declararUso(c, id, "ext-2");
 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
   const vizinha = await demandaEmExecucao(c, [{ tickets: 1 }]);
@@ -207,52 +173,34 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   assert.deepEqual(
     m.rodadas.map((r) => [r.rodadaId, r.reprovacoes, r.custo]),
     [
-      [1, 1, { conhecido: 1, incompleto: false }],
-      [2, 0, { conhecido: 4, incompleto: true }],
+      [1, 1, { conhecido: 1, trabalhosSemCusto: 0 }],
+      [2, 0, { conhecido: 4, trabalhosSemCusto: 1 }],
     ],
   );
-  assert.deepEqual(m.total.custo, { conhecido: 5, incompleto: true });
+  assert.deepEqual(m.total.custo, { conhecido: 11.5, trabalhosSemCusto: 2 });
   // A única falha é o planejamento interrompido da própria demanda (sem rodada); a execução falha da vizinha não entra.
   assert.deepEqual([m.total.falhas, m.semRodada.falhas, ...m.rodadas.map((r) => r.falhas)], [1, 1, 0, 0]);
   assert.deepEqual(
-    m.total.modelos.map((x) => [x.modelo, x.entrada]),
+    m.total.modelos.map((x) => [x.modelo, x.tokens_entrada]),
     [
-      ["a", 30],
-      ["b", 5],
+      ["p/a", 30],
+      ["p/b", 5],
+      ["x/m", 2],
     ],
   );
-  // O custo externo é um total à parte: não entra no interno de nenhuma rodada nem do total.
-  assert.deepEqual(m.custoExterno, { conhecido: 6.5, incompleto: true, sessoes: 2 });
+  // O Uso declarado entra no total da demanda, mas não no custo de nenhuma rodada; `custoExterno` continua à parte.
+  assert.deepEqual(m.custoExterno, { conhecido: 6.5, trabalhosSemCusto: 1, sessoes: 2 });
   assert.deepEqual(
     m.rodadas.map((r) => r.custoExterno.sessoes),
     [0, 0],
   );
 
-  // Custo externo de rodada: aparece na própria rodada, soma no total externo e não substitui o da demanda.
-  const linhaR2 = {
-    provedor: "x",
-    modelo: "m",
-    tokens_entrada: 1,
-    tokens_saida: 1,
-    tokens_cache_leitura: 0,
-    tokens_cache_escrita: 0,
-    custo: 7,
-  };
-  submeterEvidencia(
-    c.banco,
-    id,
-    {
-      tipo: "custos_realizados",
-      rodada_id: 2,
-      dados: { sessoes: [{ ferramenta: "claude", sessao: "ext-r2", linhas: [linhaR2] }] },
-    },
-    AUTOR,
-    ORIGENS_DOS_ANEXOS,
-  );
+  // Uso declarado depois: é da demanda, então soma no total externo e não aparece na rodada.
+  declararUso(c, id, "ext-r2", 7);
   const comRodada = metricasDaDemanda(c.banco, id);
-  assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
+  assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 });
   assert.deepEqual(comRodada.rodadas[1].custo, m.rodadas[1]?.custo, "o externo não entra no custo interno");
-  assert.deepEqual(comRodada.custoExterno, { conhecido: 13.5, incompleto: true, sessoes: 3 });
+  assert.deepEqual(comRodada.custoExterno, { conhecido: 13.5, trabalhosSemCusto: 1, sessoes: 3 });
   assert.equal(atual(c, id, "implementar", 1).titulo, "Corrigir");
 
   // Métrica só lê: nenhuma estado, status ou decisão mudou, apesar do custo da vizinha.

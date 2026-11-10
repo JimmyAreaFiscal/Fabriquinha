@@ -16,6 +16,7 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
+import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -351,4 +352,19 @@ test("a linha do tempo: o estado em andamento, tudo feito na concluída e na arq
   assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets })), "em_execucao");
   assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets: tickets.slice(1) })), "planejar");
   assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada")), "entender_e_desenhar");
+});
+
+test("os cards do mês do projeto vêm de /api/metricas com o mesmo texto do custo, só do projeto", async () => {
+  const agoraIso = new Date().toISOString();
+  banco.exec(`INSERT INTO demanda VALUES ('I-1', 'loja', 'Título', 'problema', 'd', 'em_execucao', '${agoraIso}', 'f', 's', 1, 'b-I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('I-1', 1, 'planejar', 'concluido', '${agoraIso}');
+    INSERT INTO trabalho_agentico VALUES ('s-I-1', 'I-1', 1, 'autonomo', 'conv');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('x1', 's-I-1', '${agoraIso}', '${agoraIso}', 0), ('x2', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('x1', 'p', 'm', 10, 1, 0, 0, 4.2), ('x2', 'p', 'm', 3, 1, 0, 0, NULL);`);
+  const mes = agoraIso.slice(0, 7);
+  const [loja] = (await chamar("GET", `/api/metricas?projeto=loja&de=${mes}&ate=${mes}`)) as MetricasMesDemanda[];
+  const [site] = (await chamar("GET", `/api/metricas?projeto=site&de=${mes}&ate=${mes}`)) as MetricasMesDemanda[];
+  assert.equal(loja?.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
+  assert.equal(site?.total.textoDoCusto, "US$ 0,00");
 });
