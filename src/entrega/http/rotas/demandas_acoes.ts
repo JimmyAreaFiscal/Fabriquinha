@@ -11,8 +11,6 @@ import { ReaberturaDoTicket, TicketReaberto } from "../../contrato/demanda.ts";
 import type { Pedido, Rota } from "../rotas.ts";
 import { recusaEmJson } from "./inicio.ts";
 
-const agora = () => ({ agora: new Date().toISOString() });
-
 /** O `:ref` do caminho como rodada (`I-206.R2`). */
 function refDaRodada({ params }: Pedido): RefRodada {
   const { demanda_id, rodada_id } = Endereco.ler(String(params.ref));
@@ -84,9 +82,10 @@ async function executar(pedido: Pedido): Promise<unknown> {
   return recusa && recusaEmJson(recusa);
 }
 
-const cancelamento = ({ banco, params }: Pedido) => cancelar(banco, String(params.id), AUDITOR, agora());
-const arquivamento = ({ banco, params }: Pedido) => ({
-  demanda: arquivar(banco, String(params.id), AUDITOR, agora()),
+const cancelamento = ({ banco, params, relogio }: Pedido) =>
+  cancelar(banco, String(params.id), AUDITOR, { agora: relogio.agora() });
+const arquivamento = ({ banco, params, relogio }: Pedido) => ({
+  demanda: arquivar(banco, String(params.id), AUDITOR, { agora: relogio.agora() }),
 });
 
 export const ROTAS_DAS_ACOES_DE_DEMANDA: Rota[] = [
