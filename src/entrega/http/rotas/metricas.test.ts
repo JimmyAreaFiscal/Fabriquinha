@@ -33,8 +33,9 @@ async function chamar(endereco: string): Promise<unknown> {
   for (const rota of ROTAS) {
     const params = rota.metodo === "GET" ? casar(rota.caminho, url.pathname) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
         relogio: relogioDoSistema,
@@ -47,6 +48,9 @@ async function chamar(endereco: string): Promise<unknown> {
     } catch (erro) {
       return traduzir(erro);
     }
+    assert.ok(rota.resposta, `GET ${rota.caminho} não declara o schema da resposta`);
+    rota.resposta.parse(JSON.parse(JSON.stringify(valor)));
+    return valor;
   }
   throw new Error(`GET ${endereco} não existe`);
 }

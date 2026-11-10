@@ -85,7 +85,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
-    condutor.recuperarNaSubida(aberto);
+    condutor.recuperarNaSubida(aberto, relogio);
     web.on(
       "request",
       servirWeb({
