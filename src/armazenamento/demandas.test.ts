@@ -9,8 +9,15 @@ import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { registrarDemanda } from "../nucleo/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
-import { gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  carregarDemanda,
+  carregarEscopoDoProcesso,
+  comDemanda,
+  criarDemandaNova,
+  listarDemandas,
+  sessaoDeCadaTicketDaDemanda,
+} from "./demandas.ts";
+import { abrirTrabalhoDoAgente, gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -599,4 +606,33 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
   escrever(b, () => {
     assert.equal(listarDemandas(b).length, 4);
   });
+});
+
+test("carregarEscopoDoProcesso traz o ticket, a sessão e o projeto da execução, aberta ou terminada", () => {
+  const b = comBase();
+  const trabalho_id = "e-I-1-T2"; // o id que abrirTrabalhoDoAgente dá ao processo
+  abrirTrabalhoDoAgente(b, { demanda_id: "I-1", ticket_id: 2 });
+  const escopo = { sessao: `s-${trabalho_id}`, demanda_id: "I-1", ticket_id: 2, projeto: "p" };
+  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: null, ...escopo });
+  b.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = ?").run(em, trabalho_id);
+  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: em, ...escopo });
+  assert.equal(carregarEscopoDoProcesso(b, "inexistente"), undefined);
+});
+
+test("sessaoDeCadaTicketDaDemanda devolve a sessão de cada ticket e, com mais de uma, a mais recente", () => {
+  const b = comBase();
+  const nova = b.prepare(
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-1', ?, 'autonomo', 'c')",
+  );
+  nova.run("s-a", 1);
+  nova.run("s-b", 2);
+  nova.run("s-c", 1);
+  assert.deepEqual(
+    sessaoDeCadaTicketDaDemanda(b, "I-1"),
+    new Map([
+      [1, "s-c"],
+      [2, "s-b"],
+    ]),
+  );
+  assert.deepEqual(sessaoDeCadaTicketDaDemanda(b, "I-9"), new Map());
 });

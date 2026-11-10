@@ -2,14 +2,13 @@
 // `evidencia add I-<n>.T<m> <tipo>`. Valida na fronteira (ticket próprio, etapa, produtor, schema do tipo, anexos) e
 // grava dentro de `comDemanda`, que reconfere execução aberta e estado. Implementar não tem comando: a Fabriquinha
 // coleta e conclui.
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { text } from "node:stream/consumers";
 import { z } from "zod";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
-import { ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { agregadoDaRodada, schemaDoTipo, TipoEvidencia } from "../../nucleo/evidencia.ts";
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
@@ -29,6 +28,7 @@ import {
   resolverEscopoDoAgente,
   ticketProprio,
 } from "./agente_demanda.ts";
+import { exigirTicket, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 
 /** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
 const TIPOS_QUE_O_AGENTE_SUBMETE: readonly TipoEvidencia[] = [
@@ -49,11 +49,7 @@ function tipoDoAgente(texto: string): { tipo: TipoEvidencia; schema: EsquemaDeEv
 
 /** O ticket do agente, que só recebe evidência aberto ou em execução. */
 function ticketAberto(ag: ReturnType<typeof carregarDemanda>, a: EscopoDoAgente): TicketDemanda {
-  const ticket = encontrado(
-    ag.tickets.find((t) => t.ticket_id === a.ticket_id),
-    `o ticket ${proprio(a)} não existe`,
-    "confira a execução",
-  );
+  const ticket = exigirTicket(ag, a.ticket_id);
   if (ticket.estado !== "aberto" && ticket.estado !== "em_execucao") {
     throw new ErroDeRegra(
       `o ticket ${proprio(a)} está ${ticket.estado} e não recebe evidência`,
@@ -64,13 +60,9 @@ function ticketAberto(ag: ReturnType<typeof carregarDemanda>, a: EscopoDoAgente)
 }
 
 /** O JSON de `--dados`, de um arquivo ou do stdin com `-`. */
-async function lerDados(arquivo: string | undefined, stdin: NodeJS.ReadableStream): Promise<unknown> {
+function lerDados(arquivo: string | undefined, stdin: NodeJS.ReadableStream): Promise<unknown> {
   if (arquivo === undefined) throw new ErroDeRegra("falta --dados", "passe --dados <arquivo.json|->");
-  try {
-    return JSON.parse(arquivo === "-" ? await text(stdin) : readFileSync(arquivo, "utf8"));
-  } catch (error_) {
-    throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
-  }
+  return lerJsonDoArquivo(arquivo, stdin);
 }
 
 /** De onde os anexos podem vir: a worktree da rodada do ticket (ou a da demanda) e a saída da execução, da raiz real. */
@@ -90,8 +82,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
     palavras: ["evidencia", "schema"],
     argumentos: ["<tipo>"],
     rodar({ pos }) {
-      const { dados, arquivos } = tipoDoAgente(String(pos[0])).schema;
-      return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
+      return schemaJsonDoTipo(tipoDoAgente(String(pos[0])).tipo);
     },
   },
   {

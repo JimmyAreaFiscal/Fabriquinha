@@ -2,20 +2,21 @@
 // `processo_do_trabalho` e lê a própria demanda e o próprio ticket, sempre pelo endereço público (`I-206.T3`). Nenhuma regra
 // mora aqui: o escopo é conferido na fronteira e o resto é do domínio e da persistência.
 import type { DatabaseSync } from "node:sqlite";
-import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
-import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../nucleo/erros.ts";
 import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { decidirGate } from "../../aplicacao/gates/decidir_gate.ts";
-import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
+import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
+import { carregarDemanda, carregarEscopoDoProcesso, comDemanda } from "../../armazenamento/demandas.ts";
 import { projetoExistente } from "../../aplicacao/projeto/cadastro.ts";
+import { exigirTicket, lerJsonDoArquivo } from "./comando.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
 /** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `processo_do_trabalho`), a sessão e o ticket composto que ele roda. */
@@ -45,23 +46,17 @@ export interface ComandoDemanda {
 
 /** O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo. */
 export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
-  const linha = banco
-    .prepare(
-      `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id, d.projeto
-         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id JOIN demanda d ON d.id = s.demanda_id
-        WHERE e.id = ?`,
-    )
-    .get(execucao);
+  const linha = carregarEscopoDoProcesso(banco, execucao);
   if (!linha) return undefined;
   if (linha.fim !== null) {
     throw new ErroDeEscopo(`a execução ${execucao} já terminou`, "peça ao Auditor uma nova execução");
   }
   return {
     ator: { tipo: "agente", trabalho_id: execucao },
-    sessao: String(linha.sessao),
-    demanda_id: String(linha.demanda_id),
-    ticket_id: Number(linha.ticket_id),
-    projeto: String(linha.projeto),
+    sessao: linha.sessao,
+    demanda_id: linha.demanda_id,
+    ticket_id: linha.ticket_id,
+    projeto: linha.projeto,
   };
 }
 
@@ -103,15 +98,6 @@ const publico = (ticket: TicketDemanda, ag: AgregadoDemanda) => {
   };
 };
 
-/** O JSON de uma opção, do argumento ou do stdin com `-`. */
-async function lerJson(opcao: string, valor: string, stdin: NodeJS.ReadableStream): Promise<unknown> {
-  try {
-    return JSON.parse(valor === "-" ? await text(stdin) : valor);
-  } catch (error_) {
-    throw new ErroDeRegra(`${opcao} não é um JSON válido: ${mensagem(error_)}`, `passe ${opcao} <json|->`);
-  }
-}
-
 /** Grava `transicao` na demanda do agente, reconferindo dentro da transação que a execução segue aberta. */
 const gravar = (banco: DatabaseSync, a: EscopoDoAgente, transicao: (ag: AgregadoDemanda) => AgregadoDemanda) =>
   comDemanda(banco, a.demanda_id, (ag) => {
@@ -139,7 +125,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     argumentos: ["I-<n>"],
     rodar({ banco, agente, pos }) {
       demandaPropria(agente, String(pos[0]));
-      const ag = carregarDemanda(banco, agente.demanda_id);
+      const { agregado: ag } = visaoDaDemanda(banco, agente.demanda_id);
       return {
         demanda: demandaParaCli(ag.demanda),
         rodadas: ag.rodadas.map(({ demanda_id, rodada_id, ...r }) => ({
@@ -174,14 +160,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     rodar({ banco, agente, pos }) {
       ticketProprio(agente, String(pos[0]));
       const ag = carregarDemanda(banco, agente.demanda_id);
-      return publico(
-        encontrado(
-          ag.tickets.find((t) => t.ticket_id === agente.ticket_id),
-          `o ticket ${proprio(agente)} não existe`,
-          "confira a execução",
-        ),
-        ag,
-      );
+      return publico(exigirTicket(ag, agente.ticket_id), ag);
     },
   },
   {
@@ -192,11 +171,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     rodar({ banco, agente, pos, op }) {
       const texto = String(pos[0]);
       const { demanda_id } = agente;
-      const proprioTicket = encontrado(
-        carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === agente.ticket_id),
-        `o ticket ${proprio(agente)} não existe`,
-        "confira a execução",
-      );
+      const proprioTicket = exigirTicket(carregarDemanda(banco, demanda_id), agente.ticket_id);
       const forma = `use a rodada do seu ticket, ${formatarRodadaRef({ demanda_id, rodada_id: Number(proprioTicket.rodada_id) })}`;
       let ref;
       try {
@@ -244,11 +219,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       ticketProprio(agente, String(pos[0]), true);
       const resultado = veredito === "aprovar" ? "aprovado" : "reprovado";
       const { demanda_id, ticket_id } = agente;
-      const ticket = encontrado(
-        carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
-        `o ticket ${proprio(agente)} não existe`,
-        "confira a execução",
-      );
+      const ticket = exigirTicket(carregarDemanda(banco, demanda_id), ticket_id);
       const rodada = ticket.rodada_id;
       const campo = ticket.etapa === "revisar_rodada" ? "correcoes" : "plano";
       if (ticket.etapa !== "revisar_rodada" && ticket.etapa !== "revisar_demanda") {
@@ -264,7 +235,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       } else {
         exigir(op.motivo, "--motivo", "reprovar");
         exigir(op[campo], `--${campo}`, "reprovar");
-        const valor = await lerJson(`--${campo}`, op[campo] as string, stdin);
+        const valor = await lerJsonDoArquivo(op[campo] as string, stdin, `--${campo}`);
         extra = {
           motivo: op.motivo,
           correcoes: campo === "correcoes" ? completar(valor, demanda_id, rodada) : valor,

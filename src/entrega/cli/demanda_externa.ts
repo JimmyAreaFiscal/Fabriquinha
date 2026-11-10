@@ -5,15 +5,13 @@ import { readFileSync, realpathSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
-import { z } from "zod";
-import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
-import { carregarDemanda } from "../../armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
+import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
+import { lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
@@ -67,18 +65,14 @@ const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
 function visao(banco: DatabaseSync, id: string) {
-  const ag = carregarDemanda(banco, id);
-  const anexos = banco.prepare(
-    `SELECT a.caminho, a.sha256 FROM arquivo_evidencia a JOIN evidencia_demanda e ON e.id = a.evidencia_id
-      WHERE e.demanda_id = ? AND e.tipo = ? ORDER BY a.ordem`,
-  );
+  const { agregado, predecessoras, evidencias } = visaoDaDemanda(banco, id);
   return {
-    ...demandaParaCli(ag.demanda),
-    dependencias: predecessorasDaDemanda(banco, id).map((p) => p.demanda_id),
-    evidencias: ag.evidencias.map((e) => ({
-      tipo: e.tipo,
-      em: e.em,
-      arquivos: anexos.all(id, e.tipo).map((a) => ({ nome: a.caminho, sha256: a.sha256 })),
+    ...demandaParaCli(agregado.demanda),
+    dependencias: predecessoras.map((p) => p.demanda_id),
+    evidencias: evidencias.map(({ evidencia, anexos }) => ({
+      tipo: evidencia.tipo,
+      em: evidencia.em,
+      arquivos: anexos.map((a) => ({ nome: a.nome, sha256: a.sha256 })),
     })),
   };
 }
@@ -148,12 +142,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
       const autor = autorDe(c);
       const arquivo = c.op.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
-      let dados: unknown;
-      try {
-        dados = JSON.parse(await ler(arquivo, c.stdin));
-      } catch (error_) {
-        throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
-      }
+      const dados = await lerJsonDoArquivo(arquivo, c.stdin);
       // A pasta do comando é a única origem dos anexos.
       const pasta = realpathSync(process.cwd());
       const origens = {
@@ -191,8 +180,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
     opcoesDeUso: USO_IDENTIDADE,
     opcoes: IDENTIDADE,
     rodar({ pos }) {
-      const { dados, arquivos } = schemaDoTipo(tipoDe(String(pos[0])));
-      return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
+      return schemaJsonDoTipo(tipoDe(String(pos[0])));
     },
   },
 ];
