@@ -3,7 +3,7 @@
 // e a rede ficam em projeto-montar.ts.
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,

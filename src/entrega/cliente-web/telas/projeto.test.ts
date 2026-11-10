@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
   abas,
