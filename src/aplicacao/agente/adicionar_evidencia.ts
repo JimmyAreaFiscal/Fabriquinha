@@ -3,14 +3,14 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
-import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { agregadoDaRodada } from "../../nucleo/evidencia.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { projetoExistente } from "../../armazenamento/projetos.ts";
-import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "../espaco/ambiente_do_servico.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
 import { gerarAula, type Trecho } from "../evidencias/aula.ts";
 import type { AnexoEnviado, Origens } from "../evidencias/submissao.ts";
@@ -50,16 +50,11 @@ function exigirTicketAberto(agregado: AgregadoDemanda, agente: EscopoDoAgente): 
 }
 
 /** De onde os anexos podem vir: a worktree da rodada do ticket (ou a da demanda) e a saída da execução, da raiz real. */
-function origensDosAnexos(
-  banco: DatabaseSync,
-  agente: EscopoDoAgente,
-  agregado: AgregadoDemanda,
-  ticket: TicketDemanda,
-): Origens {
+function origensDosAnexos(banco: DatabaseSync, agente: EscopoDoAgente, espaco: EspacoDeTrabalho): Origens {
   const raiz = realpathSync(raizDo(banco));
   const saida = join(raiz, "execucoes", `E-${agente.ator.trabalho_id}`, "saida");
   return {
-    worktree: espacoDoTicket(agregado, ticket, projetoExistente(banco, agente.projeto), raiz).pasta,
+    worktree: espaco.pasta,
     saida,
     fora: "da worktree do ticket e do diretório de saída",
     copie: `$FABRIQUINHA_SAIDA (${saida})`,
@@ -88,7 +83,13 @@ export async function adicionarEvidenciaComAnexosEnviados(
   if (pedido.dados === undefined) throw new ErroDeRegra("falta --dados", "passe --dados <arquivo.json|->");
   const dados = await lerJson(pedido.dados);
   let anexos = pedido.anexos.map((anexo) => anexo.caminho);
-  const origens = origensDosAnexos(banco, agente, agregadoLido, ticket);
+  const espaco = espacoDoTicket(
+    agregadoLido,
+    ticket,
+    projetoExistente(banco, agente.projeto),
+    realpathSync(raizDo(banco)),
+  );
+  const origens = origensDosAnexos(banco, agente, espaco);
   if (tipo === "aula_codigo") {
     if (anexos.length > 0) {
       throw new ErroDeRegra("aula_codigo não aceita anexo do agente", "a Fabriquinha gera o HTML; submeta só --dados");
@@ -96,7 +97,7 @@ export async function adicionarEvidenciaComAnexosEnviados(
     // O HTML nasce dos trechos, antes de a submissão ser avaliada; a API devolve o ZodError como 422.
     const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
     const html = await gerarAula(
-      ambienteDoServico(),
+      ambienteDoEspaco(espaco),
       agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
       origens.worktree,
       trechos as Trecho[],
@@ -113,7 +114,7 @@ export async function adicionarEvidenciaComAnexosEnviados(
     { tipo, dono: Endereco.doTicket(demanda_id, ticket_id), produtor: agente.ator, dados, anexos },
     {
       origens,
-      enviados: anexosEnviados && { anexos: anexosEnviados, ambiente: ambienteDoServico() },
+      enviados: anexosEnviados && { anexos: anexosEnviados, ambiente: ambienteDoEspaco(espaco) },
       conferirAntesDeGravar(agregado) {
         reconferirExecucao(banco, agente);
         exigirTicketAberto(agregado, agente);

@@ -13,12 +13,14 @@ const dirDoDockerFalso = join(base, "docker");
 const docker = instalarDockerFalso(dirDoDockerFalso);
 const binDoPacote = join(base, "pacote-pi", "bin");
 const dirDoPi = dirDoPiDoAmbiente(base, "amb-1");
+const urlDaApi = "http://host.docker.internal:3000";
 const { id: containerId } = docker.semearContainer({});
 const ambiente = new AmbienteContainer({
   id: "amb-1",
   container_id: containerId,
   bin_do_pacote: binDoPacote,
   dir_do_pi: dirDoPi,
+  url_da_api: urlDaApi,
 });
 
 after(() => {
@@ -36,7 +38,7 @@ const envDoHost = {
   GITHUB_TOKEN: "github-segredo",
   USER: "usuario-do-host",
   PATH: "/usr/bin:/bin",
-  FABRIQUINHA_API: "http://host.docker.internal:3000",
+  FABRIQUINHA_API: "http://127.0.0.1:3000",
   FABRIQUINHA_TOKEN: "token-do-ticket",
   FABRIQUINHA_SAIDA: "/raiz/execucoes/E-1/saida",
   PI_CODING_AGENT_DIR: "/home/do-usuario-do-host/.pi/agent",
@@ -99,6 +101,7 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
     ],
   );
   assert.equal(variaveis.HOME, "/root");
+  assert.equal(variaveis.FABRIQUINHA_API, urlDaApi); // o 127.0.0.1 do core não chega do container
   assert.equal(variaveis.PI_CODING_AGENT_DIR, dirDoPi);
   assert.equal(variaveis.FABRIQUINHA_TOKEN, "token-do-ticket");
   assert.equal(variaveis.ANTHROPIC_API_KEY, "chave-do-provedor");
@@ -199,6 +202,7 @@ test("executar: container que não roda devolve a falha do docker exec", async (
     container_id: "inexistente",
     bin_do_pacote: binDoPacote,
     dir_do_pi: dirDoPi,
+    url_da_api: urlDaApi,
   });
   const saida = await parado.executar(comando("true", []));
   assert.equal(saida.codigo, 1);

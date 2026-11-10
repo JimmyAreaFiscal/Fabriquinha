@@ -29,7 +29,7 @@ import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../infra/repositorio/li
 import { lerPR, type OpcoesVerificacao } from "../../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../../infra/verificacao/conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "../../infra/verificacao/verificacao.ts";
-import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "../evidencias/encerramento_demanda.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
@@ -86,11 +86,12 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     this.opcoes = opcoes;
   }
 
-  /** O ciclo do Espaço da demanda, no Ambiente do serviço, com o log do encerramento. */
+  /** O ciclo do Espaço da demanda, no Ambiente do Espaço, com o log do encerramento. */
   private cicloDoEspacoDaDemanda(projeto: Projeto, demanda_id: string): ReturnType<typeof cicloDoEspaco> {
     const raiz = raizDo(this.deps.banco);
     const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
-    return cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log }, ambienteDoServico());
+    const espaco = espacoDaDemanda(projeto, demanda_id, raiz);
+    return cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
   }
 
   private async conferirPRFinal(endereco: Endereco): Promise<ResultadoDoPasso> {

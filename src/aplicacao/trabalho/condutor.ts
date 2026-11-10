@@ -21,7 +21,7 @@ import { falharPendentes } from "../../armazenamento/simulacao.ts";
 import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
 import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/agente/harness_pi.ts";
 import type { EventoPi } from "../../infra/agente/pi.ts";
-import type { IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
+import type { Ambiente, IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
 import { anotar, noLog } from "../../infra/registro.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "../auditor_automatico.ts";
@@ -156,6 +156,8 @@ export interface PedidoDeProcesso {
   execucao: { id: Id | string; sessaoPi: string; modo: ModoTrabalho };
   args: string[];
   cwd: string;
+  /** Onde o pi roda: o Ambiente do Espaço do ticket; sem ele (consulta, avaliação, simulação), o do serviço. */
+  ambiente?: Ambiente;
   env: NodeJS.ProcessEnv;
   /** Com o banco, o processo é de um ticket e recebe o token com que o agente fala com a API (`FABRIQUINHA_TOKEN`). */
   banco?: DatabaseSync;
@@ -617,7 +619,7 @@ export class CondutorDeTrabalhos {
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
       const pi = this.harness.lancar(
-        ambienteDoServico(),
+        r.ambiente ?? ambienteDoServico(),
         r.args,
         { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {

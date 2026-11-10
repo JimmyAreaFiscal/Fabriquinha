@@ -41,6 +41,8 @@ interface ContainerDoAmbiente {
   bin_do_pacote: string;
   /** O `PI_CODING_AGENT_DIR` do container (`dirDoPiDoAmbiente`). */
   dir_do_pi: string;
+  /** A API do agente vista de dentro do container; o `FABRIQUINHA_API` do core (127.0.0.1) não chega do container. */
+  url_da_api: string;
 }
 
 const entreAspas = (texto: string): string => `'${texto.replaceAll("'", `'\\''`)}'`;
@@ -56,19 +58,21 @@ function variaveisPermitidas(env: Record<string, string>): Record<string, string
   );
 }
 
-/** @testes a produção a usa quando o Espaço for ligado ao container; por ora só o teste a exercita */
 export class AmbienteContainer implements Ambiente {
   readonly id: string;
   readonly tipo = "container";
-  readonly #containerId: string;
+  /** O id do container no docker; o teste o confere com o do conjunto. */
+  readonly container_id: string;
   readonly #binDoPacote: string;
   readonly #dirDoPi: string;
+  readonly #urlDaApi: string;
 
-  constructor({ id, container_id, bin_do_pacote, dir_do_pi }: ContainerDoAmbiente) {
+  constructor({ id, container_id, bin_do_pacote, dir_do_pi, url_da_api }: ContainerDoAmbiente) {
     this.id = id;
-    this.#containerId = container_id;
+    this.container_id = container_id;
     this.#binDoPacote = bin_do_pacote;
     this.#dirDoPi = dir_do_pi;
+    this.#urlDaApi = url_da_api;
   }
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
@@ -135,7 +139,7 @@ export class AmbienteContainer implements Ambiente {
       "docker",
       [
         "exec",
-        this.#containerId,
+        this.container_id,
         "sh",
         "-c",
         `kill -${nomeDoSinal} -"$(cat ${PASTA_DOS_PIDS}/${String(grupo_processo)} 2>/dev/null)" 2>/dev/null`,
@@ -161,7 +165,11 @@ export class AmbienteContainer implements Ambiente {
   ): { argumentosDoDocker: string[]; identificador: IdentificadorDoProcesso; apagarArquivoDeEnv: () => void } {
     const identificador = { ambiente_id: this.id, grupo_processo: randomInt(1, 2 ** 31) };
     const programaEArgumentos = noShell ? ["sh", "-c", `exec 2>&1; ${programa}`] : [programa, ...argumentos];
-    const variaveis = Object.entries({ ...variaveisPermitidas(env), PI_CODING_AGENT_DIR: this.#dirDoPi });
+    const variaveis = Object.entries({
+      ...variaveisPermitidas(env),
+      FABRIQUINHA_API: this.#urlDaApi,
+      PI_CODING_AGENT_DIR: this.#dirDoPi,
+    });
     if (variaveis.some(([, valor]) => valor.includes("\n")))
       throw new ErroDeRegra(
         "uma variável do ambiente tem quebra de linha e não cabe no env-file do docker",
@@ -184,7 +192,7 @@ export class AmbienteContainer implements Ambiente {
         cwd,
         "--env-file",
         arquivoDeEnv,
-        this.#containerId,
+        this.container_id,
         "sh",
         "-c",
         roteiro,

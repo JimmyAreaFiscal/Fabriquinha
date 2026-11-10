@@ -2,7 +2,8 @@
 // Trabalho (exclusivo enquanto roda), limpa e devolve ao conjunto quando o Espaço acaba e elimina os que ficam ociosos.
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que mexe nos containers.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { join } from "node:path";
+import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
 import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Instante } from "../../nucleo/primitivos.ts";
@@ -18,26 +19,62 @@ import {
   reservarAmbienteParaEliminar,
 } from "../../armazenamento/ambientes.ts";
 import { configuracaoDoAmbiente } from "../../armazenamento/servico.ts";
+import { PACOTE } from "../../infra/agente/pi.ts";
+import { AmbienteContainer, dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
 import type { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 
 const MS_POR_MINUTO = 60_000;
+
+/** O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha e a porta da API do agente. */
+interface ServicoDoConjunto {
+  raiz: string;
+  porta_da_api: number;
+}
+
+function comoAmbienteContainer(
+  { id, container_id }: Pick<AmbienteGravado, "id" | "container_id">,
+  { raiz, porta_da_api }: ServicoDoConjunto,
+): AmbienteContainer {
+  return new AmbienteContainer({
+    id,
+    container_id,
+    bin_do_pacote: join(PACOTE, "bin"),
+    dir_do_pi: dirDoPiDoAmbiente(raiz, id),
+    url_da_api: `http://host.docker.internal:${String(porta_da_api)}`,
+  });
+}
 
 export class ConjuntoDeAmbientes {
   readonly #banco: DatabaseSync;
   readonly #gerador: GeradorDeAmbientes;
   readonly #relogio: Relogio;
+  /** Sem ele o conjunto só elimina containers (a tela de Configuração com `host_local`); `alocar` exige. */
+  readonly #servico: ServicoDoConjunto | undefined;
 
-  constructor(banco: DatabaseSync, gerador: GeradorDeAmbientes, relogio: Relogio = relogioDoSistema) {
+  constructor(
+    banco: DatabaseSync,
+    gerador: GeradorDeAmbientes,
+    relogio: Relogio = relogioDoSistema,
+    servico?: ServicoDoConjunto,
+  ) {
     this.#banco = banco;
     this.#gerador = gerador;
     this.#relogio = relogio;
+    this.#servico = servico;
+  }
+
+  /** O Ambiente do container que o Espaço já tem alocado, ou `undefined`. */
+  ambienteAlocadoPara(espaco: EspacoDeTrabalho): AmbienteContainer | undefined {
+    const alocado = buscarAmbienteAlocadoPara(this.#banco, espaco.dono.toString());
+    return alocado && comoAmbienteContainer(alocado, this.#servicoObrigatorio());
   }
 
   /** Dá ao Espaço um livre da mesma imagem ou, sem nenhum, um container novo; o Espaço que já tem um recebe o mesmo. */
   async alocar(
     espaco: EspacoDeTrabalho,
     projeto: Pick<Projeto, "nome" | "raiz_git" | "imagem_do_ambiente">,
-  ): Promise<AmbienteGravado> {
+  ): Promise<AmbienteContainer> {
+    const servico = this.#servicoObrigatorio(); // antes de criar qualquer container
     const alocadoPara = espaco.dono.toString();
     const imagemDoProjeto = projeto.imagem_do_ambiente;
     if (imagemDoProjeto === undefined)
@@ -52,10 +89,10 @@ export class ConjuntoDeAmbientes {
     });
     // Tudo daqui até o retorno é síncrono, então dois alocar ao mesmo tempo nunca pegam o mesmo livre.
     const jaAlocado = buscarAmbienteAlocadoPara(this.#banco, alocadoPara);
-    if (jaAlocado) return jaAlocado;
+    if (jaAlocado) return comoAmbienteContainer(jaAlocado, servico);
     const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
-    if (livreReaproveitado) return livreReaproveitado;
-    return this.#criarAlocado(imagem, alocadoPara);
+    if (livreReaproveitado) return comoAmbienteContainer(livreReaproveitado, servico);
+    return comoAmbienteContainer(await this.#criarAlocado(imagem, alocadoPara), servico);
   }
 
   /** Limpa o container do Espaço e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
@@ -108,6 +145,14 @@ export class ConjuntoDeAmbientes {
       await this.#gerador.eliminar(orfao);
     for (const sumido of noBanco.filter(({ container_id }) => !containersDoDocker.has(container_id)))
       eliminarAmbiente(this.#banco, sumido.id);
+  }
+
+  #servicoObrigatorio(): ServicoDoConjunto {
+    return existe(
+      this.#servico,
+      "o conjunto de Ambientes não conhece a raiz da Fabriquinha",
+      "monte o conjunto pela composição do serviço",
+    );
   }
 
   async #criarAlocado(imagem: string, alocadoPara: string): Promise<AmbienteGravado> {

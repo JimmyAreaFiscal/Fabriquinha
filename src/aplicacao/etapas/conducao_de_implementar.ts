@@ -22,7 +22,8 @@ import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { HooksDoCommit } from "../../infra/verificacao/hooks_do_commit.ts";
 import type { OpcoesSonar } from "../../infra/verificacao/sonar.ts";
 import { montarVerificacoesDaEtapa } from "../../infra/verificacao/verificacao.ts";
-import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
+import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
+import { ambienteDoEspaco } from "../espaco/ambiente_do_servico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "../commit_ticket_demanda.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
 import { coletarVerificacoes, type Falha, type RegistroDaVerificacao } from "../evidencias/verificacoes.ts";
@@ -113,9 +114,11 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const ticket = this.ticketDe(endereco);
     const ag = carregarDemanda(banco, ticket.demanda_id);
     const projeto = carregarProjeto(banco, ag.demanda.projeto);
-    const { pasta: worktree } = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
-    if (!(await acharCommitTicketDemanda(ambienteDoServico(), worktree, ticket))) {
-      const naoPassou = await this.verificarEGravarEvidencias(ticket, ag, projeto, worktree);
+    const espaco = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
+    const { pasta: worktree } = espaco;
+    const ambiente = ambienteDoEspaco(espaco);
+    if (!(await acharCommitTicketDemanda(ambiente, worktree, ticket))) {
+      const naoPassou = await this.verificarEGravarEvidencias(ticket, ag, projeto, worktree, ambiente);
       if (naoPassou) return naoPassou;
     }
     const pendentes = evidenciasPendentes(carregarDemanda(banco, ticket.demanda_id), ticket, CATALOGO_ETAPAS);
@@ -125,7 +128,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
         motivo: `o ticket já tem commit, mas faltam as evidências: ${pendentes.join(", ")}`,
       };
     }
-    return this.commitarComHooks(ticket, ag, worktree);
+    return this.commitarComHooks(ticket, ag, worktree, ambiente);
   }
 
   /** Coleta as verificações e grava como evidência as que o Avaliador aceita; devolve o que impede de seguir ao commit. */
@@ -134,11 +137,12 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     ag: AgregadoDemanda,
     projeto: Projeto,
     worktree: string,
+    ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia | undefined> {
     const { banco, condutor } = this.deps;
     const e2e = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id)?.e2e ?? false;
     const verificacoes = await (this.opcoes.coletarVerificacoes ?? coletarVerificacoes)({
-      ambiente: ambienteDoServico(),
+      ambiente,
       projeto,
       e2e,
       worktree,
@@ -163,6 +167,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     ticket: TicketDemanda,
     ag: AgregadoDemanda,
     worktree: string,
+    ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia> {
     const { banco, condutor } = this.deps;
     const { hooks_do_commit: hooks } = montarVerificacoesDaEtapa(ticket.etapa, {
@@ -172,7 +177,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
             banco,
             ticket,
             {
-              ambiente: ambienteDoServico(),
+              ambiente,
               worktree: raiz,
               tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
               titulo: ticket.titulo ?? ag.demanda.titulo,
@@ -185,7 +190,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     let resultadoDosHooks;
     try {
       resultadoDosHooks = await hooks.executar({
-        ambiente: ambienteDoServico(),
+        ambiente,
         worktree,
         limiteMs: this.opcoes.limiteCommitMs,
       });
