@@ -1,7 +1,8 @@
 // Gera a "foto" dos prompts e das saídas do CLI que o texto da rodada I-263.R2 mexeu: `node gerar.ts <pasta-de-saída>`.
-// Roda igual na base anterior e na rodada: só usa o CLI, o montador de prompt e o `publicarPRDe`, que existem nas duas.
+// Usa o CLI do agente, o montador de prompt e o `publicarPRDe`.
 // Veja o LEIAME.md.
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { once } from "node:events";
 import {
   chmodSync,
   mkdirSync,
@@ -12,17 +13,19 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { Readable } from "node:stream";
-import { executarFabriquinha } from "../../src/composicao/cli.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/nucleo/primitivos.ts";
+import { relogioDoSistema } from "../../src/nucleo/relogio.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
 import { montarPromptDemanda } from "../../src/aplicacao/prompt_demanda.ts";
-import { abrir } from "../../src/armazenamento/banco.ts";
+import { abrir, raizDo } from "../../src/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/armazenamento/trabalho_agentico.ts";
+import { servirWeb } from "../../src/entrega/http/servidor.ts";
+import { noLog } from "../../src/infra/registro.ts";
 import { publicarPRDe } from "../../src/infra/repositorio/pr.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
@@ -116,7 +119,9 @@ for (const etapa of EtapaTicket.options.filter((e) => e !== "entender_e_desenhar
   gravarFoto(join("prompts", etapa), prompt);
 }
 
-// 3. O CLI do agente da demanda: a aula do código (HTML e recusas) e a leitura da demanda.
+// 3. O CLI do agente da demanda: a aula do código (HTML e recusas) e a leitura da demanda. É o cliente empacotado
+// (`npm run empacotar-cli-agente`) contra a API de um serviço de verdade sobre o banco do cenário.
+const CLIENTE_EMPACOTADO = join(raizDoCodigo, "pacote-pi/bin/fabriquinha");
 const em = "2026-01-01T00:00:00.000Z";
 
 // O `git` do PATH do desenvolvedor, como em todos os testes do projeto.
@@ -124,7 +129,7 @@ function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" }).trim(); // NOSONAR
 }
 
-function montarCenarioDaAula(comRevisaoConcluida: boolean) {
+async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   const raiz = mkdtempSync(join(temporaria, "raiz-"));
   const worktree = join(raiz, "worktrees", "loja", "I-206", "rodadas", "1");
   mkdirSync(worktree, { recursive: true });
@@ -238,20 +243,40 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       }),
     };
   });
-  return { raiz, banco, env: { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "exec-7" } };
+  gravarTokenDoProcesso(banco, "exec-7", "token-exec-7");
+  const servidor = createServer();
+  servidor.listen(0, "127.0.0.1");
+  await once(servidor, "listening");
+  const porta = (servidor.address() as { port: number }).port;
+  servidor.on(
+    "request",
+    servirWeb({
+      banco,
+      raiz: raizDo(banco),
+      porta,
+      agendador: { proximaBusca: () => new Date() },
+      relogio: relogioDoSistema,
+      registrarErro: noLog,
+    }),
+  );
+  return {
+    raiz,
+    banco,
+    servidor,
+    env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-7" },
+  };
 }
 
-async function rodarCli(env: NodeJS.ProcessEnv, args: string[]): Promise<string> {
-  let saida = "";
-  let erro = "";
-  const codigo = await executarFabriquinha(args, {
-    env,
-    stdin: Readable.from([""]),
-    stdout: { write: (t: string) => (saida += t) },
-    stderr: { write: (t: string) => (erro += t) },
-    parada: () => Promise.resolve(),
+function rodarCli(env: NodeJS.ProcessEnv, args: string[]): Promise<string> {
+  return new Promise((resolver) => {
+    const filho = execFile(process.execPath, [CLIENTE_EMPACOTADO, ...args], { env }, (erro, saida, erroDoCli) => {
+      const codigo = erro === null ? 0 : Number(erro.code);
+      resolver(
+        `$ fabriquinha ${args.join(" ").replace(/--dados \S+/, "--dados <dados.json>")}\ncódigo: ${String(codigo)}\n--- stdout\n${saida}--- stderr\n${erroDoCli}`,
+      );
+    });
+    filho.stdin?.end();
   });
-  return `$ fabriquinha ${args.join(" ").replace(/--dados \S+/, "--dados <dados.json>")}\ncódigo: ${String(codigo)}\n--- stdout\n${saida}--- stderr\n${erro}`;
 }
 
 function aulaComTrecho(arquivo: string, inicio: number, fim: number, raiz: string): string[] {
@@ -261,8 +286,8 @@ function aulaComTrecho(arquivo: string, inicio: number, fim: number, raiz: strin
   return ["evidencia", "add", "I-206.T7", "aula_codigo", "--dados", dados];
 }
 
-const completo = montarCenarioDaAula(true);
-const semRevisao = montarCenarioDaAula(false);
+const completo = await montarCenarioDaAula(true);
+const semRevisao = await montarCenarioDaAula(false);
 const saidasDoCli = [
   await rodarCli(completo.env, ["evidencia", "schema", "aula_codigo"]),
   await rodarCli(completo.env, aulaComTrecho("a.ts", 1, 1, completo.raiz)),
@@ -272,6 +297,10 @@ const saidasDoCli = [
   await rodarCli(completo.env, ["demanda", "ver", "I-206"]),
 ];
 gravarFoto("cli/aula-e-demanda", saidasDoCli.join("\n"));
+for (const { servidor } of [completo, semRevisao]) {
+  servidor.closeAllConnections();
+  servidor.close();
+}
 
 const [anexoDaAula] = completo.banco.prepare("SELECT sha256 FROM arquivo_evidencia").all() as { sha256: string }[];
 if (!anexoDaAula) throw new Error("a aula não gravou anexo");

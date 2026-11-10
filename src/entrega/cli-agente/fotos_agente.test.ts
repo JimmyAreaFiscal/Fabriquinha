@@ -1,16 +1,17 @@
 // Fotos do CLI do agente da demanda, gravadas do código de antes da refatoração da I-282: stdout, stderr e código de
 // saída byte a byte para projeto ver, demanda ver, ticket ver, ticket criar, revisao decidir, evidencia schema e
-// evidencia add. Nenhum valor esperado muda depois.
+// evidencia add. Aqui rodam no cliente empacotado (pacote-pi/bin/fabriquinha) contra a API de verdade, com os mesmos
+// valores esperados; só a execução inexistente vira token desconhecido, que é como o transporte novo a recusa.
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
-import { Readable } from "node:stream";
 import { test } from "node:test";
+import { gravarTokenDoProcesso } from "../../../apoio-testes/cenario_da_api_do_agente.ts";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
-import { executarFabriquinha as principal } from "../../composicao/cli.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -22,17 +23,15 @@ interface Saida {
   err: string;
 }
 
-async function cli(env: NodeJS.ProcessEnv, args: string[]): Promise<Saida> {
-  let out = "";
-  let err = "";
-  const codigo = await principal(args, {
-    env,
-    stdin: Readable.from([""]),
-    stdout: { write: (t: string) => (out += t) },
-    stderr: { write: (t: string) => (err += t) },
-    parada: () => Promise.resolve(),
+const CLIENTE_EMPACOTADO = join(import.meta.dirname, "../../../pacote-pi/bin/fabriquinha");
+
+function cli(env: NodeJS.ProcessEnv, args: string[]): Promise<Saida> {
+  return new Promise((resolver) => {
+    const filho = execFile(process.execPath, [CLIENTE_EMPACOTADO, ...args], { env }, (erro, out, err) => {
+      resolver({ codigo: erro === null ? 0 : Number(erro.code), out, err });
+    });
+    filho.stdin?.end();
   });
-  return { codigo, out, err };
 }
 
 const ticket = (ticket_id: number, etapa: string, estado: string, extra: object = {}) => ({
@@ -46,7 +45,7 @@ const ticket = (ticket_id: number, etapa: string, estado: string, extra: object 
 });
 
 /** Demanda I-206 do projeto `loja` em `estado` e a execução `exec-9` aberta no ticket T9 (de `etapa`). */
-function cenario(estado: string, rodadas: object[], tickets: object[]) {
+async function cenario(estado: string, rodadas: object[], tickets: object[]) {
   const { raiz, banco } = abrirBancoTemporario();
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
@@ -85,10 +84,12 @@ function cenario(estado: string, rodadas: object[], tickets: object[]) {
     ],
   } as unknown as AgregadoDemanda);
   abrirExecucao(banco, "exec-9", 9);
-  return { raiz, banco, env: { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "exec-9" } };
+  gravarTokenDoProcesso(banco, "exec-9", "token-exec-9");
+  const { porta } = await servir(banco);
+  return { raiz, banco, env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-9" } };
 }
 
-function abrirExecucao(banco: DatabaseSync, id: string, ticket_id: number): void {
+function abrirExecucao(banco: ReturnType<typeof abrirBancoTemporario>["banco"], id: string, ticket_id: number): void {
   banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-${id}', 'I-206', ${String(ticket_id)}, 'autonomo', 's-${id}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('${id}', 's-${id}', '${em}', 0)`);
 }
@@ -117,16 +118,16 @@ const foto = (s: Saida, esperado: Saida): void => {
 };
 
 test("foto projeto ver: devolve o projeto da demanda; execução que não existe é recusada; argumento a mais é uso inválido", async () => {
-  const { env } = naRodada("revisar_rodada", "revisar_rodada");
+  const { env } = await naRodada("revisar_rodada", "revisar_rodada");
   foto(await cli(env, ["projeto", "ver"]), {
     codigo: 0,
     out: '{"nome":"loja","raiz_git":"/repos/loja","branch_base":"main","hospedagem":"github","chave_sonarqube":"k","etapas":[],"verificacoes":{"preparacao":[],"fitness":[],"linguagens":[],"e2e":[],"globs":[]}}\n',
     err: "",
   });
-  foto(await cli({ ...env, FABRIQUINHA_EXECUCAO: "exec-x" }, ["projeto", "ver"]), {
+  foto(await cli({ ...env, FABRIQUINHA_TOKEN: "token-x" }, ["projeto", "ver"]), {
     codigo: 1,
     out: "",
-    err: "a execução exec-x não existe (confira FABRIQUINHA_EXECUCAO)\n",
+    err: "token ausente, desconhecido ou de execução encerrada (confira FABRIQUINHA_TOKEN)\n",
   });
   foto(await cli(env, ["projeto", "ver", "a-mais"]), {
     codigo: 2,
@@ -136,7 +137,7 @@ test("foto projeto ver: devolve o projeto da demanda; execução que não existe
 });
 
 test("foto demanda ver: a própria demanda; outra demanda é recusada", async () => {
-  const { env } = naRodada("revisar_rodada", "revisar_rodada");
+  const { env } = await naRodada("revisar_rodada", "revisar_rodada");
   foto(await cli(env, ["demanda", "ver", "I-206"]), {
     codigo: 0,
     out: '{"demanda":{"id":"I-206","projeto":"loja","titulo":"Busca","tipo":"funcionalidade","descricao":"d","estado":"em_execucao","estado_alterado_em":"2026-01-01T00:00:00.000Z","origem_ferramenta":"claude","origem_sessao":"s1","enviada":true,"branch":"fabriquinha/I-206"},"rodadas":[{"rodada":"I-206.R2","titulo":"r2","estado":"revisar_rodada","estado_alterado_em":"2026-01-01T00:00:00.000Z","e2e":false,"branch":"fabriquinha/I-206-2"}],"decisoes":[],"tickets":[{"ticket":"I-206.T3","rodada":"I-206.R2","etapa":"implementar","estado":"concluido","estado_alterado_em":"2026-01-01T00:00:00.000Z"},{"ticket":"I-206.T9","rodada":"I-206.R2","etapa":"revisar_rodada","estado":"em_execucao","estado_alterado_em":"2026-01-01T00:00:00.000Z","evidencias":[]}]}\n',
@@ -150,7 +151,7 @@ test("foto demanda ver: a própria demanda; outra demanda é recusada", async ()
 });
 
 test("foto ticket ver: o próprio ticket; ticket de outro é recusado", async () => {
-  const { env } = naRodada("revisar_rodada", "revisar_rodada");
+  const { env } = await naRodada("revisar_rodada", "revisar_rodada");
   foto(await cli(env, ["ticket", "ver", "I-206.T9"]), {
     codigo: 0,
     out: '{"ticket":"I-206.T9","rodada":"I-206.R2","etapa":"revisar_rodada","estado":"em_execucao","estado_alterado_em":"2026-01-01T00:00:00.000Z"}\n',
@@ -164,7 +165,7 @@ test("foto ticket ver: o próprio ticket; ticket de outro é recusado", async ()
 });
 
 test("foto ticket criar: cria o corretivo na rodada; sem título é recusado", async () => {
-  const { env } = naRodada("ajustar_resultado", "ajustar_resultado");
+  const { env } = await naRodada("ajustar_resultado", "ajustar_resultado");
   foto(await cli(env, ["ticket", "criar", "I-206.R2"]), {
     codigo: 1,
     out: "",
@@ -178,7 +179,7 @@ test("foto ticket criar: cria o corretivo na rodada; sem título é recusado", a
 });
 
 test("foto revisao decidir: veredito inválido é recusado; reprovar com correções registra a decisão", async () => {
-  const { env } = naRodada("revisar_rodada", "revisar_rodada");
+  const { env } = await naRodada("revisar_rodada", "revisar_rodada");
   foto(await cli(env, ["revisao", "decidir", "I-206.T9", "talvez"]), {
     codigo: 1,
     out: "",
@@ -193,7 +194,7 @@ test("foto revisao decidir: veredito inválido é recusado; reprovar com correç
 });
 
 test("foto evidencia schema e add: schema do tipo; tipo desconhecido; dados inválidos não gravam; plano válido grava", async () => {
-  const { raiz, env } = cenario("planejar", [], [ticket(9, "planejar", "em_execucao")]);
+  const { raiz, env } = await cenario("planejar", [], [ticket(9, "planejar", "em_execucao")]);
   foto(await cli(env, ["evidencia", "schema", "testes_estresse"]), {
     codigo: 0,
     out: '{"dados":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"aplicavel":{"type":"boolean"},"justificativa":{"description":"obrigatória se aplicavel é false","type":"string","minLength":1,"maxLength":2000},"cenarios":{"type":"array","items":{"type":"object","properties":{"nome":{"type":"string","minLength":1,"maxLength":120,"pattern":"^[^\\\\n]*$"},"objetivo":{"type":"string","minLength":1,"maxLength":2000},"comando":{"type":"string","minLength":1},"resultado":{"type":"string","enum":["passou","quebrou"]},"observado":{"type":"string","minLength":1,"maxLength":2000}},"required":["nome","objetivo","comando","resultado","observado"]}}},"required":["aplicavel","cenarios"]},"arquivos":{"classes":["texto"],"min":0}}\n',

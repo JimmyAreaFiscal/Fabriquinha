@@ -20,7 +20,6 @@ import {
   exigirTicket,
   exigirTicketProprio,
   reconferirExecucao,
-  resolverEscopoDoAgente,
 } from "./escopo.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -51,9 +50,8 @@ test("o escopo da execução aberta traz o Ator, a sessão, o ticket composto e 
   });
 });
 
-test("execução que não existe tem escopo indefinido, e o caso de uso a recusa", () => {
+test("execução que não existe é recusada pelo caso de uso", () => {
   const { banco } = cenario();
-  assert.equal(resolverEscopoDoAgente(banco, "exec-x"), undefined);
   assert.throws(() => escopoDoProcessoAberto(banco, { id: "exec-x" }), {
     name: "ErroDeRegra",
     message: "a execução exec-x não existe (confira a execução)",
