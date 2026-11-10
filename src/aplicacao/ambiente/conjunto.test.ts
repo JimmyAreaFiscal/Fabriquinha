@@ -12,6 +12,7 @@ import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configurac
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 
@@ -40,9 +41,10 @@ function cenario() {
   const banco = new DatabaseSync(":memory:");
   migrar(banco, MIGRACOES);
   validarESalvarConfiguracaoDoAmbiente(banco, LIMITES);
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes());
+  const gerador = new GeradorDeAmbientes();
+  const conjunto = new ConjuntoDeAmbientes(banco, gerador);
   const criacoes = () => docker.registro().filter(([comando]) => comando === "run" || comando === "create");
-  return { docker, banco, conjunto, criacoes, pastaDoDocker: join(base, `docker-${String(cenarios)}`) };
+  return { docker, banco, conjunto, gerador, criacoes, pastaDoDocker: join(base, `docker-${String(cenarios)}`) };
 }
 
 test("alocar sem livre cria o container com os limites da configuração e grava alocado", async () => {
@@ -64,6 +66,15 @@ test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async (
   const primeiro = await conjunto.alocar(espacoA, projeto);
   assert.deepEqual(await conjunto.alocar(espacoA, projeto), primeiro);
   assert.equal(criacoes().length, 1);
+});
+
+test("alocar e liberar gravam o instante do relógio recebido", async () => {
+  const { banco, gerador } = cenario();
+  const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioFixo("2026-01-02T03:04:05.000Z"));
+  await conjunto.alocar(espacoA, projeto);
+  assert.equal(listarAmbientes(banco)[0]?.criado_em, "2026-01-02T03:04:05.000Z");
+  await conjunto.liberar(espacoA);
+  assert.equal(listarAmbientes(banco)[0]?.liberado_em, "2026-01-02T03:04:05.000Z");
 });
 
 test("alocar sem imagem do Ambiente no projeto recusa e não toca o docker", async () => {

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import { metricasDasEtapas } from "./metricas/metricas_das_etapas.ts";
 import { colunasDoModelo, lerUsoDoPi } from "../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo, escrever } from "../armazenamento/banco.ts";
@@ -197,6 +198,7 @@ export async function iniciarAvaliacao(
   banco: DatabaseSync,
   escopo: EscopoDaAvaliacao,
   opcoes: OpcoesDaAuditoria = opcoesDaConfiguracao(banco),
+  relogio: Relogio = relogioDoSistema,
 ): Promise<string> {
   const demandas = demandasDoEscopo(banco, escopo);
   const raiz = raizDo(banco);
@@ -211,7 +213,7 @@ export async function iniciarAvaliacao(
       de: escopo.de,
       ate: escopo.ate,
       pedido,
-      criada_em: new Date().toISOString(),
+      criada_em: relogio.agora(),
       demandas,
     });
     prepararPasta(banco, dir, escopo, demandas);
@@ -292,7 +294,12 @@ export const abortarAvaliacao = (id: string): void => {
  * Encaminha o achado como demanda nova (tipo funcionalidade, em registro), com o vínculo nos dois sentidos: o
  * `demanda_id` do achado e a origem da demanda (`avaliacao` / `<id>#<n>`). Recusa o achado já encaminhado (CA-14).
  */
-export function encaminharAchado(banco: DatabaseSync, id: string, achadoId: number): AgregadoDemanda {
+export function encaminharAchado(
+  banco: DatabaseSync,
+  id: string,
+  achadoId: number,
+  relogio: Relogio = relogioDoSistema,
+): AgregadoDemanda {
   return escrever(banco, () => {
     const avaliacao = abrirAvaliacao(banco, id);
     const achado = avaliacao.achados.find((a) => a.achado_id === achadoId);
@@ -313,7 +320,7 @@ export function encaminharAchado(banco: DatabaseSync, id: string, achadoId: numb
         descricao: `${achado.descricao}\n\nEvidência: ${achado.evidencia}\n\nOrigem: avaliação ${id}, achado ${String(achadoId)}.`,
       },
       { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#${String(achadoId)}` },
-      { agora: new Date().toISOString() },
+      { agora: relogio.agora() },
     );
     vincularAchado(banco, id, achadoId, ag.demanda.id);
     return ag;
