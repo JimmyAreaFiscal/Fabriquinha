@@ -337,7 +337,7 @@ export const decisoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Decisa
       nota: l.nota === null ? null : Number(l.nota),
     }));
 
-interface RetrabalhoNoPeriodo {
+interface CommitsPosterioresNoPeriodo {
   em: string;
   adicionadas: number;
   alteradas: number;
@@ -345,7 +345,7 @@ interface RetrabalhoNoPeriodo {
 }
 
 /** M4 (comparacao-sdlc §8): por commit de ticket do período, as linhas que ele adicionou e as que outro ticket ou uma pessoa alterou depois. */
-export const retrabalhoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): RetrabalhoNoPeriodo[] =>
+export const commitsPosterioresNoPeriodo = (banco: DatabaseSync, recorte: Recorte): CommitsPosterioresNoPeriodo[] =>
   banco
     .prepare(
       `SELECT c.em,

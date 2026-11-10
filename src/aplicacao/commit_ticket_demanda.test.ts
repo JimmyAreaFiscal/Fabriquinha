@@ -159,7 +159,7 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   );
 });
 
-test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior", async () => {
+test("o commit do ticket grava os commits posteriores sobre as linhas do ticket anterior", async () => {
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
   await commitarTicketDemanda(banco, ref(1), {

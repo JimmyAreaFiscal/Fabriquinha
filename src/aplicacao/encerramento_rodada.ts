@@ -12,7 +12,7 @@ import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { LIMITE_DO_CORPO } from "./evidencias/pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
 import { produtividadeDaRodada } from "./evidencias/produtividade_rodada.ts";
-import { varrerBase } from "./retrabalho.ts";
+import { varrerCommitsHumanos } from "./metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
@@ -265,7 +265,7 @@ async function publicarEConferir(
   const conhecidos = ag.evidencias
     .filter((e) => e.tipo === "pr_aberto" && anteriores.has(e.ticket_id))
     .map((e) => (e.dados as { id: string }).id);
-  await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   const publicado = await publicarPRDe(
     raiz,
     projeto,

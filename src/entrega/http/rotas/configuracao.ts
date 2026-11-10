@@ -7,7 +7,7 @@ import { ConfiguracaoAgente, type Modelo } from "../../../nucleo/configuracao_ag
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { ComandosDePreparacao, Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
 import { HarnessPi } from "../../../infra/agente/harness_pi.ts";
-import { varrerBase } from "../../../aplicacao/retrabalho.ts";
+import { varrerCommitsHumanos } from "../../../aplicacao/metricas/varrer_commits_humanos.ts";
 import { escrever } from "../../../armazenamento/banco.ts";
 import { noLog } from "../../../infra/registro.ts";
 import {
@@ -134,7 +134,7 @@ async function conferirEGravar(banco: DatabaseSync, p: z.infer<typeof DoFormular
  */
 async function cadastrar(banco: DatabaseSync, p: z.infer<typeof DoFormulario>) {
   const salvo = await conferirEGravar(banco, p, registrarProjeto);
-  await varrerBase(banco, salvo.nome).catch(noLog);
+  await varrerCommitsHumanos(banco, salvo.nome).catch(noLog);
   return salvo;
 }
 

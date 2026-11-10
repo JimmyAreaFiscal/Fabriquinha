@@ -7,10 +7,10 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { MotivoDeRecusa } from "../nucleo/despacho.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { varrerBase } from "../aplicacao/retrabalho.ts";
+import { varrerCommitsHumanos } from "../aplicacao/metricas/varrer_commits_humanos.ts";
 import { abrir } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
-import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
+import { projetosAVarrer } from "../armazenamento/commits_humanos.ts";
 import { configuracao, configuracaoDoAmbiente } from "../armazenamento/servico.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
 import { cicloDoDespacho, executarAgora } from "../aplicacao/despacho.ts";
@@ -112,12 +112,12 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let varredura: Promise<void> | undefined;
 
   /**
-   * F4 §4, passo 1: `varrerBase` em cada projeto sem varredura há 24 horas, um por vez; a falha de um só vai para o log.
+   * F4 §4, passo 1: `varrerCommitsHumanos` em cada projeto sem varredura há 24 horas, um por vez; a falha de um só vai para o log.
    * ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
    * em cada; guardar a última tentativa se o log incomodar.
    */
   async function varrerVencidos(): Promise<void> {
-    for (const projeto of projetosAVarrer(banco)) await varrerBase(banco, projeto).catch(noLog);
+    for (const projeto of projetosAVarrer(banco)) await varrerCommitsHumanos(banco, projeto).catch(noLog);
   }
 
   /**
