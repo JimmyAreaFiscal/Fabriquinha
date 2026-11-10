@@ -10,11 +10,11 @@ import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
-import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import * as gestao from "./gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "./gestao_demandas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -138,6 +138,35 @@ test("CA-3: dependência que fecha ciclo é reprovada e nenhuma aresta nova é g
   const idC = registrar(b);
   registrarDependenciaDemanda(b, idC, idB);
   assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 2);
+});
+
+test("CA-2 a CA-5: dependência recusada (enviada, autorreferência, repetida) não grava nada e fecha a transação", () => {
+  const b = novoBanco();
+  const idA = registrar(b);
+  const idB = registrar(b, [idA]);
+  b.exec(`UPDATE demanda SET enviada = 1 WHERE id = '${idA}'`);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idA, idB);
+  }, /já foi enviada/);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idB, idB);
+  }, /não pode depender de si mesma/);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idB, idA);
+  }, /já depende/);
+  assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 1);
+  assert.equal(b.isTransaction, false);
+});
+
+test("dependência com demanda inexistente, dona ou predecessora, dá ErroDeInexistente", () => {
+  const b = novoBanco();
+  const id = registrar(b);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, "I-999", id);
+  }, ErroDeInexistente);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, id, "I-999");
+  }, ErroDeInexistente);
 });
 
 test("CA-4: editar só o título mantém tipo e descrição", () => {

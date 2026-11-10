@@ -23,8 +23,8 @@ import {
   configuracao,
   configuracaoDoAmbiente,
   salvarConfiguracao,
-  salvarConfiguracaoDoAmbiente,
 } from "../../../armazenamento/servico.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../../../aplicacao/configuracao/configuracao_do_ambiente.ts";
 import {
   eliminarAmbienteDoConjunto,
   listarAmbientesDoConjunto,
@@ -163,7 +163,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     metodo: "POST",
     caminho: "/api/ambiente",
     tratar: ({ banco, corpo }) => {
-      salvarConfiguracaoDoAmbiente(banco, corpo);
+      validarESalvarConfiguracaoDoAmbiente(banco, corpo);
       return estadoDoAmbiente(banco);
     },
   },

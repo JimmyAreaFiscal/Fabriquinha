@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
-import { type ArquivoCommit, StatusArquivo } from "../../armazenamento/commits.ts";
+import { type ArquivoCommit, StatusArquivo } from "../../nucleo/commits.ts";
 import { type Ambiente, ambienteSemCredenciais } from "../ambiente/ambiente.ts";
 
 /** Caracteres do fim da saída do commit que vão para a mensagem de falha do ticket. */

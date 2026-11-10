@@ -6,6 +6,7 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
+import { registrarDependencia } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { exigirAutoria } from "../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA } from "../nucleo/evidencia_demanda.ts";
@@ -14,7 +15,11 @@ import { CustosRealizados } from "../nucleo/schemas.ts";
 import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "../nucleo/transicoes_demanda.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
-import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
+import {
+  arestasDeDependencia,
+  demandaParaDependencia,
+  gravarDependenciaDemanda,
+} from "../armazenamento/dependencias_demanda.ts";
 import { projetoExistente } from "../armazenamento/projetos.ts";
 import { gravarUsoDeclarado } from "../armazenamento/uso_declarado.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencia/submeter.ts";
@@ -45,6 +50,15 @@ function traduzir<T>(trabalho: () => T): T {
     throw new ErroDeRegra(campos(erro.issues), "corrija o campo indicado e tente de novo");
   }
 }
+
+/** Registra `demandaId` como dependente de `dependeId`; as duas precisam existir e a regra recusa envio, repetição e ciclo. */
+export const registrarDependenciaDemanda = (banco: DatabaseSync, demandaId: string, dependeId: string): void => {
+  escrever(banco, () => {
+    const demanda = demandaParaDependencia(banco, demandaId);
+    demandaParaDependencia(banco, dependeId);
+    gravarDependenciaDemanda(banco, registrarDependencia(arestasDeDependencia(banco), demanda, dependeId));
+  });
+};
 
 /** CA-1 e CA-2: cria a demanda com o ID da sequência e as dependências; qualquer erro desfaz tudo, ID incluído. */
 export const registrar = (

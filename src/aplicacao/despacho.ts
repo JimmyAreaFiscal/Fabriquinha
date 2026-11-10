@@ -4,16 +4,25 @@
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, etapaDoEstado } from "../nucleo/ciclos.ts";
+import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
-import { Despacho, type MotivoDeRecusa, motivoDeRecusaDoItem, type SituacaoDoDespacho } from "../nucleo/despacho.ts";
+import {
+  Despacho,
+  type DemandaParaDespacho,
+  type MotivoDeRecusa,
+  motivoDeRecusaDoItem,
+  type SituacaoDoDespacho,
+} from "../nucleo/despacho.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { exigirEtapaConduzida } from "../nucleo/etapa.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
-import type { EtapaTicket } from "../nucleo/primitivos.ts";
+import { EstadoDemanda, type EtapaTicket } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";
-import { demandasParaDespacho, noSnapshot, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
+import { demandasParaDespacho as lerDemandasParaDespacho, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
+import { lerEmSnapshot } from "../armazenamento/snapshot.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
 import type { ConducaoDeEtapa, DepsDaConducao } from "./etapas/conducao_de_etapa.ts";
@@ -45,6 +54,22 @@ export interface DepsDespacho {
   verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
 }
 
+// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
+// cuja Etapa é a do ticket que eles esperam, não a do estado.
+const ESTADOS_DESPACHADOS = EstadoDemanda.options.filter(
+  (estado) =>
+    CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
+    estado !== "entender_e_desenhar" &&
+    (etapaDoEstado(estado) ?? estado) === estado,
+);
+
+/** Demandas em planejamento, execução, revisão da demanda e encerramento, com o agregado e as predecessoras pendentes. */
+export const demandasParaDespacho = (banco: DatabaseSync): DemandaParaDespacho[] =>
+  lerDemandasParaDespacho(banco, ESTADOS_DESPACHADOS).map(({ agregado, predecessoras }) => ({
+    agregado,
+    predecessoras_pendentes: predecessorasPendentes(predecessoras),
+  }));
+
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
@@ -64,7 +89,7 @@ export const ultimasRecusas = (): ReadonlyMap<Endereco, MotivoDeRecusa> => recus
 
 /** A situação lida num snapshot só: as demandas em andamento e os tickets com trabalho vivo. */
 const situacaoDoDespacho = (banco: DatabaseSync): SituacaoDoDespacho =>
-  noSnapshot(banco, () => ({ demandas: demandasParaDespacho(banco), vivos: trabalhosVivos(banco) }));
+  lerEmSnapshot(banco, () => ({ demandas: demandasParaDespacho(banco), vivos: trabalhosVivos(banco) }));
 
 /**
  * Reserva o ticket e inicia a etapa dele. Chamada dentro de `escrever`: a recusa síncrona desfaz a reserva. A promessa

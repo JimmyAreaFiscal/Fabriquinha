@@ -18,7 +18,7 @@ import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
 import type { Tentativa } from "../src/nucleo/tentativa.ts";
 import { comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { principal } from "../src/entrega/cli/cli.ts";
+import { executarFabriquinha } from "../src/composicao/cli.ts";
 import { pagina, type DadosDaPagina } from "../src/entrega/cliente-web/telas/demandas.ts";
 
 const ticket = Endereco.doTicket("I-206", 3);
@@ -64,7 +64,7 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
     return { ...estado, sessoes, execucoes: iniciarProcesso(sessoes, estado.execucoes, execucao) };
   });
   let saida = "";
-  const codigo = await principal(["ticket", "ver", "I-206.T3"], {
+  const codigo = await executarFabriquinha(["ticket", "ver", "I-206.T3"], {
     env: { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "exec-3" },
     stdin: Readable.from([""]),
     stdout: { write: (texto: string) => (saida += texto) },

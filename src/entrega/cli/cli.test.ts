@@ -12,7 +12,7 @@ import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { comandoDoNavegador, principal } from "./cli.ts";
+import { comandoDoNavegador, executarFabriquinha } from "../../composicao/cli.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-cli-"));
@@ -32,7 +32,7 @@ let saidas = 0;
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = ""): Promise<Saida> {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([stdin]),
     stdout: { write: (t: string) => (out += t) },

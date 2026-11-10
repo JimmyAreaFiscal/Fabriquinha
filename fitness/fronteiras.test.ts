@@ -27,8 +27,12 @@ const MATRIZ: Record<string, RegraDoModulo> = {
   aplicacao: { modulosPermitidos: ["nucleo", "armazenamento", "infra"], externoPermitido: QUALQUER_EXTERNO },
   "entrega/http": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
   "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  // Roda no navegador: de fora de si, só tipos (apagados na execução).
-  [MODULO_CLIENTE_WEB]: { modulosPermitidos: [], externoPermitido: () => false, somenteImportDeTipo: true },
+  // Roda no navegador: de fora de si, só tipos (apagados na execução) e o markdown-it, servido em /static/ pelo import map.
+  [MODULO_CLIENTE_WEB]: {
+    modulosPermitidos: [],
+    externoPermitido: (alvo) => alvo === "markdown-it/browser",
+    somenteImportDeTipo: true,
+  },
   composicao: {
     modulosPermitidos: [
       "nucleo",
@@ -53,24 +57,9 @@ interface Excecao extends Achado {
   demanda: string;
 }
 
-// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
+// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http.
 const EXCECOES: Excecao[] = [
-  { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
-  { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
-  { arquivo: "aplicacao/trabalho/processo_do_ticket.ts", import: "SQL .prepare(", demanda: "22" },
-  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
-  { arquivo: "entrega/cli/cli.ts", import: "../../infra/processo.ts", demanda: "21" },
-  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/dependencias_demanda.ts", demanda: "21" },
-  { arquivo: "entrega/cli/demanda_externa.ts", import: "SQL .prepare(", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/projetos.ts", demanda: "21" },
-  { arquivo: "entrega/cliente-web/markdown.ts", import: "markdown-it/browser", demanda: "22" },
   { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
@@ -91,7 +80,6 @@ const EXCECOES: Excecao[] = [
   },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/evidencia_demanda.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas.ts", import: "SQL .prepare(", demanda: "20" },
   { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
@@ -108,7 +96,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/servidor.ts", import: "../../armazenamento/banco.ts", demanda: "20" },
   { arquivo: "entrega/http/servidor.ts", import: "../../infra/registro.ts", demanda: "20" },
   { arquivo: "entrega/http/servidor.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
-  { arquivo: "infra/repositorio/commit.ts", import: "../../armazenamento/commits.ts", demanda: "22" },
 ];
 
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
@@ -265,6 +252,15 @@ test("toda exceção cita arquivo, import e uma demanda de 04 a 26", () => {
   }
 });
 
+test("só restam as exceções das demandas 19 (aplicacao/retrabalho.ts) e 20 (entrega/http)", () => {
+  const dasDemandas19E20 = EXCECOES.filter(
+    ({ arquivo, demanda }) =>
+      (demanda === "19" && arquivo === "aplicacao/retrabalho.ts") ||
+      (demanda === "20" && arquivo.startsWith("entrega/http/")),
+  );
+  assert.deepEqual(EXCECOES, dasDemandas19E20);
+});
+
 test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
   const importadores = listarArquivosDeProducao(SRC)
     .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("entrega/http/"))
@@ -291,12 +287,16 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "entrega/http/ok.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
     "entrega/cliente-web/ok.ts": 'import type { A } from "../../aplicacao/ok.ts";\nimport { b } from "./sub.ts";\n',
     "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
+    "entrega/cliente-web/markdown.ts": 'import markdownit from "markdown-it/browser";\n',
     "composicao/ok.ts": 'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\n',
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
     "entrega/cliente-web/aplicacao.ts":
       'import { a } from "../../aplicacao/ok.ts";\nimport type { B } from "../../aplicacao/ok.ts";\n',
+    "entrega/cliente-web/markdown_inteiro.ts": 'import markdownit from "markdown-it";\n',
+    "entrega/cliente-web/markdown_subcaminho.ts": 'import x from "markdown-it/browser/x";\n',
+    "entrega/cliente-web/lodash.ts": 'import _ from "lodash";\n',
     "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
     "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
     "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
@@ -314,6 +314,9 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
       "entrega/cliente-web/aplicacao.ts importa ../../aplicacao/ok.ts",
+      "entrega/cliente-web/lodash.ts importa lodash",
+      "entrega/cliente-web/markdown_inteiro.ts importa markdown-it",
+      "entrega/cliente-web/markdown_subcaminho.ts importa markdown-it/browser/x",
       "infra/armazenamento.ts importa ../armazenamento/ok.ts",
       "nucleo/fs.ts importa node:fs",
     ].sort(),
@@ -382,7 +385,7 @@ const CHAMADORES_DIRETOS_DO_PROCESSO = [
   "aplicacao/auditor_automatico.ts",
   "aplicacao/executor.ts",
   "aplicacao/retrabalho.ts",
-  "entrega/cli/cli.ts",
+  "composicao/cli.ts",
   "infra/agente/harness_pi.ts",
   "infra/repositorio/cadastro.ts",
   "infra/repositorio/heatmap.ts",

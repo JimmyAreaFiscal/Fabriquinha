@@ -5,7 +5,7 @@ import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeReprovacao } from "../nucleo/erros.ts";
 import { registrarRetrabalhoDemanda } from "./retrabalho.ts";
 import { noLog } from "../infra/registro.ts";
-import type { Commit } from "../armazenamento/commits.ts";
+import type { Commit } from "../nucleo/commits.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { arquivosDe, commitar } from "../infra/repositorio/commit.ts";
 import { exigirGitNoAmbiente, gitNoAmbiente } from "../infra/repositorio/worktree.ts";
