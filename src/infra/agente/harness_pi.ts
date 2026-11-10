@@ -10,6 +10,7 @@ import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
 import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
+import { chavesDeProvedorDoLlm } from "../ambiente/container/ambiente_container.ts";
 import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
@@ -147,8 +148,23 @@ export class HarnessPi {
    * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
    * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
    * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * No Ambiente `container` o env começa vazio, sem `process.env`: só as chaves de provedor do LLM e as variáveis da
+   * Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio AmbienteContainer.
    */
-  ambiente(raiz: string, dir: string, execucao?: number | string): NodeJS.ProcessEnv {
+  ambiente(
+    raiz: string,
+    dir: string,
+    execucao?: number | string,
+    tipoDoAmbiente: Ambiente["tipo"] = "host_local",
+  ): NodeJS.ProcessEnv {
+    if (tipoDoAmbiente === "container") {
+      return {
+        ...chavesDeProvedorDoLlm(process.env),
+        ...(execucao === undefined
+          ? { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
+          : { FABRIQUINHA_SAIDA: join(dir, "saida") }),
+      };
+    }
     const {
       FABRIQUINHA_EXECUCAO: _execucaoHerdada,
       FABRIQUINHA_ROOT: _raizHerdada,

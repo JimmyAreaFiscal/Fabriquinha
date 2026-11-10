@@ -9,7 +9,7 @@ import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
-import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
@@ -41,7 +41,7 @@ import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
-import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
@@ -82,11 +82,12 @@ interface Conducao {
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
 async function worktreeDoEspacoDoTicket(
-  { banco, ag, ticket, projeto, opcoes }: Conducao,
+  { banco, projeto, opcoes }: Conducao,
+  espaco: EspacoDeTrabalho,
   log: string,
 ): Promise<string> {
   const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
+  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
   const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
   if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
@@ -138,9 +139,11 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem.
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
-    const worktree = await worktreeDoEspacoDoTicket(c, log);
-    // O agente enxerga o Espaço pelo Ambiente: no host local os caminhos são os do host.
-    const caminhoNoAmbiente = (caminhoNoHost: string): string => ambienteDoServico().caminhoNoAmbiente(caminhoNoHost);
+    const espaco = espacoDoTicket(c.ag, c.ticket, projeto, raiz);
+    const worktree = await worktreeDoEspacoDoTicket(c, espaco, log);
+    // O agente enxerga o Espaço pelo Ambiente (o container, depois de alocado): no host local os caminhos são os do host.
+    const ambiente = ambienteDoEspaco(espaco);
+    const caminhoNoAmbiente = (caminhoNoHost: string): string => ambiente.caminhoNoAmbiente(caminhoNoHost);
     const prompt =
       opcoes.mensagem ??
       montarPromptDemanda({
@@ -175,7 +178,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
       args,
       cwd: worktree,
-      env: new HarnessPi().ambiente(raiz, dir, execucao.id),
+      ambiente,
+      env: new HarnessPi().ambiente(raiz, dir, execucao.id, ambiente.tipo),
       banco: c.banco,
       log,
       prompt,
@@ -296,7 +300,14 @@ export function interromperExecucaoDemanda(
   );
   if (condutor.interromper(execucao.id)) return;
   if (execucao.grupo_processo != null) {
-    const ambiente = ambienteDoServico();
+    const ag = carregarDemanda(banco, ref.demanda_id);
+    const ticket = encontrado(
+      ag.tickets.find((t) => t.ticket_id === ref.ticket_id),
+      `o ticket ${formatarTicketRef(ref)} não existe`,
+      "use um ticket da demanda",
+    );
+    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const ambiente = ambienteDoEspaco(espacoDoTicket(ag, ticket, projeto, raizDo(banco)));
     // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
     ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
   }

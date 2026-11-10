@@ -32,8 +32,8 @@ abstract class CicloDoEspaco {
   protected readonly espaco: EspacoDeTrabalho;
   protected readonly projeto: ProjetoDoCiclo;
   protected readonly registro: RegistroDoCiclo;
-  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. */
-  readonly ambiente: Ambiente;
+  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. Depois de alocar, é o container. */
+  ambiente: Ambiente;
   /** O conjunto de containers; `undefined` com o Ambiente no host local, que nunca chama o docker. */
   readonly #conjunto: ConjuntoDeAmbientes | undefined;
 
@@ -51,10 +51,10 @@ abstract class CicloDoEspaco {
     this.#conjunto = conjunto;
   }
 
-  /** Dá ao Espaço o container do Projeto; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
+  /** Dá ao Espaço o container do Projeto e passa a rodar nele; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
   protected async alocarContainerSeHouver(): Promise<void> {
     if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
-      await this.#conjunto.alocar(this.espaco, this.projeto);
+      this.ambiente = await this.#conjunto.alocar(this.espaco, this.projeto);
   }
 
   /**

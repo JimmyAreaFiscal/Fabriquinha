@@ -14,7 +14,7 @@ import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../infra/registro.ts";
-import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { ConducaoDeAjustarResultado } from "../etapas/conducao_de_ajustar_resultado.ts";
 import { guardarMarcoDaSessao, sessaoDaRodada } from "../sessao_ajustes.ts";
@@ -75,7 +75,7 @@ export async function aprovarPR(
     "o encerramento publica o PR",
   );
   const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
-  await cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico()).integrar();
+  await cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco)).integrar();
 
   return comDemanda(banco, ref.demanda_id, (a) => {
     const agora = relogio.agora();

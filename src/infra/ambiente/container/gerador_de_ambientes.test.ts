@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
+import { dirDoPiDoAmbiente } from "./ambiente_container.ts";
 import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
@@ -60,6 +61,73 @@ test("criar sobe o container com rótulo, memória e CPUs, e o ambiente volta co
     [container?.rotulos, container?.memoria, container?.cpus, container?.imagem, container?.estado],
     [{ "fabriquinha.ambiente": criado.id }, 512 * 1048576, 1.5, "node:22-alpine", "running"],
   );
+});
+
+test("criar liga o container à rede do host pelo host-gateway, mesmo sem montagens", async () => {
+  await gerador.criar("node:22-alpine", limites);
+  const container = docker.containers().at(-1);
+  assert.deepEqual([container?.hospedeiros, container?.montagens], [["host.docker.internal:host-gateway"], []]);
+});
+
+test("criar monta exatamente a worktree, o .git, as sessões, a execução, o pacote (ro) e o dir do pi com o auth.json", async () => {
+  const raiz = join(base, "fabriquinha-raiz");
+  const authJson = join(base, "pi-do-usuario", "auth.json");
+  mkdirSync(join(base, "pi-do-usuario"));
+  writeFileSync(authJson, '{"anthropic":{"access":"segredo"}}');
+  writeFileSync(join(base, "pi-do-usuario", "trust.json"), "{}");
+  mkdirSync(raiz);
+  writeFileSync(join(raiz, "fabriquinha.db"), "banco");
+  const worktree = join(raiz, "worktrees", "projeto", "I-1", "rodadas", "1");
+  const pacote = join(base, "pacote-pi");
+  const criado = await gerador.criar("node:22-alpine", limites, {
+    worktree,
+    raiz_git: raizGit,
+    raiz,
+    execucao: 7,
+    pacote,
+    auth_json: authJson,
+  });
+  const dirDoPi = dirDoPiDoAmbiente(raiz, criado.id);
+  const montagens = docker
+    .containers()
+    .find((c) => c.id === criado.container_id)
+    ?.montagens.map((montagem) => {
+      const [origem, destino, modo] = montagem.split(":");
+      return { origem, destino, modo };
+    });
+  const mesmoCaminho = (caminho: string, modo: string) => ({ origem: caminho, destino: caminho, modo });
+  assert.deepEqual(montagens, [
+    mesmoCaminho(worktree, "rw"),
+    mesmoCaminho(join(raizGit, ".git"), "rw"),
+    mesmoCaminho(join(raiz, "sessoes"), "rw"),
+    mesmoCaminho(join(raiz, "execucoes", "E-7"), "rw"),
+    mesmoCaminho(pacote, "ro"),
+    mesmoCaminho(dirDoPi, "rw"),
+  ]);
+  const run = docker.registro().findLast(([comando]) => comando === "run") ?? [];
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 6);
+  assert.ok(!run.includes("--mount"));
+  // O pi do container só tem o auth.json (nem o trust.json do usuário), e o banco da raiz não é montado.
+  assert.deepEqual(readdirSync(dirDoPi), ["auth.json"]);
+  assert.equal(readFileSync(join(dirDoPi, "auth.json"), "utf8"), '{"anthropic":{"access":"segredo"}}');
+  assert.equal(statSync(join(dirDoPi, "auth.json")).mode & 0o777, 0o600);
+  assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
+});
+
+test("criar com montagens sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {
+  const antes = docker.registro().length;
+  await assert.rejects(
+    gerador.criar("node:22-alpine", limites, {
+      worktree: join(base, "w"),
+      raiz_git: raizGit,
+      raiz: join(base, "fabriquinha-raiz"),
+      execucao: 8,
+      pacote: join(base, "pacote-pi"),
+      auth_json: join(base, "nao-existe", "auth.json"),
+    }),
+    /não existe o .*auth\.json.*entre no pi/s,
+  );
+  assert.equal(docker.registro().length, antes);
 });
 
 test("criar sem a imagem falha com a orientação", async () => {

@@ -2,10 +2,15 @@
 // O docker falso dos testes. Duas faces no mesmo arquivo:
 // - importado, `instalarDockerFalso(dir)` põe um executável `docker` à frente no PATH e guarda o estado e o registro em `dir`;
 // - executado como o `docker` (`import.meta.main`), simula imagens e containers: `image inspect`, `build`, `pull`, `run`,
-//   `create`, `start`, `ps`, `inspect`, `exec` e `rm`.
+//   `create`, `start`, `ps`, `inspect`, `exec` e `rm`. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
+//   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
+//   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
+//   trocada por uma pasta do estado; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
+//   um desastre.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
 // `ps` e `inspect` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>" e `inspect` imprime o JSON.
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -17,7 +22,10 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { constants } from "node:os";
 import { join } from "node:path";
+
+const PASTA_DOS_PIDS_NO_CONTAINER = "/fabriquinha/pids";
 
 /** Um container do docker falso. `memoria` em bytes, como o `HostConfig.Memory` do docker de verdade. */
 export interface ContainerFalso {
@@ -28,6 +36,10 @@ export interface ContainerFalso {
   cpus: number;
   estado: "created" | "running";
   comandos: string[][];
+  /** Os `-v` do `run`, como foram escritos (`origem:destino:modo`). */
+  montagens: string[];
+  /** Os `--add-host` do `run` (`nome:ip`). */
+  hospedeiros: string[];
 }
 
 export interface DockerFalso {
@@ -80,6 +92,8 @@ export function instalarDockerFalso(dir: string): DockerFalso {
       cpus: 0,
       estado: "running",
       comandos: [],
+      montagens: [],
+      hospedeiros: [],
     };
     gravarContainer(dir, container);
     return container;
@@ -115,6 +129,41 @@ function tirarOpcoes(args: string[], comValor: string[]): { opcoes: Record<strin
   return { opcoes, resto };
 }
 
+/** Roda o roteiro no host como se fosse dentro do container: o processo lidera o próprio grupo, como no `docker exec`. */
+function simularProcessoDoContainer(
+  dir: string,
+  container: ContainerFalso,
+  programa: string[],
+  opcoes: Record<string, string[]>,
+  sair: (codigo: number, mensagem: string) => never,
+): void {
+  const pastaDosPids = join(dir, "pids", container.id);
+  mkdirSync(pastaDosPids, { recursive: true });
+  const cwd = opcoes["-w"]?.[0];
+  if (cwd !== undefined && !existsSync(cwd))
+    sair(126, `OCI runtime exec failed: chdir to cwd ("${cwd}") set in config.process.cwd: no such file or directory`);
+  const arquivoDeEnv = opcoes["--env-file"]?.[0];
+  const doArquivo = arquivoDeEnv === undefined ? [] : readFileSync(arquivoDeEnv, "utf8").split("\n").filter(Boolean);
+  const env: Record<string, string> = {
+    PATH: process.env.PATH ?? "",
+    HOME: "/root",
+    HOSTNAME: container.id.slice(0, 12),
+    ...Object.fromEntries(
+      doArquivo.map((linha): [string, string] => [linha.split("=")[0] ?? "", linha.split("=").slice(1).join("=")]),
+    ),
+  };
+  const [executavel = "", ...argumentos] = programa.map((arg) =>
+    arg.replaceAll(PASTA_DOS_PIDS_NO_CONTAINER, pastaDosPids),
+  );
+  const filho = spawn(executavel, argumentos, {
+    cwd,
+    env,
+    detached: true,
+    stdio: [opcoes["-i"] ? "inherit" : "ignore", "inherit", "inherit"],
+  });
+  filho.on("close", (codigo, sinal) => process.exit(codigo ?? 128 + (sinal ? constants.signals[sinal] : 0)));
+}
+
 function executarDockerFalso(): void {
   const dir = process.env.FALSO_DOCKER_DIR ?? "";
   const { containers, imagens, falhas, registro } = pastas(dir);
@@ -142,7 +191,7 @@ function executarDockerFalso(): void {
   } else if (comando === "pull") {
     writeFileSync(join(imagens, codificar(args[0] ?? "")), "");
   } else if (comando === "run" || comando === "create") {
-    const { opcoes, resto } = tirarOpcoes(args, ["--label", "--memory", "--cpus", "--workdir"]);
+    const { opcoes, resto } = tirarOpcoes(args, ["--label", "--memory", "--cpus", "--workdir", "-v", "--add-host"]);
     const [imagem = "", ...programa] = resto;
     if (!temImagem(imagem)) sair(125, `Unable to find image '${imagem}' locally`);
     const rotulos = Object.fromEntries(
@@ -157,6 +206,8 @@ function executarDockerFalso(): void {
       cpus: Number(opcoes["--cpus"]?.[0] ?? 0),
       estado: comando === "run" ? "running" : "created",
       comandos: [programa],
+      montagens: opcoes["-v"] ?? [],
+      hospedeiros: opcoes["--add-host"] ?? [],
     };
     writeFileSync(arquivoDoContainer(container.id), JSON.stringify(container));
     console.log(container.id);
@@ -175,18 +226,28 @@ function executarDockerFalso(): void {
         {
           Id: container.id,
           Config: { Image: container.imagem, Labels: container.rotulos },
-          HostConfig: { Memory: container.memoria, NanoCpus: container.cpus * 1e9 },
+          HostConfig: {
+            Memory: container.memoria,
+            NanoCpus: container.cpus * 1e9,
+            Binds: container.montagens,
+            ExtraHosts: container.hospedeiros,
+          },
           State: { Running: container.estado === "running" },
         },
       ]),
     );
   } else if (comando === "exec") {
-    const container = achar(args[0] ?? "");
+    const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file"]);
+    const container = achar(resto[0] ?? "");
     if (container.estado !== "running") sair(1, `Error response from daemon: container ${container.id} is not running`);
+    const programa = resto.slice(1);
     writeFileSync(
       arquivoDoContainer(container.id),
-      JSON.stringify({ ...container, comandos: [...container.comandos, args.slice(1)] }),
+      JSON.stringify({ ...container, comandos: [...container.comandos, programa] }),
     );
+    const [shell, opcaoC, roteiro = ""] = programa;
+    if (shell === "sh" && opcaoC === "-c" && roteiro.includes(PASTA_DOS_PIDS_NO_CONTAINER))
+      simularProcessoDoContainer(dir, container, programa, opcoes, sair);
   } else if (comando === "rm") {
     const container = achar(args.at(-1) ?? "");
     rmSync(arquivoDoContainer(container.id));

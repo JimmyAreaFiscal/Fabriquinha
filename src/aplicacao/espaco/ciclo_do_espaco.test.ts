@@ -14,6 +14,7 @@ import { listarAmbientes } from "../../armazenamento/ambientes.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configuracao_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
+import { relogioDoSistema } from "../../nucleo/relogio.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
@@ -176,7 +177,10 @@ function cenarioComContainer() {
     cpus: 1,
     ociosidade_para_eliminar_min: 30,
   });
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes());
+  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+    raiz: c.raiz,
+    porta_da_api: 4999,
+  });
   const registro = { raiz: c.raiz, log: c.log };
   const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };
   return {
@@ -198,6 +202,11 @@ test("com container e imagem, criar aloca o container ao Espaço e limpar o devo
   assert.equal(alocado.alocado_para, "I-1");
   await cicloDaDemanda().criar();
   assert.equal(listarAmbientes(banco).length, 1);
+  const ciclo = cicloDaDemanda();
+  assert.equal(ciclo.ambiente, ambiente);
+  await ciclo.criar();
+  assert.equal(ciclo.ambiente.id, alocado.id); // depois de alocar, o ciclo trabalha no container
+  assert.equal(ciclo.ambiente.tipo, "container");
   await cicloDaDemanda().limpar();
   assert.equal(listarAmbientes(banco)[0]?.estado, "livre");
   assert.equal(docker.containers().length, 1);
