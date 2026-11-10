@@ -9,6 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { Projeto } from "../../../nucleo/projeto.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { gravarProjeto } from "../../../armazenamento/projetos.ts";
 import {
   gravarAgregadoPronto,
@@ -50,6 +51,7 @@ async function chamar(metodo: string, endereco: string): Promise<unknown> {
       return await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        relogio: relogioDoSistema,
         params,
         query: url.searchParams,
         corpo: undefined,

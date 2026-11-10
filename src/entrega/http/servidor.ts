@@ -8,8 +8,7 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { raizDo } from "../../armazenamento/banco.ts";
-import { noLog } from "../../infra/registro.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 import { casar } from "../compartilhado/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
@@ -153,18 +152,23 @@ const cookie = (pedido: IncomingMessage): string | undefined =>
 
 interface Web {
   banco: DatabaseSync;
+  /** A pasta de dados do serviço, onde vai o `web.url`. */
+  raiz: string;
   porta: number;
   agendador: Agendador;
+  relogio: Relogio;
+  /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
+  registrarErro: (erro: unknown) => void;
 }
 
 /**
  * Gera o token desta subida (32 bytes aleatórios), grava o link de entrada em `<raiz>/web.url` com `0600` e devolve o
  * tratador das requisições. Reiniciar o serviço troca o token e invalida o cookie dos navegadores.
  */
-export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
+export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErro }: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
-  const arquivo = join(raizDo(banco), "web.url");
+  const arquivo = join(raiz, "web.url");
   // Escrito ao lado e renomeado: quem lê nunca vê o arquivo vazio ou pela metade. O temporário é recriado: o modo só
   // vale na criação.
   const temporario = `${arquivo}.novo`;
@@ -205,6 +209,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
       const valor: unknown = await rota.tratar({
         banco,
         agendador,
+        relogio,
         params,
         query: url.searchParams,
         corpo,
@@ -240,7 +245,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
   return (pedido, resposta) => {
     atender(pedido, resposta).catch((error_: unknown) => {
       const [status, mensagem] = traduzir(error_);
-      if (status === 500) noLog(error_);
+      if (status === 500) registrarErro(error_);
       // A rota que já começou a responder (SSE, download) e falhou no meio só pode cortar a conexão.
       if (resposta.headersSent) resposta.destroy();
       else json(resposta, status, { erro: mensagem });

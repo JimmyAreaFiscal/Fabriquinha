@@ -7,6 +7,7 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../../nucleo/erros.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -68,6 +69,7 @@ async function sessoes(query: string): Promise<unknown> {
     return await rota.tratar({
       banco,
       agendador: { proximaBusca: () => new Date() },
+      relogio: relogioDoSistema,
       params: {},
       query: new URLSearchParams(query),
       corpo: undefined,
