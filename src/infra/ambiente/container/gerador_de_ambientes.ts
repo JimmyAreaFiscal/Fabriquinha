@@ -7,7 +7,6 @@ import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente.ts";
 import { executar } from "../../processo.ts";
-import { pastasDoProcesso } from "../../registro.ts";
 import { dirDoPiDoAmbiente } from "./ambiente_container.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
@@ -30,17 +29,16 @@ interface Limites {
  */
 export interface Montagens {
   /**
-   * A pasta das worktrees da demanda do Espaço (`R/worktrees/<projeto>/<demanda>`), em leitura e escrita. A worktree do
-   * Espaço não é montada sozinha: o git do container a cria, e uma pasta que já existe o core entende como worktree
-   * pronta; montada, a pasta existiria desde a criação do container e não se removeria com a worktree.
+   * A pasta das worktrees do projeto (`R/worktrees/<projeto>`), em leitura e escrita. O container volta ao conjunto e
+   * serve a outra demanda do projeto, então a pasta de uma demanda só não basta. A worktree do Espaço não é montada
+   * sozinha: o git do container a cria, e uma pasta que já existe o core entende como worktree pronta; montada, a
+   * pasta existiria desde a criação do container e não se removeria com a worktree.
    */
-  pastaDaDemanda: string;
+  pastaDasWorktreesDoProjeto: string;
   /** O clone do usuário: só o `.git` entra (objetos e `worktrees/<n>`), em leitura e escrita. */
   raiz_git: string;
-  /** A raiz da Fabriquinha (R): entram `sessoes` e `execucoes/E-<execucao>`, em leitura e escrita. */
+  /** A raiz da Fabriquinha (R): entram `sessoes` e `execucoes`, em leitura e escrita. O container nasce antes dos processos que o usam, então entram as pastas de todos (`E-<id>`). */
   raiz: string;
-  /** O container nasce antes do processo: sem `execucao`, a pasta do processo não entra. */
-  execucao?: string | number;
   /** O `pacote-pi`, só em leitura. */
   pacote: string;
   /** O `auth.json` do pi no host: o container recebe uma cópia dele, num `PI_CODING_AGENT_DIR` próprio. */
@@ -72,21 +70,21 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
 
 /** Cria no host o que o container monta e devolve os `-v`; a cópia do `auth.json` não leva mais nada do `~/.pi/agent`. */
 function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
-  const { pastaDaDemanda, raiz_git, raiz, execucao, pacote, auth_json } = montagens;
+  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote, auth_json } = montagens;
   if (!existsSync(auth_json))
     throw new ErroDeRegra(`não existe o ${auth_json}`, "entre no pi (login) antes de usar um Ambiente em container");
   const dirDoPi = dirDoPiDoAmbiente(raiz, idDoAmbiente);
   const dirDasSessoes = join(raiz, "sessoes");
-  const dirDaExecucao = execucao === undefined ? undefined : pastasDoProcesso(raiz, execucao).dir;
-  for (const dir of [pastaDaDemanda, dirDoPi, dirDasSessoes, dirDaExecucao])
-    if (dir) mkdirSync(dir, { recursive: true });
+  const dirDasExecucoes = join(raiz, "execucoes");
+  for (const dir of [pastaDasWorktreesDoProjeto, dirDoPi, dirDasSessoes, dirDasExecucoes])
+    mkdirSync(dir, { recursive: true });
   copyFileSync(auth_json, join(dirDoPi, "auth.json"));
   chmodSync(join(dirDoPi, "auth.json"), 0o600);
   const montagensComModo: [string, "rw" | "ro"][] = [
-    [pastaDaDemanda, "rw"],
+    [pastaDasWorktreesDoProjeto, "rw"],
     [join(raiz_git, ".git"), "rw"],
     [dirDasSessoes, "rw"],
-    ...(dirDaExecucao ? [[dirDaExecucao, "rw"] as [string, "rw"]] : []),
+    [dirDasExecucoes, "rw"],
     [pacote, "ro"],
     [dirDoPi, "rw"],
   ];

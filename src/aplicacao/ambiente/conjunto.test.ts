@@ -69,14 +69,30 @@ test("alocar sem livre cria o container com os limites da configuração e grava
   assert.equal(container.rotulos["fabriquinha.ambiente"], ambiente.id);
 });
 
-test("alocar cria o container com a pasta da demanda do Espaço, o .git do projeto e as sessões montados", async () => {
+test("alocar cria o container com a pasta das worktrees do projeto, o .git, as sessões e as execuções montados", async () => {
   const { docker, conjunto } = cenario();
   await conjunto.alocar(espacoB, projeto);
   const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0]);
-  assert.ok(origens.includes(join(base, "worktrees", "loja", "I-1")), "a pasta da demanda");
+  assert.ok(origens.includes(join(base, "worktrees", "loja")), "a pasta das worktrees do projeto");
   assert.ok(origens.includes(join(base, ".git")), "o .git do projeto");
   assert.ok(origens.includes(join(base, "sessoes")), "as sessões");
+  assert.ok(origens.includes(join(base, "execucoes")), "as pastas dos processos, onde mora o FABRIQUINHA_SAIDA");
   assert.ok(!origens.includes(espacoB.pasta), "a worktree do Espaço não é montada: o git do container a cria");
+});
+
+test("o container reaproveitado para outra demanda do projeto continua com as worktrees dela montadas", async () => {
+  const { docker, banco, conjunto, criacoes } = cenario();
+  const primeiro = await conjunto.alocar(espacoA, projeto);
+  await conjunto.liberar(espacoA);
+  const espacoDeOutraDemanda = espacoDaDemanda(projeto, "I-2", base);
+  const segundo = await conjunto.alocar(espacoDeOutraDemanda, projeto);
+  assert.equal(segundo.container_id, primeiro.container_id);
+  assert.equal(criacoes().length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.alocado_para, "I-2");
+  const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0] ?? "");
+  const montadas = (caminho: string) => origens.some((origem) => caminho.startsWith(`${origem}/`));
+  assert.ok(montadas(espacoDeOutraDemanda.pasta), "a worktree da outra demanda");
+  assert.ok(montadas(join(base, "execucoes", "E-99", "saida")), "a pasta de qualquer processo");
 });
 
 test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async () => {
