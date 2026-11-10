@@ -40,6 +40,7 @@ import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
+  gravarAmbienteDoProcesso,
 } from "../armazenamento/trabalho_agentico.ts";
 import { ambienteDoEspaco } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
@@ -93,12 +94,13 @@ async function worktreeDoEspacoDoTicket(
   return pasta;
 }
 
-/** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
-function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
+/** Grava o grupo de processo do pi e o Ambiente que o lançou, para o reinício do serviço poder interrompê-lo (§4.2). */
+function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number, ambienteId: string): void {
   comTrabalhosDoTicket(banco, ref, (estado) => ({
     ...estado,
     execucoes: estado.execucoes.map((e) => (e.id === execucao.id ? { ...e, grupo_processo: pgid } : e)),
   }));
+  gravarAmbienteDoProcesso(banco, execucao.id, ambienteId);
 }
 
 /** As perguntas respondidas nas sessões de cada ticket anterior da rodada que foi reprovado, por ticket (só a revisão da rodada as lê). */
@@ -192,8 +194,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
           undefined,
           { banco: c.banco, ticket: c.ref, execucao: execucao.id },
         ),
-      aoLancar: (pgid) => {
-        gravarGrupo(c, pgid);
+      aoLancar: (pgid, ambienteId) => {
+        gravarGrupo(c, pgid, ambienteId);
       },
     });
   } catch (error_) {
