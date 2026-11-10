@@ -2,7 +2,7 @@
 // UTC no banco (F2 §3.6).
 import { z } from "zod";
 import { Slug } from "./primitivos.ts";
-import { inicioDoMes, mesDoInstante } from "./relogio.ts";
+import { inicioDoMes } from "./relogio.ts";
 
 export const Mes = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/); // AAAA-MM; o `Date` do JS leva os anos 0 a 99 para 1900
 
@@ -19,9 +19,6 @@ interface Intervalo {
   inicio: string;
   fim: string;
 }
-
-/** O mês `AAAA-MM` de um instante, no fuso do serviço. */
-export const mesDe = (d: Date): string => mesDoInstante(d.toISOString());
 
 /** O mês `AAAA-MM` deslocado de `n` meses, com o intervalo de instantes UTC das suas meias-noites no fuso do serviço. */
 export function intervalo(mes: string, n = 0): Intervalo {

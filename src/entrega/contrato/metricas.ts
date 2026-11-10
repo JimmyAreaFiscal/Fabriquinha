@@ -41,7 +41,7 @@ const SomaDeUso = z.object({
 });
 
 /** Uma Métrica de Sucesso com a definição que a tela mostra e o valor que o seu tipo declara. */
-const metrica = <Valor extends z.ZodType>(tipo: string, valor: Valor) =>
+const metrica = <const Tipo extends string, Valor extends z.ZodType>(tipo: Tipo, valor: Valor) =>
   z.object({ definicao: z.object({ tipo: z.literal(tipo), rotulo: Texto, fonte: Texto }), valor });
 
 const ValorDaMetrica = z.union([
@@ -80,7 +80,8 @@ const ValorDaMetrica = z.union([
   metrica("nota_humana", z.object({ soma: Numero, quantidade: Contagem, media: Numero.nullable() })),
 ]);
 
-const MetricasDoMes = z.object({
+/** As Métricas de um mês, de todos os projetos ou de um. */
+export const MetricasDoMes = z.object({
   mes: Mes,
   /** `null` = todos os projetos. */
   projeto: Texto.nullable(),
@@ -100,6 +101,8 @@ const MetricasDoMes = z.object({
   tickets: z.object({ criados: Contagem, concluidos: Contagem }),
   prs: z.object({ abertos: Contagem, mergeados: Contagem }),
 });
+
+export type MetricasDoMes = z.infer<typeof MetricasDoMes>;
 
 /** Uma entrada por mês do período, do mais antigo ao mais recente. */
 export const MetricasDosMeses = z.array(MetricasDoMes);

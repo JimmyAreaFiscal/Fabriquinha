@@ -5,11 +5,12 @@ import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../../nucleo/ciclos.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../../nucleo/dependencia_demanda.ts";
+import { encontrado } from "../../nucleo/erros.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { pendenciasDaDemanda, type TrabalhoVivo } from "../../nucleo/pendencia.ts";
-import type { Instante } from "../../nucleo/primitivos.ts";
+import type { EstadoDemanda, Instante } from "../../nucleo/primitivos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
-import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
+import { predecessorasDasDemandas } from "../../armazenamento/dependencias_demanda.ts";
 import type { PendenciaDoInicio } from "../../entrega/contrato/demanda.ts";
 import { condutor, type Situacao } from "../trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../historico_demanda.ts";
@@ -35,15 +36,15 @@ const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
 
 /** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
 function pendenciasDoInicio(
-  banco: DatabaseSync,
   ag: AgregadoDemanda,
+  predecessoras: readonly { demanda_id: string; estado: EstadoDemanda }[],
   vivos: readonly TrabalhoVivo[],
   sessaoDoTicket: ReadonlyMap<string, string>,
   agendadorLigado: boolean,
   agora: Instante,
 ): PendenciaDoInicio[] {
   const { id: demanda, projeto, titulo } = ag.demanda;
-  const predecessorasSatisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demanda)).length === 0;
+  const predecessorasSatisfeitas = predecessorasPendentes(predecessoras).length === 0;
   return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, { agora, predecessorasSatisfeitas }).map(
     (p) => {
       const item = p.item.toString();
@@ -77,8 +78,16 @@ export function pendenciasDasDemandas(
   const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
   const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
   const agendadorLigado = configuracao(banco).agendadorAtivo;
+  const predecessoras = predecessorasDasDemandas(
+    banco,
+    demandas.map((ag) => ag.demanda.id),
+  );
   return demandas
-    .flatMap((ag) => pendenciasDoInicio(banco, ag, vivos, sessaoDoTicket, agendadorLigado, agora))
+    .flatMap((ag) => {
+      const { id } = ag.demanda;
+      const doId = encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue");
+      return pendenciasDoInicio(ag, doId, vivos, sessaoDoTicket, agendadorLigado, agora);
+    })
     .toSorted((a, b) => a.desde.localeCompare(b.desde));
 }
 
