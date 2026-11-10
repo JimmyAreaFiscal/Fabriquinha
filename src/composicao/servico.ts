@@ -156,7 +156,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c))
+      for (const fim of cicloDoDespacho(banco, c, {}, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -169,7 +169,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco));
+      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), {}, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

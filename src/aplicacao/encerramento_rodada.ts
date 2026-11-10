@@ -26,7 +26,7 @@ import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
-import type { instanteAtual } from "./relogio.ts";
+import type { Relogio } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarUsoDaConsulta } from "./trabalho/processo_do_ticket.ts";
 
@@ -133,13 +133,15 @@ function submeterEvidenciaDoEncerramento(
 /** Os fatos da conferência vão ao domínio, que volta a `implementar` com as correções ou leva ao gate. */
 function conferir(
   banco: DatabaseSync,
-  relogio: typeof instanteAtual,
+  relogio: Relogio,
   ref: RefRodada,
   ticket: TicketDemanda,
   fatos: { documentacao_entregue: boolean; conflito: boolean; check_falho: boolean; correcoes?: unknown[] },
 ): AgregadoDemanda {
   return comDemanda(banco, ref.demanda_id, (ag) =>
-    conferirPullRequestRodada(ag, { ...ref, ticket_id: ticket.ticket_id, ...fatos }, FABRIQUINHA, relogio()),
+    conferirPullRequestRodada(ag, { ...ref, ticket_id: ticket.ticket_id, ...fatos }, FABRIQUINHA, {
+      agora: relogio.agora(),
+    }),
   );
 }
 
@@ -154,7 +156,7 @@ function conferir(
  */
 export async function conferirEncerramentoRodada(
   banco: DatabaseSync,
-  relogio: typeof instanteAtual,
+  relogio: Relogio,
   ref: RefRodada,
 ): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, ref.demanda_id);
@@ -173,7 +175,7 @@ export async function conferirEncerramentoRodada(
 
 async function publicarEConferir(
   banco: DatabaseSync,
-  relogio: typeof instanteAtual,
+  relogio: Relogio,
   ag: AgregadoDemanda,
   ref: RefRodada,
   branchRodada: string,
@@ -293,7 +295,7 @@ async function publicarEConferir(
       url: publicado.url,
       head: publicado.head,
       estado: "aberto",
-      atualizado_em: relogio().agora,
+      atualizado_em: relogio.agora(),
     }),
   }));
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);

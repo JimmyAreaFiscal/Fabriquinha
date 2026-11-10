@@ -8,6 +8,7 @@ import { type EspacoDeTrabalho, espacoDoTicket } from "../../nucleo/espaco_de_tr
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { lerPlanoGravado } from "../../nucleo/plano.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
@@ -15,7 +16,6 @@ import { anotar, logDaOperacao } from "../../infra/registro.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../etapas/pi_vivo.ts";
-import { instanteAtual } from "../relogio.ts";
 import { varrerCommitsHumanos } from "../metricas/varrer_commits_humanos.ts";
 
 const gate = GATES.gate_planejamento;
@@ -30,10 +30,11 @@ export function reprovarGateDoPlanejamento(
   entrada: EntradaDoGate,
   ator: Ator,
   motivo: string,
+  relogio: Relogio,
 ): AgregadoDemanda {
   const { ticket_id } = gate.ancora(carregarDemanda(banco, endereco.demanda_id), endereco);
   const reprovado = comDemanda(banco, endereco.demanda_id, (ag) =>
-    gate.decidir(ag, endereco, entrada, ator, instanteAtual()),
+    gate.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() }),
   );
   mandarAoPiVivoOcioso(
     banco,
@@ -53,10 +54,11 @@ export async function aprovarGateDoPlanejamento(
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
+  relogio: Relogio,
 ): Promise<AgregadoDemanda> {
   const { demanda_id } = endereco;
   const ag = carregarDemanda(banco, demanda_id);
-  gate.ensaiar(ag, endereco, entrada, ator, instanteAtual()); // recusa antes de tocar o git (estado, falha, plano ausente)
+  gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de tocar o git (estado, falha, plano ausente)
   const { ticket_id } = gate.ancora(ag, endereco);
   const plano = lerPlanoGravado(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
@@ -86,7 +88,9 @@ export async function aprovarGateDoPlanejamento(
       throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
     }
   }
-  const aprovado = comDemanda(banco, demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, instanteAtual()));
+  const aprovado = comDemanda(banco, demanda_id, (a) =>
+    gate.decidir(a, endereco, entrada, ator, { agora: relogio.agora() }),
+  );
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
   encerrarPiVivo(banco, { demanda_id, ticket_id });
   return aprovado;

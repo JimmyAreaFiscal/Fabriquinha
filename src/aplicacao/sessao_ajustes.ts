@@ -21,7 +21,7 @@ import { descartarAlteracoes, exigirGitNoAmbiente } from "../infra/repositorio/w
 import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { encerrarPiVivo } from "./etapas/pi_vivo.ts";
-import { instanteAtual } from "./relogio.ts";
+import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
 
@@ -124,11 +124,16 @@ export function retomarSessaoAjustes(
 }
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */
-export async function concluirSessaoAjustes(banco: DatabaseSync, ref: RefRodada, ator: Ator): Promise<AgregadoDemanda> {
+export async function concluirSessaoAjustes(
+  banco: DatabaseSync,
+  ref: RefRodada,
+  ator: Ator,
+  relogio: Relogio = relogioDoSistema,
+): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = sessaoDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id, rodada_id: ref.rodada_id };
-  const concluir = (a: AgregadoDemanda) => concluirSessaoRodada(a, entrada, ator, instanteAtual());
+  const concluir = (a: AgregadoDemanda) => concluirSessaoRodada(a, entrada, ator, { agora: relogio.agora() });
   // Ensaio: uma conclusão rejeitada não pode derrubar a conversa; o agregado volta como veio, então nada é gravado.
   comDemanda(banco, ref.demanda_id, (a) => {
     concluir(a);

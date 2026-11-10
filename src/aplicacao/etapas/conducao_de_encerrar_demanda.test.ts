@@ -25,7 +25,7 @@ import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apo
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../infra/repositorio/worktree-demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { anotar } from "../../infra/registro.ts";
-import { instanteAtual } from "../relogio.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
 import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
@@ -180,9 +180,10 @@ async function cenario({
 
 /** Conduz o `encerrar_demanda` aberto, como o agendador, e devolve a demanda no fim do que deu para fazer. */
 async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDemanda = {}) {
-  await new ConducaoDeEncerrarDemanda({ banco, relogio: instanteAtual, condutor, registro: anotar }, opcoes).conduzir(
-    Endereco.doTicket(D, 8),
-  );
+  await new ConducaoDeEncerrarDemanda(
+    { banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar },
+    opcoes,
+  ).conduzir(Endereco.doTicket(D, 8));
   return carregarDemanda(banco, D);
 }
 
