@@ -1,0 +1,7 @@
+#!/bin/sh
+# O caso vem do arquivo `hook-caso` no diretório git da worktree: passa (padrão), reprova ou trava.
+caso=$(cat "$(git rev-parse --git-path hook-caso)" 2>/dev/null || echo passa)
+case "$caso" in
+  reprova) echo "hook: reprovado de propósito" >&2; exit 1 ;;
+  trava) echo "hook: dormindo além do limite"; exec sleep 3600 ;;
+esac

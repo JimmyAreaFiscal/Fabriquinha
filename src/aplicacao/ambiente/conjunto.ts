@@ -4,7 +4,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
-import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
+import { type EspacoDeTrabalho, pastaDaDemanda } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Instante } from "../../nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
@@ -19,9 +19,9 @@ import {
   reservarAmbienteParaEliminar,
 } from "../../armazenamento/ambientes.ts";
 import { configuracaoDoAmbiente } from "../../armazenamento/servico.ts";
-import { PACOTE } from "../../infra/agente/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../infra/agente/pi.ts";
 import { AmbienteContainer, dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
-import type { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
+import type { GeradorDeAmbientes, Montagens } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 
 const MS_POR_MINUTO = 60_000;
 
@@ -98,7 +98,14 @@ export class ConjuntoDeAmbientes {
     if (jaAlocado) return comoAmbienteContainer(jaAlocado, servico);
     const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
     if (livreReaproveitado) return comoAmbienteContainer(livreReaproveitado, servico);
-    return comoAmbienteContainer(await this.#criarAlocado(imagem, alocadoPara), servico);
+    const montagens = {
+      pastaDaDemanda: pastaDaDemanda(servico.raiz, projeto.nome, espaco.dono.demanda_id),
+      raiz_git: projeto.raiz_git,
+      raiz: servico.raiz,
+      pacote: PACOTE,
+      auth_json: join(dirDoPiDoAuditor(), "auth.json"),
+    };
+    return comoAmbienteContainer(await this.#criarAlocado(imagem, alocadoPara, montagens), servico);
   }
 
   /** Limpa o container do Espaço e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
@@ -171,8 +178,8 @@ export class ConjuntoDeAmbientes {
     );
   }
 
-  async #criarAlocado(imagem: string, alocadoPara: string): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco));
+  async #criarAlocado(imagem: string, alocadoPara: string, montagens: Montagens): Promise<AmbienteGravado> {
+    const criado = await this.#gerador.criar(imagem, configuracaoDoAmbiente(this.#banco), montagens);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,
