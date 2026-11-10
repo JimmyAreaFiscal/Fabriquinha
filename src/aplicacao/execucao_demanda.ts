@@ -179,7 +179,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       args,
       cwd: worktree,
       ambiente,
-      env: new HarnessPi().ambiente(raiz, dir, execucao.id),
+      env: new HarnessPi().ambiente(raiz, dir, execucao.id, ambiente.tipo),
       banco: c.banco,
       log,
       prompt,

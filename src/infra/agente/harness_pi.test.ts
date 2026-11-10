@@ -126,6 +126,37 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
   }
 });
 
+test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais de hospedagem ou do Sonar", () => {
+  const herdadas = {
+    HOME: "/home/host",
+    SSH_AUTH_SOCK: "/tmp/ssh",
+    GH_TOKEN: "segredo",
+    AZURE_DEVOPS_EXT_PAT: "segredo",
+    AZURE_OPENAI_API_KEY: "segredo",
+    SONAR_TOKEN: "segredo",
+    PI_CODING_AGENT_DIR: "/home/host/.pi/agent",
+    ANTHROPIC_API_KEY: "chave",
+  };
+  const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
+  Object.assign(process.env, herdadas);
+  try {
+    assert.deepEqual(harness.ambiente("/r", "/r/execucoes/E-7", 7, "container"), {
+      ANTHROPIC_API_KEY: "chave",
+      FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
+    });
+    assert.deepEqual(harness.ambiente("/r", "/r/avaliacoes/s", undefined, "container"), {
+      ANTHROPIC_API_KEY: "chave",
+      FABRIQUINHA_ROOT: "/r",
+      FABRIQUINHA_AUDITORIA: "1",
+    });
+  } finally {
+    for (const [nome, valor] of Object.entries(originais)) {
+      if (valor === undefined) Reflect.deleteProperty(process.env, nome);
+      else process.env[nome] = valor;
+    }
+  }
+});
+
 test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guarda, e o ambiente sem FABRIQUINHA_EXECUCAO", () => {
   const sessao = "11111111-1111-4111-8111-111111111111";
   const args = harness.argumentos({ raiz: "/r", sessaoPi: sessao });

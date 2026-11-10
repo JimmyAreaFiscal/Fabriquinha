@@ -47,15 +47,24 @@ interface ContainerDoAmbiente {
 
 const entreAspas = (texto: string): string => `'${texto.replaceAll("'", `'\\''`)}'`;
 
-/** Só o que o agente precisa; o resto do `env` do core, credenciais inclusive, não entra. */
-function variaveisPermitidas(env: Record<string, string>): Record<string, string> {
+/** As chaves de provedor do LLM de `env`, sem credencial de hospedagem nem do SonarQube. */
+export function chavesDeProvedorDoLlm(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
     Object.entries(env).filter(
-      ([nome]) =>
-        VARIAVEIS_DA_FABRIQUINHA.has(nome) ||
-        (nome.endsWith(SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM) && !CREDENCIAL_QUE_NUNCA_ENTRA.test(nome)),
+      (entrada): entrada is [string, string] =>
+        entrada[1] !== undefined &&
+        entrada[0].endsWith(SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM) &&
+        !CREDENCIAL_QUE_NUNCA_ENTRA.test(entrada[0]),
     ),
   );
+}
+
+/** Só o que o agente precisa; o resto do `env` do core, credenciais inclusive, não entra. */
+function variaveisPermitidas(env: Record<string, string>): Record<string, string> {
+  return {
+    ...Object.fromEntries(Object.entries(env).filter(([nome]) => VARIAVEIS_DA_FABRIQUINHA.has(nome))),
+    ...chavesDeProvedorDoLlm(env),
+  };
 }
 
 export class AmbienteContainer implements Ambiente {
