@@ -181,16 +181,23 @@ export interface PedidoDeProcesso {
 }
 
 /** O sinal a um processo que não vai esperar a resposta; a falha do sinal vai para o log, nunca derruba o serviço. */
-function sinalizarSemEsperar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): void {
-  ambienteDoServico().sinalizar(identificador, sinal).catch(noLog);
+function sinalizarSemEsperar(
+  ambienteDoProcesso: Ambiente,
+  identificador: IdentificadorDoProcesso,
+  sinal: NodeJS.Signals,
+): void {
+  ambienteDoProcesso.sinalizar(identificador, sinal).catch(noLog);
 }
 
 export class CondutorDeTrabalhos {
   private readonly harness = new HarnessPi();
   private readonly vivas = new Map<Id | string, Viva>();
   private readonly ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
-  /** Os processos de ticket com condutor vivo, por id, com o grupo do pi depois de lançado. */
-  private readonly ativas = new Map<string, { identificador?: IdentificadorDoProcesso; interrompida?: boolean }>();
+  /** Os processos de ticket com condutor vivo, por id, com o grupo do pi e o Ambiente que o lançou, depois de lançado. */
+  private readonly ativas = new Map<
+    string,
+    { identificador?: IdentificadorDoProcesso; ambienteDoPi?: Ambiente; interrompida?: boolean }
+  >();
   /** Os condutores em curso, por id do processo: o `parar` do serviço os espera antes de fechar o banco. */
   private readonly condutores = new Map<string, Promise<unknown>>();
   /** As sessões com pi subindo, vivo ou parando: no máximo um pi por sessão. */
@@ -340,7 +347,7 @@ export class CondutorDeTrabalhos {
     const viva = this.ativas.get(id);
     if (!viva) return false;
     viva.interrompida = true;
-    if (viva.identificador) sinalizarSemEsperar(viva.identificador, "SIGTERM");
+    if (viva.identificador && viva.ambienteDoPi) sinalizarSemEsperar(viva.ambienteDoPi, viva.identificador, "SIGTERM");
     return true;
   }
 
@@ -373,8 +380,8 @@ export class CondutorDeTrabalhos {
       return resultado;
     };
     if ((await esperar(limiteMs)) === "limite") {
-      for (const { identificador } of this.ativas.values()) {
-        if (identificador) sinalizarSemEsperar(identificador, "SIGKILL");
+      for (const { identificador, ambienteDoPi } of this.ativas.values()) {
+        if (identificador && ambienteDoPi) sinalizarSemEsperar(ambienteDoPi, identificador, "SIGKILL");
       }
       await esperar(aposKillMs);
     }
@@ -394,9 +401,10 @@ export class CondutorDeTrabalhos {
       ...recolherGruposDasAvaliacoes(banco),
       ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
     ];
-    const { id: ambiente_id } = ambienteDoServico();
+    const ambiente = ambienteDoServico();
     // ponytail: o host local sinaliza na hora; com Ambiente remoto a recuperação passa a esperar os sinais (demanda 24).
-    for (const grupo_processo of grupos) sinalizarSemEsperar({ ambiente_id, grupo_processo }, "SIGKILL");
+    for (const grupo_processo of grupos)
+      sinalizarSemEsperar(ambiente, { ambiente_id: ambiente.id, grupo_processo }, "SIGKILL");
     recuperarProcessosAbertos(banco, this.avisar);
   }
 
@@ -618,8 +626,9 @@ export class CondutorDeTrabalhos {
       let agenteTerminou = false;
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
+      const ambienteDoPi = r.ambiente ?? ambienteDoServico();
       const pi = this.harness.lancar(
-        r.ambiente ?? ambienteDoServico(),
+        ambienteDoPi,
         r.args,
         { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {
@@ -680,8 +689,9 @@ export class CondutorDeTrabalhos {
         const ativa = this.ativas.get(String(id));
         if (ativa) {
           ativa.identificador = pi.identificador;
+          ativa.ambienteDoPi = ambienteDoPi;
           // Interrompido durante a preparação: o pi que acaba de subir recebe o término já.
-          if (ativa.interrompida) sinalizarSemEsperar(pi.identificador, "SIGTERM");
+          if (ativa.interrompida) sinalizarSemEsperar(ambienteDoPi, pi.identificador, "SIGTERM");
         }
         r.aoLancar(pi.identificador.grupo_processo);
       }

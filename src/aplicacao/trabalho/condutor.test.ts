@@ -9,7 +9,9 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
+import { AmbienteContainer, dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { executar } from "../../infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "../auditor_automatico.ts";
@@ -548,4 +550,79 @@ test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que 
       Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
   assert.deepEqual(await condutor.consultar("pergunta", undefined, 1000, pi(0)), { saida: "resposta", uso: [] });
   assert.equal(await condutor.consultar("pergunta", undefined, 1000, pi(1)), undefined);
+});
+
+/** Um pi falso em `[ao vivo]` (que não termina sozinho) lançado pelo AmbienteContainer, com o condutor acompanhando-o. */
+async function lancarPiNoContainer() {
+  const dir = mkdtempSync(join(base, "container-"));
+  const dirDoDockerFalso = join(dir, "docker");
+  const docker = instalarDockerFalso(dirDoDockerFalso);
+  const { id: container_id } = docker.semearContainer({});
+  const ambienteContainer = new AmbienteContainer({
+    id: "amb-1",
+    container_id,
+    bin_do_pacote: join(dir, "pacote-pi", "bin"),
+    dir_do_pi: dirDoPiDoAmbiente(dir, "amb-1"),
+    url_da_api: "http://host.docker.internal:3000",
+  });
+  const id = `ticket-no-container-${String(++n)}`;
+  let grupoDoPi = 0;
+  const fim = condutor.acompanhar(id, () =>
+    condutor.iniciar({
+      execucao: { id, sessaoPi: id, modo: "autonomo" },
+      args: [],
+      cwd: dir,
+      ambiente: ambienteContainer,
+      env: { ...process.env },
+      log: join(dir, "log"),
+      prompt: "[ao vivo]",
+      limiteMin: 1,
+      aoLancar: (grupo) => {
+        grupoDoPi = grupo;
+      },
+    }),
+  );
+  const arquivoDoPid = () => join(dirDoDockerFalso, "pids", container_id, String(grupoDoPi));
+  await ate(
+    () => grupoDoPi !== 0 && existsSync(arquivoDoPid()) && readFileSync(arquivoDoPid(), "utf8").trim() !== "",
+    "o pi no container",
+  );
+  const grupoNoHost = Number(readFileSync(arquivoDoPid(), "utf8"));
+  const sinaisPeloDocker = () =>
+    docker
+      .registro()
+      .filter(
+        ([comando, alvo, , , roteiro]) =>
+          comando === "exec" && alvo === container_id && String(roteiro).startsWith("kill -"),
+      )
+      .map(([, , , , roteiro]) => String(roteiro).split(" ")[1]);
+  const piEstaVivo = () => {
+    try {
+      process.kill(-grupoNoHost, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return { id, fim, sinaisPeloDocker, piEstaVivo, ambienteDoPi: ambienteContainer };
+}
+
+test("interromper sinaliza o pi pelo Ambiente que o lançou: SIGTERM por docker exec dentro do container", async () => {
+  const { id, fim, sinaisPeloDocker, piEstaVivo } = await lancarPiNoContainer();
+  assert.equal(piEstaVivo(), true);
+  assert.equal(condutor.interromper(id), true);
+  await fim;
+  condutor.deixarDeAcompanhar(id);
+  // Depois do fim, o harness ainda manda TERM e KILL de limpeza; o que prova o caminho é o primeiro sinal.
+  assert.equal(sinaisPeloDocker()[0], "-TERM");
+  assert.equal(piEstaVivo(), false);
+});
+
+test("a parada do serviço passado o limite mata o pi pelo Ambiente que o lançou: SIGKILL por docker exec", async () => {
+  const { id, fim, sinaisPeloDocker, piEstaVivo } = await lancarPiNoContainer();
+  await condutor.aguardarTodos(50);
+  await fim;
+  condutor.deixarDeAcompanhar(id);
+  assert.equal(sinaisPeloDocker()[0], "-KILL");
+  assert.equal(piEstaVivo(), false);
 });

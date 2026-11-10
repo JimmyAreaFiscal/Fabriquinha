@@ -260,6 +260,21 @@ test("sinalizar: o sinal chega ao grupo inteiro do processo, dentro do container
   assert.match(String(exec[4]), /^kill -KILL -"\$\(cat \/fabriquinha\/pids\/\d+ 2>\/dev\/null\)" 2>\/dev\/null$/);
 });
 
+test("sinalizar: o SIGTERM também alcança o grupo pelo docker exec e o programa sai por ele", async () => {
+  const processo = ambiente.lancar(comando("sleep", ["30"]));
+  const grupo = await esperarOArquivoDePid(processo.identificador.grupo_processo);
+  await ambiente.sinalizar(processo.identificador, "SIGTERM");
+  assert.equal(await processo.saiu, 143);
+  assert.equal(grupoEstaVivo(grupo), false);
+  assert.ok(
+    docker
+      .registro()
+      .some(
+        ([comandoDoDocker, , , , roteiro]) => comandoDoDocker === "exec" && String(roteiro).startsWith("kill -TERM -"),
+      ),
+  );
+});
+
 test("sinalizar: grupo que já acabou ou que nunca existiu é ignorado", async () => {
   await assert.doesNotReject(ambiente.sinalizar({ ambiente_id: "amb-1", grupo_processo: 2 ** 30 }, "SIGTERM"));
 });
