@@ -1,14 +1,13 @@
 // CLI `fabriquinha` (F7 §3): sem `FABRIQUINHA_EXECUCAO`, o serviço (`servidor`, `abrir`) e a ferramenta externa
 // (`demanda ...`); com ela, só o agente da execução da demanda. Converte a entrada, chama o comando e traduz o resultado
 // em uma linha de JSON e o erro em uma linha de texto. Nenhuma regra mora aqui.
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { z, ZodError } from "zod";
 import { ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
+import { lancarSolto } from "../../infra/processo.ts";
 import { iniciarServico } from "../../composicao/servico.ts";
 import { abrir as abrirBanco, raizPadrao } from "../../armazenamento/banco.ts";
 import {
@@ -75,20 +74,14 @@ const COMANDOS_DO_SERVICO: readonly ComandoDoServico[] = [
         throw new ErroDeRegra(`o serviço não está rodando: falta ${arquivo}`, "suba-o com fabriquinha servidor");
       }
       const url = readFileSync(arquivo, "utf8").trim();
-      const navegador = spawn(comandoDoNavegador(process.platform), [url], {
-        env: io.env,
-        detached: true,
-        stdio: "ignore",
-      });
       try {
-        await once(navegador, "spawn");
+        await lancarSolto(comandoDoNavegador(process.platform), [url], io.env);
       } catch (error_) {
         throw new ErroDeRegra(
           `a Fabriquinha não conseguiu abrir o navegador: ${mensagem(error_)}`,
           `abra ${url} no navegador`,
         );
       }
-      navegador.unref();
       return { url };
     },
   },

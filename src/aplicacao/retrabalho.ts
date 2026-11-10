@@ -12,7 +12,8 @@ import {
 import { noLog } from "../infra/registro.ts";
 import { buscarProjeto, projetoExistente } from "../armazenamento/projetos.ts";
 import { type CommitHumano, cursorDaBase, gravarVarredura } from "../armazenamento/retrabalho.ts";
-import { executar, git, LIMITE_COMANDO_MS } from "../infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../infra/ambiente/ambiente.ts";
+import { executar, git } from "../infra/processo.ts";
 import { exigirGit, naFilaDoProjeto } from "../infra/repositorio/worktree.ts";
 
 /** Cabeçalho de hunk do `-U0`: `@@ -início[,quantidade] ...`, sem quantidade quando é uma linha só. */

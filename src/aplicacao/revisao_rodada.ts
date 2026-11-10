@@ -4,27 +4,29 @@ import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
+import { branchDemanda, branchRodada, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
-import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { escrever, raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
-import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
+import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { submeterEvidencia } from "./evidencia/submeter.ts";
-import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 
-/** `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui). */
-/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
+/**
+ * `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui).
+ * Devolve o Espaço da rodada que ela criou para rodar a fitness.
+ */
 export async function prepararRevisaoRodada(
   banco: DatabaseSync,
   ref: { demanda_id: string; ticket_id: number },
-): Promise<void> {
+): Promise<{ pasta: string; buscouBase: boolean }> {
   const { demanda_id, ticket_id } = ref;
   const ag = carregarDemanda(banco, demanda_id);
   const { rodada_id } = encontrado(
@@ -41,10 +43,14 @@ export async function prepararRevisaoRodada(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
   const raiz = raizDo(banco);
-  const { pasta: worktree } = await cicloDoEspaco(espacoDoTicket(ag, { rodada_id }, projeto, raiz), projeto, {
-    raiz,
-    log: `${raiz}/log`,
-  }).criar();
+  const ambiente = ambienteDoServico();
+  const espaco = await cicloDoEspaco(
+    espacoDoTicket(ag, { rodada_id }, projeto, raiz),
+    projeto,
+    { raiz, log: `${raiz}/log` },
+    ambiente,
+  ).criar();
+  const worktree = espaco.pasta;
 
   // `base...head` é o diff desde o ancestral comum: o que a rodada fez, mesmo se a demanda avançou depois.
   const rev = async (branch: string) => (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();
@@ -71,7 +77,10 @@ export async function prepararRevisaoRodada(
     previstosNaoTocados: previstos.filter((p) => !arquivos.some((a) => casa(a, p))),
   };
 
-  const fitness = await exigidaPelaEtapa("revisar_rodada", new VerificacaoDeFitness(projeto)).coletar({ worktree });
+  const { fitness: verificacaoDeFitness } = montarVerificacoesDaEtapa("revisar_rodada", {
+    fitness: () => new VerificacaoDeFitness(projeto),
+  });
+  const fitness = await verificacaoDeFitness.coletar({ ambiente, worktree });
   const linhas = (fitness.dados.linhas as Record<string, unknown>[]).map((l) => ({
     ...l,
     log: `${String(l.nome)}.log`,
@@ -105,20 +114,5 @@ export async function prepararRevisaoRodada(
   } finally {
     rmSync(pastaDosLogs, { recursive: true, force: true });
   }
-}
-
-/** Reserva e executa o `revisar_rodada` atual da rodada, com as evidências da Fabriquinha preparadas antes do pi. */
-export async function conduzirRevisaoRodada(
-  banco: DatabaseSync,
-  ref: { demanda_id: string; rodada_id: number },
-  opcoes: Omit<OpcoesRevisao, "preparar">,
-): Promise<ResultadoRevisao> {
-  const { demanda_id, rodada_id } = ref;
-  const { ticket_id } = encontrado(
-    ticketAtualDaEtapa(carregarDemanda(banco, demanda_id), "revisar_rodada", rodada_id),
-    `a rodada ${formatarRodadaRef(ref)} não tem ticket revisar_rodada`,
-    "use uma rodada da demanda que esteja em revisão",
-  );
-  const alvo = { demanda_id, ticket_id };
-  return conduzirRevisao(banco, alvo, { ...opcoes, preparar: () => prepararRevisaoRodada(banco, alvo) });
+  return espaco;
 }

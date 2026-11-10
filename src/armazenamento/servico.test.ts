@@ -3,9 +3,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
-import { configuracao, limiteParalelismo, salvarConfiguracao } from "./servico.ts";
+import {
+  configuracao,
+  configuracaoDoAmbiente,
+  limiteParalelismo,
+  salvarConfiguracao,
+  salvarConfiguracaoDoAmbiente,
+} from "./servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
+const AMBIENTE_PADRAO = {
+  tipo: "host_local",
+  memoria_maxima_mb: 2048,
+  cpus: 2,
+  ociosidade_para_eliminar_min: 60,
+};
 const novoBanco = () => abrirBancoTemporario().banco;
 
 test("configuração: linha única, agendador desligado por padrão, salvar validado por zod", () => {
@@ -59,5 +71,22 @@ test("CA-6: limite de paralelismo tem padrão 4 e é lido da coluna própria", (
   banco.prepare("UPDATE configuracao SET limite_paralelismo = 3").run();
   assert.equal(limiteParalelismo(banco), 3);
   assert.equal(configuracao(banco).intervaloMin, 5, "o limite fica fora de `Configuracao`");
+  banco.close();
+});
+
+test("configuração do Ambiente: host_local por padrão, gravada à parte da Configuração, validada por zod", () => {
+  const banco = novoBanco();
+  assert.deepEqual(configuracaoDoAmbiente(banco), AMBIENTE_PADRAO);
+
+  const nova = { tipo: "container", memoria_maxima_mb: 512, cpus: 0.5, ociosidade_para_eliminar_min: 5 };
+  assert.deepEqual(salvarConfiguracaoDoAmbiente(banco, nova), nova);
+  assert.deepEqual(configuracaoDoAmbiente(banco), nova);
+  salvarConfiguracao(banco, { agendadorAtivo: true });
+  assert.deepEqual(configuracaoDoAmbiente(banco), nova, "a web grava a Configuração sem tocar no Ambiente");
+  assert.deepEqual(salvarConfiguracaoDoAmbiente(banco, {}), AMBIENTE_PADRAO, "campo ausente volta ao padrão");
+
+  for (const errada of [{ tipo: "vm" }, { memoria_maxima_mb: 511 }, { cpus: 0 }, { ociosidade_para_eliminar_min: 4 }])
+    assert.throws(() => salvarConfiguracaoDoAmbiente(banco, errada), ZodError);
+  assert.deepEqual(configuracaoDoAmbiente(banco), AMBIENTE_PADRAO, "a rejeitada não gravou nada");
   banco.close();
 });

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
 import { HooksDoCommit } from "./hooks_do_commit.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 
-const contexto = { worktree: "/tmp/worktree" };
+const contexto = { ambiente: new AmbienteHostLocal(), worktree: "/tmp/worktree" };
 
 test("o commit que passa é 'passou', sem relatório, e recebe o contexto", async () => {
   const recebidos: unknown[] = [];
@@ -33,9 +34,8 @@ test("o hook que reprova o commit é reprovação com a saída; o que estoura o 
   });
 });
 
-test("outro erro propaga, e os hooks não geram Evidência", async () => {
+test("outro erro propaga", async () => {
   const hooks = new HooksDoCommit(() => Promise.reject(new Error("disco cheio")));
 
   await assert.rejects(hooks.executar(contexto), /disco cheio/);
-  await assert.rejects(hooks.coletar(), /não geram Evidência/);
 });

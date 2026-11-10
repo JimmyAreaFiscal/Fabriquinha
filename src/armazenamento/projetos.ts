@@ -25,7 +25,7 @@ function noSnapshot<T>(banco: DatabaseSync, leitura: () => T): T {
   }
 }
 
-const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto";
+const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente";
 
 /** Monta o projeto da `linha` com as tabelas da sua configuração; quem chama garante o snapshot. */
 function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
@@ -123,10 +123,10 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
   escrever(banco, () => {
     banco
       .prepare(
-        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (nome) DO UPDATE SET raiz_git = excluded.raiz_git, branch_base = excluded.branch_base,
            hospedagem = excluded.hospedagem, chave_sonarqube = excluded.chave_sonarqube,
-           link_produto = excluded.link_produto`,
+           link_produto = excluded.link_produto, imagem_do_ambiente = excluded.imagem_do_ambiente`,
       )
       .run(
         nome,
@@ -135,6 +135,7 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
         projeto.hospedagem,
         projeto.chave_sonarqube,
         projeto.link_produto ?? null,
+        projeto.imagem_do_ambiente ?? null,
       );
     for (const tabela of [
       "glob_e2e",

@@ -6,6 +6,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
 import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 import type { executar } from "../processo.ts";
 import { HarnessPi, divisorJsonl } from "./harness_pi.ts";
 import { PACOTE } from "./pi.ts";
@@ -173,7 +174,9 @@ test("pi que nem roda: o erro vai para o log, saiu resolve, e enviar e parar nã
   const log = join(base, "log-inexistente");
   process.env.FABRIQUINHA_PI = join(base, "nao-existe");
   try {
-    const pi = harness.lancar([], { cwd: base, env: process.env, log }, () => undefined);
+    // Variável indefinida do env não vai ao Ambiente.
+    const env = { ...process.env, SEM_VALOR: undefined };
+    const pi = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env, log }, () => undefined);
     pi.enviar({ type: "prompt", message: "oi" });
     assert.equal(await pi.saiu, -2);
     await pi.parar();
@@ -196,7 +199,9 @@ test("stdout: cada objeto JSON vira evento; texto solto, null e número vão par
   process.env.FABRIQUINHA_ROOT = base;
   try {
     const eventos: unknown[] = [];
-    const pi = harness.lancar([], { cwd: base, env: process.env, log }, (e) => eventos.push(e));
+    const pi = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env: process.env, log }, (e) =>
+      eventos.push(e),
+    );
     assert.equal(await pi.saiu, 0);
     assert.deepEqual(eventos, [{ type: "agent_settled" }]);
     const texto = readFileSync(log, "utf8");
@@ -219,9 +224,14 @@ test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", a
   process.env.FABRIQUINHA_ROOT = base;
   try {
     // O pi só termina no EOF; sem fecharStdin, ficaria preso até o parar().
-    const piFechado = harness.lancar([], { cwd: base, env: process.env, log, fecharStdin: true }, () => undefined);
+    const piFechado = harness.lancar(
+      new AmbienteHostLocal(),
+      [],
+      { cwd: base, env: process.env, log, fecharStdin: true },
+      () => undefined,
+    );
     assert.equal(await piFechado.saiu, 0);
-    const aberto = harness.lancar([], { cwd: base, env: process.env, log }, () => undefined);
+    const aberto = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env: process.env, log }, () => undefined);
     const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
     assert.equal(preso, "preso");
     await aberto.parar();

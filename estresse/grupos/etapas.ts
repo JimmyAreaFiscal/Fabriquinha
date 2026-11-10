@@ -25,8 +25,7 @@ import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_dema
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
 import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
+import { interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
 import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
@@ -39,7 +38,7 @@ import { integrarPR } from "../../src/infra/repositorio/pr.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
 export const EXECUCOES = 5;
@@ -215,12 +214,7 @@ const verificacoes = (): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
 const deps: DepsDespacho = {
-  iniciarProcesso: (banco, t, opcoes) =>
-    iniciarExecucaoDemanda(banco, t, {
-      ...opcoes,
-      fechar: (b, ref, r) =>
-        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes()) }),
-    }),
+  implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes()) },
   verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
 };
 

@@ -17,10 +17,11 @@ import {
 import { recolherGruposDasAvaliacoes } from "../../armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../armazenamento/simulacao.ts";
 import { processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
-import { HarnessPi, type RespostaDaConsulta } from "../../infra/agente/harness_pi.ts";
+import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/agente/harness_pi.ts";
 import type { EventoPi } from "../../infra/agente/pi.ts";
-import { type executar, sinalNoGrupo } from "../../infra/processo.ts";
-import { anotar } from "../../infra/registro.ts";
+import type { IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
+import { anotar, noLog } from "../../infra/registro.ts";
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "../auditor_automatico.ts";
 import { type AvisarSessao, recuperarProcessosAbertos } from "./processo_do_ticket.ts";
 
@@ -173,12 +174,17 @@ export interface PedidoDeProcesso {
   silencioMaximoDoModeloMin?: number;
 }
 
+/** O sinal a um processo que não vai esperar a resposta; a falha do sinal vai para o log, nunca derruba o serviço. */
+function sinalizarSemEsperar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): void {
+  ambienteDoServico().sinalizar(identificador, sinal).catch(noLog);
+}
+
 export class CondutorDeTrabalhos {
   private readonly harness = new HarnessPi();
   private readonly vivas = new Map<Id | string, Viva>();
   private readonly ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
   /** Os processos de ticket com condutor vivo, por id, com o grupo do pi depois de lançado. */
-  private readonly ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
+  private readonly ativas = new Map<string, { identificador?: IdentificadorDoProcesso; interrompida?: boolean }>();
   /** Os condutores em curso, por id do processo: o `parar` do serviço os espera antes de fechar o banco. */
   private readonly condutores = new Map<string, Promise<unknown>>();
   /** As sessões com pi subindo, vivo ou parando: no máximo um pi por sessão. */
@@ -311,7 +317,7 @@ export class CondutorDeTrabalhos {
     const viva = this.ativas.get(id);
     if (!viva) return false;
     viva.interrompida = true;
-    if (viva.pgid !== undefined) sinalNoGrupo(viva.pgid, "SIGTERM");
+    if (viva.identificador) sinalizarSemEsperar(viva.identificador, "SIGTERM");
     return true;
   }
 
@@ -344,7 +350,9 @@ export class CondutorDeTrabalhos {
       return resultado;
     };
     if ((await esperar(limiteMs)) === "limite") {
-      for (const { pgid } of this.ativas.values()) if (pgid !== undefined) sinalNoGrupo(pgid, "SIGKILL");
+      for (const { identificador } of this.ativas.values()) {
+        if (identificador) sinalizarSemEsperar(identificador, "SIGKILL");
+      }
       await esperar(aposKillMs);
     }
     this.parando = false;
@@ -363,7 +371,9 @@ export class CondutorDeTrabalhos {
       ...recolherGruposDasAvaliacoes(banco),
       ...falharPendentes(banco, falhaPorServicoReiniciado.motivo),
     ];
-    for (const grupo of grupos) sinalNoGrupo(grupo, "SIGKILL");
+    const { id: ambiente_id } = ambienteDoServico();
+    // ponytail: o host local sinaliza na hora; com Ambiente remoto a recuperação passa a esperar os sinais (demanda 24).
+    for (const grupo_processo of grupos) sinalizarSemEsperar({ ambiente_id, grupo_processo }, "SIGKILL");
     recuperarProcessosAbertos(banco, this.avisar);
   }
 
@@ -375,7 +385,7 @@ export class CondutorDeTrabalhos {
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
-    rodar?: typeof executar,
+    rodar?: RodarComando,
   ): Promise<RespostaDaConsulta | undefined> {
     return this.harness.perguntar(prompt, modelo, limiteMs, rodar);
   }
@@ -584,6 +594,7 @@ export class CondutorDeTrabalhos {
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
       const pi = this.harness.lancar(
+        ambienteDoServico(),
         r.args,
         { cwd: r.cwd, env: r.env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {
@@ -640,14 +651,14 @@ export class CondutorDeTrabalhos {
         },
       );
       // Sem pid (o pi nem subiu) não há grupo a gravar; o `saiu` do pi relata o erro.
-      if (Number.isInteger(pi.pgid)) {
+      if (Number.isInteger(pi.identificador.grupo_processo)) {
         const ativa = this.ativas.get(String(id));
         if (ativa) {
-          ativa.pgid = pi.pgid;
+          ativa.identificador = pi.identificador;
           // Interrompido durante a preparação: o pi que acaba de subir recebe o término já.
-          if (ativa.interrompida) sinalNoGrupo(pi.pgid, "SIGTERM");
+          if (ativa.interrompida) sinalizarSemEsperar(pi.identificador, "SIGTERM");
         }
-        r.aoLancar(pi.pgid);
+        r.aoLancar(pi.identificador.grupo_processo);
       }
       void pi.saiu.then((codigo) => {
         if (r.terminaSozinho) {

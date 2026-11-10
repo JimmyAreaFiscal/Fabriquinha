@@ -1,7 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
+import type { PendenciaDoInicio } from "../../http/rotas/inicio.ts";
 import { type DadosDaPagina, type DemandaDoQuadro, pagina, quadro } from "./demandas.ts";
+
+const ACAO_DO_TIPO: Record<PendenciaDoInicio["tipo"], PendenciaDoInicio["acao_esperada"]> = {
+  gate_humano: "decidir_gate",
+  item_bloqueado: "reabrir_com_instrucao",
+  dialogo_do_agente: "responder",
+  revisao_parada: "reabrir_com_instrucao",
+  acao_externa: "integrar_na_plataforma",
+  despacho_parado: "executar",
+};
+
+/** Uma Pendência como o servidor a manda; o `motivo` é o texto pronto. */
+const pendencia = (tipo: PendenciaDoInicio["tipo"], item: string, motivo = "motivo"): PendenciaDoInicio => ({
+  tipo,
+  item,
+  motivo,
+  acao_esperada: ACAO_DO_TIPO[tipo],
+  desde: "2026-11-05T10:00:00.000Z",
+  demanda: item.split(".")[0] ?? item,
+  projeto: "loja",
+  titulo: "t",
+});
 
 const demanda = (id: string, resto: Partial<DemandaDoQuadro> = {}): DemandaDoQuadro => ({
   id,
@@ -11,8 +33,7 @@ const demanda = (id: string, resto: Partial<DemandaDoQuadro> = {}): DemandaDoQua
   terminal: false,
   rodadas: [],
   bloqueios: [],
-  falhos: [],
-  aguarda_merge: false,
+  pendencias: [],
   ...resto,
 });
 
@@ -44,6 +65,7 @@ test("o cartão traz o título, o estado, as rodadas e o link do PR só na rodad
   const html = quadro({
     demandas: [
       demanda("I-206", {
+        pendencias: [pendencia("gate_humano", "I-206.R1")],
         rodadas: [
           { ref: "I-206.R1", estado: "gate_pr", pr: { id: "7", url: "https://pr/7?a=1&b=2" } },
           { ref: "I-206.R2", estado: "implementar" },
@@ -60,31 +82,34 @@ test("o cartão traz o título, o estado, as rodadas e o link do PR só na rodad
   );
   assert.match(html, /I-206\.R2<\/span> <span class="pill pill-rodando">Desenvolvimento<\/span><\/li>/);
   assert.equal(html.match(/target="_blank"/g)?.length, 1);
-  assert.match(html, /aguarda a decisão do Auditor/);
+  assert.match(html, /aguarda você · gate · I-206\.R1/);
   assert.match(html, /href="\/demandas\/I-206">abrir a demanda →/);
 });
 
-test("as marcas: gate da demanda, ticket falho e bloqueio com título e estado (CA-3 a CA-5)", () => {
+test("as marcas: uma por Pendência, do tipo e do item, e a dependência à parte, com título e estado (CA-3 a CA-5)", () => {
   const html = quadro({
     demandas: [
       demanda("I-206"),
       demanda("I-207", {
-        falhos: [{ ref: "I-207.T1", etapa: "implementar" }],
+        pendencias: [pendencia("item_bloqueado", "I-207.T1")],
         bloqueios: [
           { demanda_id: "I-206", estado: "em_execucao" },
           { demanda_id: "I-300", estado: "planejar" },
         ],
       }),
-      demanda("I-208", { estado: "gate_demanda" }),
-      demanda("I-209", { estado: "gate_planejamento" }),
+      demanda("I-208", { estado: "gate_demanda", pendencias: [pendencia("gate_humano", "I-208")] }),
+      demanda("I-209", { estado: "encerrar_demanda", pendencias: [pendencia("acao_externa", "I-209")] }),
     ],
     trabalho: [],
   });
-  assert.match(html, /ticket falho I-207\.T1/);
-  assert.match(html, /aguarda I-206 · Demanda I-206 · Execução/);
-  assert.match(html, /aguarda I-300 · Planejamento</);
-  assert.equal(html.match(/aguarda a decisão do Auditor/g)?.length, 2);
-  assert.equal(html.match(/class="cartao dm-cartao aguarda"/g)?.length, 2);
+  assert.match(html, /pill-falha">aguarda você · bloqueado · I-207\.T1/);
+  assert.match(html, /bloqueada por I-206 · Demanda I-206 · Execução/);
+  assert.match(html, /bloqueada por I-300 · Planejamento</);
+  assert.match(html, /pill-aguarda">aguarda você · gate · I-208/);
+  assert.match(html, /pill-aguarda">aguarda você · ação externa · I-209/);
+  // A dependência não é "Aguarda você": o cartão da I-206 e o da I-207 só ganham a classe pelo que a I-207 e as outras esperam.
+  assert.equal(html.match(/class="cartao dm-cartao aguarda"/g)?.length, 3);
+  assert.doesNotMatch(html, /aguarda você · [^<]*I-300/);
 });
 
 test("o texto do servidor é escapado", () => {
@@ -94,6 +119,7 @@ test("o texto do servidor é escapado", () => {
 });
 
 const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
+  pendencias: [],
   demanda: {
     id: "I-206",
     projeto: "loja",
@@ -314,10 +340,19 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   assert.ok(html.indexOf('id="I-206.R2"') < html.indexOf("titulo-depois"));
 });
 
-test("Aguarda você liga ao gate do estado, ao PR e à sessão da rodada e aos tickets que pedem o Auditor", () => {
+test("Aguarda você mostra as Pendências do servidor e liga cada uma ao lugar onde o Auditor resolve", () => {
   const html = pagina(
     dadosDaPagina({
       demanda: { ...dadosDaPagina().demanda, estado: "gate_planejamento" },
+      pendencias: [
+        pendencia("gate_humano", "I-206", "Aprovação do planejamento aguarda decisão"),
+        pendencia("gate_humano", "I-206.R1", "PR #7 da rodada aguarda decisão"),
+        pendencia("dialogo_do_agente", "I-206.R2", "A sessão de ajustes do resultado aguarda o Auditor"),
+        pendencia("item_bloqueado", "I-206.T1", "Tentativas esgotadas: <x>"),
+        pendencia("despacho_parado", "I-206.T2"),
+        pendencia("dialogo_do_agente", "I-206.T4", "O agente pergunta: seguir?"),
+        pendencia("revisao_parada", "I-206", "A revisão integral não começou"),
+      ],
       rodadas: [
         { ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: {} },
         { ref: "I-206.R2", titulo: "r", estado: "ajustar_resultado", ticket_atual_por_etapa: {} },
@@ -353,11 +388,14 @@ test("Aguarda você liga ao gate do estado, ao PR e à sessão da rodada e aos t
     }),
   );
   const aguarda = trecho(html, "dm-aguarda");
-  assert.match(aguarda, /href="#gate">Aprovação do planejamento ↓/);
-  assert.match(aguarda, /href="#pr-I-206\.R1">Aprovação do PR · I-206\.R1 ↓/);
-  assert.match(aguarda, /href="#ajustes-I-206\.R2">Sessão de ajustes · I-206\.R2 ↓/);
-  assert.match(aguarda, /href="#I-206\.T1">Reabrir I-206\.T1 · Refazer &#60;x&#62; ↓/);
-  assert.match(aguarda, /href="#I-206\.T2">Executar I-206\.T2 ↓/);
+  assert.match(aguarda, /href="#gate">Decidir I-206: Aprovação do planejamento aguarda decisão ↓/);
+  assert.match(aguarda, /href="#pr-I-206\.R1">Decidir I-206\.R1: PR #7 da rodada aguarda decisão ↓/);
+  assert.match(aguarda, /href="#ajustes-I-206\.R2">Responder I-206\.R2: A sessão de ajustes/);
+  assert.match(aguarda, /href="#I-206\.T1">Reabrir o ticket I-206\.T1: Tentativas esgotadas: &#60;x&#62; ↓/);
+  assert.match(aguarda, /href="#I-206\.T2">Executar I-206\.T2: motivo ↓/);
+  assert.match(aguarda, /href="#I-206\.T4">Responder I-206\.T4: O agente pergunta: seguir\? ↓/);
+  // A revisão parada não tem lugar na página: o texto fica sem link.
+  assert.match(aguarda, /<li>Ver a demanda I-206: A revisão integral não começou<\/li>/);
   assert.doesNotMatch(aguarda, /I-206\.T3|I-206\.R3/);
   // Só o aberto elegível tem o marco em destaque.
   assert.match(html, /<li class="dm-ticket dm-marco-elegivel" id="I-206\.T2">/);
@@ -632,6 +670,7 @@ test("a integração à espera do merge humano: o passo, o link do PR e o Aguard
   const html = pagina(
     dadosDaPagina({
       demanda: { ...dadosDaPagina().demanda, estado: "encerrar_demanda" },
+      pendencias: [pendencia("acao_externa", "I-206", "Integrar o PR final #9 na plataforma")],
       tickets: [
         { ref: "I-206.T8", etapa: "encerrar_demanda", estado: "aberto", satisfaz_dependencia: false, elegivel: false },
       ],
@@ -647,12 +686,8 @@ test("a integração à espera do merge humano: o passo, o link do PR e o Aguard
     /Integração<\/strong> <span class="pill pill-aguarda">Aguardando você<\/span> <span class="dm-texto"><a class="link" href="https:\/\/pr\/9" target="_blank" rel="noopener">aprove e integre o PR final na plataforma ↗/,
   );
   const aguarda = trecho(html, "dm-aguarda");
-  assert.match(aguarda, /href="#titulo-encerramento">Integrar o PR final ↓/);
+  assert.match(aguarda, /href="#titulo-encerramento">Integrar o PR I-206: Integrar o PR final #9 na plataforma ↓/);
   assert.doesNotMatch(aguarda, /Executar I-206\.T8/);
-  assert.match(
-    quadro({ demandas: [demanda("I-206", { estado: "encerrar_demanda", aguarda_merge: true })], trabalho: [] }),
-    /class="cartao dm-cartao aguarda"[\s\S]*aguarda o seu merge do PR final/,
-  );
 });
 
 test("o gate da demanda traz Aprovar e Reprovar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
@@ -1000,5 +1035,5 @@ test("o cartão de demanda cancelada não diz que aguarda a decisão do Auditor"
     ],
     trabalho: [],
   });
-  assert.doesNotMatch(html, /aguarda a decisão/);
+  assert.doesNotMatch(html, /aguarda você/);
 });

@@ -970,18 +970,45 @@ const MIGRACAO_44_EVIDENCIA_ACEITA: Migracao = (banco) => {
   );
 };
 
+/**
+ * A 45 abre o conjunto de Ambientes em container: a tabela `ambiente` (um container por linha, `alocado_para` só no estado
+ * `alocado`, e no máximo um alocado por Espaço), a ConfiguracaoDoAmbiente na `configuracao` (padrão `host_local`, com os
+ * limites que o container exige), a `imagem_do_ambiente` do projeto (nula: continua no host local) e o `ambiente_id` do
+ * `processo_do_trabalho`, que nesta etapa é sempre `host_local`, inclusive nos processos que já existem.
+ */
+const MIGRACAO_45_AMBIENTE_EM_CONTAINER = `
+CREATE TABLE ambiente (
+    id           TEXT PRIMARY KEY CHECK (length(id) > 0),
+    container_id TEXT NOT NULL UNIQUE CHECK (length(container_id) > 0),
+    imagem       TEXT NOT NULL CHECK (length(imagem) > 0),
+    estado       TEXT NOT NULL CHECK (estado IN ('livre','alocado','sujo','eliminado')),
+    alocado_para TEXT CHECK (alocado_para IS NULL OR length(alocado_para) > 0),
+    criado_em    TEXT NOT NULL,
+    liberado_em  TEXT,
+    CHECK ((estado = 'alocado') = (alocado_para IS NOT NULL))
+  );
+CREATE UNIQUE INDEX ux_ambiente_alocado_para ON ambiente(alocado_para) WHERE estado = 'alocado';
+CREATE INDEX ix_ambiente_imagem_estado ON ambiente(imagem, estado);
+ALTER TABLE configuracao ADD COLUMN ambiente_tipo TEXT NOT NULL DEFAULT 'host_local' CHECK (ambiente_tipo IN ('host_local','container'));
+ALTER TABLE configuracao ADD COLUMN ambiente_memoria_maxima_mb INTEGER NOT NULL DEFAULT 2048 CHECK (typeof(ambiente_memoria_maxima_mb) = 'integer' AND ambiente_memoria_maxima_mb >= 512);
+ALTER TABLE configuracao ADD COLUMN ambiente_cpus REAL NOT NULL DEFAULT 2 CHECK (typeof(ambiente_cpus) IN ('integer','real') AND ambiente_cpus > 0);
+ALTER TABLE configuracao ADD COLUMN ambiente_ociosidade_para_eliminar_min INTEGER NOT NULL DEFAULT 60 CHECK (typeof(ambiente_ociosidade_para_eliminar_min) = 'integer' AND ambiente_ociosidade_para_eliminar_min >= 5);
+ALTER TABLE projeto ADD COLUMN imagem_do_ambiente TEXT CHECK (imagem_do_ambiente IS NULL OR length(imagem_do_ambiente) > 0);
+ALTER TABLE processo_do_trabalho ADD COLUMN ambiente_id TEXT NOT NULL DEFAULT 'host_local' CHECK (length(ambiente_id) > 0);
+`;
+
 /** Um número da linha de `custos_realizados` como `LinhaDeUso`: o que não for número vira 0 (tokens) ou `null` (custo). */
 const NUMERO_DA_LINHA_EXTERNA = (campo: string, senao: string) =>
   `CASE WHEN json_type(l.value, '$.${campo}') IN ('integer', 'real') THEN json_extract(l.value, '$.${campo}') ELSE ${senao} END`;
 
 /**
- * A 45 cria `uso_declarado`, o Uso que a ferramenta externa declara de uma sessão (`linhas` é uma lista de `LinhaDeUso`),
+ * A 46 cria `uso_declarado`, o Uso que a ferramenta externa declara de uma sessão (`linhas` é uma lista de `LinhaDeUso`),
  * e tira `custos_realizados` de `evidencia_demanda`. Cada sessão de `trabalho_nao_gerenciado` (a dona pela regra atual:
  * a primeira demanda que a informou) vira uma linha com todas as linhas que as `custos_realizados` da demanda dona
  * trazem para ela, a evidência malformada ficando de fora como antes. `modelo` é `provedor/modelo` e `chamadas` é 0, que
  * a ferramenta externa não informa. `trabalho_nao_gerenciado` passa a apontar para o Uso declarado.
  */
-const MIGRACAO_45_USO_DECLARADO = `
+const MIGRACAO_46_USO_DECLARADO = `
 CREATE TABLE uso_declarado (
     ferramenta TEXT NOT NULL,
     sessao     TEXT NOT NULL,
@@ -1031,5 +1058,6 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_42_TRABALHO_AGENTICO,
   MIGRACAO_43_PULL_REQUEST,
   MIGRACAO_44_EVIDENCIA_ACEITA,
-  MIGRACAO_45_USO_DECLARADO,
+  MIGRACAO_45_AMBIENTE_EM_CONTAINER,
+  MIGRACAO_46_USO_DECLARADO,
 ];

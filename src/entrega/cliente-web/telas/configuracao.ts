@@ -1,15 +1,23 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
-import type { Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
+import type { ConfiguracaoDoAmbiente, Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
 import type { ConfiguracaoAgente, Modelo } from "../../../nucleo/configuracao_agente.ts";
 import type { Effort, EtapaTicket } from "../../../nucleo/primitivos.ts";
+import type { AmbienteGravado } from "../../../armazenamento/ambientes.ts";
 import type { Configuracao } from "../../../armazenamento/servico.ts";
 import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import { escapar, nomeDoModelo } from "../render.ts";
+import { ACAO_DA_ETAPA } from "../rotulos.ts";
 
 /** `GET /api/configuracao`. */
 export interface EstadoDaConfiguracao extends Configuracao {
   proximaBusca: string | null;
+}
+
+/** `GET /api/ambiente`: o tipo e os limites do Ambiente, e o conjunto de containers da Fabriquinha. */
+export interface EstadoDoAmbiente {
+  configuracao: ConfiguracaoDoAmbiente;
+  conjunto: AmbienteGravado[];
 }
 
 /** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
@@ -49,14 +57,20 @@ export const rascunhoDe = ({
   configuracoes,
 });
 
-/** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?projeto=<nome>` ou `/config?novo`. */
-type Selecao = { tipo: "agendador" } | { tipo: "avaliacoes" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
+/** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?ambiente`, `/config?projeto=<nome>` ou `/config?novo`. */
+type Selecao =
+  | { tipo: "agendador" }
+  | { tipo: "avaliacoes" }
+  | { tipo: "ambiente" }
+  | { tipo: "projeto"; nome: string }
+  | { tipo: "novo" };
 
 export function selecao(busca: string): Selecao {
   const q = new URLSearchParams(busca);
   const nome = q.get("projeto");
   if (nome) return { tipo: "projeto", nome };
   if (q.has("avaliacoes")) return { tipo: "avaliacoes" };
+  if (q.has("ambiente")) return { tipo: "ambiente" };
   return q.has("novo") ? { tipo: "novo" } : { tipo: "agendador" };
 }
 
@@ -113,22 +127,11 @@ const EFFORTS = Object.keys({
 } satisfies Record<Effort, 0>);
 
 /** As etapas do ticket, na ordem do fluxo da demanda, com o rótulo do formulário. */
-const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Demanda",
-  planejar: "Planejar",
-  implementar: "Implementar",
-  revisar_rodada: "Revisar rodada",
-  encerrar_rodada: "Encerrar rodada",
-  ajustar_resultado: "Sessão em aberto",
-  revisar_demanda: "Revisar demanda",
-  encerrar_demanda: "Encerrar demanda",
-  resolver_conflito: "Resolver conflito",
-};
-export const ETAPAS = Object.entries(ROTULOS_DA_ETAPA) as [EtapaTicket, string][];
+export const ETAPAS = Object.entries(ACAO_DA_ETAPA) as [EtapaTicket, string][];
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
-/** Menu à esquerda: Geral → Agendador, com a marca, e Avaliações; Projetos → um por projeto, com a hospedagem, e o novo. */
+/** Menu à esquerda: Geral → Agendador, com a marca, Avaliações e Ambiente; Projetos → um por projeto, com a hospedagem, e o novo. */
 export function menu(config: Configuracao, projetos: readonly ProjetoListado[], sel: Selecao): string {
   const ligado = config.agendadorAtivo
     ? '<span class="pill pill-ok">ligado</span>'
@@ -137,7 +140,7 @@ export function menu(config: Configuracao, projetos: readonly ProjetoListado[], 
     (p) =>
       `<a href="/config?projeto=${encodeURIComponent(p.nome)}"${atual(sel.tipo === "projeto" && sel.nome === p.nome)}>${escapar(p.nome)}<span class="muted hospedagem">${HOSPEDAGEM[p.hospedagem]}</span></a>`,
   );
-  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><a href="/config?avaliacoes"${atual(sel.tipo === "avaliacoes")}>Avaliações</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
+  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><a href="/config?avaliacoes"${atual(sel.tipo === "avaliacoes")}>Avaliações</a><a href="/config?ambiente"${atual(sel.tipo === "ambiente")}>Ambiente</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
 }
 
 const hora = (instante: string): string =>
@@ -160,6 +163,49 @@ export function agendador(estado: EstadoDaConfiguracao, erros: Erros): string {
     : "Desligado: <b>não procura tickets</b>";
   return `<h2>Agendador</h2><form class="agendador superficie" data-agendador novalidate><label class="chave"><input type="checkbox" name="agendadorAtivo"${estado.agendadorAtivo ? " checked" : ""}><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos das demandas e os executa</small></span></label>${numeros.join("")}<div class="status-ag"><span>${busca}</span></div><button type="submit" class="btn btn-primario">Salvar</button></form>`;
 }
+
+const TIPOS_DE_AMBIENTE: Record<ConfiguracaoDoAmbiente["tipo"], string> = {
+  host_local: "Host local",
+  container: "Container",
+};
+
+const LIMITES_DO_AMBIENTE = [
+  ["memoria_maxima_mb", "Memória máxima por container", 512, "1", "MB"],
+  ["cpus", "CPUs por container", 0.1, "any", "CPUs"],
+  ["ociosidade_para_eliminar_min", "Eliminar container livre após", 5, "1", "min"],
+] as const;
+
+const instanteLegivel = (instante: string): string =>
+  new Date(instante).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+// shortcut: o alocado mostra a criação do container, porque a tabela não guarda quando foi alocado; gravar o instante da alocação se isso confundir.
+function linhaDoAmbiente({ id, imagem, estado, alocado_para, criado_em, liberado_em }: AmbienteGravado): string {
+  const desde = instanteLegivel(estado === "alocado" ? criado_em : (liberado_em ?? criado_em));
+  const podeEliminar = estado === "livre" || estado === "sujo";
+  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td><td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
+}
+
+/** Ambiente: o tipo e os limites de cada container, e o conjunto de containers da Fabriquinha com o Eliminar de cada um. */
+export function ambiente({ configuracao, conjunto }: EstadoDoAmbiente, erros: Erros): string {
+  const opcoes = Object.entries(TIPOS_DE_AMBIENTE).map(
+    ([tipo, rotulo]) => `<option value="${tipo}"${tipo === configuracao.tipo ? " selected" : ""}>${rotulo}</option>`,
+  );
+  const limites = LIMITES_DO_AMBIENTE.map(([campo, rotulo, minimo, passo, unidade]) => {
+    const m = marca(erros, campo);
+    return `<div class="num-campo${m.classe}"><label for="${idDe(campo)}">${rotulo}</label><span class="com-unidade"><input type="number" id="${idDe(campo)}" name="${campo}" value="${String(configuracao[campo])}" min="${String(minimo)}" step="${passo}"${m.aria}> ${unidade}</span>${m.msg}</div>`;
+  });
+  const tipo = marca(erros, "tipo");
+  const linhas = conjunto.map(linhaDoAmbiente);
+  const tabela =
+    linhas.length > 0
+      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+      : '<p class="muted">Nenhum container no conjunto.</p>';
+  return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3><div class="campo${tipo.classe}"><label for="${idDe("tipo")}">Tipo de Ambiente</label><select id="${idDe("tipo")}" name="tipo"${tipo.aria}>${opcoes.join("")}</select>${tipo.msg}</div><div class="limites-ambiente">${limites.join("")}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
+}
+
+/** A confirmação de eliminar um container do conjunto. */
+export const confirmacaoDeEliminar = (id: string): string =>
+  `<dialog class="dialogo" data-dialogo-eliminar aria-labelledby="titulo-eliminar"><h2 id="titulo-eliminar">Eliminar o container ${escapar(id)}</h2><p>O container <strong>${escapar(id)}</strong> será removido do docker e sai do conjunto. O próximo Espaço que precisar de um Ambiente cria outro.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-eliminar>Eliminar container</button></form></dialog>`;
 
 interface OpcoesDoProjeto {
   novo: boolean;

@@ -18,6 +18,9 @@ import {
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
 type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
@@ -54,7 +57,7 @@ const pendente = <T>(p: Promise<T>) => {
   return () => !resolvida;
 };
 const garantirDemanda = (c: Cenario, preparacao = c.projeto) =>
-  garantirWorktreeDemanda(c.raiz, preparacao, "D-1", c.log);
+  garantirWorktreeDemanda(ambiente, c.raiz, preparacao, "D-1", c.log);
 
 test("duas garantias novas do mesmo projeto rodam em ordem, só depois de liberar a mutação retida", async () => {
   const c = criarRepositorioDeTeste();
@@ -62,7 +65,7 @@ test("duas garantias novas do mesmo projeto rodam em ordem, só depois de libera
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
   const demanda = garantirDemanda(c);
   // A rodada só funciona depois da demanda: se passasse à frente, falharia por demanda ausente.
-  const rodada = garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const rodada = garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   const emAndamento = pendente(rodada);
   await ceder();
   assert.deepEqual(estado(c), antes);
@@ -78,14 +81,14 @@ test("duas garantias novas do mesmo projeto rodam em ordem, só depois de libera
 test("atualização nova espera a mutação retida e a fila segue depois de uma falha", async () => {
   const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   commit(demanda, "novo.txt", "demanda\n");
   const headAntes = git(rodada, "rev-parse", "HEAD");
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
   // Falha dentro da fila (rodada de demanda inexistente) antes da atualização que deve vencer.
-  const falha = garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "D-9", rodada_id: 1 }, c.log);
+  const falha = garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "D-9", rodada_id: 1 }, c.log);
   const falhou = assert.rejects(falha, ErroDeRegra);
-  const atualizacao = atualizarWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const atualizacao = atualizarWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   await ceder();
   assert.equal(git(rodada, "rev-parse", "HEAD"), headAntes);
   assert.equal(existsSync(join(rodada, "novo.txt")), false);
@@ -108,7 +111,7 @@ test("outro projeto completa mutação enquanto o primeiro segue bloqueado", asy
   const outro = criarRepositorioDeTeste();
   const projetoOutro = { ...outro.projeto, nome: "outra" };
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
-  const pasta = await garantirWorktreeDemanda(c.raiz, projetoOutro, "D-1", c.log);
+  const pasta = await garantirWorktreeDemanda(ambiente, c.raiz, projetoOutro, "D-1", c.log);
   assert.equal(existsSync(pasta), true);
   const retido = garantirDemanda(c);
   const emAndamento = pendente(retido);
@@ -135,7 +138,7 @@ test("processo de agente na worktree provisionada começa e termina com a fila r
   const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
-  const retido = garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const retido = garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   const emAndamento = pendente(retido);
   const r = await executar("/bin/sh", ["-c", "echo agente > agente.txt"], { cwd: demanda });
   assert.equal(r.codigo, 0);
@@ -177,7 +180,7 @@ test("preparação da rodada não ocupa a fila", async () => {
   const c = criarRepositorioDeTeste();
   await garantirDemanda(c);
   const barreira = preparacaoComBarreira(c);
-  const garantia = garantirWorktreeRodada(c.raiz, barreira.projeto, ref, c.log);
+  const garantia = garantirWorktreeRodada(ambiente, c.raiz, barreira.projeto, ref, c.log);
   await barreira.comecou();
   await mutacaoLivre(c);
   assert.equal(git(c.repo, "config", "teste.livre"), "sim");
@@ -188,10 +191,10 @@ test("preparação da rodada não ocupa a fila", async () => {
 test("preparação após atualização por merge não ocupa a fila", async () => {
   const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
-  await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   commit(demanda, "novo.txt", "demanda\n");
   const barreira = preparacaoComBarreira(c);
-  const atualizacao = atualizarWorktreeRodada(c.raiz, barreira.projeto, ref, c.log);
+  const atualizacao = atualizarWorktreeRodada(ambiente, c.raiz, barreira.projeto, ref, c.log);
   await barreira.comecou();
   await mutacaoLivre(c);
   await barreira.liberar();
@@ -201,7 +204,7 @@ test("preparação após atualização por merge não ocupa a fila", async () =>
 test("merge e abort do conflito ficam na mesma seção serializada", async () => {
   const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   commit(demanda, "base.txt", "demanda\n");
   commit(rodada, "base.txt", "rodada\n");
   const gitDir = git(rodada, "rev-parse", "--path-format=absolute", "--git-dir");
@@ -211,7 +214,7 @@ test("merge e abort do conflito ficam na mesma seção serializada", async () =>
       observacoes.push({ merge: existsSync(join(gitDir, "MERGE_HEAD")), sujo: git(rodada, "status", "--porcelain") });
       return Promise.resolve();
     });
-  const atualizacao = atualizarWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const atualizacao = atualizarWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   await Promise.all([sonda(), atualizacao]);
   await sonda();
   assert.deepEqual(await atualizacao, { status: "conflito", arquivos: ["base.txt"] });

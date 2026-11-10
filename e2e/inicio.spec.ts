@@ -5,6 +5,7 @@ import type { Locator, Page } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { fotografar, projeto } from "./apoio.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
+import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
 /** A sessão autônoma do I-206.T3 com a execução aberta e o grupo do pi gravado: o pi roda. */
@@ -48,8 +49,8 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
   await expect(aguarda.locator(".contador")).toHaveText("3");
   await expect(nav.getByRole("link", { name: /^Início/ }).locator(".contador")).toHaveText("3");
-  await expect(aguarda.locator(".decisao-motivo")).toHaveText(["Gate do PR", "Falhou", "Gate da demanda"]);
-  await expect(aguarda.locator(".decisao").first()).toContainText("PR #7 aberto; aguarda a sua revisão no PR");
+  await expect(aguarda.locator(".decisao-motivo")).toHaveText(["Gate", "Bloqueado", "Gate"]);
+  await expect(aguarda.locator(".decisao").first()).toContainText("PR #7 da rodada aguarda decisão");
 
   // Rodando: a sessão do I-206.T3.
   const rodando = pagina.getByRole("region", { name: "Rodando" });
@@ -63,19 +64,17 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   const pr = coluna(pagina, "Aprovação do PR");
   await expect(pr.locator(".cartao")).toHaveCount(1);
   await expect(pr.locator(".cartao")).toContainText("I-206.R1");
-  await expect(pr.locator(".cartao")).toContainText("aguarda você · gate do PR");
+  await expect(pr.locator(".cartao")).toContainText("aguarda você · gate");
   const desenvolvimento = coluna(pagina, "Desenvolvimento");
   await expect(desenvolvimento.locator(".cartao .id")).toHaveText(["I-206.R2", "I-207.R1"]);
   await expect(desenvolvimento.locator(".cartao").first()).toContainText(
     "I-206.T3 implementação · autônoma · sessão pi ativa",
   );
   await expect(desenvolvimento.locator(".cartao").first()).toContainText("em execução ·");
-  await expect(desenvolvimento.locator(".cartao").last()).toContainText("aguarda você · falha");
+  await expect(desenvolvimento.locator(".cartao").last()).toContainText("aguarda você · bloqueado");
   await expect(desenvolvimento.locator(".cartao").last()).toContainText("bloqueada por I-206");
   await expect(desenvolvimento.locator(".cartao").last().locator(".pill .mono")).toHaveText("I-206");
-  await expect(coluna(pagina, "Aprovação da demanda").locator(".cartao")).toContainText(
-    "aguarda você · gate da demanda",
-  );
+  await expect(coluna(pagina, "Aprovação da demanda").locator(".cartao")).toContainText("aguarda você · gate");
   await expect(pagina.locator(".coluna-gate")).toHaveCount(3);
 
   // Nenhuma largura rola a página na horizontal nem quebra um endereço (I-206, I-206.R1, I-206.T3). A 1440 e a 1320 px
@@ -117,7 +116,7 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   await expect(coluna(pagina, "Aprovação da demanda").locator(".cartao .id")).toHaveText(["I-208", "I-209"]);
 
   // O cartão do que aguarda leva à página da demanda, e ela volta ao Início.
-  await aguarda.getByRole("link", { name: /Gate do PR/ }).click();
+  await aguarda.getByRole("link", { name: /PR #7 da rodada aguarda decisão/ }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas/I-206`);
   await expect(nav.getByRole("link", { name: /^Início/ })).toHaveAttribute("aria-current", "page");
   await pagina.getByRole("link", { name: "← Início" }).click();
@@ -153,4 +152,32 @@ test("sem nada em andamento, o Início diz que nada aguarda nem roda e mostra as
   await expect(pagina.getByText("Nenhuma sessão rodando.")).toBeVisible();
   await expect(pagina.getByRole("region", { name: "Board" })).toContainText("0 demandas em andamento");
   await expect(pagina.locator(".coluna-vazia")).toHaveCount(11);
+});
+
+test("o Início lista uma Pendência de cada tipo, inclusive o merge final, e a navegação conta as seis", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semearPendencias(fabriquinha.raiz);
+  const nav = pagina.getByRole("navigation", { name: "Páginas" });
+  await nav.getByRole("link", { name: "Métricas" }).click();
+  await nav.getByRole("link", { name: /^Início/ }).click();
+  const titulos = {
+    gate_humano: "Gate",
+    item_bloqueado: "Bloqueado",
+    dialogo_do_agente: "Diálogo do agente",
+    revisao_parada: "Revisão parada",
+    acao_externa: "Ação externa",
+    despacho_parado: "Despacho parado",
+  };
+  const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
+  await expect(aguarda.locator(".contador")).toHaveText("6");
+  await expect(nav.getByRole("link", { name: /^Início/ }).locator(".contador")).toHaveText("6");
+  await expect(aguarda.locator(".decisao-motivo")).toHaveText(PENDENCIAS_ESPERADAS.map((p) => titulos[p.tipo]));
+  for (const [i, { item }] of PENDENCIAS_ESPERADAS.entries()) {
+    await expect(aguarda.locator(".decisao").nth(i)).toContainText(item);
+  }
+  await expect(aguarda.locator(".decisao", { hasText: "Ação externa" })).toContainText(
+    "Integrar o PR final #12 na plataforma",
+  );
 });

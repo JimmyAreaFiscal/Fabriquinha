@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { CATALOGO_DE_ETAPAS } from "../../nucleo/etapa.ts";
 import type { EtapaTicket } from "../../nucleo/primitivos.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
 import type { CausaDeInfraestrutura } from "../../nucleo/tentativa.ts";
@@ -12,7 +13,7 @@ import {
   type ResultadoDaVerificacao,
   type TipoVerificacao,
 } from "../../nucleo/verificacao.ts";
-import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../processo.ts";
+import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
 export type Falha =
@@ -31,9 +32,20 @@ export interface RegistroDaVerificacao {
 }
 
 export interface ContextoDaVerificacao {
+  /** O Ambiente do Espaço: os comandos configurados rodam nele. */
+  ambiente: Ambiente;
   worktree: string;
   /** Tempo máximo de cada comando; o Sonar tem o seu em `OpcoesSonar`. */
   limiteMs?: number;
+}
+
+interface Resultado {
+  /** `null` quando o comando morreu por sinal ou estourou o limite. */
+  codigo: number | null;
+  estourou: boolean;
+  duracaoMs: number;
+  /** Stdout e stderr intercalados, com no máximo `LIMITE.texto` bytes (os do fim). */
+  log: string;
 }
 
 export type ComandoRodar = (comando: string, cwd: string) => Promise<Resultado>;
@@ -69,6 +81,11 @@ function resultadoDoRegistro({ passou, falhas, dados, logs }: RegistroDaVerifica
 export abstract class Verificacao {
   abstract readonly tipo: TipoVerificacao;
 
+  abstract executar(contexto: ContextoDaVerificacao): Promise<ResultadoDaVerificacao>;
+}
+
+/** A Verificação que deixa registro completo (testes, fitness, sonar, e2e): `coletar` o guarda e `executar` o reduz. */
+export abstract class VerificacaoComRegistro extends Verificacao {
   abstract coletar(contexto: ContextoDaVerificacao): Promise<RegistroDaVerificacao>;
 
   async executar(contexto: ContextoDaVerificacao): Promise<ResultadoDaVerificacao> {
@@ -76,27 +93,29 @@ export abstract class Verificacao {
   }
 }
 
-// Até a demanda 15 as Verificações que cada Etapa exige são esta tabela fechada. O E2E não é item: entra em `testes`.
-const VERIFICACOES_DA_ETAPA: Record<EtapaTicket, readonly TipoVerificacao[]> = {
-  entender_e_desenhar: [],
-  planejar: [],
-  implementar: ["testes", "fitness", "sonar", "hooks_do_commit"],
-  revisar_rodada: ["fitness"],
-  encerrar_rodada: ["conferencia_do_pr"],
-  ajustar_resultado: [],
-  revisar_demanda: [],
-  encerrar_demanda: ["conferencia_do_pr"],
-  resolver_conflito: ["testes", "fitness", "sonar", "hooks_do_commit"],
-};
+type VerificacoesMontadas<F> = { [T in keyof F]: F[T] extends () => infer V ? V : never };
 
-export const verificacoesDaEtapa = (etapa: EtapaTicket): readonly TipoVerificacao[] => VERIFICACOES_DA_ETAPA[etapa];
+type FabricasDeVerificacao = Partial<Record<TipoVerificacao, () => Verificacao>>;
 
-/** Devolve a Verificação que quem chama montou, depois de conferir que a tabela da Etapa a exige. */
-export function exigidaPelaEtapa<V extends Verificacao>(etapa: EtapaTicket, verificacao: V): V {
-  if (!verificacoesDaEtapa(etapa).includes(verificacao.tipo)) {
-    throw new ErroDeRegra(`a etapa ${etapa} não exige a verificação ${verificacao.tipo}`);
-  }
-  return verificacao;
+/**
+ * Monta, na ordem do catálogo, as Verificações que quem chama sabe construir (`fabricas`), por tipo. Recusa a fábrica
+ * de uma Verificação que `CATALOGO_DE_ETAPAS[etapa].verificacoes` não lista; a que a Etapa lista e não vem em
+ * `fabricas` fica de fora, para quem chama montar só a parte que usa (os hooks, por exemplo, são do fechamento).
+ */
+export function montarVerificacoesDaEtapa<F extends FabricasDeVerificacao>(
+  etapa: EtapaTicket,
+  fabricas: F,
+): VerificacoesMontadas<F> {
+  const exigidas: readonly string[] = CATALOGO_DE_ETAPAS[etapa].verificacoes;
+  const naoExigida = Object.keys(fabricas).find((tipo) => !exigidas.includes(tipo));
+  if (naoExigida) throw new ErroDeRegra(`a etapa ${etapa} não exige a verificação ${naoExigida}`);
+  const fabricasPorTipo: FabricasDeVerificacao = fabricas;
+  const montadas = exigidas.flatMap((tipo) => {
+    const fabrica = fabricasPorTipo[tipo as TipoVerificacao];
+    return fabrica ? [[tipo, fabrica()]] : [];
+  });
+  // O cast vale porque cada chave de `montadas` vem de `fabricas`.
+  return Object.fromEntries(montadas) as VerificacoesMontadas<F>;
 }
 
 /** Traduz a classificação única para a Falha do ticket; o motivo e a causa de infraestrutura dependem de como o comando falhou. */
@@ -118,21 +137,35 @@ export function classificarComando(comando: string, r: Resultado, codigoDeReprov
 
 /** Roda os comandos de `corpo` com o ambiente sem credenciais (F5 §5.0). */
 export async function comAmbienteSemCredenciais<T>(
+  ambiente: Ambiente,
   limiteMs: number = LIMITE_COMANDO_MS,
   corpo: (rodar: ComandoRodar) => Promise<T>,
 ) {
   const vazio = mkdtempSync(join(tmpdir(), "fabriquinha-verificacao-"));
   try {
     const env = ambienteSemCredenciais(process.env, vazio);
-    return await corpo((comando, cwd) => executarNoShell(comando, cwd, { env, limiteMs, limiteLog: LIMITE.texto }));
+    return await corpo(async (comando, cwd) => {
+      const r = await ambiente.executar({
+        programa: comando,
+        argumentos: [],
+        cwd: ambiente.caminhoNoAmbiente(cwd),
+        env,
+        limiteMs,
+        ultimosBytes: LIMITE.texto,
+        noShell: true,
+      });
+      return { codigo: r.codigo, estourou: r.limiteEstourado, duracaoMs: r.duracaoMs, log: r.saida };
+    });
   } finally {
     rmSync(vazio, { recursive: true, force: true });
   }
 }
 
-export const linhaDoComando = (comando: string, r: Resultado) => ({
+/** A linha do comando em `dados`; `log` é o nome do anexo com a saída dele (`ComandoRodado`). */
+export const linhaDoComando = (comando: string, r: Resultado, log: string) => ({
   comando,
   codigoSaida: r.codigo,
   estourou: r.estourou,
   duracaoMs: r.duracaoMs,
+  log,
 });

@@ -867,6 +867,15 @@ input.erro {
 .painel-config .remover-projeto {
   margin-left: auto;
 }
+.limites-ambiente {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-5);
+  margin-top: var(--s-3);
+}
+.conjunto-ambiente {
+  margin-top: var(--s-5);
+}
 
 .agendador {
   display: grid;
@@ -3763,6 +3772,15 @@ svg.barras :not(.hit) {
 }
 .pista-item.fechada .gaveta {
   display: none;
+}
+.gaveta .pendencias {
+  margin: 0 0 var(--s-2);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+.gaveta .pendencias li {
+  padding: var(--s-1) var(--s-2);
 }
 .gaveta table {
   width: 100%;

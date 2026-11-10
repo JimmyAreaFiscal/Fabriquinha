@@ -20,6 +20,7 @@ import {
 import { anexosDaDemanda, lerAnexo } from "../../../armazenamento/evidencia_demanda.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
+import { pendenciasDeUmaDemanda } from "./inicio.ts";
 
 const ref = (demanda_id: string) => ({
   rodada: (rodada_id: number) => formatarRodadaRef({ demanda_id, rodada_id }),
@@ -27,7 +28,7 @@ const ref = (demanda_id: string) => ({
 });
 
 /** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados de gate. */
-export function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
   const pr = prDoEspaco(ag, rodada_id);
@@ -48,12 +49,6 @@ const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>) =>
       };
     });
 
-/** Os tickets `falhou` da demanda: o que bloqueia a rodada até o Auditor reabrir. */
-const falhos = (ag: AgregadoDemanda) =>
-  ag.tickets
-    .filter((t) => t.estado === "falhou")
-    .map((t) => ({ ref: ref(ag.demanda.id).ticket(t.ticket_id), etapa: t.etapa }));
-
 /** `GET /api/demandas`: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
 function board(pedido: Parameters<Rota["tratar"]>[0]) {
   const todas = listarDemandas(pedido.banco);
@@ -72,8 +67,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
           return { ref: ref(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
         }),
         bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.estado)),
-        falhos: falhos(ag),
-        aguarda_merge: ag.encerramento?.aguardando_merge_humano === true,
+        pendencias: pendenciasDeUmaDemanda(pedido.banco, ag),
       };
     }),
     trabalho: todas.flatMap((ag) => emExecucao(ag, comPiAtivo)),
@@ -131,6 +125,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
     ).map((t) => t.ticket_id),
   );
   return {
+    pendencias: pendenciasDeUmaDemanda(banco, ag),
     ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
     demanda: {
       id,

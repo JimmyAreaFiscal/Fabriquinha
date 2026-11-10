@@ -4,6 +4,7 @@ import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../src/armazenamento/ambientes.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 
@@ -83,6 +84,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     hospedagem: "github",
     chave_sonarqube: "loja",
     link_produto: null,
+    imagem_do_ambiente: null,
   });
   // A preparação vai para a tabela que o fluxo da demanda lê ao criar a worktree.
   expect({ ...banco.prepare("SELECT * FROM comando_preparacao_projeto").get() }).toEqual({
@@ -245,4 +247,96 @@ test("escolhe o modelo e o effort de cada etapa no cadastro do projeto, salva e 
     { projeto: "loja", etapa: "revisar_rodada", modelo_provedor: null, modelo_nome: null, effort: "high" },
   ]);
   banco.close();
+});
+
+test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container livre pede confirmação, e o alocado não tem como (I-286, CA-5)", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  const { dockerFalso } = fabriquinha;
+  const livre = dockerFalso.semearContainer({ imagem: "alpine", rotulos: { "fabriquinha.ambiente": "amb-livre" } });
+  const alocado = dockerFalso.semearContainer({
+    imagem: "node:22",
+    rotulos: { "fabriquinha.ambiente": "amb-alocado" },
+  });
+  const banco = abrir(fabriquinha.raiz);
+  inserirAmbienteAlocado(banco, {
+    id: "amb-livre",
+    container_id: livre.id,
+    imagem: "alpine",
+    alocado_para: "I-1",
+    criado_em: "2026-11-09T10:00:00.000Z",
+  });
+  liberarAmbiente(banco, "amb-livre", "livre", "2026-11-09T11:00:00.000Z");
+  inserirAmbienteAlocado(banco, {
+    id: "amb-alocado",
+    container_id: alocado.id,
+    imagem: "node:22",
+    alocado_para: "I-2",
+    criado_em: "2026-11-09T12:00:00.000Z",
+  });
+  banco.close();
+
+  await pagina.goto(`${fabriquinha.base}/config`);
+  const menu = pagina.getByRole("navigation", { name: "Configuração" });
+  await menu.getByRole("link", { name: "Ambiente" }).click();
+  await expect(menu.getByRole("link", { name: "Ambiente" })).toHaveAttribute("aria-current", "page");
+  await expect(pagina.getByLabel("Tipo de Ambiente")).toHaveValue("host_local");
+  await expect(pagina.getByRole("spinbutton", { name: "Memória máxima por container" })).toHaveValue("2048");
+  await expect(pagina.getByRole("spinbutton", { name: "CPUs por container" })).toHaveValue("2");
+  await expect(pagina.getByRole("spinbutton", { name: "Eliminar container livre após" })).toHaveValue("60");
+
+  const linhaDoLivre = pagina.locator('tr[data-ambiente="amb-livre"]');
+  const linhaDoAlocado = pagina.locator('tr[data-ambiente="amb-alocado"]');
+  const data = /\d{2}\/\d{2}\/\d{4}/;
+  for (const [linha, id, imagem, estado, alocadoPara] of [
+    [linhaDoLivre, "amb-livre", "alpine", "livre", "—"],
+    [linhaDoAlocado, "amb-alocado", "node:22", "alocado", "I-2"],
+  ] as const) {
+    const celulas = linha.locator("td");
+    await expect(celulas.nth(0)).toHaveText(id);
+    await expect(celulas.nth(1)).toHaveText(imagem);
+    await expect(celulas.nth(2)).toHaveText(estado);
+    await expect(celulas.nth(3)).toHaveText(alocadoPara);
+    await expect(celulas.nth(4)).toHaveText(data);
+  }
+  await expect(linhaDoAlocado.getByRole("button", { name: "Eliminar" })).toBeDisabled();
+  await expect(linhaDoLivre.getByRole("button", { name: "Eliminar" })).toBeEnabled();
+  await fotografar(pagina, info, "configuracao-ambiente");
+
+  await linhaDoLivre.getByRole("button", { name: "Eliminar" }).click();
+  const confirmacao = pagina.getByRole("dialog", { name: "Eliminar o container amb-livre" });
+  await expect(confirmacao).toBeVisible();
+  await confirmacao.getByRole("button", { name: "Cancelar" }).click();
+  await expect(linhaDoLivre).toBeVisible();
+  expect(dockerFalso.registro().filter(([comando]) => comando === "rm")).toEqual([]);
+
+  await linhaDoLivre.getByRole("button", { name: "Eliminar" }).click();
+  await pagina
+    .getByRole("dialog", { name: "Eliminar o container amb-livre" })
+    .getByRole("button", { name: "Eliminar container" })
+    .click();
+  await expect(linhaDoLivre).toHaveCount(0);
+  await expect(linhaDoAlocado).toBeVisible();
+  expect(dockerFalso.registro().filter(([comando]) => comando === "rm")).toEqual([["rm", "--force", livre.id]]);
+  expect(dockerFalso.containers().map(({ id }) => id)).toEqual([alocado.id]);
+});
+
+test("Ambiente: salva os limites; com host_local, o padrão, subir e abrir a Configuração não chama o docker (I-286, CA-1)", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  await pagina.goto(`${fabriquinha.base}/config?ambiente`);
+  await expect(pagina.getByText("Nenhum container no conjunto.")).toBeVisible();
+  await pagina.getByRole("spinbutton", { name: "Memória máxima por container" }).fill("1024");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.getByRole("button", { name: "Salvar" })).toBeEnabled();
+  await pagina.reload();
+  await expect(pagina.getByRole("spinbutton", { name: "Memória máxima por container" })).toHaveValue("1024");
+  await expect(pagina.getByLabel("Tipo de Ambiente")).toHaveValue("host_local");
+
+  await pagina.getByRole("spinbutton", { name: "Memória máxima por container" }).fill("100");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.locator(".num-campo.erro .msg-erro")).toHaveCount(1);
+  expect(fabriquinha.dockerFalso.registro()).toEqual([]);
 });

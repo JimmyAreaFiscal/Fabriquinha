@@ -1,5 +1,5 @@
 // Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
-// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pelo fechamento (`fechamento_ticket.ts`).
+// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pela condução da etapa (`etapas/`).
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -34,15 +34,15 @@ import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
-import { anotar, pastasDoProcesso } from "../infra/registro.ts";
+import { anotar, noLog, pastasDoProcesso } from "../infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
-import { sinalNoGrupo } from "../infra/processo.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
-import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
+import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
@@ -61,8 +61,10 @@ export interface OpcoesExecucaoDemanda {
   iniciarEmSessaoNova?: boolean;
   /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
   mensagem?: string;
-  /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
-  fechar?: typeof fecharTicketDemanda;
+  /** O que fazer com o ticket depois do encerramento do processo; sem ele, quem conduz a etapa o fecha. */
+  fechar?: (banco: DatabaseSync, ref: TicketRef, resultado: { falha?: FalhaDaTentativa }) => Promise<void>;
+  /** O Espaço que a condução já criou (e se buscou a base); sem ele, a execução o cria. */
+  espaco?: { pasta: string; buscouBase: boolean };
 }
 
 interface Conducao {
@@ -77,10 +79,13 @@ interface Conducao {
 }
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
-async function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+async function worktreeDoEspacoDoTicket(
+  { banco, ag, ticket, projeto, opcoes }: Conducao,
+  log: string,
+): Promise<string> {
   const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
-  const { pasta, buscouBase } = await ciclo.criar();
+  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
+  const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
   if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
 }
@@ -192,14 +197,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   condutor.deixarDeAcompanhar(execucao.id);
   encerrarProcessoDoTicket(c, falha !== undefined, log);
   try {
-    await (opcoes.fechar ?? fecharTicketDemanda)(
-      c.banco,
-      c.ref,
-      { falha },
-      {
-        parada: () => condutor.emParada(),
-      },
-    );
+    await opcoes.fechar?.(c.banco, c.ref, { falha });
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {
@@ -287,6 +285,10 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     "só se interrompe uma execução aberta",
   );
   if (condutor.interromper(execucao.id)) return;
-  if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
+  if (execucao.grupo_processo != null) {
+    const ambiente = ambienteDoServico();
+    // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
+    ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
+  }
   encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar);
 }

@@ -5,16 +5,19 @@ import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
+import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../armazenamento/banco.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
 import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
-import { salvarConfiguracao } from "../armazenamento/servico.ts";
+import { salvarConfiguracao, salvarConfiguracaoDoAmbiente } from "../armazenamento/servico.ts";
 import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
@@ -435,4 +438,76 @@ test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e re
   assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
   await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
+});
+
+const AMBIENTE_EM_CONTAINER = { tipo: "container", memoria_maxima_mb: 512, cpus: 1, ociosidade_para_eliminar_min: 30 };
+
+test("com tipo host_local, o padrão, subir, bater o relógio e parar não chamam o docker", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-host-local-")));
+  const minuto = relogio(t);
+  const s = await subir();
+  minuto();
+  await s.parar();
+  assert.deepEqual(docker.registro(), []);
+});
+
+test("com tipo container, a subida elimina o órfão com rótulo e nunca toca o container sem rótulo", async () => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-reconciliar-")));
+  const orfao = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "orfao" } });
+  const sonar = docker.semearContainer({ imagem: "sonarqube" });
+  const { raiz, banco } = abrirBancoTemporario();
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  banco.close();
+  const s = await subir(raiz);
+  await s.parar();
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [sonar.id],
+  );
+  assert.ok(!docker.registro().some((chamada) => chamada.includes(sonar.id)));
+  assert.ok(docker.registro().some((chamada) => chamada.includes(orfao.id)));
+});
+
+test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o alocado", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-ociosos-")));
+  const minuto = relogio(t);
+  const { raiz, banco } = abrirBancoTemporario();
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  for (const [id, alocadoPara] of [
+    ["ocioso", "I-1"],
+    ["em-uso", "I-2"],
+  ] as const) {
+    const container = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": id } });
+    inserirAmbienteAlocado(banco, {
+      id,
+      container_id: container.id,
+      imagem: "alpine",
+      criado_em: "2020-01-01T00:00:00.000Z",
+      alocado_para: alocadoPara,
+    });
+  }
+  liberarAmbiente(banco, "ocioso", "livre", "2020-01-01T00:00:00.000Z");
+  banco.close();
+  const s = await subir(raiz);
+  minuto();
+  await ate(() => listarAmbientes(s.banco).length === 1);
+  assert.deepEqual(
+    listarAmbientes(s.banco).map(({ id }) => id),
+    ["em-uso"],
+  );
+  await s.parar();
+});
+
+test("com tipo container e o docker fora do ar, o serviço sobe e a batida do relógio não lança", async (t) => {
+  const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-fora-")));
+  docker.falharComando("ps", "Cannot connect to the Docker daemon");
+  const erros = t.mock.method(console, "error", () => undefined);
+  const minuto = relogio(t);
+  const { raiz, banco } = abrirBancoTemporario();
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  banco.close();
+  const s = await subir(raiz);
+  minuto();
+  await s.parar();
+  assert.ok(erros.mock.callCount() > 0);
 });

@@ -108,7 +108,17 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
-    // A 45 criou `uso_declarado` e fez `trabalho_nao_gerenciado` apontar para ele: a volta recria a tabela sem a FK. A 42 renomeou as tabelas da sessão (e os índices delas) e deu `grupo_processo` à avaliação: a volta desfaz tudo.
+    // A 45 abriu o conjunto de Ambientes em container: a volta apaga a tabela e as colunas novas.
+    banco.exec(`
+      DROP TABLE ambiente;
+      ALTER TABLE configuracao DROP COLUMN ambiente_tipo;
+      ALTER TABLE configuracao DROP COLUMN ambiente_memoria_maxima_mb;
+      ALTER TABLE configuracao DROP COLUMN ambiente_cpus;
+      ALTER TABLE configuracao DROP COLUMN ambiente_ociosidade_para_eliminar_min;
+      ALTER TABLE projeto DROP COLUMN imagem_do_ambiente;
+      ALTER TABLE processo_do_trabalho DROP COLUMN ambiente_id;
+    `);
+    // A 46 criou `uso_declarado` e fez `trabalho_nao_gerenciado` apontar para ele: a volta recria a tabela sem a FK. A 42 renomeou as tabelas da sessão (e os índices delas) e deu `grupo_processo` à avaliação: a volta desfaz tudo.
     banco.exec(`
       CREATE TABLE sessao_externa_demanda (
         ferramenta TEXT NOT NULL,

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { migrar } from "./banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
-const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 8;
+const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 9;
 const EM = "2026-01-01T00:00:00.000Z";
 
 interface Soma {
@@ -36,12 +36,12 @@ const sessaoExterna = (ferramenta: string, sessao: string, ...linhasDaSessao: ob
 });
 
 /**
- * Um banco na versão 44 com 2 demandas de 2 projetos. Uso medido: I-1 em janeiro (um custo conhecido, um desconhecido) e
+ * Um banco na versão 45 com 2 demandas de 2 projetos. Uso medido: I-1 em janeiro (um custo conhecido, um desconhecido) e
  * I-2 em fevereiro. `custos_realizados`: a I-1 informa a sessão claude/s1 (uma linha sem custo) e codex/s2 na demanda,
  * codex/s3 na rodada e codex/x num ticket (que nunca contou); a I-2 informa a mesma claude/s1 (já da I-1), pi/s4 e,
  * na rodada, uma `custos_realizados` malformada. `trabalho_nao_gerenciado` tem as donas pela regra atual.
  */
-function bancoNaVersao44(): DatabaseSync {
+function bancoNaVersao45(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
   banco.exec(ESQUEMA_V36);
   banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE)}`);
@@ -146,8 +146,8 @@ function declaradoDepois(banco: DatabaseSync): Record<string, SomaPorChave> {
   };
 }
 
-test("a migração 45 cria uso_declarado pelas custos_realizados das donas, sem mudar nenhuma soma", () => {
-  const banco = bancoNaVersao44();
+test("a migração 46 cria uso_declarado pelas custos_realizados das donas, sem mudar nenhuma soma", () => {
+  const banco = bancoNaVersao45();
   const medidoAntes = medidoPorDemandaProjetoEMes(banco);
   const declaradoDeAntes = declaradoAntes(banco);
   assert.deepEqual(declaradoDeAntes.demanda, {
@@ -176,8 +176,8 @@ test("a migração 45 cria uso_declarado pelas custos_realizados das donas, sem 
   );
 });
 
-test("a migração 45 grava cada linha como LinhaDeUso, com custo desconhecido null e chamadas 0", () => {
-  const banco = bancoNaVersao44();
+test("a migração 46 grava cada linha como LinhaDeUso, com custo desconhecido null e chamadas 0", () => {
+  const banco = bancoNaVersao45();
   migrar(banco, MIGRACOES);
   const { linhas: linhasDaSessao } = banco
     .prepare("SELECT linhas FROM uso_declarado WHERE ferramenta = 'claude' AND sessao = 's1'")
@@ -204,23 +204,23 @@ test("a migração 45 grava cada linha como LinhaDeUso, com custo desconhecido n
   ]);
 });
 
-test("a migração 45 tira todas as custos_realizados, com o histórico, e deixa as outras evidências", () => {
-  const banco = bancoNaVersao44();
+test("a migração 46 tira todas as custos_realizados, com o histórico, e deixa as outras evidências", () => {
+  const banco = bancoNaVersao45();
   migrar(banco, MIGRACOES);
   assert.deepEqual(linhas(banco, "SELECT id, tipo FROM evidencia_demanda"), [{ id: "e1c", tipo: "criterios_aceite" }]);
   assert.deepEqual(linhas(banco, "SELECT * FROM evidencia_historico"), []);
 });
 
-test("a migração 45 faz trabalho_nao_gerenciado apontar para o Uso declarado", () => {
-  const banco = bancoNaVersao44();
+test("a migração 46 faz trabalho_nao_gerenciado apontar para o Uso declarado", () => {
+  const banco = bancoNaVersao45();
   migrar(banco, MIGRACOES);
   assert.throws(() => {
     banco.exec("INSERT INTO trabalho_nao_gerenciado VALUES ('claude', 'sem-uso', 'I-1')");
   }, /FOREIGN KEY/);
 });
 
-test("a migração 45 guarda linhas vazias para a sessão cuja evidência dona não tem linhas", () => {
-  const banco = bancoNaVersao44();
+test("a migração 46 guarda linhas vazias para a sessão cuja evidência dona não tem linhas", () => {
+  const banco = bancoNaVersao45();
   banco.exec(
     `DELETE FROM evidencia_demanda WHERE id = 'e2'; INSERT INTO trabalho_nao_gerenciado VALUES ('pi', 'sem-linhas', 'I-2');`,
   );

@@ -12,6 +12,7 @@ import { Projeto } from "../../../nucleo/projeto.ts";
 import { gravarProjeto } from "../../../armazenamento/projetos.ts";
 import {
   gravarAgregadoPronto,
+  INSTANTE_DO_CENARIO,
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
@@ -184,7 +185,8 @@ function semearDemandas(): void {
   );
   banco.exec(
     `INSERT INTO trabalho_agentico VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
-    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES
+      ('e-antiga', 's-antiga', '${em}', '${em}', 0, 4241), ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
   );
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejar"));
   banco.exec(`INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id)
@@ -262,6 +264,32 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
   ]);
 });
 
+test("demandas: cada uma traz as Pendências que a regra única acha; a encerrada não tem", async () => {
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-210", "gate_planejamento"));
+  gravarAgregadoPronto(
+    banco,
+    montarAgregadoDemanda("I-211", "em_execucao", {
+      rodadas: [rodada("I-211", 1, "ajustar_resultado")],
+      tickets: [ticket("I-211", 1, "ajustar_resultado", { rodada_id: 1, estado: "em_execucao" })],
+    }),
+  );
+  gravarAgregadoPronto(
+    banco,
+    montarAgregadoDemanda("I-212", "cancelada", { tickets: [ticket("I-212", 1, "implementar", { estado: "falhou" })] }),
+  );
+  const resumo = async (filtro = "") =>
+    ((await chamar("GET", `/api/projetos/loja/demandas${filtro}`)) as ListaDoProjeto).demandas.map((d) => [
+      d.id,
+      d.pendencias.map((p) => [p.tipo, p.item, p.rodada, p.acao_esperada, p.desde]),
+    ]);
+  assert.deepEqual(await resumo(), [
+    ["I-211", [["dialogo_do_agente", "I-211.R1", "I-211.R1", "responder", em]]],
+    ["I-210", [["gate_humano", "I-210", undefined, "decidir_gate", INSTANTE_DO_CENARIO]]],
+  ]);
+  // A cancelada com ticket falho não aguarda ninguém.
+  assert.deepEqual((await resumo("?canceladas=true"))[0], ["I-212", []]);
+});
+
 test("demandas: usa o padrão do agente se a releitura do projeto não o encontrar", async (contexto) => {
   semearDemandas();
   const prepararConsulta = banco.prepare.bind(banco);
@@ -270,7 +298,7 @@ test("demandas: usa o padrão do agente se a releitura do projeto não o encontr
     const consulta = prepararConsulta(consultaSql);
     if (
       consultaSql.startsWith(
-        "SELECT nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto FROM projeto",
+        "SELECT nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente FROM projeto",
       )
     ) {
       leiturasDoProjeto++;

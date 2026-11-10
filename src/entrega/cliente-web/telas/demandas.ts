@@ -1,6 +1,8 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
+import { ROTULO_DA_ETAPA } from "../rotulos.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada } from "../../../nucleo/primitivos.ts";
+import type { PendenciaDoInicio } from "../../http/rotas/inicio.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaDemanda,
@@ -12,6 +14,7 @@ import {
   pilulaDoEstadoDoTicket,
   rotuloDoEstadoDoTicket,
 } from "../render.ts";
+import { EM_ALERTA, ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface DemandaDoQuadro {
@@ -22,27 +25,13 @@ export interface DemandaDoQuadro {
   terminal: boolean;
   rodadas: { ref: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
   bloqueios: { demanda_id: string; estado: EstadoDemanda }[];
-  falhos: { ref: string; etapa: EtapaTicket }[];
-  /** O PR final verificado espera o humano integrá-lo na plataforma. */
-  aguarda_merge: boolean;
+  /** O que a demanda tem parado esperando o Auditor, como o servidor derivou. */
+  pendencias: PendenciaDoInicio[];
 }
 export interface DadosDoQuadro {
   demandas: DemandaDoQuadro[];
   trabalho: { ref: string; etapa: EtapaTicket; rodada?: string; pi_ativo?: true }[];
 }
-
-/** A etapa do ticket como o quadro a mostra. */
-export const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Demanda",
-  planejar: "Planejamento",
-  implementar: "Implementação",
-  revisar_rodada: "Revisão da rodada",
-  encerrar_rodada: "Encerramento da rodada",
-  ajustar_resultado: "Sessão em aberto",
-  revisar_demanda: "Revisão da demanda",
-  encerrar_demanda: "Encerramento da demanda",
-  resolver_conflito: "Resolução de conflito",
-};
 
 export const pilula = ([rotulo, classe]: readonly [string, string]): string =>
   `<span class="pill ${classe}">${rotulo}</span>`;
@@ -58,14 +47,11 @@ const rodada = (r: DemandaDoQuadro["rodadas"][number]): string => {
 };
 
 function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
-  const aguarda =
-    d.estado === "gate_demanda" ||
-    d.estado === "gate_planejamento" ||
-    (!d.terminal && d.rodadas.some((r) => r.estado === "gate_pr"));
   const marcas = [
-    ...(aguarda ? [`<span class="pill pill-aguarda">aguarda a decisão do Auditor</span>`] : []),
-    ...(d.aguarda_merge ? [`<span class="pill pill-aguarda">aguarda o seu merge do PR final</span>`] : []),
-    ...d.falhos.map((f) => `<span class="pill pill-falha">ticket falho ${escapar(f.ref)}</span>`),
+    ...d.pendencias.map(
+      (p) =>
+        `<span class="pill ${EM_ALERTA.has(p.tipo) ? "pill-falha" : "pill-aguarda"}">aguarda você · ${ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo].marca} · ${escapar(p.item)}</span>`,
+    ),
     ...d.bloqueios.map((b) => {
       const titulo = todas.find((o) => o.id === b.demanda_id)?.titulo;
       const partes = [
@@ -73,10 +59,10 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
         ...(titulo === undefined ? [] : [titulo]),
         APARENCIA_DO_ESTADO_DA_DEMANDA[b.estado][0],
       ];
-      return `<span class="pill pill-neutro">aguarda ${partes.map(escapar).join(" · ")}</span>`;
+      return `<span class="pill pill-neutro">bloqueada por ${partes.map(escapar).join(" · ")}</span>`;
     }),
   ];
-  return `<article class="cartao dm-cartao${aguarda || d.aguarda_merge ? " aguarda" : ""}">
+  return `<article class="cartao dm-cartao${d.pendencias.length > 0 ? " aguarda" : ""}">
     <div class="cartao-topo"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span></div>
     <h3 class="cartao-titulo">${escapar(d.titulo)}</h3>
     <div>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</div>
@@ -89,7 +75,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
 export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
   const ativo = trabalho.map(
     (t) =>
-      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
+      `<li><span class="id">${escapar(t.ref)}</span> ${ROTULO_DA_ETAPA[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
   );
   return `<div class="cabeca-pagina"><h1>Demandas</h1></div>
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-trabalho">
@@ -106,6 +92,8 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
 
 type EstadoTicket = keyof typeof PILULA_DO_ESTADO_DO_TICKET;
 export interface DadosDaPagina {
+  /** O que a demanda tem parado esperando o Auditor, como o servidor derivou. */
+  pendencias: PendenciaDoInicio[];
   demanda: {
     id: string;
     projeto: string;
@@ -124,7 +112,7 @@ export interface DadosDaPagina {
     estado: EstadoRodada;
     pr?: { id: string; url: string };
     /** O endereço do ticket atual de cada etapa que a rodada já teve. */
-    ticket_atual_por_etapa: Partial<Record<EtapaTicket, string>>;
+    ticket_atual_por_etapa: Partial<Record<keyof typeof ROTULO_DA_ETAPA, string>>;
   }[];
   tickets: {
     ref: string;
@@ -305,7 +293,7 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
   const marco = decidido ?? (t.estado === "aberto" && t.elegivel ? "elegivel" : t.estado);
   return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
-    <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ETAPA_DO_TICKET[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
+    <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ROTULO_DA_ETAPA[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo)}</p>`}
     ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
@@ -611,30 +599,35 @@ function acoesDaDemanda({ demanda: { id, terminal, arquivavel }, dependentes }: 
   );
 }
 
-/** O que espera o Auditor, com o link até onde ele age: o gate do estado, o PR ou a sessão da rodada, o ticket. */
-function aguardaVoce({ demanda, rodadas, tickets, encerramento: { aguardando_merge } }: Pagina): string {
-  const gateDoEstado = GATES[demanda.estado];
-  const itens = [
-    ...(gateDoEstado ? [["gate", gateDoEstado.titulo]] : []),
-    ...(aguardando_merge ? [["titulo-encerramento", "Integrar o PR final"]] : []),
-    ...rodadas
-      .filter((r) => r.estado === "gate_pr" || r.estado === "ajustar_resultado")
-      .map((r) => [
-        `${r.estado === "ajustar_resultado" ? "ajustes" : "pr"}-${r.ref}`,
-        `${APARENCIA_DO_ESTADO_DA_RODADA[r.estado][0]} · ${r.ref}`,
-      ]),
-    ...tickets
-      .filter((t) => t.estado === "falhou" || (t.estado === "aberto" && t.elegivel))
-      .map((t) => [
-        t.ref,
-        `${t.estado === "falhou" ? "Reabrir" : "Executar"} ${t.ref}${t.titulo === undefined ? "" : ` · ${t.titulo}`}`,
-      ]),
-  ];
-  if (itens.length === 0) return "";
-  const links = itens.map(
-    ([alvo = "", texto = ""]) => `<li><a class="link" href="#${escapar(alvo)}">${escapar(texto)} ↓</a></li>`,
-  );
-  return `<section class="superficie dm-cartao-lateral dm-aguarda" aria-labelledby="titulo-aguarda"><h2 class="titulo-bloco" id="titulo-aguarda">Aguarda você</h2><ul class="dm-tickets">${links.join("")}</ul></section>`;
+/** Onde, na página, o Auditor resolve a Pendência; a revisão parada não tem lugar na página. */
+function alvoDaPendencia({ tipo, item }: PendenciaDoInicio): string | undefined {
+  const ehRodada = item.includes(".R");
+  switch (tipo) {
+    case "gate_humano":
+      return ehRodada ? `pr-${item}` : "gate";
+    case "acao_externa":
+      return "titulo-encerramento";
+    case "dialogo_do_agente":
+      return ehRodada ? `ajustes-${item}` : item;
+    case "item_bloqueado":
+    case "despacho_parado":
+      return item;
+    case "revisao_parada":
+      return undefined;
+  }
+}
+
+/** O que espera o Auditor, como o servidor derivou, com o link até onde ele age. */
+function pendenciasDaPagina({ pendencias }: Pagina): string {
+  if (pendencias.length === 0) return "";
+  const itens = pendencias.map((p) => {
+    const alvo = alvoDaPendencia(p);
+    const texto = `${escapar(ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo].acao)} ${escapar(p.item)}: ${escapar(p.motivo)}`;
+    return alvo === undefined
+      ? `<li>${texto}</li>`
+      : `<li><a class="link" href="#${escapar(alvo)}">${texto} ↓</a></li>`;
+  });
+  return `<section class="superficie dm-cartao-lateral dm-aguarda" aria-labelledby="titulo-aguarda"><h2 class="titulo-bloco" id="titulo-aguarda">Aguarda você</h2><ul class="dm-tickets">${itens.join("")}</ul></section>`;
 }
 
 interface Comprovacao {
@@ -736,7 +729,7 @@ export function pagina(p: DadosDaPagina): string {
     p.evidencias.filter((e) => e.rodada === undefined && e.ticket === undefined),
   );
   const lateral = [
-    aguardaVoce(p),
+    pendenciasDaPagina(p),
     naAprovacao ? "" : criteriosDaLateral(p),
     naAprovacao
       ? ""

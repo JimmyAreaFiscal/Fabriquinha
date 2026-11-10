@@ -1,7 +1,7 @@
 // Métricas (F7 §4.4) como funções puras: o período em meses, a página `/metrics` (mês em foco contra a média dos
 // meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses lida das tabelas da demanda.
-import type { EtapaTicket, EstadoDemanda } from "../../../nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../../../nucleo/primitivos.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda, Nivel, Soma } from "../../../aplicacao/periodo_demanda.ts";
 import {
   caminhoDaDemanda,
@@ -12,6 +12,7 @@ import {
   APARENCIA_DO_ESTADO_DA_DEMANDA,
   plural as pluralDe,
 } from "../render.ts";
+import { ACAO_DA_ETAPA } from "../rotulos.ts";
 import { pilula } from "./demandas.ts";
 
 type MetricasMes = MetricasMesDemanda;
@@ -399,18 +400,6 @@ function blocoDaEvolucao(meses: readonly MetricasMes[], e: EstadoDasMetricas): s
 
 // ——— por etapa ———
 
-const NOME_DA_ETAPA: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Demanda",
-  planejar: "Planejar",
-  implementar: "Implementar",
-  revisar_rodada: "Revisar rodada",
-  encerrar_rodada: "Encerrar rodada",
-  ajustar_resultado: "Sessão em aberto",
-  revisar_demanda: "Revisar demanda",
-  encerrar_demanda: "Encerrar demanda",
-  resolver_conflito: "Resolver conflito",
-};
-
 type NumerosDaEtapa = MetricasMes["etapas"][number];
 
 const numerosDaEtapa = (n: NumerosDaEtapa) => ({
@@ -437,7 +426,7 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
   const rotulo = rotuloMes(e.foco);
   const corpo = linhas.map(({ etapa, textoDoCusto, a, med }) => {
     const mc = med("custo");
-    return `<tr><td>${NOME_DA_ETAPA[etapa]}</td>
+    return `<tr><td>${ACAO_DA_ETAPA[etapa]}</td>
       <td><div class="barras-cel"><i style="width:${((a.custo / maximo) * 100).toFixed(1)}%;background:var(--foco)"></i><i style="width:${(((mc ?? 0) / maximo) * 100).toFixed(1)}%;background:var(--base)"></i></div></td>
       <td class="num">${textoDoCusto}</td><td class="num muted">${mm(mc, custo)}</td><td class="num">${variacao(a.custo, mc)}</td>
       <td class="num sep">${compacto(a.tokens)} <span class="muted">/ ${mm(med("tokens"), compacto)}</span></td>

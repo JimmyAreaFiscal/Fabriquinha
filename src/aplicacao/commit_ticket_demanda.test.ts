@@ -9,6 +9,8 @@ import { ErroDeReprovacao } from "../nucleo/erros.ts";
 import { migrar } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
+import type { ComandoNoAmbiente } from "../infra/ambiente/ambiente.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-commit-demanda-")));
@@ -47,12 +49,23 @@ function cenario() {
   return { worktree, banco };
 }
 
+/** O host local registrando cada comando que recebe, para provar que o git passou pelo Ambiente. */
+class AmbienteQueRegistra extends AmbienteHostLocal {
+  readonly argumentosRecebidos: string[][] = [];
+  override executar(comando: ComandoNoAmbiente) {
+    this.argumentosRecebidos.push(comando.argumentos);
+    return super.executar(comando);
+  }
+}
+
 test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repetição não duplica", async () => {
   const { worktree, banco } = cenario();
-  assert.equal(await acharCommitTicketDemanda(worktree, ref(1)), undefined);
+  const ambiente = new AmbienteQueRegistra();
+  assert.equal(await acharCommitTicketDemanda(ambiente, worktree, ref(1)), undefined);
   escreve(worktree, "a.txt", "a\nb\nc\n");
   escreve(worktree, "novo.txt", "x\ny\n");
   const feito = await commitarTicketDemanda(banco, ref(1), {
+    ambiente,
     worktree,
     tipo: "feat",
     titulo: "Cache",
@@ -68,12 +81,15 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   );
   assert.match(git(worktree, "show", "--stat", "--format=", "HEAD"), /a\.txt\s+\|\s+1 \+\n.*novo\.txt\s+\|\s+2 \+\+/);
   assert.deepEqual(commitDoTicketDemanda(banco, "I-1", 1), feito);
-  assert.deepEqual(await acharCommitTicketDemanda(worktree, ref(1)), feito);
-  assert.equal(await acharCommitTicketDemanda(worktree, ref(2)), undefined);
+  assert.deepEqual(await acharCommitTicketDemanda(ambiente, worktree, ref(1)), feito);
+  assert.equal(await acharCommitTicketDemanda(ambiente, worktree, ref(2)), undefined);
+  const subcomandos = ambiente.argumentosRecebidos.map((a) => a.slice(2).find((x) => !x.startsWith("-")));
+  for (const subcomando of ["add", "diff", "rev-parse", "show", "log"]) assert.ok(subcomandos.includes(subcomando));
 
   // queda antes da gravação: o commit existe, o registro não
   banco.exec("DELETE FROM arquivo_commit_demanda; DELETE FROM commit_ticket_demanda");
   const de_novo = await commitarTicketDemanda(banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "feat",
     titulo: "Cache",
@@ -87,7 +103,13 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
 test("implementar sem alteração é rejeitado, sem commit", async () => {
   const { worktree, banco } = cenario();
   await assert.rejects(
-    commitarTicketDemanda(banco, ref(1), { worktree, tipo: "fix", titulo: "Nada", etapa: "implementar" }),
+    commitarTicketDemanda(banco, ref(1), {
+      ambiente: new AmbienteHostLocal(),
+      worktree,
+      tipo: "fix",
+      titulo: "Nada",
+      etapa: "implementar",
+    }),
     (erro) =>
       erro instanceof ErroDeReprovacao && erro.message.startsWith("o ticket I-1.T1 terminou sem alteração na worktree"),
   );
@@ -101,6 +123,7 @@ test("resolver_conflito sem alteração commita o merge vazio com dois pais", as
   git(worktree, "checkout", "-q", "main");
   git(worktree, "merge", "--no-ff", "--no-commit", "outra");
   const c = await commitarTicketDemanda(banco, ref(2), {
+    ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "fix",
     titulo: "Nada",
@@ -123,6 +146,7 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   git(worktree, "commit", "-qm", "main");
   git(worktree, "merge", "--no-commit", "--no-ff", "outra");
   const c = await commitarTicketDemanda(banco, ref(2), {
+    ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "fix",
     titulo: "Conflito",
@@ -138,9 +162,21 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
 test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior", async () => {
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
-  await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Um", etapa: "implementar" });
+  await commitarTicketDemanda(banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
+    worktree,
+    tipo: "feat",
+    titulo: "Um",
+    etapa: "implementar",
+  });
   escreve(worktree, "a.txt", "a\nb\nX\nY\nZ\n");
-  await commitarTicketDemanda(banco, ref(2), { worktree, tipo: "feat", titulo: "Dois", etapa: "implementar" });
+  await commitarTicketDemanda(banco, ref(2), {
+    ambiente: new AmbienteHostLocal(),
+    worktree,
+    tipo: "feat",
+    titulo: "Dois",
+    etapa: "implementar",
+  });
   assert.deepEqual(
     banco
       .prepare(

@@ -11,7 +11,7 @@ export type EventoPi = Record<string, unknown> & { type?: unknown };
 /** A raiz do pacote P1 `pi-fabriquinha`, versionado junto com a Fabriquinha (F4 §6.1). */
 export const PACOTE = fileURLToPath(new URL("../../../pacote-pi", import.meta.url));
 
-/** O nome da skill de artefato (P1 §5.1) de uma evidência: sai do tipo. */
+/** O nome da skill de artefato (P1 §5.1) de uma evidência: sai do tipo. @testes as fitness conferem que o catálogo declara as skills que o tipo gera */
 export const skillDoTipo = (tipo: string): string => "artefato-" + tipo.replace(/^relatorio_/, "").replaceAll("_", "-");
 
 /**
