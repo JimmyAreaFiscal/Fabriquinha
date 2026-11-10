@@ -69,7 +69,7 @@ abstract class CicloDoEspaco {
 
   /** A falha da varredura nunca falha a operação: só vai para o log. */
   readonly anotarFalhaDaVarredura = (erro: unknown): void => {
-    anotar(this.registro.log, `varrerBase falhou: ${mensagem(erro)}`);
+    anotar(this.registro.log, `varrerCommitsHumanos falhou: ${mensagem(erro)}`);
   };
 
   /**

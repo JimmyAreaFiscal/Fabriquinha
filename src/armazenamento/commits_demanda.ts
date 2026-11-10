@@ -1,4 +1,4 @@
-// Commit, arquivos e retrabalho do ticket da demanda (comparacao-sdlc-implementacao.md §8, §10.1).
+// Commit, arquivos e commits posteriores do ticket da demanda (comparacao-sdlc-implementacao.md §8, §10.1).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever } from "./banco.ts";
@@ -86,7 +86,7 @@ export function commitDoTicketDemanda(banco: DatabaseSync, demandaId: string, ti
 /** As linhas reescritas por ticket de origem, agrupadas pela demanda dele (origem → quantidade). */
 export type LinhasPorDemanda = Map<string, Map<number, number>>;
 
-const inserirRetrabalho = (
+const inserirCommitsPosteriores = (
   banco: DatabaseSync,
   sha: string,
   alterador: { demandaId: string; ticketId: number } | null,
@@ -94,7 +94,7 @@ const inserirRetrabalho = (
   linhas: LinhasPorDemanda,
 ) => {
   const insere = banco.prepare(
-    `INSERT OR REPLACE INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+    `INSERT OR REPLACE INTO commit_humano_posterior (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   try {
@@ -102,12 +102,12 @@ const inserirRetrabalho = (
       for (const [origem, n] of porTicket)
         insere.run(sha, demandaId, alterador?.ticketId ?? null, autor, origem, n, alterador?.demandaId ?? null);
   } catch {
-    throw new ErroDeRegra(`retrabalho inválido no commit ${sha}`, "os tickets precisam existir na demanda");
+    throw new ErroDeRegra(`commits posteriores inválidos no commit ${sha}`, "os tickets precisam existir na demanda");
   }
 };
 
 /** Troca as linhas em que o ticket é o alterador pelas de `linhas`. */
-export function gravarRetrabalhoDoTicket(
+export function gravarCommitsPosterioresDoTicket(
   banco: DatabaseSync,
   demandaId: string,
   ticketId: number,
@@ -116,20 +116,20 @@ export function gravarRetrabalhoDoTicket(
 ): void {
   escrever(banco, () => {
     banco
-      .prepare("DELETE FROM retrabalho_demanda WHERE alterador_demanda_id = ? AND ticket_id = ?")
+      .prepare("DELETE FROM commit_humano_posterior WHERE alterador_demanda_id = ? AND ticket_id = ?")
       .run(demandaId, ticketId);
-    inserirRetrabalho(banco, sha, { demandaId, ticketId }, null, linhas);
+    inserirCommitsPosteriores(banco, sha, { demandaId, ticketId }, null, linhas);
   });
 }
 
 /** Grava as linhas de um commit humano de `autor`. */
-export function gravarRetrabalhoExterno(
+export function gravarCommitHumanoPosterior(
   banco: DatabaseSync,
   sha: string,
   autor: string,
   linhas: LinhasPorDemanda,
 ): void {
   escrever(banco, () => {
-    inserirRetrabalho(banco, sha, null, autor, linhas);
+    inserirCommitsPosteriores(banco, sha, null, autor, linhas);
   });
 }

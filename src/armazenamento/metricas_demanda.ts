@@ -337,7 +337,7 @@ export const decisoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Decisa
       nota: l.nota === null ? null : Number(l.nota),
     }));
 
-interface RetrabalhoNoPeriodo {
+interface CommitsPosterioresNoPeriodo {
   em: string;
   adicionadas: number;
   alteradas: number;
@@ -345,14 +345,14 @@ interface RetrabalhoNoPeriodo {
 }
 
 /** M4 (comparacao-sdlc §8): por commit de ticket do período, as linhas que ele adicionou e as que outro ticket ou uma pessoa alterou depois. */
-export const retrabalhoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): RetrabalhoNoPeriodo[] =>
+export const commitsPosterioresNoPeriodo = (banco: DatabaseSync, recorte: Recorte): CommitsPosterioresNoPeriodo[] =>
   banco
     .prepare(
       `SELECT c.em,
          (SELECT COALESCE(SUM(a.adicionadas), 0) FROM arquivo_commit_demanda a WHERE a.sha = c.sha) AS adicionadas,
-         (SELECT COALESCE(SUM(r.linhas), 0) FROM retrabalho_demanda r
+         (SELECT COALESCE(SUM(r.linhas), 0) FROM commit_humano_posterior r
            WHERE r.demanda_id = c.demanda_id AND r.ticket_origem_id = c.ticket_id) AS alteradas,
-         (SELECT COALESCE(SUM(r.linhas), 0) FROM retrabalho_demanda r
+         (SELECT COALESCE(SUM(r.linhas), 0) FROM commit_humano_posterior r
            WHERE r.demanda_id = c.demanda_id AND r.ticket_origem_id = c.ticket_id AND r.ticket_id IS NULL) AS por_humanos
        FROM commit_ticket_demanda c JOIN demanda d ON d.id = c.demanda_id
        WHERE c.em >= $inicio AND c.em < $fim AND ${NO_RECORTE}`,

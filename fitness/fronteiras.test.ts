@@ -53,10 +53,9 @@ interface Excecao extends Achado {
   demanda: string;
 }
 
-// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
+// Cada exceção cita a demanda (04 a 26) que a remove: 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
 const EXCECOES: Excecao[] = [
   { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
-  { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
   { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/trabalho/processo_do_ticket.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
@@ -101,7 +100,7 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../infra/repositorio/heatmap.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
-  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/retrabalho.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/commits_humanos.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },
@@ -381,10 +380,10 @@ const ARQUIVOS_COM_CHILD_PROCESS = new Set(["infra/processo.ts", ARQUIVO_DO_HARN
 const CHAMADORES_DIRETOS_DO_PROCESSO = [
   "aplicacao/auditor_automatico.ts",
   "aplicacao/executor.ts",
-  "aplicacao/retrabalho.ts",
   "entrega/cli/cli.ts",
   "infra/agente/harness_pi.ts",
   "infra/repositorio/cadastro.ts",
+  "infra/repositorio/commits_humanos.ts",
   "infra/repositorio/heatmap.ts",
   "infra/repositorio/limpeza_demanda.ts",
   "infra/repositorio/pr.ts",

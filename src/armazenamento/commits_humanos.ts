@@ -1,9 +1,9 @@
-// O retrabalho dos commits humanos da base e o cursor da varredura deles (F6 §4, §7).
+// Os commits humanos posteriores da base e o cursor da varredura deles (F6 §4, §7).
 import type { DatabaseSync } from "node:sqlite";
 import { escrever } from "./banco.ts";
-import { gravarRetrabalhoExterno, type LinhasPorDemanda } from "./commits_demanda.ts";
+import { gravarCommitHumanoPosterior, type LinhasPorDemanda } from "./commits_demanda.ts";
 
-/** As linhas que um commit humano da base reescreveu, por ticket de origem (F6 §4.4). */
+/** As linhas que um commit humano posterior da base reescreveu, por ticket de origem (F6 §4.4). */
 export interface CommitHumano {
   sha: string;
   autor: string;
@@ -20,7 +20,7 @@ export const cursorDaBase = (banco: DatabaseSync, projeto: string): string | und
 /** F6 §4.4, passos 4 e 5: as linhas dos commits humanos e o cursor novo, na mesma transação. */
 export function gravarVarredura(banco: DatabaseSync, projeto: string, cursor: string, humanos: CommitHumano[]): void {
   escrever(banco, () => {
-    for (const h of humanos) gravarRetrabalhoExterno(banco, h.sha, h.autor, h.linhas);
+    for (const h of humanos) gravarCommitHumanoPosterior(banco, h.sha, h.autor, h.linhas);
     banco
       .prepare(
         `INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES (?, ?, ?)

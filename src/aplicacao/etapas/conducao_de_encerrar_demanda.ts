@@ -34,7 +34,7 @@ import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "../evidencias/encerramento_demanda.ts";
 import { submeterEvidencia } from "../evidencia/submeter.ts";
 import { publicarPRFinal } from "../encerramento_demanda.ts";
-import { varrerBase } from "../retrabalho.ts";
+import { varrerCommitsHumanos } from "../metricas/varrer_commits_humanos.ts";
 import {
   ConducaoDeterministica,
   type DepsDaConducao,
@@ -102,7 +102,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
     // O erro até a tentativa registrada sobe e a base falha o ticket.
     const ciclo = this.cicloDoEspacoDaDemanda(projeto, demanda_id);
-    await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
     const publicado = await publicarPRFinal(banco, ag, projeto, projeto.branch_base, raiz);
     this.aplicar(endereco, (a) =>
       registrarTentativaEncerramento(

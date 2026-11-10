@@ -15,7 +15,7 @@ import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { concluirResolucaoConflito, podeTentarEncerramento } from "../../nucleo/transicoes_encerramento.ts";
 import { gravarCommitDemanda } from "../../armazenamento/commits_demanda.ts";
-import { cursorDaBase } from "../../armazenamento/retrabalho.ts";
+import { cursorDaBase } from "../../armazenamento/commits_humanos.ts";
 import { registrarProjeto } from "../projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
@@ -314,7 +314,7 @@ test("a base é varrida uma vez antes de publicar o PR final, e a falha da varre
   assert.equal(sem.ag().encerramento?.aguardando_merge_humano, true);
   assert.match(
     readFileSync(join(sem.raiz, "execucoes", "encerramento-I-206.log"), "utf8"),
-    /varrerBase falhou: .*varredura_base/,
+    /varrerCommitsHumanos falhou: .*varredura_base/,
   );
 });
 

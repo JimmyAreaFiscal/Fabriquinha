@@ -27,7 +27,7 @@ import {
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
 } from "../nucleo/trabalho_agentico.ts";
-import { varrerBase } from "./retrabalho.ts";
+import { varrerCommitsHumanos } from "./metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
@@ -86,7 +86,7 @@ async function worktreeDoEspacoDoTicket(
   const raiz = raizDo(banco);
   const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
   const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
-  if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
 }
 

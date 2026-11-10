@@ -8,7 +8,7 @@ import {
   execucoesNoPeriodo,
   fatosNoPeriodo,
   prsNoPeriodo,
-  retrabalhoNoPeriodo,
+  commitsPosterioresNoPeriodo,
   type UsoNoPeriodo,
   usoNoPeriodo,
 } from "../armazenamento/metricas_demanda.ts";
@@ -120,7 +120,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
   const fatos = noMes(fatosNoPeriodo(banco, recorte), (f) => f.em);
   const prs = noMes(prsNoPeriodo(banco, recorte), (p) => p.em);
   const decisoes = noMes(decisoesNoPeriodo(banco, recorte), (d) => d.em);
-  const retrabalho = noMes(retrabalhoNoPeriodo(banco, recorte), (r) => r.em);
+  const posteriores = noMes(commitsPosterioresNoPeriodo(banco, recorte), (r) => r.em);
 
   return meses.map(({ mes }) => {
     const execs = execucoes.get(mes) ?? [];
@@ -129,7 +129,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
     const mergeados = ds.filter((d) => d.etapa === "encerrar_rodada" && !d.reprovada);
     const notas = mergeados.flatMap((d) => (d.nota === null ? [] : [d.nota]));
     const prsDoMes = prs.get(mes) ?? [];
-    const r = retrabalho.get(mes) ?? [];
+    const r = posteriores.get(mes) ?? [];
     const usoDeclaradoDoMes = usoDeclaradoDe(declarado.get(mes) ?? []);
     const usoDoMes = usoDe(execs, uso).somar(usoDeclaradoDoMes);
     return {

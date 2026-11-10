@@ -80,8 +80,8 @@ function banco(): DatabaseSync {
   b.prepare("INSERT INTO commit_ticket_demanda VALUES (?, 'I-1', 1, 'm', ?)").run(SHA(1), em("2026-02"));
   b.prepare("INSERT INTO commit_ticket_demanda VALUES (?, 'I-1', 3, 'm', ?)").run(SHA(2), em("2026-03"));
   b.prepare("INSERT INTO arquivo_commit_demanda VALUES (?, 'a.ts', NULL, 'M', 30, 0)").run(SHA(1));
-  b.prepare("INSERT INTO retrabalho_demanda VALUES (?, 'I-1', 3, NULL, 1, 10, 'I-1')").run(SHA(2));
-  b.prepare("INSERT INTO retrabalho_demanda VALUES (?, 'I-1', NULL, 'ana', 1, 5, NULL)").run(SHA(3));
+  b.prepare("INSERT INTO commit_humano_posterior VALUES (?, 'I-1', 3, NULL, 1, 10, 'I-1')").run(SHA(2));
+  b.prepare("INSERT INTO commit_humano_posterior VALUES (?, 'I-1', NULL, 'ana', 1, 5, NULL)").run(SHA(3));
   return b;
 }
 

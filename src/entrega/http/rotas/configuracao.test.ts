@@ -15,7 +15,7 @@ import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso
 import { Projeto } from "../../../nucleo/projeto.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
-import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
+import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";

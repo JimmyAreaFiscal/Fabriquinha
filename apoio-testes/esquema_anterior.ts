@@ -108,6 +108,14 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
+    // A 49 renomeou a tabela dos commits humanos posteriores e os índices dela: a volta devolve os nomes antigos.
+    banco.exec(`
+      ALTER TABLE commit_humano_posterior RENAME TO retrabalho_demanda;
+      DROP INDEX ix_commit_humano_posterior_origem;
+      DROP INDEX ix_commit_humano_posterior_alterador;
+      CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
+      CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(alterador_demanda_id, ticket_id);
+    `);
     // A 47 criou o Plano com versões e os arquivos previstos de rodada e demanda: a volta apaga as três tabelas.
     banco.exec(`
       DROP TABLE versao_plano;

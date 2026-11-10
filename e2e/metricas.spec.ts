@@ -166,7 +166,7 @@ function semearNumerosGrandes(raiz: string): void {
     INSERT INTO commit_ticket_demanda VALUES ('${sha("a")}', 'I-1', 1, 'm', '${em(M0)}');
     INSERT INTO arquivo_commit_demanda (sha, caminho, status, adicionadas, removidas)
       VALUES ('${sha("a")}', 'a.ts', 'A', 289424, 0);
-    INSERT INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+    INSERT INTO commit_humano_posterior (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
       VALUES ('${sha("b")}', 'I-1', 2, NULL, 1, 24929, 'I-1');
   `);
   banco.close();

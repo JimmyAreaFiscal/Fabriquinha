@@ -14,7 +14,7 @@ import {
 } from "../../apoio-testes/cenario_de_encerramento_rodada.ts";
 import { commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
-import { cursorDaBase } from "../armazenamento/retrabalho.ts";
+import { cursorDaBase } from "../armazenamento/commits_humanos.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { schemaDoTipo } from "../nucleo/evidencia.ts";
 import { caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
@@ -135,7 +135,7 @@ test("a base é varrida uma vez antes de publicar o PR, e a falha da varredura s
   assert.equal(hospedagem.prs().length, 1);
   assert.match(
     readFileSync(join(sem.c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
-    /varrerBase falhou: .*varredura_base/,
+    /varrerCommitsHumanos falhou: .*varredura_base/,
   );
 });
 
