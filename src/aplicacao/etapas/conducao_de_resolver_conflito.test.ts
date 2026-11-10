@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { selecionarTrabalho } from "../../nucleo/selecao_trabalho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../nucleo/despacho.ts";
 import { podeTentarEncerramento } from "../../nucleo/transicoes_encerramento.ts";
 import { commitDoTicketDemanda } from "../../armazenamento/commits_demanda.ts";
 import {
@@ -33,7 +33,7 @@ test("CA-12 e CA-13: aprovado conclui e o encerramento volta a ser tentado sozin
   assert.equal(c.ag().encerramento?.sha_verificado, commitDoTicketDemanda(c.banco, DEMANDA, RESOLVER)?.sha);
   assert.equal(podeTentarEncerramento(c.ag()), true);
   assert.deepEqual(
-    selecionarTrabalho(c.ag(), true).map((t) => t.etapa),
+    new Despacho().selecionar(situacaoDeUmaDemanda(c.ag(), true)).prontos.map((t) => t.etapa),
     ["encerrar_demanda"],
   );
 });

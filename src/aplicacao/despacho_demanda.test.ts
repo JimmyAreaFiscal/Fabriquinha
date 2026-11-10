@@ -338,6 +338,28 @@ test("executar agora recusa demanda fora dos estados lidos, ticket inexistente e
   assert.equal(estadoDoTicket(banco, 3, 1), "aberto");
 });
 
+test("executar agora não perde a vaga livre para outro pronto de menor número: só o limite cheio de execuções recusa", async () => {
+  const { banco, config } = await cenario(1);
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  await executarAgoraDemanda(banco, { demanda_id: "I-3", ticket_id: 1 }, config, deps);
+  assert.deepEqual([estadoDoTicket(banco, 2, 1), estadoDoTicket(banco, 3, 1)], ["aberto", "em_execucao"]);
+});
+
+test("CA-2 (4): o ticket retomado por falha de infraestrutura só é despachado se o Despacho o devolve em prontos", async () => {
+  const { banco, config } = await cenario(1);
+  demanda(banco, 1, { rodadas: ["implementar"], tickets: [{ ...implementar(1), estado: "em_execucao" }] });
+  demanda(banco, 2, {
+    rodadas: ["implementar"],
+    tickets: [{ ...implementar(1), estado: "falhou", resultado: falhaPorServicoReiniciado }],
+  });
+  await Promise.all(despacharDemandas(banco, config, deps));
+  assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["aberto", 0]); // retomado, mas sem vaga
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = 2").run();
+  await Promise.all(despacharDemandas(banco, config, deps));
+  assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 1]);
+});
+
 test("falha síncrona ao iniciar desfaz a reserva e vai ao log; fim rejeitado também só vai ao log", async (t) => {
   const log = silenciar(t);
   const { banco, config } = await cenario(3);
