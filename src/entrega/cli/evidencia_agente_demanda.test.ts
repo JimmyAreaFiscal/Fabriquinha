@@ -245,6 +245,37 @@ test("CA-7: plano com campo inválido não grava e o erro aponta o caminho do ca
   assert.deepEqual(gravadas(banco), []);
 });
 
+test("CA-2: a submissão recusa Ticket fora da Rodada e Rodada fora da Demanda, sem gravar, e aceita o plano incluído", async () => {
+  const { raiz, banco, env } = cenario();
+  const planoCom = (demanda: string[], rodada: string[], ticket: string[]) => ({
+    ...PLANO,
+    arquivos_previstos: demanda,
+    rodadas: [{ ...PLANO.rodadas[0], arquivos_previstos: rodada }],
+    tickets: [{ ...PLANO.tickets[0], arquivos_previstos: ticket }],
+  });
+  const contarEvidencias = () =>
+    (banco.prepare("SELECT COUNT(*) AS n FROM evidencia_demanda").get() as { n: number }).n;
+  const submeter = (plano: object) =>
+    cli(env(1), ["evidencia", "add", "I-206.T1", "plano", "--dados", json(raiz, plano)]);
+
+  const antes = contarEvidencias();
+  const ticketForaDaRodada = await submeter(planoCom(["src/a.ts"], ["src/a.ts"], ["src/b.ts"]));
+  assert.equal(ticketForaDaRodada.codigo, 1);
+  assert.match(ticketForaDaRodada.err, /src\/b\.ts/);
+  assert.match(ticketForaDaRodada.err, /ticket 1/);
+  assert.match(ticketForaDaRodada.err, /rodada 1/);
+  const rodadaForaDaDemanda = await submeter(planoCom(["src/a.ts"], ["src/b.ts"], ["src/b.ts"]));
+  assert.equal(rodadaForaDaDemanda.codigo, 1);
+  assert.match(rodadaForaDaDemanda.err, /src\/b\.ts/);
+  assert.match(rodadaForaDaDemanda.err, /rodada 1/);
+  assert.match(rodadaForaDaDemanda.err, /demanda I-206/);
+  assert.equal(contarEvidencias(), antes);
+
+  const valido = await submeter(planoCom(["src/a.ts", "src/b.ts"], ["src/a.ts", "src/b.ts"], ["src/b.ts"]));
+  assert.deepEqual([valido.codigo, valido.err], [0, ""]);
+  assert.equal(contarEvidencias(), antes + 1);
+});
+
 test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída, fica no ticket com veredito", async () => {
   const { raiz, banco, env } = cenario();
   const sem = await cli(
