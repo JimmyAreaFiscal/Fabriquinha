@@ -8,6 +8,7 @@ import {
   inicioDoMes,
   instanteAntes,
   instanteDepois,
+  instanteMesesAntes,
   mesDoInstante,
   type Relogio,
   relogioDoSistema,
@@ -34,6 +35,11 @@ test("inicioDoMes: a meia-noite do dia 1 no fuso do serviço, em UTC, e a virada
 
 test("instanteAntes recua o instante em milissegundos", () => {
   assert.equal(instanteAntes("2026-10-11T12:00:00.000Z", 24 * 60 * 60_000), "2026-10-10T12:00:00.000Z");
+});
+
+test("instanteMesesAntes recua o instante em meses de calendário UTC", () => {
+  assert.equal(instanteMesesAntes("2026-10-11T12:00:00.000Z", 12), "2025-10-11T12:00:00.000Z");
+  assert.equal(instanteMesesAntes("2026-02-11T12:00:00.000Z", 3), "2025-11-11T12:00:00.000Z");
 });
 
 test("mesDoInstante: o mês do fuso do serviço, não o do UTC", () => {

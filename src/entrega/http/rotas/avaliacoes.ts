@@ -20,7 +20,7 @@ import {
   NovaMensagemDaAvaliacao,
   PeriodoDaAvaliacao,
 } from "../../contrato/avaliacoes.ts";
-import { IdDoCaminho, type Rota } from "../rotas.ts";
+import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";
 import { abrirFluxoSse } from "../sse.ts";
 
 const idDe = (params: Record<string, unknown>): string => z.uuid().parse(params.id);
@@ -70,6 +70,7 @@ export const ROTAS_DAS_AVALIACOES: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/avaliacoes/:id/mensagens",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, corpo }) => {
       enviarNaAvaliacao(banco, idDe(params), NovaMensagemDaAvaliacao.parse(corpo).texto);
     },
@@ -77,6 +78,7 @@ export const ROTAS_DAS_AVALIACOES: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/avaliacoes/:id/abortar",
+    resposta: SemCorpoEmJson,
     tratar: ({ params }) => {
       abortarAvaliacao(idDe(params));
     },

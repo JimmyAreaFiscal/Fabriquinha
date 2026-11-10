@@ -4,6 +4,7 @@ import { basename } from "node:path";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Instante } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import { instanteMesesAntes } from "../../nucleo/relogio.ts";
 import { git } from "../processo.ts";
 import { exigirGit } from "./worktree.ts";
 
@@ -181,8 +182,7 @@ export async function heatmapDo(projeto: Pick<Projeto, "raiz_git" | "branch_base
       `busque-a com git fetch origin ${branch_base} ou corrija a branch base na Configuração`,
     );
   }
-  const desde = new Date(agora);
-  desde.setUTCMonth(desde.getUTCMonth() - MESES_DA_JANELA);
+  const desde = instanteMesesAntes(agora, MESES_DA_JANELA);
   const arquivos = (await exigirGit(repo, "ls-tree", "-r", "-z", "--name-only", ref)).split("\0").filter(Boolean);
   const log = lerLog(
     await exigirGit(
@@ -192,7 +192,7 @@ export async function heatmapDo(projeto: Pick<Projeto, "raiz_git" | "branch_base
       "log",
       "--no-show-signature",
       "-z",
-      `--since=${desde.toISOString()}`,
+      `--since=${desde}`,
       "--format=%x1e%H%x1f%P%x1f%cI%x1f%s",
       "--name-only",
       ref,
@@ -200,7 +200,7 @@ export async function heatmapDo(projeto: Pick<Projeto, "raiz_git" | "branch_base
   );
   return {
     branch: branch_base,
-    desde: desde.toISOString(),
+    desde,
     ate: agora,
     ...montar(basename(repo), arquivos, log, prsDos(log, ponta.saida.trim())),
   };

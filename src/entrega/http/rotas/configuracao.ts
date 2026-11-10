@@ -27,7 +27,7 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
-import type { Rota } from "../rotas.ts";
+import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
@@ -63,6 +63,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "DELETE",
     caminho: "/api/ambiente/:id",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params }) => eliminarAmbienteDoConjunto(banco, String(params.id)),
   },
   {

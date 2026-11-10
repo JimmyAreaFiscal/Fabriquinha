@@ -12,8 +12,8 @@ import {
   exportarHistoricoDemanda,
   responderDialogoDemanda,
 } from "../../../aplicacao/sessoes_demanda.ts";
-import { DadosDoChatDemanda as RespostaDoChat, NovaMensagemDoChat, RespostaDoDialogo } from "../../contrato/chat.ts";
-import type { Rota } from "../rotas.ts";
+import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../contrato/chat.ts";
+import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 import { abrirFluxoSse } from "../sse.ts";
 
 /** O erro da sessão que não é de nenhuma demanda. */
@@ -31,7 +31,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/sessoes/:sessao",
-    resposta: RespostaDoChat,
+    resposta: DadosDoChatDemanda,
     tratar: ({ banco, params }) => {
       const chat = chatDa(banco, String(params.sessao));
       return { ...chat.cabecalho, conversa: chat.conversa };
@@ -53,6 +53,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/mensagens",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, corpo }) => {
       const { texto, modo } = NovaMensagemDoChat.parse(corpo);
       const sessao = String(params.sessao);
@@ -62,6 +63,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/sessoes/:sessao/historico.md",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, resposta }) => {
       const sessao = String(params.sessao);
       const historico = exportarHistoricoDemanda(banco, sessao);
@@ -77,6 +79,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/dialogos/:id",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, corpo }) => {
       const resposta = RespostaDoDialogo.parse(corpo);
       const sessao = String(params.sessao);
@@ -86,6 +89,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/abortar",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params }) => {
       const sessao = String(params.sessao);
       if (!abortarDemanda(banco, sessao)) throw naoExiste(sessao);

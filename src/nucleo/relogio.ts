@@ -18,6 +18,13 @@ export const inicioDoMes = (ano: number, mes: number): Instante => new Date(ano,
 export const instanteAntes = (instante: Instante, ms: number): Instante =>
   new Date(Date.parse(instante) - ms).toISOString();
 
+/** O `instante` recuado em `meses` meses de calendário UTC. */
+export const instanteMesesAntes = (instante: Instante, meses: number): Instante => {
+  const data = new Date(instante);
+  data.setUTCMonth(data.getUTCMonth() - meses);
+  return data.toISOString();
+};
+
 /** O mês `AAAA-MM` do `instante`, no fuso do serviço. */
 export const mesDoInstante = (instante: Instante): string => {
   const data = new Date(instante);
