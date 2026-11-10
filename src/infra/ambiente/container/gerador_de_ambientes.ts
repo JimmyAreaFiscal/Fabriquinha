@@ -2,11 +2,13 @@
 // que servem de Ambiente. Todo container nasce com o rótulo `fabriquinha.ambiente` e com limite de memória e de CPU, e
 // só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente.ts";
 import { executar } from "../../processo.ts";
+import { pastasDoProcesso } from "../../registro.ts";
+import { dirDoPiDoAmbiente } from "./ambiente_container.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
@@ -20,6 +22,24 @@ type ImagemDoAmbiente = string;
 interface Limites {
   memoria_maxima_mb: number;
   cpus: number;
+}
+
+/**
+ * O que o container enxerga do host, nos mesmos caminhos dele, e nada além disto: nunca a raiz da Fabriquinha inteira,
+ * que tem o banco, nem o `~/.pi/agent`, que tem o `trust.json` e as configurações do Auditor.
+ */
+interface Montagens {
+  /** A worktree do Espaço, em leitura e escrita. */
+  worktree: string;
+  /** O clone do usuário: só o `.git` entra (objetos e `worktrees/<n>`), em leitura e escrita. */
+  raiz_git: string;
+  /** A raiz da Fabriquinha (R): entram `sessoes` e `execucoes/E-<execucao>`, em leitura e escrita. */
+  raiz: string;
+  execucao: string | number;
+  /** O `pacote-pi`, só em leitura. */
+  pacote: string;
+  /** O `auth.json` do pi no host: o container recebe uma cópia dele, num `PI_CODING_AGENT_DIR` próprio. */
+  auth_json: string;
 }
 
 interface ContainerCriado {
@@ -43,6 +63,28 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
     `docker ${String(args[0])} falhou: ${motivo}`,
     "confira se o Docker está rodando e se o usuário tem acesso a ele",
   );
+}
+
+/** Cria no host o que o container monta e devolve os `-v`; a cópia do `auth.json` não leva mais nada do `~/.pi/agent`. */
+function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
+  const { worktree, raiz_git, raiz, execucao, pacote, auth_json } = montagens;
+  if (!existsSync(auth_json))
+    throw new ErroDeRegra(`não existe o ${auth_json}`, "entre no pi (login) antes de usar um Ambiente em container");
+  const dirDoPi = dirDoPiDoAmbiente(raiz, idDoAmbiente);
+  const dirDasSessoes = join(raiz, "sessoes");
+  const dirDaExecucao = pastasDoProcesso(raiz, execucao).dir;
+  for (const dir of [dirDoPi, dirDasSessoes, dirDaExecucao]) mkdirSync(dir, { recursive: true });
+  copyFileSync(auth_json, join(dirDoPi, "auth.json"));
+  chmodSync(join(dirDoPi, "auth.json"), 0o600);
+  const montagensComModo: [string, "rw" | "ro"][] = [
+    [worktree, "rw"],
+    [join(raiz_git, ".git"), "rw"],
+    [dirDasSessoes, "rw"],
+    [dirDaExecucao, "rw"],
+    [pacote, "ro"],
+    [dirDoPi, "rw"],
+  ];
+  return montagensComModo.flatMap(([caminho, modo]) => ["-v", `${caminho}:${caminho}:${modo}`]);
 }
 
 export class GeradorDeAmbientes {
@@ -69,8 +111,12 @@ export class GeradorDeAmbientes {
 
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o
   // `kill -9 -1` da `limpar` derruba o `tail` e o tini sai junto. Trocar por um PID 1 que colha, se os zumbis pesarem.
-  /** Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. */
-  async criar(imagem: ImagemDoAmbiente, limites: Limites): Promise<ContainerCriado> {
+  /**
+   * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e para o host
+   * pelo `host-gateway` (a API do agente). Sem `montagens`, o container nasce sem pasta do host.
+   * shortcut: o `host-gateway` abre todas as portas do host; limitar à porta do serviço pede regra de firewall.
+   */
+  async criar(imagem: ImagemDoAmbiente, limites: Limites, montagens?: Montagens): Promise<ContainerCriado> {
     const id = randomUUID();
     const containerId = await rodarDocker(
       [
@@ -84,6 +130,9 @@ export class GeradorDeAmbientes {
         String(limites.cpus),
         "--workdir",
         PASTA_DE_TRABALHO,
+        "--add-host",
+        "host.docker.internal:host-gateway",
+        ...(montagens ? argumentosDasMontagens(montagens, id) : []),
         imagem,
         "tail",
         "-f",
