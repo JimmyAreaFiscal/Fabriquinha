@@ -71,11 +71,6 @@ interface Excecao extends Achado {
 
 // Cada exceção cita a demanda (04 a 26) que a remove: 20 limpa entrega/http.
 const EXCECOES: Excecao[] = [
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/harness_pi.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
@@ -95,7 +90,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/trabalho_agentico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../infra/repositorio/heatmap.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
-  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/commits_humanos.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },

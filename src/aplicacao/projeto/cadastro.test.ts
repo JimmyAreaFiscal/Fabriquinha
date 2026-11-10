@@ -1,17 +1,28 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { ZodError } from "zod";
 import type { DatabaseSync } from "node:sqlite";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../../nucleo/erros.ts";
+import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
+import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../infra/registro.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
+import { cursorDaBase } from "../../armazenamento/commits_humanos.ts";
 import { buscarProjeto, listarProjetos } from "../../armazenamento/projetos.ts";
-import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto, removerProjeto } from "./cadastro.ts";
+import {
+  cadastrarProjetoDoFormulario,
+  editarProjeto,
+  editarProjetoDoFormulario,
+  gravarConfiguracaoSdlc,
+  registrarProjeto,
+  removerProjeto,
+} from "./cadastro.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;
@@ -624,5 +635,156 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
   banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
   assert.deepEqual(contagensDemanda(banco), antes);
   assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);
+  banco.close();
+});
+
+// Cadastro e edição pelo formulário: um clone com remoto de cara GitHub (o acesso desviado para um bare no disco), gh e
+// pi falsos. realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
+const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-cadastro-")));
+after(() => {
+  rmSync(base, { recursive: true, force: true });
+});
+const gitconfig = join(base, "gitconfig");
+writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+process.env.GIT_CONFIG_GLOBAL = gitconfig;
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+const bin = join(base, "bin");
+mkdirSync(bin);
+writeFileSync(join(bin, "gh"), "#!/bin/sh\nexit 0\n");
+chmodSync(join(bin, "gh"), 0o755);
+process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
+const piFalso = instalarPiFalso(base);
+const modelosDoPi: PassoPi = {
+  listaDeModelos: {
+    tabela:
+      "provider   model              context  max-out  thinking  images\n" +
+      "anthropic  claude-opus-5-5    200K     64K      yes       yes\n" +
+      "llamacpp   qwen3-coder-30b    32.8K    8.2K     yes       no\n",
+  },
+};
+const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
+const qwen = { provedor: "llamacpp", nome: "qwen3-coder-30b" };
+
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+
+/** Clone com `origin` de cara GitHub e a branch `main` publicada num bare no disco. */
+function clonePublicado(): string {
+  const bare = mkdtempSync(join(base, "origin-"));
+  git(bare, "init", "--bare", "-q");
+  const repo = mkdtempSync(join(base, "repo-"));
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "commit", "-q", "--allow-empty", "-m", "início");
+  git(repo, "push", "-q", bare, "HEAD:refs/heads/main");
+  const url = "https://github.com/dono/repo.git";
+  git(repo, "remote", "add", "origin", url);
+  git(repo, "config", `url.${bare}.insteadOf`, url);
+  return repo;
+}
+
+const formularioDeLoja = (repo: string) => ({
+  nome: "loja",
+  raiz_git: repo,
+  branch_base: "main",
+  preparacao: [],
+  configuracoes: {},
+});
+
+const linhasDasEtapas = (banco: DatabaseSync) =>
+  banco
+    .prepare("SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto ORDER BY etapa")
+    .all()
+    .map((linha) => ({ ...linha }));
+
+test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava as etapas escolhidas e fixa o cursor da base", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  const configuracoes = {
+    planejar: { modelo: opus, effort: "high" as const },
+    implementar: { modelo: qwen },
+    revisar_rodada: { effort: "low" as const },
+    entender_e_desenhar: {},
+  };
+  const salvo = await cadastrarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    hospedagem: "azure-devops",
+    configuracoes,
+  });
+  assert.equal(salvo.hospedagem, "github");
+  assert.equal(salvo.chave_sonarqube, "loja");
+  assert.deepEqual(salvo.configuracoes, {
+    planejar: configuracoes.planejar,
+    implementar: configuracoes.implementar,
+    revisar_rodada: configuracoes.revisar_rodada,
+  });
+  assert.deepEqual(
+    linhasDasEtapas(banco).map((linha) => linha.etapa),
+    ["implementar", "planejar", "revisar_rodada"],
+    "a etapa sem modelo nem effort não deixa linha",
+  );
+  assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
+  await assert.rejects(cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo)), /já existe o projeto loja/);
+  banco.close();
+});
+
+test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e não varre a base", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  await cadastrarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    configuracoes: { planejar: { modelo: opus } },
+  });
+  const cursor = cursorDaBase(banco, "loja");
+  git(repo, "commit", "-q", "--allow-empty", "-m", "outro");
+
+  // O modelo que o pi não lista: erro no campo da etapa, e nada muda.
+  await assert.rejects(
+    editarProjetoDoFormulario(banco, {
+      ...formularioDeLoja(repo),
+      preparacao: ["npm ci"],
+      configuracoes: { planejar: { modelo: opus }, implementar: { modelo: { provedor: "inexistente", nome: "xyz" } } },
+    }),
+    (erro: unknown) =>
+      erro instanceof ZodError &&
+      erro.issues.length === 1 &&
+      erro.issues[0]?.path.join(".") === "configuracoes.implementar.modelo" &&
+      erro.issues[0].message.includes("o modelo inexistente/xyz não existe no pi"),
+  );
+  assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes.preparacao, []);
+  assert.deepEqual(
+    linhasDasEtapas(banco).map((linha) => linha.etapa),
+    ["planejar"],
+  );
+
+  // Com o pi quebrado: o igual ao gravado salva sem chamá-lo; o trocado é rejeitado.
+  piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
+  const editado = await editarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    preparacao: ["npm ci"],
+    configuracoes: { planejar: { modelo: opus, effort: "low" } },
+  });
+  assert.deepEqual(editado.verificacoes.preparacao, ["npm ci"]);
+  assert.deepEqual(linhasDasEtapas(banco), [
+    { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "low" },
+  ]);
+  await assert.rejects(
+    editarProjetoDoFormulario(banco, { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } }),
+    ZodError,
+  );
+  assert.equal(cursorDaBase(banco, "loja"), cursor, "a edição não varre a base");
+  banco.close();
+});
+
+test("o cadastro pelo formulário recusa o repositório que a conferência reprova como ErroExterno, sem gravar", async () => {
+  const banco = novoBanco();
+  const pasta = mkdtempSync(join(base, "nao-git-"));
+  await assert.rejects(
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta)),
+    (erro: unknown) =>
+      erro instanceof ErroExterno &&
+      erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
+  );
+  assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
