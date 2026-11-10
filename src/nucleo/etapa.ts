@@ -3,6 +3,7 @@ import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
 import { OBRIGATORIAS_DEMANDA, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 import type { NomeGate } from "./agregado_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
+import type { TipoMetrica } from "./metrica.ts";
 import type { EtapaTicket } from "./primitivos.ts";
 import type { TipoVerificacao } from "./verificacao.ts";
 
@@ -13,6 +14,7 @@ export interface DefinicaoDaEtapa {
   executor: "agente_autonomo" | "agente_interativo" | "externo" | "fabriquinha";
   evidencias: ItemCatalogoEtapa[];
   verificacoes: TipoVerificacao[];
+  metricas: TipoMetrica[];
   capacidades: { skills: string[]; extensoes: string[] };
   /** O nome do `.md` em `aplicacao/etapas/`. */
   instrucao?: string;
@@ -55,6 +57,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
       item("entender_e_desenhar", t, "externo", (OBRIGATORIAS_DEMANDA as readonly string[]).includes(t)),
     ),
     verificacoes: [],
+    metricas: ["uso", "aprovacoes_e_reprovacoes"],
     capacidades: SEM_CAPACIDADES,
     gate: "gate_demanda",
   },
@@ -65,6 +68,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
     executor: "agente_interativo",
     evidencias: [item("planejar", "plano", "agente")],
     verificacoes: [],
+    metricas: ["uso", "conformidade_com_o_plano"],
     capacidades: { skills: ["artefato-plano"], extensoes: EXTENSOES_DO_AGENTE },
     instrucao: "planejar.md",
     gate: "gate_planejamento",
@@ -76,6 +80,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
     executor: "agente_autonomo",
     evidencias: evidenciasDeVerificacao("implementar"),
     verificacoes: VERIFICACOES_DE_CODIGO,
+    metricas: ["uso", "alteracoes_posteriores"],
     capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
     instrucao: "implementar.md",
   },
@@ -91,6 +96,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
       item("revisar_rodada", "comprovacao_criterios", "agente", true, "criterios_rodada_atendidos"),
     ],
     verificacoes: ["fitness"],
+    metricas: ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"],
     capacidades: {
       skills: ["artefato-explicacao-fitness", "artefato-comprovacao-criterios"],
       extensoes: EXTENSOES_DO_AGENTE,
@@ -111,6 +117,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
       item("encerrar_rodada", "video_demonstracao", "agente", false),
     ],
     verificacoes: ["conferencia_do_pr"],
+    metricas: ["uso", "nota_humana"],
     capacidades: {
       skills: ["artefato-mensagem-pr", "artefato-aula-codigo", "artefato-video-demonstracao"],
       extensoes: EXTENSOES_DO_AGENTE,
@@ -125,6 +132,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
     executor: "agente_interativo",
     evidencias: [],
     verificacoes: [],
+    metricas: ["uso"],
     capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
     instrucao: "ajustar_resultado.md",
   },
@@ -139,6 +147,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
       item("revisar_demanda", "analise_seguranca", "agente"),
     ],
     verificacoes: [],
+    metricas: ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"],
     capacidades: {
       skills: ["artefato-comprovacao-criterios", "artefato-testes-estresse", "artefato-analise-seguranca"],
       extensoes: EXTENSOES_DO_AGENTE,
@@ -156,6 +165,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
       item("encerrar_demanda", "demonstracao_limpeza", "fabriquinha", true, "nada_sobrou"),
     ],
     verificacoes: ["conferencia_do_pr"],
+    metricas: ["uso"],
     capacidades: SEM_CAPACIDADES,
     instrucao: "encerrar_demanda.md",
   },
@@ -166,6 +176,7 @@ export const CATALOGO_DE_ETAPAS: Record<EtapaTicket, DefinicaoDaEtapa> = {
     executor: "agente_autonomo",
     evidencias: evidenciasDeVerificacao("resolver_conflito"),
     verificacoes: VERIFICACOES_DE_CODIGO,
+    metricas: ["uso"],
     capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
     instrucao: "resolver_conflito.md",
   },
