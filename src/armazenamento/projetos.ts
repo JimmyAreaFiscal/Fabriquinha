@@ -263,6 +263,9 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("encerramento_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("caminho_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("arquivo_previsto_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("arquivo_previsto_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("versao_plano", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("tentativa", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("criterio_citado_rodada", `demanda_id IN (${DAS_DEMANDAS})`);

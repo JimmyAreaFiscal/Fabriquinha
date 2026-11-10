@@ -997,6 +997,40 @@ ALTER TABLE projeto ADD COLUMN imagem_do_ambiente TEXT CHECK (imagem_do_ambiente
 ALTER TABLE processo_do_trabalho ADD COLUMN ambiente_id TEXT NOT NULL DEFAULT 'host_local' CHECK (length(ambiente_id) > 0);
 `;
 
+/**
+ * A 46 dá lugar ao Plano com versões e aos arquivos previstos nos três níveis (CONCEITOS.md §10): `versao_plano` (a 1 é o
+ * plano aprovado; as seguintes, as correções, com o `dados` de cada uma) e `arquivo_previsto_rodada` e
+ * `arquivo_previsto_demanda`, ao lado do `caminho_ticket`. Só cria as tabelas; as demandas que já existem seguem sem linha.
+ */
+const MIGRACAO_46_VERSOES_DO_PLANO = `
+CREATE TABLE arquivo_previsto_rodada (
+    demanda_id TEXT NOT NULL,
+    rodada_id  INTEGER NOT NULL,
+    caminho    TEXT NOT NULL CHECK (length(caminho) > 0),
+    PRIMARY KEY (demanda_id, rodada_id, caminho),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id)
+  );
+CREATE TABLE arquivo_previsto_demanda (
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    caminho    TEXT NOT NULL CHECK (length(caminho) > 0),
+    PRIMARY KEY (demanda_id, caminho)
+  );
+CREATE TABLE versao_plano (
+    demanda_id        TEXT NOT NULL REFERENCES demanda(id),
+    numero            INTEGER NOT NULL CHECK (numero >= 1),
+    origem            TEXT NOT NULL CHECK (origem IN ('aprovacao_do_planejamento','revisao_rodada','revisao_demanda','ajustar_resultado','conferencia_do_pr')),
+    autor_tipo        TEXT NOT NULL CHECK (autor_tipo IN ('auditor','agente','fabriquinha','externo')),
+    autor_trabalho_id TEXT CHECK ((autor_tipo = 'agente') = (autor_trabalho_id IS NOT NULL)),
+    autor_ferramenta  TEXT CHECK ((autor_tipo = 'externo') = (autor_ferramenta IS NOT NULL)),
+    autor_sessao      TEXT CHECK ((autor_tipo = 'externo') = (autor_sessao IS NOT NULL)),
+    rodada_id         INTEGER,
+    criada_em         TEXT NOT NULL,
+    dados             TEXT NOT NULL CHECK (json_valid(dados)),
+    PRIMARY KEY (demanda_id, numero),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id)
+  );
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -1008,4 +1042,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_43_PULL_REQUEST,
   MIGRACAO_44_EVIDENCIA_ACEITA,
   MIGRACAO_45_AMBIENTE_EM_CONTAINER,
+  MIGRACAO_46_VERSOES_DO_PLANO,
 ];
