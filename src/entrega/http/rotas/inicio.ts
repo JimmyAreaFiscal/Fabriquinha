@@ -181,22 +181,23 @@ function pendenciasDoInicio(
 ): PendenciaDoInicio[] {
   const { id: demanda, projeto, titulo } = ag.demanda;
   const predecessorasSatisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demanda)).length === 0;
-  return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, { agora, predecessorasSatisfeitas }).map(
-    (p) => {
-      const item = p.item.toString();
-      const rodada_id = p.item.rodada_id ?? ag.tickets.find((t) => t.ticket_id === p.item.ticket_id)?.rodada_id;
-      const sessao = p.tipo === "dialogo_do_agente" ? sessaoDoTicket.get(item) : undefined;
-      return {
-        ...p,
-        item,
-        demanda,
-        ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id }) }),
-        projeto,
-        titulo,
-        ...(sessao !== undefined && { sessao }),
-      };
-    },
-  );
+  return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, {
+    agora: agora.toISOString(),
+    predecessorasSatisfeitas,
+  }).map((p) => {
+    const item = p.item.toString();
+    const rodada_id = p.item.rodada_id ?? ag.tickets.find((t) => t.ticket_id === p.item.ticket_id)?.rodada_id;
+    const sessao = p.tipo === "dialogo_do_agente" ? sessaoDoTicket.get(item) : undefined;
+    return {
+      ...p,
+      item,
+      demanda,
+      ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id }) }),
+      projeto,
+      titulo,
+      ...(sessao !== undefined && { sessao }),
+    };
+  });
 }
 
 /**

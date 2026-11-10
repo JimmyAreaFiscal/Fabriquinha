@@ -11,6 +11,7 @@ import {
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
 import { CICLO_DA_DEMANDA } from "../../nucleo/ciclos.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import { validarPlano } from "../../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
@@ -33,6 +34,7 @@ export function submeterEvidencia(
   banco: DatabaseSync,
   submissao: SubmissaoDeEvidencia,
   contexto: ContextoDaSubmissao,
+  relogio: Relogio = relogioDoSistema,
 ): Avaliacao {
   const { tipo, dono, produtor, anexos } = submissao;
   const avaliacao = AVALIADOR.avaliar(carregarDemanda(banco, dono.demanda_id), submissao);
@@ -46,7 +48,7 @@ export function submeterEvidencia(
     if (erro instanceof ErroDeRegra) return { resultado: "recusada", motivo: erro.message };
     throw erro;
   }
-  const agora = new Date().toISOString();
+  const agora = relogio.agora();
   // shortcut: a Avaliação lê a demanda antes da transação e só o ciclo barra a corrida do plano, reavaliar aqui se outra regra passar a depender de estado que muda em paralelo.
   comDemanda(
     banco,
