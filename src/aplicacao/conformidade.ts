@@ -1,10 +1,10 @@
 // Conformidade do PR da rodada com o plano aprovado original (comparacao-sdlc-implementacao.md §8).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
+import type { Plano } from "../nucleo/plano.ts";
 import {
   type ArquivoDaRodada,
   arquivosDaRodada,
-  caminhosPlanejadosDaRodada,
   demandaExiste,
   rodadaExiste,
 } from "../armazenamento/metricas_demanda.ts";
@@ -33,13 +33,18 @@ function conformidade(planejados: string[], arquivos: ArquivoDaRodada[]): Confor
   return { percentual: (comuns / uniao) * 100, comuns, uniao, ausentes, extras };
 }
 
-/** `null` sem plano original da rodada (corretiva) ou sem commit. */
-export function conformidadeDaRodada(banco: DatabaseSync, demandaId: string, rodadaId: number): Conformidade | null {
+/** A referência é o original aprovado: o que as correções acrescentam não está nele e conta como extra. `null` sem plano original da rodada (corretiva) ou sem commit. */
+export function conformidadeDaRodada(
+  banco: DatabaseSync,
+  demandaId: string,
+  rodadaId: number,
+  plano: Plano | undefined,
+): Conformidade | null {
   if (!demandaExiste(banco, demandaId))
     throw new ErroDeInexistente(`a demanda ${demandaId} não existe`, "confira o id da demanda");
   if (!rodadaExiste(banco, demandaId, rodadaId))
     throw new ErroDeInexistente(`a rodada ${String(rodadaId)} não existe em ${demandaId}`, "confira a rodada");
-  const planejados = caminhosPlanejadosDaRodada(banco, demandaId, rodadaId);
+  const planejados = plano?.original.rodadas.find((r) => r.rodada_id === rodadaId)?.arquivos_previstos;
   const { commits, arquivos } = arquivosDaRodada(banco, demandaId, rodadaId);
   if (planejados === undefined || planejados.length === 0 || commits === 0) return null;
   return conformidade(planejados, arquivos);

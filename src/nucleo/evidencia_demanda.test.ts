@@ -38,6 +38,9 @@ const base = (enviada = false): AgregadoDemanda => ({
   criterios_citados: [],
   dependencias_ticket: [],
   caminhos_ticket: [],
+  arquivos_previstos_rodada: [],
+  arquivos_previstos_demanda: [],
+  versoes_plano: [],
   pull_requests: [],
 });
 test("catálogo: obrigatórias e opcionais da demanda", () => {

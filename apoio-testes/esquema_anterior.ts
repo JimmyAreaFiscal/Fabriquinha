@@ -108,6 +108,12 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
+    // A 47 criou o Plano com versões e os arquivos previstos de rodada e demanda: a volta apaga as três tabelas.
+    banco.exec(`
+      DROP TABLE versao_plano;
+      DROP TABLE arquivo_previsto_rodada;
+      DROP TABLE arquivo_previsto_demanda;
+    `);
     // A 45 abriu o conjunto de Ambientes em container: a volta apaga a tabela e as colunas novas.
     banco.exec(`
       DROP TABLE ambiente;

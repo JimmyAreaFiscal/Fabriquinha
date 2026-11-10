@@ -60,6 +60,9 @@ const demanda = (id: string, estado: string, resto: object = {}): AgregadoDemand
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     tentativas: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
@@ -508,6 +511,9 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     tentativas: [],
   } as unknown as AgregadoDemanda);
   banco.close();

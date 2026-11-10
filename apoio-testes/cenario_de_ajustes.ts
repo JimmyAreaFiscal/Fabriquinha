@@ -104,6 +104,9 @@ export async function cenarioDeAjustes(shell = "") {
     tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: [],
     evidencias: [
       {

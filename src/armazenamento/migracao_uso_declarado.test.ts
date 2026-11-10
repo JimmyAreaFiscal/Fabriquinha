@@ -155,7 +155,7 @@ test("a migração 46 cria uso_declarado pelas custos_realizados das donas, sem 
     "I-2": { tokens: 4 * 7, custo: 0.25 },
   });
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES + 1 - VERSAO_LINHA_DE_BASE));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);

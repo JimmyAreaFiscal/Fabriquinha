@@ -168,7 +168,7 @@ async function conduzirRodada(c: Cenario, id: string, rodada: number, estado: st
     case "ajustar_resultado": {
       const ref = { demanda_id: id, rodada_id: rodada };
       const { ticket_id } = atual(c, id, "ajustar_resultado", rodada);
-      const correcao = { ...ref, ticket_id: 1, titulo: "Separar as mudanças", descricao: "d", caminhos: [] };
+      const correcao = { ...ref, ticket_id: 1, titulo: "Separar as mudanças", descricao: "d", arquivos_previstos: [] };
       comDemanda(c.banco, id, (ag) =>
         registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
       );
