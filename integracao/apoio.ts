@@ -12,7 +12,7 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import { ErroDeRegra } from "../src/nucleo/erros.ts";
 import { submeterEvidencia } from "../src/aplicacao/evidencia/submeter.ts";
-import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho, type DepsDespacho } from "../src/aplicacao/despacho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
@@ -140,7 +140,7 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
 export async function ciclo(c: Cenario, deps?: DepsDespacho): Promise<void> {
-  await Promise.all(despacharDemandas(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
 }
 
 // Evidências de uma IA externa que registra a demanda (F3): critérios, desenho com o html e custos.

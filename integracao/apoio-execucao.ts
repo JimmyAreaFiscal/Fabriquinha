@@ -8,7 +8,7 @@ import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verifica
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
-import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho, type DepsDespacho } from "../src/aplicacao/despacho.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { ConducaoDePlanejar } from "../src/aplicacao/etapas/conducao_de_planejar.ts";
 import { instanteAtual } from "../src/aplicacao/relogio.ts";
@@ -171,7 +171,7 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   pi.roteirizar([{ agente: agenteMudo, uso: null }]);
-  const fins = despacharDemandas(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps);
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();

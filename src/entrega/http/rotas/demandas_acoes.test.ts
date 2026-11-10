@@ -15,6 +15,8 @@ import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-t
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../infra/repositorio/worktree-demanda.ts";
+import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { AmbienteHostLocal } from "../../../infra/ambiente/ambiente_host_local.ts";
 
@@ -71,7 +73,7 @@ const plano = {
  * I-206 num dos três gates: `demanda` (aprovação da demanda), `planejamento` (plano submetido) ou `pr` (R2 com o PR 1
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
-async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
+async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true, recusa?: MotivoDeRecusa) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   banco
@@ -179,7 +181,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   return {
     c,
     banco,
-    ...(await servir(banco, comExecutarDemanda)),
+    ...(await servir(banco, comExecutarDemanda, recusa)),
     ag: () => carregarDemanda(banco, DEMANDA),
     estado: (id = DEMANDA) => carregarDemanda(banco, id).demanda.estado,
   };
@@ -514,6 +516,23 @@ test("CA-30: Executar agora entrega o ticket ao agendador e responde 204", async
   const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
   assert.equal(r.status, 204);
   assert.deepEqual(executados, [{ demanda_id: "I-206", ticket_id: 1 }]);
+});
+
+test("Executar agora recusado pelo Despacho responde 200 com o MotivoDeRecusa", async () => {
+  const recusa = { tipo: "limite_de_paralelismo", em_uso: 3, limite: 3 } as const;
+  const { pedir } = await cenario("demanda", true, recusa);
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json(), recusa);
+});
+
+test("Executar agora recusado por dependência responde os endereços em texto", async () => {
+  const { pedir } = await cenario("demanda", true, {
+    tipo: "dependencia_pendente",
+    aguarda: [Endereco.doTicket("I-206", 2)],
+  });
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.deepEqual(r.json(), { tipo: "dependencia_pendente", aguarda: ["I-206.T2"] });
 });
 
 test("Executar agora sem o agendador das demandas devolve erro claro", async () => {
