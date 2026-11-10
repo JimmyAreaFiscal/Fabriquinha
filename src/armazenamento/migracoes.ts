@@ -1175,6 +1175,18 @@ DELETE FROM evidencia_historico WHERE evidencia_id IN (SELECT id FROM evidencia_
 DELETE FROM evidencia_demanda WHERE tipo = 'custos_realizados';
 `;
 
+/**
+ * A 49 troca o nome da tabela `retrabalho_demanda` para `commit_humano_posterior`, com as mesmas colunas e o mesmo
+ * conteúdo. O SQLite não renomeia índice: os dois índices antigos caem e voltam com o nome novo.
+ */
+const MIGRACAO_49_COMMIT_HUMANO_POSTERIOR = `
+ALTER TABLE retrabalho_demanda RENAME TO commit_humano_posterior;
+DROP INDEX ix_retrabalho_demanda_origem;
+DROP INDEX ix_retrabalho_demanda_alterador;
+CREATE INDEX ix_commit_humano_posterior_origem ON commit_humano_posterior(demanda_id, ticket_origem_id);
+CREATE INDEX ix_commit_humano_posterior_alterador ON commit_humano_posterior(alterador_demanda_id, ticket_id);
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -1189,4 +1201,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_46_USO_DECLARADO,
   MIGRACAO_47_VERSOES_DO_PLANO,
   MIGRACAO_48_PLANO_DAS_DEMANDAS_ANTIGAS,
+  MIGRACAO_49_COMMIT_HUMANO_POSTERIOR,
 ];

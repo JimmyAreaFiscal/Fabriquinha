@@ -103,7 +103,7 @@ function dosTicketsDemanda(banco: DatabaseSync, porCommit: Map<string, number>):
 
 /**
  * F6 §4.2: refaz o retrabalho do commit `sha` do ticket da demanda, contra o primeiro pai: lê `commit_ticket_demanda` e
- * grava `retrabalho_demanda`. Roda no repositório do projeto, que tem os objetos da worktree e continua lá quando ela é
+ * grava `commit_humano_posterior`. Roda no repositório do projeto, que tem os objetos da worktree e continua lá quando ela é
  * removida, e na fila git do projeto (F5 §6).
  */
 export async function registrarRetrabalhoDemanda(

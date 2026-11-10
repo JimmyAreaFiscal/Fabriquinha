@@ -87,7 +87,7 @@ function cenario() {
     retrabalhoDemanda: () =>
       banco
         .prepare(
-          "SELECT commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id FROM retrabalho_demanda ORDER BY commit_alterador, ticket_origem_id",
+          "SELECT commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id FROM commit_humano_posterior ORDER BY commit_alterador, ticket_origem_id",
         )
         .all()
         .map((l) => ({ ...l })),
@@ -96,7 +96,7 @@ function cenario() {
       banco
         .prepare(
           `SELECT commit_alterador, ticket_id AS ticket, autor, ticket_origem_id AS ticket_origem, linhas
-           FROM retrabalho_demanda ORDER BY commit_alterador, ticket_origem_id`,
+           FROM commit_humano_posterior ORDER BY commit_alterador, ticket_origem_id`,
         )
         .all()
         .map((l) => ({ ...l })),
@@ -240,7 +240,7 @@ test("linha de commit humano é ignorada; um ticket nunca conta retrabalho sobre
   c.banco.close();
 });
 
-test("CA-11: o segundo ticket da demanda reescreve linhas do primeiro e vai para retrabalho_demanda, idempotente", async () => {
+test("CA-11: o segundo ticket da demanda reescreve linhas do primeiro e vai para commit_humano_posterior, idempotente", async () => {
   const c = cenario();
   c.commitar({ "a.txt": linhas(...DEZ) }, 1);
   const b = c.commitar({ "a.txt": linhas("l1", "B2", "l3", "l4", "B5", "l6", "l7", "l8", "B9", "l10", "n1") }, 2);

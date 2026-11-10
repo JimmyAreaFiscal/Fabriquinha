@@ -39,11 +39,11 @@ const banco = () => {
   }
   return b;
 };
-/** Lê o que a gravação deixou em `retrabalho_demanda` para o ticket de origem; a produção só lê isso por agregação. */
+/** Lê o que a gravação deixou em `commit_humano_posterior` para o ticket de origem; a produção só lê isso por agregação. */
 const retrabalhoDoTicket = (b: DatabaseSync, demandaId: string, origem: number) =>
   b
     .prepare(
-      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM retrabalho_demanda
+      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM commit_humano_posterior
        WHERE demanda_id = ? AND ticket_origem_id = ? ORDER BY rowid`,
     )
     .all(demandaId, origem)
@@ -154,7 +154,7 @@ test("CA-9: o retrabalho traz o ticket alterador", () => {
 
 test("o alterador de outra demanda aparece em demandaAlteradora e a regravação não apaga o dele", () => {
   const b = banco();
-  b.exec(`INSERT INTO retrabalho_demanda VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
+  b.exec(`INSERT INTO commit_humano_posterior VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
   gravarRetrabalhoDoTicket(b, "D", 1, sha("a"), em("D", [[2, 1]]));
   assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [
     { commitAlterador: sha("b"), ticketAlterador: 1, demandaAlteradora: "E", linhas: 4 },
@@ -186,5 +186,5 @@ test("CA-11: origem de outra demanda é rejeitada e nada fica gravado", () => {
   assert.throws(() => {
     gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[9, 4]]));
   }, ErroDeRegra);
-  assert.equal(b.prepare("SELECT 1 FROM retrabalho_demanda").all().length, 0);
+  assert.equal(b.prepare("SELECT 1 FROM commit_humano_posterior").all().length, 0);
 });

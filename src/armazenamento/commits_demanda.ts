@@ -94,7 +94,7 @@ const inserirRetrabalho = (
   linhas: LinhasPorDemanda,
 ) => {
   const insere = banco.prepare(
-    `INSERT OR REPLACE INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+    `INSERT OR REPLACE INTO commit_humano_posterior (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   try {
@@ -116,7 +116,7 @@ export function gravarRetrabalhoDoTicket(
 ): void {
   escrever(banco, () => {
     banco
-      .prepare("DELETE FROM retrabalho_demanda WHERE alterador_demanda_id = ? AND ticket_id = ?")
+      .prepare("DELETE FROM commit_humano_posterior WHERE alterador_demanda_id = ? AND ticket_id = ?")
       .run(demandaId, ticketId);
     inserirRetrabalho(banco, sha, { demandaId, ticketId }, null, linhas);
   });

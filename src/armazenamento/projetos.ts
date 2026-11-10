@@ -243,7 +243,7 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("avaliacao_demanda", `avaliacao_id IN (${DAS_AVALIACOES}) OR demanda_id IN (${DAS_DEMANDAS})`);
   apagar("achado_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
   apagar("avaliacao", "projeto = $p");
-  apagar("retrabalho_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("commit_humano_posterior", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
   apagar(
     "arquivo_commit_demanda",
     `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,
