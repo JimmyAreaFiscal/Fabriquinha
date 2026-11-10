@@ -1,7 +1,7 @@
 // O contrato das rotas das demandas na API: o board, a página de uma demanda e a reabertura de um ticket. Só tipos e
 // schemas; quem monta cada resposta é a consulta da aplicação, e o cliente web depende só destes tipos.
 import { z } from "zod";
-import { TicketDemanda, TipoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { Decisao, Demanda, RodadaDemanda, TicketDemanda, TipoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { EstadoDemanda, EstadoRodada, EtapaTicket, EstadoTicket, Instante } from "../../nucleo/primitivos.ts";
 import type { AcaoEsperada, TipoPendencia } from "../../nucleo/pendencia.ts";
 
@@ -175,3 +175,23 @@ export const ReaberturaDoTicket = z.object({
 
 /** A resposta de `POST /api/demandas/tickets/:ref/reabrir`. */
 export const TicketReaberto = z.object({ ticket: TicketDemanda });
+
+/**
+ * A demanda como as ações a devolvem: o agregado em JSON. O contrato cobre o que as telas e o CLI leem; o resto (as
+ * `tentativas`, os planos) segue no corpo sem schema, porque seus Endereços saem em texto e o schema do núcleo os quer como objeto.
+ */
+export const DemandaEmJson = z.looseObject({
+  demanda: Demanda,
+  tickets: z.array(TicketDemanda),
+  decisoes: z.array(Decisao),
+  rodadas: z.array(RodadaDemanda),
+});
+
+/** A resposta de `POST /api/demandas/:id/decisao` e de `.../cancelar`: a demanda e as que o gate ou o cancelamento levou junto. */
+export const DemandaComCanceladas = z.object({ demanda: DemandaEmJson, canceladas: z.array(z.string()) });
+
+/** A resposta de `POST /api/demandas/rodadas/:ref/pr`: a demanda decidida, ou a `sessao` de ajustes quando o PR é reprovado. */
+export const DecisaoDoPR = z.union([DemandaEmJson, z.object({ sessao: z.string() })]);
+
+/** A resposta de `POST /api/demandas/:id/arquivar`. */
+export const DemandaArquivada = z.object({ demanda: DemandaEmJson });

@@ -7,7 +7,15 @@ import type { RefRodada } from "../../../aplicacao/encerramento_rodada.ts";
 import { decidirGate } from "../../../aplicacao/gates/decidir_gate.ts";
 import { arquivar, cancelar, reabrir } from "../../../aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../../aplicacao/sessao_ajustes.ts";
-import { ReaberturaDoTicket, TicketReaberto } from "../../contrato/demanda.ts";
+import {
+  DecisaoDoPR,
+  DemandaArquivada,
+  DemandaComCanceladas,
+  DemandaEmJson,
+  ReaberturaDoTicket,
+  TicketReaberto,
+} from "../../contrato/demanda.ts";
+import { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
 import type { Pedido, Rota } from "../rotas.ts";
 import { recusaEmJson } from "./inicio.ts";
 
@@ -89,12 +97,22 @@ const arquivamento = ({ banco, params, relogio }: Pedido) => ({
 });
 
 export const ROTAS_DAS_ACOES_DE_DEMANDA: Rota[] = [
-  { metodo: "POST", caminho: "/api/demandas/:id/decisao", tratar: decisaoDaDemanda },
-  { metodo: "POST", caminho: "/api/demandas/:id/planejamento/decisao", tratar: decisaoDoPlanejamento },
-  { metodo: "POST", caminho: "/api/demandas/rodadas/:ref/pr", tratar: decisaoDoPR },
-  { metodo: "POST", caminho: "/api/demandas/rodadas/:ref/ajustes/concluir", tratar: concluir },
+  { metodo: "POST", caminho: "/api/demandas/:id/decisao", tratar: decisaoDaDemanda, resposta: DemandaComCanceladas },
+  {
+    metodo: "POST",
+    caminho: "/api/demandas/:id/planejamento/decisao",
+    tratar: decisaoDoPlanejamento,
+    resposta: DemandaEmJson,
+  },
+  { metodo: "POST", caminho: "/api/demandas/rodadas/:ref/pr", tratar: decisaoDoPR, resposta: DecisaoDoPR },
+  {
+    metodo: "POST",
+    caminho: "/api/demandas/rodadas/:ref/ajustes/concluir",
+    tratar: concluir,
+    resposta: DemandaEmJson,
+  },
   { metodo: "POST", caminho: "/api/demandas/tickets/:ref/reabrir", tratar: reabertura, resposta: TicketReaberto },
-  { metodo: "POST", caminho: "/api/demandas/tickets/:ref/executar", tratar: executar },
-  { metodo: "POST", caminho: "/api/demandas/:id/cancelar", tratar: cancelamento },
-  { metodo: "POST", caminho: "/api/demandas/:id/arquivar", tratar: arquivamento },
+  { metodo: "POST", caminho: "/api/demandas/tickets/:ref/executar", tratar: executar, resposta: MotivoDeRecusaEmJson },
+  { metodo: "POST", caminho: "/api/demandas/:id/cancelar", tratar: cancelamento, resposta: DemandaComCanceladas },
+  { metodo: "POST", caminho: "/api/demandas/:id/arquivar", tratar: arquivamento, resposta: DemandaArquivada },
 ];

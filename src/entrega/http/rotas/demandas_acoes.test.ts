@@ -18,7 +18,14 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../infra/
 import type { MotivoDeRecusa } from "../../../nucleo/despacho.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { TicketReaberto } from "../../contrato/demanda.ts";
+import {
+  DecisaoDoPR,
+  DemandaArquivada,
+  DemandaComCanceladas,
+  DemandaEmJson,
+  TicketReaberto,
+} from "../../contrato/demanda.ts";
+import { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
 import { AmbienteHostLocal } from "../../../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -197,7 +204,7 @@ test("CA-13: aprovar a demanda avança de estado e a resposta traz a demanda atu
   const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { resultado: "aprovado" } });
   assert.equal(r.status, 200);
-  const { demanda, canceladas } = r.json<{ demanda: { demanda: { estado: string } }; canceladas: string[] }>();
+  const { demanda, canceladas } = DemandaComCanceladas.parse(r.json());
   assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
   assert.equal(estado(), "planejar");
@@ -242,7 +249,7 @@ test("CA-15: reprovar com motivo cancela a I-206 e a I-207 que depende dela", as
     corpo: { resultado: "reprovado", motivo: "escopo grande demais" },
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
+  assert.deepEqual(DemandaComCanceladas.parse(r.json()).canceladas, ["I-206", "I-207"]);
   assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
 });
 
@@ -262,7 +269,7 @@ test("CA-17: aprovar o planejamento avança de estado e cria a worktree de cada 
     corpo: { resultado: "aprovado", nota: 4 },
   });
   assert.equal(r.status, 200);
-  assert.equal(r.json<{ demanda: { estado: string } }>().demanda.estado, "em_execucao");
+  assert.equal(DemandaEmJson.parse(r.json()).demanda.estado, "em_execucao");
   assert.equal(estado(), "em_execucao");
   assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
   // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
@@ -301,10 +308,9 @@ test("CA-20: aprovar o PR com nota 4 conclui a rodada e grava a nota", async () 
   const c = await cenario("pr");
   const r = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "aprovado", nota: 4 } });
   assert.equal(r.status, 200);
-  assert.equal(
-    r.json<{ rodadas: { rodada_id: number; estado: string }[] }>().rodadas.find((x) => x.rodada_id === 2)?.estado,
-    "concluida",
-  );
+  const decisao = DecisaoDoPR.parse(r.json());
+  assert.ok("rodadas" in decisao);
+  assert.equal(decisao.rodadas.find((x) => x.rodada_id === 2)?.estado, "concluida");
   assert.equal(rodada(c)?.estado, "concluida");
   assert.equal(c.ag().decisoes.find((d) => d.resultado === "aprovado")?.nota, 4);
 });
@@ -345,7 +351,7 @@ async function comSessao() {
     corpo: { resultado: "reprovado", motivo: "cobertura abaixo do combinado" },
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(Object.keys(r.json()), ["sessao"]);
+  assert.deepEqual(Object.keys(DecisaoDoPR.parse(r.json())), ["sessao"]);
   const { id: sessao } = c.banco.prepare("SELECT id FROM trabalho_agentico WHERE ticket_id = 9").get() as {
     id: string;
   };
@@ -438,6 +444,7 @@ test("CA-27: concluir a sessão a deixa concluída e ela não aceita mais mensag
   const c = await comSessao();
   const r = await concluirSessao(c, 9);
   assert.equal(r.status, 200);
+  DemandaEmJson.parse(r.json());
   assert.equal(rodada(c)?.estado, "implementar");
   assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "concluido");
   const depois = await c.pedir(`/api/sessoes/${c.sessao}/mensagens`, {
@@ -524,7 +531,7 @@ test("Executar agora recusado pelo Despacho responde 200 com o MotivoDeRecusa", 
   const { pedir } = await cenario("demanda", true, recusa);
   const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json(), recusa);
+  assert.deepEqual(MotivoDeRecusaEmJson.parse(r.json()), recusa);
 });
 
 test("Executar agora recusado por dependência responde os endereços em texto", async () => {
@@ -547,7 +554,7 @@ test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
   const { pedir, estado, ag } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
+  assert.deepEqual(DemandaComCanceladas.parse(r.json()).canceladas, ["I-206", "I-207"]);
   assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
   assert.equal(ag().tickets.length, 1);
 });
@@ -575,6 +582,6 @@ test("CA-34 e CA-35: arquivar só a concluída", async () => {
   banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(r.status, 200);
-  assert.equal(r.json<{ demanda: { demanda: { estado: string } } }>().demanda.demanda.estado, "arquivada");
+  assert.equal(DemandaArquivada.parse(r.json()).demanda.demanda.estado, "arquivada");
   assert.equal(estado(), "arquivada");
 });
