@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDaDemanda, gravarDecisao, gravarExecucao } from "../../../apoio-testes/banco_de_metricas.ts";
+import {
+  bancoDaDemanda,
+  gravarDecisao,
+  gravarDecisaoEm,
+  gravarExecucao,
+} from "../../../apoio-testes/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import type { EtapaTicket } from "../../nucleo/primitivos.ts";
 import { MetricaDeExigenciasDeAlteracao } from "./metrica_de_exigencias_de_alteracao.ts";
@@ -21,29 +26,25 @@ const bancoDaRevisao = () => {
 };
 
 test("CA-2: cada etapa mostra execuções, falhas, devoluções e reprovações", () => {
-  const b = bancoDaRevisao();
+  const b = bancoDaDemanda();
   gravarExecucao(b, 1, "e0", 1);
   gravarExecucao(b, 2, "e1", 0);
   gravarExecucao(b, 2, "e2", 1);
-  gravarDecisao(b, 2, 1, "reprovado", null);
   gravarDecisao(b, 1, 1, "reprovado", null);
   gravarDecisao(b, 1, 2, "aprovado", null);
   const recorte = { demandaId: "I-1" };
   const uso = new MetricaDeUso().calcular(b, recorte);
   const exigencias = new MetricaDeExigenciasDeAlteracao().calcular(b, recorte);
   assert.deepEqual(
-    (["planejar", "revisar_rodada"] as const).map((etapa) => [
-      daEtapa(uso, etapa).execucoes,
-      daEtapa(uso, etapa).falhas,
-    ]),
+    (["planejar", "implementar"] as const).map((etapa) => [daEtapa(uso, etapa).execucoes, daEtapa(uso, etapa).falhas]),
     [
       [1, 1],
       [2, 1],
     ],
   );
-  // A Decisão reprovada e a Tentativa reprovada do ticket 2 somam; a Decisão do planejar não é exigência de revisão.
-  assert.deepEqual(daEtapa(exigencias, "revisar_rodada"), { reprovacoes: 2 });
-  assert.deepEqual(daEtapa(exigencias, "revisar_demanda"), { reprovacoes: 0 });
+  // A devolução do ticket 2 (implementar) conta na revisão da rodada, a Decisão do Gate do plano na revisão da demanda.
+  assert.deepEqual(daEtapa(exigencias, "revisar_rodada"), { reprovacoes: 1 });
+  assert.deepEqual(daEtapa(exigencias, "revisar_demanda"), { reprovacoes: 1 });
   assert.equal(daEtapa(uso, "encerrar_rodada").execucoes, 0);
   assert.deepEqual([...exigencias.keys()], ["revisar_rodada", "revisar_demanda"]);
 });
@@ -74,4 +75,24 @@ test("o recorte de período, de Projeto e de Demanda limitam as exigências", ()
   assert.equal(reprovacoesDaRevisao({ projeto: "outro" }), 0);
   assert.equal(reprovacoesDaRevisao({ demandaId: "I-1" }), 2);
   assert.equal(reprovacoesDaRevisao({ ...janeiro, demandaId: "I-1" }), 2);
+});
+
+test("devoluções e Decisões reprovadas de todos os Gates somam as Reprovações do recorte, por Demanda, período e Projeto", () => {
+  const b = bancoDaDemanda();
+  gravarDecisaoEm(b, ["I-1", 1, 1], ["gate_planejamento", "reprovado", null], "2026-01-01T00:00:00.000Z");
+  gravarDecisaoEm(b, ["I-1", 1, 2], ["gate_planejamento", "aprovado", null], "2026-01-01T00:00:00.000Z");
+  gravarDecisaoEm(b, ["I-1", 3, 1], ["gate_pr", "reprovado", null], "2026-01-01T00:00:00.000Z");
+  gravarDecisaoEm(b, ["I-1", 3, 2], ["gate_pr", "aprovado", null], "2026-01-01T00:00:00.000Z");
+  b.exec(`INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, motivo)
+    VALUES ('I-1', 1, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'reprovacao', 'refaça o plano')`);
+  const reprovacoesPorEtapa = (recorte: Recorte) => {
+    const exigencias = new MetricaDeExigenciasDeAlteracao().calcular(b, recorte);
+    return [daEtapa(exigencias, "revisar_rodada").reprovacoes, daEtapa(exigencias, "revisar_demanda").reprovacoes];
+  };
+  const janeiro = { inicio: "2026-01-01T00:00:00.000Z", fim: "2026-02-01T00:00:00.000Z" };
+  // Tentativa do ticket 2 e Gate do PR na rodada; Tentativa do ticket 1, sem rodada, e Gate do plano na demanda.
+  assert.deepEqual(reprovacoesPorEtapa({ demandaId: "I-1" }), [2, 2]);
+  assert.deepEqual(reprovacoesPorEtapa(janeiro), [2, 2]);
+  assert.deepEqual(reprovacoesPorEtapa({ projeto: "p" }), [2, 2]);
+  assert.deepEqual(reprovacoesPorEtapa({ projeto: "outro" }), [0, 0]);
 });

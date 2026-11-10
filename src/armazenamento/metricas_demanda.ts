@@ -314,17 +314,20 @@ export const decisoesDoRecorte = (banco: DatabaseSync, recorte: RecorteDaMetrica
     nota: l.nota === null ? null : Number(l.nota),
   }));
 
-/** A etapa do ticket de cada Tentativa reprovada: as vezes em que o agente teve de corrigir a entrega. */
-export const etapasDasTentativasReprovadasDoRecorte = (banco: DatabaseSync, recorte: RecorteDaMetrica): string[] =>
+/** A rodada do ticket de cada Tentativa reprovada (`null` fora de rodada): as vezes em que o agente teve de corrigir a entrega. */
+export const rodadasDasTentativasReprovadasDoRecorte = (
+  banco: DatabaseSync,
+  recorte: RecorteDaMetrica,
+): (number | null)[] =>
   lerDoRecorte(
     banco,
     recorte,
     "x.inicio",
-    (onde) => `SELECT t.etapa FROM tentativa x
+    (onde) => `SELECT t.rodada_id FROM tentativa x
          JOIN ticket_demanda t ON t.demanda_id = x.demanda_id AND t.ticket_id = x.ticket_id
          JOIN demanda d ON d.id = x.demanda_id
        WHERE x.resultado_tipo = 'reprovacao' AND ${onde}`,
-  ).map((l) => l.etapa as string);
+  ).map(rodadaDe);
 
 interface CommitDoRecorte extends DonoDaLinha {
   adicionadas: number;

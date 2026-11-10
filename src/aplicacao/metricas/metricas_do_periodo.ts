@@ -128,7 +128,7 @@ const somarModelosDasEtapas = (etapas: readonly MetricasDaEtapa[]): LinhaDeUso[]
     0,
   ).porModelo();
 
-/** As Reprovações do Gate da demanda e as exigências de alteração das revisões, de todas as Etapas. */
+/** As Reprovações do Gate da demanda e as exigências de alteração (os demais Gates e as Tentativas), de todas as Etapas. */
 const reprovacoesDas = (etapas: readonly MetricasDaEtapa[]): number =>
   soma(
     valoresDe<ValorDe<MetricaDeAprovacoesEReprovacoes>>(etapas, "aprovacoes_e_reprovacoes").map((v) => v.reprovacoes),
