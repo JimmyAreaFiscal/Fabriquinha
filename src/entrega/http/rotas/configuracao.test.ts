@@ -16,7 +16,7 @@ import { Projeto } from "../../../nucleo/projeto.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { cursorDaBase } from "../../../armazenamento/commits_humanos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 

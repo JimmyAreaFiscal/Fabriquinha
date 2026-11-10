@@ -18,7 +18,7 @@ import {
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 import { estadoNaLinhaDoTempo, type ListaDoProjeto } from "./projeto.ts";

@@ -3,7 +3,7 @@
 // vem de chat.ts; os testes de ponta a ponta (e2e/chat*.spec.ts) o exercitam no navegador.
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { abrirCaixa, api, avisar, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import {

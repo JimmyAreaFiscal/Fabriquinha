@@ -3,7 +3,7 @@
 // terminado. Os testes de ponta a ponta (e2e/historico.spec.ts) o exercitam.
 import type { DadosDoChatDemanda } from "../../http/rotas/chat.ts";
 import type { SessaoDeDemanda } from "../../http/rotas/historico.ts";
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, avisar, elemento, mostrarErro } from "../dom.ts";
 import { verSaida } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";

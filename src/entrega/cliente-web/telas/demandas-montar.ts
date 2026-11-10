@@ -1,6 +1,6 @@
 // Quadro e página da demanda no DOM: leem a API e desenham com `quadro` e `pagina`. O app.ts redesenha só o quadro a
 // cada 5 s; a página decide os gates da demanda e do planejamento. Os testes de ponta a ponta (e2e/) os exercitam.
-import type { Parametros } from "../caminhos.ts";
+import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";

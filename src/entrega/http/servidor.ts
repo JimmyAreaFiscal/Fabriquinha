@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { noLog } from "../../infra/registro.ts";
-import { casar } from "../cliente-web/caminhos.ts";
+import { casar } from "../compartilhado/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
 import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacoes.ts";
@@ -42,6 +42,7 @@ export const ROTAS: Rota[] = [
 ];
 
 const CLIENTE = join(import.meta.dirname, "../cliente-web");
+const COMPARTILHADO = join(import.meta.dirname, "../compartilhado");
 const COOKIE = "fabriquinha";
 const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
 const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
@@ -55,14 +56,19 @@ const TIPOS: Record<string, string> = {
 };
 
 /**
- * Os arquivos que o navegador pode pedir, com o caminho e o tipo: os de `cliente/` dos tipos acima, sem testes, e o
- * `markdown-it` do navegador, que o import map do `index.html` resolve.
+ * Os arquivos que o navegador pode pedir, com o caminho e o tipo: os de `cliente-web/` e de `compartilhado/` (em
+ * `compartilhado/…`, que o import map do `index.html` aponta) dos tipos acima, sem testes, e o `markdown-it` do navegador.
  */
 const ESTATICOS = new Map([
-  ...readdirSync(CLIENTE, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
-    const tipo = TIPOS[extname(arquivo)];
-    return tipo && !arquivo.endsWith(".test.ts") ? [[arquivo, [join(CLIENTE, arquivo), tipo]] as const] : [];
-  }),
+  ...[
+    { pasta: CLIENTE, prefixo: "" },
+    { pasta: COMPARTILHADO, prefixo: "compartilhado/" },
+  ].flatMap(({ pasta, prefixo }) =>
+    readdirSync(pasta, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
+      const tipo = TIPOS[extname(arquivo)];
+      return tipo && !arquivo.endsWith(".test.ts") ? [[prefixo + arquivo, [join(pasta, arquivo), tipo]] as const] : [];
+    }),
+  ),
   ["markdown-it.js", [fileURLToPath(import.meta.resolve("markdown-it/browser")), "text/javascript; charset=utf-8"]],
 ]);
 

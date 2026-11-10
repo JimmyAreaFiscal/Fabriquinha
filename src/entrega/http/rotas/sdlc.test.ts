@@ -6,7 +6,7 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { Projeto } from "../../../nucleo/projeto.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 

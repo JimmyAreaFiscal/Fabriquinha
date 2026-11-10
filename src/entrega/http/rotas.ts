@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { MotivoDeRecusa } from "../../nucleo/despacho.ts";
 import { Id } from "../../nucleo/primitivos.ts";
-import type { Parametros } from "../cliente-web/caminhos.ts";
+import type { Parametros } from "../compartilhado/caminhos.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {

@@ -8,7 +8,7 @@ import { createServer } from "node:net";
 import { setTimeout as dormir } from "node:timers/promises";
 import { editarProjeto, registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { buscarProjeto } from "../../../armazenamento/projetos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 

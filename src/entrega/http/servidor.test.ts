@@ -257,6 +257,15 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
     /"markdown-it\/browser": "\/static\/markdown-it.js"/,
   );
 
+  // O casar compartilhado, que o import map do index.html aponta para o cliente achar em /compartilhado/.
+  const compartilhado = await pedir("/static/compartilhado/caminhos.ts");
+  assert.equal(compartilhado.headers["content-type"], "text/javascript; charset=utf-8");
+  assert.match(compartilhado.texto, /export function casar\(/);
+  assert.match(
+    readFileSync(join(import.meta.dirname, "..", "cliente-web", "index.html"), "utf8"),
+    /"\/compartilhado\/caminhos.ts": "\/static\/compartilhado\/caminhos.ts"/,
+  );
+
   const css = await pedir("/static/estilo.css");
   assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
   assert.match(css.texto, /url\("fontes\/plex-sans-400\.woff2"\)/);
@@ -270,6 +279,7 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
 
   for (const caminho of [
     "/static/render.test.ts",
+    "/static/compartilhado/caminhos.test.ts",
     "/static/index.html",
     "/static/fontes/OFL.txt",
     "/static/nada.ts",

@@ -7,7 +7,7 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../../nucleo/erros.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 import type { SessaoDeDemanda } from "./historico.ts";
