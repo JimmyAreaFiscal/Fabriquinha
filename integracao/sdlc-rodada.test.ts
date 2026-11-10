@@ -150,6 +150,21 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
     trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id,
   });
 
+  // I-280: a reprovação grava a versão 2 do Plano (a 1 é o aprovado), do Agente revisor, com os tickets corretivos criados.
+  assert.deepEqual(
+    ag.versoes_plano.map((v) => v.numero),
+    [1, 2],
+  );
+  const versaoDaCorrecao = ag.versoes_plano[1];
+  assert.ok(versaoDaCorrecao);
+  assert.equal(versaoDaCorrecao.origem, "revisao_rodada");
+  assert.deepEqual(versaoDaCorrecao.autor, corretivo.criado_por);
+  const { tickets_novos } = versaoDaCorrecao.dados as { tickets_novos: { titulo: string }[] };
+  assert.deepEqual(
+    tickets_novos.map((t) => t.titulo),
+    [corretivo.titulo],
+  );
+
   // A correção executa pelo agendador, como qualquer implementação, e a rodada volta à revisão com um revisor novo.
   pi.roteirizar(agenteQuePergunta);
   await ciclo(c, despacho());
