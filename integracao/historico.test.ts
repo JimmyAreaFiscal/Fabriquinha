@@ -19,7 +19,7 @@ import {
 } from "../src/aplicacao/avaliacao.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
-import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
+import { metricasDasEtapas } from "../src/aplicacao/metricas/metricas_das_etapas.ts";
 import { achadoDaDemanda } from "../src/armazenamento/avaliacoes.ts";
 import { predecessorasDaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/armazenamento/servico.ts";
@@ -148,7 +148,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   assert.ok(existsSync(metricas));
   assert.deepEqual(
     JSON.parse(readFileSync(metricas, "utf8")),
-    JSON.parse(JSON.stringify(metricasDaDemanda(c.banco, origem))),
+    JSON.parse(JSON.stringify(Object.fromEntries(metricasDasEtapas(c.banco, { demandaId: origem })))),
   );
 
   // O Auditor encaminha um achado: uma demanda nova, em registro, e o outro achado segue sem demanda.

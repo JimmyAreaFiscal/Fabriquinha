@@ -1,4 +1,4 @@
-// Métricas da demanda e das rodadas: tokens, custo, etapas e nota (comparacao-sdlc-implementacao.md §8).
+// Métricas da demanda e das rodadas: tokens, custo e etapas (comparacao-sdlc-implementacao.md §8).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import {
@@ -7,15 +7,13 @@ import {
   type DonoDaLinha,
   execucoesDaDemanda,
   linhasExternasDaDemanda,
-  planoDaDemanda,
   rodadasDaDemanda,
   ticketsDaDemanda,
   type UsoDaExecucao,
-  usoDaDemanda,
+  usoDoRecorte,
 } from "../armazenamento/metricas_demanda.ts";
 import { lerUsoDeclarado } from "../armazenamento/uso_declarado.ts";
 import { type LinhaDeUso, textoDoCusto, Uso } from "../nucleo/uso.ts";
-import { type Conformidade, conformidadeDaRodada } from "./conformidade.ts";
 
 /** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
 type CustoDoUso = ReturnType<Uso["custo"]>;
@@ -33,21 +31,13 @@ interface Contagens {
   textoDoCusto: string;
 }
 
-/** Nota dos PRs de rodada com `soma` e `quantidade`, para o projeto somar sem tirar média de médias. */
-interface Nota {
-  soma: number;
-  quantidade: number;
-  media: number | null;
-}
-
 interface Escopo extends Contagens {
-  nota: Nota;
   etapas: Partial<Record<string, Contagens>>;
 }
 
 interface MetricasDaDemanda {
   total: Escopo;
-  rodadas: (Escopo & { rodadaId: number; conformidade: Conformidade | null; custoExterno: CustoExterno })[];
+  rodadas: (Escopo & { rodadaId: number; custoExterno: CustoExterno })[];
   semRodada: Escopo;
   /** Custo das sessões externas de `custos_realizados` (e quantas são), fora do interno. */
   custoExterno: CustoExterno;
@@ -99,12 +89,11 @@ const custoExterno = (linhas: { ferramenta: string; sessao: string; custo: numbe
 export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): MetricasDaDemanda {
   if (!demandaExiste(banco, demandaId))
     throw new ErroDeInexistente(`a demanda ${demandaId} não existe`, "confira o id da demanda");
-  const uso = usoDaDemanda(banco, demandaId);
+  const uso = usoDoRecorte(banco, { demandaId });
   const execucoes = execucoesDaDemanda(banco, demandaId);
   const tickets = ticketsDaDemanda(banco, demandaId);
   const decisoes = decisoesDaDemanda(banco, demandaId);
   const externas = linhasExternasDaDemanda(banco, demandaId);
-  const plano = planoDaDemanda(banco, demandaId);
 
   const declarado = usoDeclaradoDe(lerUsoDeclarado(banco, demandaId));
 
@@ -121,13 +110,8 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
     };
   };
   const escopo = (dono: (l: DonoDaLinha) => boolean, doDeclarado = Uso.vazio()): Escopo => {
-    const notas = decisoes.flatMap((d) =>
-      dono(d) && d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],
-    );
-    const soma = notas.reduce((s, n) => s + n, 0);
     return {
       ...contagens(dono, doDeclarado),
-      nota: { soma, quantidade: notas.length, media: notas.length === 0 ? null : soma / notas.length },
       etapas: Object.fromEntries(
         [...new Set(tickets.filter(dono).map((t) => t.etapa))].map((etapa) => [
           etapa,
@@ -143,7 +127,6 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
     rodadas: rodadasDaDemanda(banco, demandaId).map((rodadaId) => ({
       rodadaId,
       ...escopo((l) => l.rodadaId === rodadaId),
-      conformidade: conformidadeDaRodada(banco, demandaId, rodadaId, plano),
       custoExterno: custoExterno(externas.filter((l) => l.rodadaId === rodadaId)),
     })),
     semRodada: escopo((l) => l.rodadaId === null),
