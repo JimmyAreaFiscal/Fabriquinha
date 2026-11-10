@@ -91,7 +91,7 @@ export async function lancarSolto(comando: string, args: readonly string[], env:
  * `.git/config`). Por isso hooks e fsmonitor ficam desligados, e `core.sshCommand` e `credential.helper` valem os do
  * sistema e do usuário do serviço (lidos fora de qualquer repositório), nunca os do repositório.
  */
-async function configsFixasDoServico(): Promise<string[]> {
+async function lerConfigsFixasDoServico(): Promise<string[]> {
   const lerDoServico = async (...args: string[]): Promise<string[]> =>
     (await executar("git", ["-C", "/", "config", ...args], { limiteMs: LIMITE_COMANDO_MS })).saida
       .split("\n")
@@ -109,6 +109,10 @@ async function configsFixasDoServico(): Promise<string[]> {
     ...["", ...credenciais].flatMap((helper) => ["-c", `credential.helper=${helper}`]),
   ];
 }
+
+// Lidas uma vez por processo: a configuração do serviço não muda enquanto ele roda, e reler custaria 2 git por git.
+let configsFixasDoServicoLidas: Promise<string[]> | undefined;
+const configsFixasDoServico = (): Promise<string[]> => (configsFixasDoServicoLidas ??= lerConfigsFixasDoServico());
 
 /**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
