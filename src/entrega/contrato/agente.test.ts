@@ -28,14 +28,14 @@ test("as respostas dos sete comandos do agente aceitam o que os casos de uso dev
   assert.throws(() => RespostaProjetoVer.parse({}));
 });
 
-test("os pedidos exigem o endereço e trazem os anexos com os bytes e o SHA-256", () => {
+test("os pedidos exigem o endereço e trazem os anexos com o caminho e o SHA-256", () => {
   assert.deepEqual(PedidoTicketCriar.parse({ rodada: "I-1.R1" }), { rodada: "I-1.R1" });
   assert.equal(
     PedidoRevisaoDecidir.parse({ ticket: "I-1.T2", veredito: "reprovar", plano: [] }).plano?.constructor,
     Array,
   );
   assert.deepEqual(PedidoEvidenciaAdd.parse({ ticket: "I-1.T2", tipo: "comportamento" }).anexos, []);
-  const anexo = { caminho: "/w/a.txt", conteudo_base64: "YQ==", sha256: "a".repeat(64) };
+  const anexo = { caminho: "/w/a.txt", sha256: "a".repeat(64) };
   assert.deepEqual(PedidoEvidenciaAdd.parse({ ticket: "I-1.T2", tipo: "comportamento", anexos: [anexo] }).anexos, [
     anexo,
   ]);

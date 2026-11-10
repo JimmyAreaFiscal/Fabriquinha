@@ -28,10 +28,12 @@ export interface EntradaDoComando {
   readonly opcoes: Readonly<Record<string, string | string[] | undefined>>;
 }
 
-/** Os dois verbos da API do agente: devolvem o JSON da resposta 200 ou lançam `ErroDoComando`. */
+/** Os verbos da API do agente: devolvem o JSON da resposta 200 ou lançam `ErroDoComando`. */
 export interface ApiDoAgente {
   get(caminho: string): Promise<unknown>;
   post(caminho: string, corpo: unknown): Promise<unknown>;
+  /** `POST` com o arquivo como corpo binário, em fluxo: o arquivo nunca vira string nem Buffer inteiro. */
+  postArquivo(caminho: string, arquivo: string): Promise<unknown>;
 }
 
 /** O que o processo entrega ao cliente: o ambiente, os fluxos e o `fetch`. */

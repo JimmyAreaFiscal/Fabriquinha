@@ -4,7 +4,17 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
-import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  rmSync,
+  truncateSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +23,7 @@ import { after, test } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import {
   cenarioDaApiDoAgente,
+  enderecoDoTicket,
   TICKETS_DA_API_DO_AGENTE,
   tokenDoTicket,
 } from "../apoio-testes/cenario_da_api_do_agente.ts";
@@ -59,6 +70,40 @@ test("projeto ver, com o serviço no ar: sai 0 e o stdout é a foto; o token nã
   );
   assert.deepEqual(saida, { codigo: 0, out: FOTO_PROJETO_VER, err: "" });
 });
+
+test(
+  "evidencia add de um vídeo de 450 MiB, acima do teto de string do V8, é aceito: o anexo vai em fluxo, sem base64",
+  { timeout: 120_000 },
+  async () => {
+    const { raiz, banco } = cenarioDaApiDoAgente();
+    const { porta } = await servir(banco);
+    // Arquivo esparso de 450 MiB com cabeçalho MP4: ocupa quase nada em disco e passa de 384 MiB.
+    const video = join(raiz, "worktrees", "loja", "I-206", "rodadas", "1", "demo.mp4");
+    const arquivo = openSync(video, "w");
+    writeSync(arquivo, Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypmp42")]));
+    closeSync(arquivo);
+    truncateSync(video, 450 * 1024 * 1024);
+    const dados = join(pastaVazia, "dados.json");
+    writeFileSync(dados, '{"roteiro":"r"}');
+    const alvo = TICKETS_DA_API_DO_AGENTE.video;
+    const saida = await rodarEmpacotado(
+      { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: tokenDoTicket(alvo) },
+      ["evidencia", "add", enderecoDoTicket(alvo), "video_demonstracao", "--dados", dados, "--arquivo", video],
+    );
+    assert.deepEqual(saida, {
+      codigo: 0,
+      out: '{"ticket":"I-206.T7","tipo":"video_demonstracao"}\n',
+      err: "",
+    });
+    assert.deepEqual(
+      banco
+        .prepare("SELECT caminho, bytes FROM arquivo_evidencia")
+        .all()
+        .map((a) => ({ ...a })),
+      [{ caminho: "demo.mp4", bytes: 450 * 1024 * 1024 }],
+    );
+  },
+);
 
 test("serviço parado: sai ≠ 0 e o stderr diz que a Fabriquinha está fora, sem o token", async () => {
   const ocioso = createServer().listen(0, "127.0.0.1");

@@ -344,7 +344,6 @@ const enviado = (
   sha256 = sha(conteudo),
 ): AnexoEnviado => ({
   caminho: caminhoNoHost.replace(c.raiz, "/espaco"),
-  conteudo: Buffer.from(conteudo),
   sha256,
 });
 
@@ -412,7 +411,7 @@ test("enviados: link simbólico no último componente é recusado, aponte para f
   c.banco.close();
 });
 
-test("enviados: arquivo trocado entre a leitura e o envio, ou bytes que não batem com o SHA-256, são recusados sem guardar", async () => {
+test("enviados: arquivo trocado entre a leitura e o envio é recusado sem guardar", async () => {
   const c = cenario();
   const caminho = c.arquivo(c.worktree, "x.txt", "lido\n");
   const lido = enviado(c, caminho, "lido\n");
@@ -423,12 +422,17 @@ test("enviados: arquivo trocado entre a leitura e o envio, ou bytes que não bat
     ErroDeRegra,
     `${lido.caminho} não tem o SHA-256 enviado (o arquivo mudou depois de lido; envie-o de novo)`,
   );
-  const adulterado = enviado(c, caminho, "trocado\n", sha("outro"));
+  c.banco.close();
+});
+
+test("enviados: caminho com byte nulo é recusado como erro de regra, e não como falha do open", async () => {
+  const c = cenario();
+  const comNulo = { ...enviado(c, c.arquivo(c.worktree, "x.txt", "x"), "x"), caminho: "/espaco/x.txt\0.log" };
   await recusa(
     c,
-    () => submeterEnviados(c, [adulterado]),
+    () => submeterEnviados(c, [comNulo]),
     ErroDeRegra,
-    `os bytes enviados de ${adulterado.caminho} não têm o SHA-256 declarado (envie o arquivo de novo)`,
+    '"/espaco/x.txt\\u0000.log" tem byte nulo no caminho (informe o caminho real do arquivo)',
   );
   c.banco.close();
 });

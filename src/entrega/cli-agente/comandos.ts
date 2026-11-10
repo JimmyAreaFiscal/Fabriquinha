@@ -1,26 +1,27 @@
 // Os sete comandos do agente, cada um mapeado para um endpoint de /api/agente/*. O comando lê os argumentos, os arquivos
 // e o stdin (que só o cliente alcança) e manda o pedido; a regra e a conferência do escopo são do serviço.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createReadStream } from "node:fs";
 import { resolve } from "node:path";
-import type { PedidoEvidenciaAdd, PedidoRevisaoDecidir, PedidoTicketCriar } from "../contrato/agente.ts";
+import type {
+  PedidoEvidenciaAdd,
+  PedidoRevisaoDecidir,
+  PedidoTicketCriar,
+  RespostaAnexoEnviado,
+} from "../contrato/agente.ts";
 import { type Comando, ErroDoComando, frase, lerJsonDoArquivo, mensagem } from "./comando.ts";
 
 const caminhoDaApi = (...partes: string[]): string => `/api/agente/${partes.map(encodeURIComponent).join("/")}`;
 
-/** O anexo no corpo do pedido: o caminho absoluto no Ambiente do agente, os bytes em base64 e o SHA-256 deles. */
-function lerAnexo(arquivo: string): PedidoEvidenciaAdd["anexos"][number] {
-  let bytes: Buffer;
+/** O anexo a enviar: o caminho absoluto no Ambiente do agente e o SHA-256 do arquivo, lido em blocos. */
+async function lerAnexo(arquivo: string): Promise<RespostaAnexoEnviado> {
+  const hash = createHash("sha256");
   try {
-    bytes = readFileSync(arquivo);
+    for await (const bloco of createReadStream(arquivo)) hash.update(bloco as Buffer);
   } catch (error_) {
     throw new ErroDoComando(frase(`não consegui ler ${arquivo}: ${mensagem(error_)}`, "confira o caminho do arquivo"));
   }
-  return {
-    caminho: resolve(arquivo),
-    conteudo_base64: bytes.toString("base64"),
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  };
+  return { caminho: resolve(arquivo), sha256: hash.digest("hex") };
 }
 
 export const COMANDOS_DO_AGENTE: readonly Comando[] = [
@@ -88,11 +89,19 @@ export const COMANDOS_DO_AGENTE: readonly Comando[] = [
     opcoesDeUso: "--dados <arquivo.json|-> [--arquivo <caminho>]...",
     argumentos: { options: { dados: { type: "string" }, arquivo: { type: "string", multiple: true } } },
     executar: async ({ posicionais, opcoes }, api, stdin) => {
+      const arquivos = (opcoes.arquivo ?? []) as string[];
+      const dados = opcoes.dados === undefined ? undefined : await lerJsonDoArquivo(String(opcoes.dados), stdin);
+      const lidos: { arquivo: string; anexo: RespostaAnexoEnviado }[] = [];
+      for (const arquivo of arquivos) lidos.push({ arquivo, anexo: await lerAnexo(arquivo) });
+      // Cada anexo vai em pedido próprio, em fluxo; só depois a evidência o cita pelo caminho e pelo SHA-256.
+      for (const { arquivo, anexo } of lidos) {
+        await api.postArquivo(`${caminhoDaApi("anexos")}?${new URLSearchParams(anexo).toString()}`, arquivo);
+      }
       const pedido: PedidoEvidenciaAdd = {
         ticket: String(posicionais[0]),
         tipo: String(posicionais[1]),
-        dados: opcoes.dados === undefined ? undefined : await lerJsonDoArquivo(String(opcoes.dados), stdin),
-        anexos: ((opcoes.arquivo ?? []) as string[]).map(lerAnexo),
+        dados,
+        anexos: lidos.map(({ anexo }) => anexo),
       };
       return api.post(caminhoDaApi("evidencias"), pedido);
     },

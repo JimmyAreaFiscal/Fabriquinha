@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { Readable } from "node:stream";
 import { after } from "node:test";
 import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { raizDo } from "../src/armazenamento/banco.ts";
@@ -128,15 +129,17 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
   return async function pedir(
     metodo: "GET" | "POST",
     caminho: string,
-    { token, corpo }: { token?: string; corpo?: unknown } = {},
+    { token, corpo, bytes }: { token?: string; corpo?: unknown; bytes?: Readable } = {},
   ) {
     const resposta = await fetch(`http://127.0.0.1:${String(porta)}${caminho}`, {
       method: metodo,
       headers: {
         ...(token !== undefined && { authorization: `Bearer ${token}` }),
         ...(corpo !== undefined && { "content-type": "application/json" }),
+        ...(bytes !== undefined && { "content-type": "application/octet-stream" }),
       },
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      body: bytes ? (Readable.toWeb(bytes) as ReadableStream) : JSON.stringify(corpo),
+      ...(bytes && { duplex: "half" }),
     });
     return { status: resposta.status, json: (await resposta.json()) as unknown };
   };

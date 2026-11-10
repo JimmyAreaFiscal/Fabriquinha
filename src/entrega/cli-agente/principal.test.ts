@@ -115,7 +115,7 @@ test("evidencia schema pede o schema do tipo", async () => {
   );
 });
 
-test("evidencia add manda os dados lidos do arquivo e cada anexo com o caminho absoluto, os bytes e o SHA-256", async () => {
+test("evidencia add manda cada anexo em pedido próprio, com o caminho absoluto e o SHA-256, e a evidência cita os anexos", async () => {
   const dados = join(pasta, "dados.json");
   writeFileSync(dados, '{"aplicavel":false}');
   const log = join(pasta, "estresse.log");
@@ -131,7 +131,13 @@ test("evidencia add manda os dados lidos do arquivo e cada anexo com o caminho a
     log,
   ]);
   assert.equal(codigo, 0);
+  const sha256 = createHash("sha256").update("tudo certo\n").digest("hex");
   assert.deepEqual(pedidos, [
+    {
+      metodo: "POST",
+      caminho: `/api/agente/anexos?${new URLSearchParams({ caminho: log, sha256 }).toString()}`,
+      corpo: undefined,
+    },
     {
       metodo: "POST",
       caminho: "/api/agente/evidencias",
@@ -139,13 +145,7 @@ test("evidencia add manda os dados lidos do arquivo e cada anexo com o caminho a
         ticket: "I-206.T5",
         tipo: "testes_estresse",
         dados: { aplicavel: false },
-        anexos: [
-          {
-            caminho: log,
-            conteudo_base64: Buffer.from("tudo certo\n").toString("base64"),
-            sha256: createHash("sha256").update("tudo certo\n").digest("hex"),
-          },
-        ],
+        anexos: [{ caminho: log, sha256 }],
       },
     },
   ]);
