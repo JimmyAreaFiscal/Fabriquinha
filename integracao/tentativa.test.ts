@@ -4,7 +4,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
@@ -67,12 +66,18 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
   });
   gravarTokenDoProcesso(banco, "exec-3", "token-exec-3");
   const { pedir, porta } = await servir(banco);
-  const { stdout } = await promisify(execFile)(
-    process.execPath,
-    [join(import.meta.dirname, "../pacote-pi/bin/fabriquinha"), "ticket", "ver", "I-206.T3"],
-    { env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-3" } },
-  );
-  assert.equal((JSON.parse(stdout) as { motivo?: string }).motivo, "motivo B");
+  const { codigo, saida } = await new Promise<{ codigo: number; saida: string }>((resolve) => {
+    execFile(
+      process.execPath,
+      [join(import.meta.dirname, "../pacote-pi/bin/fabriquinha"), "ticket", "ver", "I-206.T3"],
+      { env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-3" } },
+      (erro, stdout) => {
+        resolve({ codigo: typeof erro?.code === "number" ? erro.code : 0, saida: stdout });
+      },
+    );
+  });
+  assert.equal(codigo, 0);
+  assert.equal((JSON.parse(saida) as { motivo?: string }).motivo, "motivo B");
 
   const demanda = (await pedir("/api/demandas/I-206")).json<PaginaDaDemanda>();
   assert.equal(demanda.tickets.find((t) => t.ref === "I-206.T3")?.motivo, "motivo B");
