@@ -7,6 +7,7 @@ import {
   type DonoDaLinha,
   execucoesDaDemanda,
   linhasExternasDaDemanda,
+  planoDaDemanda,
   rodadasDaDemanda,
   ticketsDaDemanda,
   type UsoDaExecucao,
@@ -97,6 +98,7 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
   const tickets = ticketsDaDemanda(banco, demandaId);
   const decisoes = decisoesDaDemanda(banco, demandaId);
   const externas = linhasExternasDaDemanda(banco, demandaId);
+  const plano = planoDaDemanda(banco, demandaId);
 
   const contagens = (dono: (l: DonoDaLinha) => boolean): Contagens => {
     const u = uso.filter(dono);
@@ -131,7 +133,7 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
     rodadas: rodadasDaDemanda(banco, demandaId).map((rodadaId) => ({
       rodadaId,
       ...escopo((l) => l.rodadaId === rodadaId),
-      conformidade: conformidadeDaRodada(banco, demandaId, rodadaId),
+      conformidade: conformidadeDaRodada(banco, demandaId, rodadaId, plano),
       custoExterno: custoExterno(externas.filter((l) => l.rodadaId === rodadaId)),
     })),
     semRodada: escopo((l) => l.rodadaId === null),

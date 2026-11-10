@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { conformidadeDaRodada } from "../aplicacao/conformidade.ts";
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../nucleo/plano.ts";
 import { migrar } from "./banco.ts";
+import { planoDaDemanda } from "./metricas_demanda.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
 const VERSAO_47 = VERSAO_LINHA_DE_BASE + 11;
@@ -234,5 +236,61 @@ test("a migração 47 preenche os arquivos de rodada e demanda pela união dos c
     )
     .all();
   assert.deepEqual(foraDaDemanda, [], "Rodada ⊆ Demanda");
+  banco.close();
+});
+
+/** O caminho de antes da migração: o planejado da rodada sai dos tickets da evidência `plano`, sem `Plano`. */
+function conformidadeDoCaminhoAntigo(banco: DatabaseSync, demanda: string, rodada: number) {
+  const evidencia = banco
+    .prepare("SELECT dados FROM evidencia_demanda WHERE demanda_id = ? AND tipo = 'plano'")
+    .get(demanda);
+  const planejado = new Set(
+    lerPlanoGravado(JSON.parse(String(evidencia?.dados)))
+      .tickets.filter((t) => t.rodada_id === rodada)
+      .flatMap((t) => t.arquivos_previstos),
+  );
+  const alterado = new Set(
+    banco
+      .prepare(
+        `SELECT a.caminho FROM arquivo_commit_demanda a
+         JOIN commit_ticket_demanda c ON c.sha = a.sha
+         JOIN ticket_demanda t ON t.demanda_id = c.demanda_id AND t.ticket_id = c.ticket_id
+         WHERE c.demanda_id = ? AND t.rodada_id = ?`,
+      )
+      .all(demanda, rodada)
+      .map((l) => String(l.caminho)),
+  );
+  const ausentes = [...planejado].filter((c) => !alterado.has(c)).sort();
+  const extras = [...alterado].filter((c) => !planejado.has(c)).sort();
+  const comuns = planejado.size - ausentes.length;
+  return { percentual: (comuns / (comuns + ausentes.length + extras.length)) * 100, ausentes, extras };
+}
+
+test("a Conformidade da demanda concluída com tickets corretivos é a mesma antes e depois da migração 47", () => {
+  const banco = bancoNaVersao46();
+  const commits: [number, string][] = [
+    [2, "src/a.ts"],
+    [5, "src/c.ts"],
+    [7, "src/d.ts"],
+    [9, "src/e.ts"],
+  ];
+  for (const [ticket, caminho] of commits) {
+    const sha = String(ticket).padStart(40, "0");
+    banco.exec(`
+      INSERT INTO commit_ticket_demanda VALUES ('${sha}', 'I-1', ${String(ticket)}, 'm', '${EM}');
+      INSERT INTO arquivo_commit_demanda VALUES ('${sha}', '${caminho}', NULL, 'M', 1, 1);
+    `);
+  }
+  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-1'");
+  const antes = conformidadeDoCaminhoAntigo(banco, "I-1", 1);
+  assert.deepEqual(antes.extras, ["src/c.ts", "src/d.ts", "src/e.ts"], "as correções são extras");
+
+  migrar(banco, MIGRACOES.slice(0, VERSAO_47 - VERSAO_LINHA_DE_BASE));
+
+  const depois = conformidadeDaRodada(banco, "I-1", 1, planoDaDemanda(banco, "I-1"));
+  assert.deepEqual(
+    { percentual: depois?.percentual, ausentes: depois?.ausentes.sort(), extras: depois?.extras.sort() },
+    antes,
+  );
   banco.close();
 });

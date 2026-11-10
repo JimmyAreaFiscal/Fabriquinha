@@ -505,7 +505,6 @@ export function materializar(
 /**
  * O Plano de uma demanda: o original aprovado (versão 1) e as correções, na ordem. A referência da Conformidade é
  * sempre o original; o que as correções acrescentam conta como extra.
- * @testes a Conformidade passa a recebê-lo na demanda de métricas; a produção ainda não o lê
  */
 export class Plano {
   readonly original: PlanoProposto;
