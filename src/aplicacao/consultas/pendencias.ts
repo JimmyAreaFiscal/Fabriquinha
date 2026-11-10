@@ -7,6 +7,7 @@ import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../../nucleo/dependencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { pendenciasDaDemanda, type TrabalhoVivo } from "../../nucleo/pendencia.ts";
+import type { Instante } from "../../nucleo/primitivos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
 import type { PendenciaDoInicio } from "../../entrega/contrato/demanda.ts";
@@ -39,7 +40,7 @@ function pendenciasDoInicio(
   vivos: readonly TrabalhoVivo[],
   sessaoDoTicket: ReadonlyMap<string, string>,
   agendadorLigado: boolean,
-  agora: Date,
+  agora: Instante,
 ): PendenciaDoInicio[] {
   const { id: demanda, projeto, titulo } = ag.demanda;
   const predecessorasSatisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demanda)).length === 0;
@@ -70,7 +71,7 @@ export function pendenciasDasDemandas(
   demandas: readonly AgregadoDemanda[],
   sessoes: readonly SessaoDeDemanda[],
   situacaoDa: SituacaoDaSessao,
-  agora: Date,
+  agora: Instante,
 ): PendenciaDoInicio[] {
   const sessoesParadas = sessoes.filter(esperaOAuditor);
   const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
@@ -89,7 +90,7 @@ export function pendenciasDeUmaDemanda(
   banco: DatabaseSync,
   ag: AgregadoDemanda,
   situacaoDa: SituacaoDaSessao,
-  agora: Date,
+  agora: Instante,
 ): PendenciaDoInicio[] {
   if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
   const sessoes = sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id });

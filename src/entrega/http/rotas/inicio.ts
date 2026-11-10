@@ -154,7 +154,7 @@ export function inicio(banco: DatabaseSync, situacaoDa = situacaoDoCondutor, ago
   );
   return {
     mes: doMes,
-    aguarda: pendenciasDasDemandas(banco, demandas, sessoes, situacaoDa, agora),
+    aguarda: pendenciasDasDemandas(banco, demandas, sessoes, situacaoDa, agora.toISOString()),
     rodando: sessoes
       .filter((s) => s.estado === "rodando")
       .map((s) => {

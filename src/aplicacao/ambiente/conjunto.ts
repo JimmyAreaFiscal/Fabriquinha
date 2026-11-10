@@ -6,6 +6,7 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Instante } from "../../nucleo/primitivos.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import {
   type AmbienteGravado,
   alocarAmbienteLivreDaImagem,
@@ -21,15 +22,15 @@ import type { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_
 
 const MS_POR_MINUTO = 60_000;
 
-const instanteAtual = (): Instante => new Date().toISOString();
-
 export class ConjuntoDeAmbientes {
   readonly #banco: DatabaseSync;
   readonly #gerador: GeradorDeAmbientes;
+  readonly #relogio: Relogio;
 
-  constructor(banco: DatabaseSync, gerador: GeradorDeAmbientes) {
+  constructor(banco: DatabaseSync, gerador: GeradorDeAmbientes, relogio: Relogio = relogioDoSistema) {
     this.#banco = banco;
     this.#gerador = gerador;
+    this.#relogio = relogio;
   }
 
   /** Dá ao Espaço um livre da mesma imagem ou, sem nenhum, um container novo; o Espaço que já tem um recebe o mesmo. */
@@ -67,7 +68,7 @@ export class ConjuntoDeAmbientes {
     } catch {
       estadoDepoisDaLiberacao = "sujo";
     }
-    liberarAmbiente(this.#banco, ambiente.id, estadoDepoisDaLiberacao, instanteAtual());
+    liberarAmbiente(this.#banco, ambiente.id, estadoDepoisDaLiberacao, this.#relogio.agora());
   }
 
   /** Elimina um container do conjunto; só vale para o `livre` ou `sujo`, nunca para o que um Espaço está usando. */
@@ -116,7 +117,7 @@ export class ConjuntoDeAmbientes {
       imagem,
       estado: "alocado",
       alocado_para: alocadoPara,
-      criado_em: instanteAtual(),
+      criado_em: this.#relogio.agora(),
       liberado_em: null,
     };
     try {

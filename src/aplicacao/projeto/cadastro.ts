@@ -1,11 +1,13 @@
-// Cadastro do projeto (C19: registrar, editar e remover; F2 §4 e §6). As conferências externas (F5 §2, F4 §9) rodam
-// antes, fora daqui; o armazenamento só lê e grava as linhas.
+// Cadastro do projeto (C19: registrar, editar e remover; F2 §4 e §6). `registrarProjeto` e `editarProjeto` só validam e
+// gravam; as conferências externas (F5 §2, F4 §9) são de `cadastrarProjetoDoFormulario` e `editarProjetoDoFormulario`.
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
 import { formatarTicketRef } from "../../nucleo/demanda.ts";
-import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { Projeto } from "../../nucleo/projeto.ts";
+import { ErroDeRegra, ErroExterno, mensagem } from "../../nucleo/erros.ts";
+import { EtapaTicket } from "../../nucleo/primitivos.ts";
+import { type Hospedagem, Projeto } from "../../nucleo/projeto.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { escrever, raizDo } from "../../armazenamento/banco.ts";
 import {
@@ -17,8 +19,18 @@ import {
   tarefaComExecucaoSimuladaPendente,
   ticketEmAndamentoDoProjeto,
 } from "../../armazenamento/projetos.ts";
-import { dirDaExecucaoSimulada } from "../../infra/registro.ts";
+import { HarnessPi } from "../../infra/agente/harness_pi.ts";
+import { dirDaExecucaoSimulada, noLog } from "../../infra/registro.ts";
+import { conferirProjeto } from "../../infra/repositorio/cadastro.ts";
 import { removerWorktrees } from "../../infra/repositorio/worktree.ts";
+import {
+  type ConfiguracoesDasEtapas,
+  configuracoesDasEtapas,
+  etapasComModeloOuEffort,
+  parDoModelo,
+  projetoComConfiguracoesDasEtapas,
+} from "../configuracao/configuracao_do_ambiente.ts";
+import { varrerCommitsHumanos } from "../metricas/varrer_commits_humanos.ts";
 
 export { buscarProjeto, listarProjetos, projetoExistente } from "../../armazenamento/projetos.ts";
 
@@ -49,6 +61,7 @@ export function registrarProjeto(banco: DatabaseSync, entrada: unknown): Projeto
  * C19: substitui o cadastro de um projeto que já existe, com as etapas e a preparação da worktree; o nome é a chave e não
  * muda. A chave do SonarQube e o resto das Verificações (da configuração SDLC) ficam como estão.
  */
+/** @testes a produção edita pelo formulário (`editarProjetoDoFormulario`); os testes exercitam o caso de uso direto */
 export function editarProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
   return escrever(banco, () => {
@@ -85,6 +98,80 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
     return gravado;
   });
 }
+
+/** O projeto como o formulário o manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
+type ProjetoDoFormulario = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "link_produto"> & {
+  hospedagem?: Hospedagem;
+  preparacao: Projeto["verificacoes"]["preparacao"];
+  configuracoes: ConfiguracoesDasEtapas;
+};
+
+/**
+ * F4 §9: o modelo novo ou trocado precisa existir no pi; o rejeitado vira erro do campo (ZodError). O igual ao gravado
+ * não chama o pi: o que ele deixou de listar continua salvando sem mexer.
+ */
+async function conferirModelosAlterados(banco: DatabaseSync, nome: string, configuracoes: ConfiguracoesDasEtapas) {
+  const gravadas = configuracoesDasEtapas(buscarProjeto(banco, nome)?.etapas ?? []);
+  const alterados = EtapaTicket.options.flatMap((etapa) => {
+    const modelo = configuracoes[etapa]?.modelo;
+    return modelo && parDoModelo(modelo) !== parDoModelo(gravadas[etapa]?.modelo) ? [{ etapa, modelo }] : [];
+  });
+  const rejeitados = (
+    await Promise.all(
+      alterados.map(({ etapa, modelo }) =>
+        new HarnessPi().conferirModelo(modelo).then(
+          () => [],
+          (error_: unknown) => [
+            {
+              code: "custom" as const,
+              path: ["configuracoes", etapa, "modelo"],
+              message: mensagem(error_),
+              input: modelo,
+            },
+          ],
+        ),
+      ),
+    )
+  ).flat();
+  if (rejeitados.length > 0) throw new z.ZodError(rejeitados);
+}
+
+/**
+ * C19 pelo formulário: confere o repositório (F5 §2; a falha é externa, ErroExterno, e nada é gravado) e os modelos, e
+ * grava o cadastro e as etapas numa transação só.
+ */
+async function conferirEGravar(banco: DatabaseSync, formulario: ProjetoDoFormulario, gravar: typeof registrarProjeto) {
+  const { configuracoes, preparacao, ...cadastro } = formulario;
+  const { hospedagem } = await conferirProjeto(cadastro).catch((error_: unknown) => {
+    throw new ErroExterno(mensagem(error_));
+  });
+  await conferirModelosAlterados(banco, formulario.nome, configuracoes);
+  return escrever(banco, () => {
+    // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
+    const salvo = gravar(banco, {
+      ...cadastro,
+      hospedagem,
+      chave_sonarqube: formulario.nome,
+      etapas: etapasComModeloOuEffort(configuracoes),
+      verificacoes: { preparacao },
+    });
+    return projetoComConfiguracoesDasEtapas(salvo);
+  });
+}
+
+/**
+ * O cadastro e só ele fixa o cursor inicial da base (F6 §4.4); a edição não varre. A varredura que falha só vai para o
+ * log: o agendador a refaz no dia seguinte.
+ */
+export async function cadastrarProjetoDoFormulario(banco: DatabaseSync, formulario: ProjetoDoFormulario) {
+  const salvo = await conferirEGravar(banco, formulario, registrarProjeto);
+  await varrerCommitsHumanos(banco, salvo.nome).catch(noLog);
+  return salvo;
+}
+
+/** Edita o projeto que já existe com as mesmas conferências do cadastro, sem varrer a base. */
+export const editarProjetoDoFormulario = (banco: DatabaseSync, formulario: ProjetoDoFormulario) =>
+  conferirEGravar(banco, formulario, editarProjeto);
 
 /** Recusa a remoção enquanto o projeto tem execução, de ticket ou simulada, em andamento. */
 function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string): void {

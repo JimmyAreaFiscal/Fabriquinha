@@ -9,6 +9,7 @@ import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
@@ -116,7 +117,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
           [ag],
           sessoesDeDemanda(banco, { escopo: "ativas", demanda: id }),
           condutor.situacao.bind(condutor),
-          new Date(),
+          relogioDoSistema.agora(),
         ),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoEspaco(ag, r.rodada_id);

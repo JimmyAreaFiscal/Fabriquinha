@@ -10,7 +10,7 @@ import { encontrado } from "../../nucleo/erros.ts";
 import { prDoEspaco } from "../../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
 import { EtapaTicket } from "../../nucleo/primitivos.ts";
-import { dataDoInstante, type Relogio } from "../../nucleo/relogio.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import { achadoDaDemanda } from "../../armazenamento/avaliacoes.ts";
 import { carregarDemandas, listarDemandas } from "../../armazenamento/demandas.ts";
@@ -67,7 +67,7 @@ export function consultarBoardDeDemandas(
       banco,
       todas.map((ag) => ag.demanda.id),
     );
-    const agora = dataDoInstante(relogio.agora());
+    const agora = relogio.agora();
     return {
       demandas: todas.map((ag) => {
         const { id, projeto, titulo, estado } = ag.demanda;
@@ -140,7 +140,7 @@ export function consultarDemanda(
       ).map((t) => t.ticket_id),
     );
     return {
-      pendencias: pendenciasDeUmaDemanda(banco, ag, situacaoDa, dataDoInstante(relogio.agora())),
+      pendencias: pendenciasDeUmaDemanda(banco, ag, situacaoDa, relogio.agora()),
       ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
       demanda: {
         id,
