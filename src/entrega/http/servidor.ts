@@ -8,8 +8,12 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { LIMITE } from "../../nucleo/schemas.ts";
 import type { Relogio } from "../../nucleo/relogio.ts";
 import { casar } from "../compartilhado/caminhos.ts";
+import { autenticarAgente } from "./agente/autenticacao.ts";
+import { rotaDeEvidenciaAdd } from "./agente/evidencia.ts";
+import { erroDaApiDoAgente, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente, rotasDoAgente } from "./agente/rotas.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
 import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacoes.ts";
@@ -40,11 +44,16 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DA_SIMULACAO,
 ];
 
+/** As rotas de /api/agente/*: fora de `ROTAS`, porque entram com o token do processo e não com o cookie do navegador. */
+const ROTAS_DO_AGENTE: RotaDoAgente[] = [...rotasDoAgente(), rotaDeEvidenciaAdd()];
+
 const CLIENTE = join(import.meta.dirname, "../cliente-web");
 const COMPARTILHADO = join(import.meta.dirname, "../compartilhado");
 const COOKIE = "fabriquinha";
 const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
 const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
+// O `evidencia add` leva os anexos em base64 no JSON: o maior anexo (o vídeo) vezes 4/3, mais o JSON de sempre.
+const LIMITE_DO_JSON_DO_AGENTE = { bytes: Math.ceil(LIMITE.video / 3) * 4 + LIMITE_DO_JSON.bytes, texto: "667 MiB" };
 
 /** Os tipos servidos em `/static/*`. O cliente é TypeScript: o navegador recebe o JavaScript sem os tipos. */
 const TIPOS: Record<string, string> = {
@@ -84,9 +93,9 @@ const json = (resposta: ServerResponse, status: number, valor: unknown): void =>
  * é JSON, até 64 KiB; vazio é `undefined`. Corpo grande demais ou JSON inválido é corpo inválido (422).
  * ponytail: o corpo grande demais é lido até o fim e descartado, para a resposta chegar ao cliente.
  */
-async function lerCorpo(pedido: IncomingMessage): Promise<unknown> {
+async function lerCorpo(pedido: IncomingMessage, limiteDoJson = LIMITE_DO_JSON): Promise<unknown> {
   const binario = pedido.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/octet-stream";
-  const limite = binario ? LIMITE_DO_ANEXO : LIMITE_DO_JSON;
+  const limite = binario ? LIMITE_DO_ANEXO : limiteDoJson;
   const partes: Buffer[] = [];
   let tamanho = 0;
   for await (const parte of pedido as AsyncIterable<Buffer>) {
@@ -159,13 +168,23 @@ interface Web {
   relogio: Relogio;
   /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
   registrarErro: (erro: unknown) => void;
+  /** As rotas do agente; os testes trocam os casos de uso por espiões. */
+  rotasDoAgente?: RotaDoAgente[];
 }
 
 /**
  * Gera o token desta subida (32 bytes aleatórios), grava o link de entrada em `<raiz>/web.url` com `0600` e devolve o
  * tratador das requisições. Reiniciar o serviço troca o token e invalida o cookie dos navegadores.
  */
-export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErro }: Web): RequestListener {
+export function servirWeb({
+  banco,
+  raiz,
+  porta,
+  agendador,
+  relogio,
+  registrarErro,
+  rotasDoAgente: rotasDaApiDoAgente = ROTAS_DO_AGENTE,
+}: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
   const arquivo = join(raiz, "web.url");
@@ -184,6 +203,8 @@ export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErr
 
   /** A guarda do F7 §4.1, na ordem da tabela: `Host`, cookie nas rotas de dado, `Sec-Fetch-Site` na mutação. */
   function guardar(pedido: IncomingMessage, caminho: string, mutacao: boolean): void {
+    // O agente não é um navegador: a guarda dele é o token do processo (`autenticarAgente`), em qualquer `Host`.
+    if (caminho.startsWith(PREFIXO_DA_API_DO_AGENTE)) return;
     if (pedido.headers.host !== origem) throw new ErroHttp(403, `só ${origem} é atendido`);
     const dado = caminho.startsWith("/api/") || caminho.startsWith("/arquivos/");
     if (dado && !confere(cookie(pedido))) {
@@ -224,6 +245,19 @@ export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErr
     throw new ErroHttp(404, `${String(pedido.method)} ${url.pathname} não existe`);
   }
 
+  /** `/api/agente/*`: o token vem antes do corpo, para quem não o tem não fazer o serviço ler até 667 MiB. */
+  async function apiDoAgente(pedido: IncomingMessage, url: URL, resposta: ServerResponse): Promise<void> {
+    const agente = autenticarAgente(banco, pedido.headers);
+    for (const rota of rotasDaApiDoAgente) {
+      const params = rota.metodo === pedido.method ? casar(rota.caminho, url.pathname) : undefined;
+      if (!params) continue;
+      const corpo = rota.metodo === "POST" ? await lerCorpo(pedido, LIMITE_DO_JSON_DO_AGENTE) : undefined;
+      json(resposta, 200, await rota.tratar({ banco, relogio, agente, params, query: url.searchParams, corpo }));
+      return;
+    }
+    throw new ErroHttp(404, `${String(pedido.method)} ${url.pathname} não existe`);
+  }
+
   async function atender(pedido: IncomingMessage, resposta: ServerResponse): Promise<void> {
     resposta.setHeader("X-Content-Type-Options", "nosniff");
     // No servidor, `url` sempre vem: o tipo opcional é do cliente.
@@ -231,6 +265,10 @@ export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErr
     const caminho = url.pathname;
     const mutacao = pedido.method !== "GET" && pedido.method !== "HEAD";
     guardar(pedido, caminho, mutacao);
+    if (caminho.startsWith(PREFIXO_DA_API_DO_AGENTE)) {
+      await apiDoAgente(pedido, url, resposta);
+      return;
+    }
     if (caminho.startsWith("/api/") || caminho.startsWith("/arquivos/")) {
       await api(pedido, url, resposta, mutacao ? await lerCorpo(pedido) : undefined);
       return;
@@ -248,6 +286,8 @@ export function servirWeb({ banco, raiz, porta, agendador, relogio, registrarErr
       if (status === 500) registrarErro(error_);
       // A rota que já começou a responder (SSE, download) e falhou no meio só pode cortar a conexão.
       if (resposta.headersSent) resposta.destroy();
+      else if (String(pedido.url).startsWith(PREFIXO_DA_API_DO_AGENTE))
+        json(resposta, status, erroDaApiDoAgente(mensagem));
       else json(resposta, status, { erro: mensagem });
     });
   };

@@ -85,7 +85,6 @@ export function adicionarEvidencia(
 /**
  * O mesmo que `adicionarEvidencia`, para o agente que roda em outro Ambiente: o core inverte o caminho declarado de
  * cada anexo para o host e confere que o arquivo ali tem o SHA-256 enviado.
- * @testes o endpoint da API do agente é de outro ticket da rodada; só o teste a usa até lá
  */
 export function adicionarEvidenciaComAnexosEnviados(
   banco: DatabaseSync,

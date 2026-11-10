@@ -243,6 +243,21 @@ test("a lista de exceções está vazia: entrega/http não importa armazenamento
   assert.deepEqual(daHttp.map(descrever), []);
 });
 
+// A matriz libera `aplicacao` inteira a entrega/http; a API do agente só alcança os casos de uso do agente.
+test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
+  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("entrega/http/agente/"));
+  assert.ok(daApiDoAgente.length > 0);
+  const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
+    const caminho = join(SRC, arquivo);
+    return ts
+      .preProcessFile(readFileSync(caminho, "utf8"), true, true)
+      .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
+      .filter((alvo) => alvo.startsWith("aplicacao/") && !alvo.startsWith("aplicacao/agente/"))
+      .map((alvo) => `${arquivo} importa ${alvo}`);
+  });
+  assert.deepEqual(deAplicacaoFora, []);
+});
+
 test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
   const importadores = listarArquivosDeProducao(SRC)
     .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("entrega/http/"))

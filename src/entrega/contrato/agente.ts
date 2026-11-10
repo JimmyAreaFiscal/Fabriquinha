@@ -9,14 +9,12 @@ const Veredito = z.enum(["atende", "nao_atende"]);
 
 /**
  * `GET /api/agente/projeto`: o projeto da demanda do agente.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaProjetoVer = Projeto;
 export type RespostaProjetoVer = z.infer<typeof RespostaProjetoVer>;
 
 /**
  * `GET /api/agente/demandas/:demanda`: a demanda (com a origem como o CLI a mostra), as rodadas, as decisões e os tickets.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaDemandaVer = z.object({
   demanda: z.record(z.string(), z.unknown()),
@@ -28,7 +26,6 @@ export type RespostaDemandaVer = z.infer<typeof RespostaDemandaVer>;
 
 /**
  * `GET /api/agente/tickets/:ticket`: o próprio ticket, pelo endereço público, com o motivo quando falhou.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaTicketVer = z.looseObject({
   ticket: EnderecoDoTicket,
@@ -39,14 +36,12 @@ export type RespostaTicketVer = z.infer<typeof RespostaTicketVer>;
 
 /**
  * `POST /api/agente/tickets`: o ticket corretivo na rodada do agente.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const PedidoTicketCriar = z.object({ rodada: z.string().min(1), titulo: z.string().optional() });
 export type PedidoTicketCriar = z.infer<typeof PedidoTicketCriar>;
 
 /**
  * Os tickets que nasceram do `PedidoTicketCriar`.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaTicketCriar = z.object({ rodada: z.string(), tickets: z.array(EnderecoDoTicket) });
 export type RespostaTicketCriar = z.infer<typeof RespostaTicketCriar>;
@@ -54,7 +49,6 @@ export type RespostaTicketCriar = z.infer<typeof RespostaTicketCriar>;
 /**
  * `POST /api/agente/revisoes`: o veredito do agente sobre o próprio ticket de revisão. `correcoes` e `plano` chegam já
  * lidos (o cliente lê o arquivo ou o stdin); só a presença conta na recusa de `aprovar` com opções a mais.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const PedidoRevisaoDecidir = z.object({
   ticket: EnderecoDoTicket,
@@ -67,7 +61,6 @@ export type PedidoRevisaoDecidir = z.infer<typeof PedidoRevisaoDecidir>;
 
 /**
  * A decisão registrada pelo `PedidoRevisaoDecidir`.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaRevisaoDecidir = z.object({
   ticket: EnderecoDoTicket,
@@ -78,7 +71,6 @@ export type RespostaRevisaoDecidir = z.infer<typeof RespostaRevisaoDecidir>;
 
 /**
  * `GET /api/agente/evidencias/:tipo/schema`: o schema JSON dos dados do tipo e a regra dos arquivos.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaEvidenciaSchema = z.object({ dados: z.record(z.string(), z.unknown()), arquivos: z.unknown() });
 export type RespostaEvidenciaSchema = z.infer<typeof RespostaEvidenciaSchema>;
@@ -92,7 +84,6 @@ const AnexoDoPedido = z.object({
 
 /**
  * `POST /api/agente/evidencias`: a evidência do próprio ticket; `dados` chega já lido e os anexos vão com os bytes.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const PedidoEvidenciaAdd = z.object({
   ticket: EnderecoDoTicket,
@@ -104,7 +95,6 @@ export type PedidoEvidenciaAdd = z.infer<typeof PedidoEvidenciaAdd>;
 
 /**
  * A evidência gravada pelo `PedidoEvidenciaAdd`.
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const RespostaEvidenciaAdd = z.object({
   ticket: EnderecoDoTicket,
@@ -116,7 +106,6 @@ export type RespostaEvidenciaAdd = z.infer<typeof RespostaEvidenciaAdd>;
 /**
  * O erro de qualquer endpoint: a `mensagem` é o que o CLI imprime no stderr (já com a orientação entre parênteses),
  * `orientacao` é essa orientação à parte e `codigo_de_saida` o código do CLI (1 erro, 2 uso inválido).
- * @testes o endpoint e o cliente da API do agente são de outros tickets da rodada; só o teste a usa até lá
  */
 export const ErroDaApiDoAgente = z.object({
   mensagem: z.string(),

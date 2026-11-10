@@ -9,6 +9,7 @@ import { encontrado, ErroDeEscopo, ErroDeRegra, existe } from "../../nucleo/erro
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import type { ProcessoDoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import { carregarEscopoDoProcesso } from "../../armazenamento/demandas.ts";
+import { processoVivoDoToken } from "../../armazenamento/trabalho_agentico.ts";
 import { exigirTrabalhoDoTicket } from "../trabalho_do_ticket.ts";
 
 /** A identidade do processo que age: o `id` basta, e o `ProcessoDoTrabalho` inteiro também serve. */
@@ -42,6 +43,12 @@ export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): E
     ticket_id: linha.ticket_id,
     projeto: linha.projeto,
   };
+}
+
+/** O escopo do agente do processo vivo que tem `token`; `undefined` se o token é desconhecido ou o processo já terminou. */
+export function resolverEscopoDoToken(banco: DatabaseSync, token: string): EscopoDoAgente | undefined {
+  const execucao = processoVivoDoToken(banco, token);
+  return execucao === undefined ? undefined : resolverEscopoDoAgente(banco, execucao);
 }
 
 /** O escopo do agente do `processo`, que existe e segue aberto. */

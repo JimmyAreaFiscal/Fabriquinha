@@ -108,6 +108,11 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
+    // A 50 deu ao processo o hash do token da API do agente: a volta apaga o índice e a coluna.
+    banco.exec(`
+      DROP INDEX ux_processo_do_trabalho_hash_do_token;
+      ALTER TABLE processo_do_trabalho DROP COLUMN hash_do_token;
+    `);
     // A 49 renomeou a tabela dos commits humanos posteriores e os índices dela: a volta devolve os nomes antigos.
     banco.exec(`
       ALTER TABLE commit_humano_posterior RENAME TO retrabalho_demanda;

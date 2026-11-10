@@ -179,7 +179,7 @@ export function gravarTokenDoProcesso(banco: DatabaseSync, processoId: string, t
   if (changes === 0) throw new ErroDeRegra(`processo ${processoId} não existe ou já terminou, e não recebe token`);
 }
 
-/** @testes o consumidor de produção (a API do agente) entra num ticket seguinte da I-287; o id do processo dono do token, ou `undefined` se o token é desconhecido ou o processo já terminou (`fim` preenchido). */
+/** O id do processo dono do token, ou `undefined` se o token é desconhecido ou o processo já terminou (`fim` preenchido). */
 export const processoVivoDoToken = (banco: DatabaseSync, token: string): string | undefined =>
   (
     banco
