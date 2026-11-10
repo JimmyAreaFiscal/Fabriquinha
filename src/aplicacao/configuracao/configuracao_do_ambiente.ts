@@ -7,7 +7,7 @@ import { mensagem } from "../../nucleo/erros.ts";
 import { EtapaTicket } from "../../nucleo/primitivos.ts";
 import { ConfiguracaoDoAmbiente, type Projeto } from "../../nucleo/projeto.ts";
 import {
-  type Configuracao,
+  Configuracao,
   configuracao,
   salvarConfiguracao,
   salvarConfiguracaoDoAmbiente,
@@ -47,9 +47,10 @@ export const etapasComModeloOuEffort = (configuracoes: ConfiguracoesDasEtapas) =
 
 /**
  * F4 §9: o modelo de auditoria novo ou trocado precisa existir no pi; o rejeitado vira erro do campo. O igual ao
- * gravado não chama o pi. Grava a configuração inteira só depois da conferência.
+ * gravado não chama o pi. Valida a `entrada` e grava a configuração inteira só depois da conferência.
  */
-export async function conferirESalvarConfiguracao(banco: DatabaseSync, nova: Configuracao): Promise<Configuracao> {
+export async function conferirESalvarConfiguracao(banco: DatabaseSync, entrada: unknown): Promise<Configuracao> {
+  const nova = Configuracao.parse(entrada);
   const modelo = nova.modeloAuditoria;
   if (modelo && parDoModelo(modelo) !== parDoModelo(configuracao(banco).modeloAuditoria)) {
     await new HarnessPi().conferirModelo(modelo).catch((error_: unknown) => {
