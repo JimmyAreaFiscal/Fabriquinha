@@ -33,29 +33,10 @@ const arquivo = (nome: string, conteudo: string | object): string => {
 
 const CRITERIOS = { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] };
 const DESENHO = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "m" }] };
-const CUSTOS = {
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao: "ext",
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-};
 const HTML = "<!doctype html><p>x</p>";
 arquivo("desc.md", "descrição");
 arquivo("criterios.json", CRITERIOS);
 arquivo("desenho.json", DESENHO);
-arquivo("custos.json", CUSTOS);
 arquivo("desenho.html", HTML);
 
 const bancoDaRaiz = new Map<string | undefined, DatabaseSync>();
@@ -92,7 +73,7 @@ interface Visao {
   evidencias: { tipo: string; arquivos: { nome: string; sha256: string }[] }[];
 }
 interface Schema {
-  dados: { properties: { sessoes: unknown } };
+  dados: { properties: { criterios: unknown } };
   arquivos: { min: number; max?: number };
 }
 const ler = (s: Saida): unknown => {
@@ -126,7 +107,6 @@ const completar = async (env: NodeJS.ProcessEnv, id: string, pular = "") => {
   const evid = [
     ["criterios_aceite", "criterios.json"],
     ["desenho_solucao", "desenho.json", "--arquivo", "desenho.html"],
-    ["custos_realizados", "custos.json"],
   ].filter(([tipo]) => tipo !== pular);
   for (const [tipo, dados, ...resto] of evid) {
     json(await cli(env, ["demanda", "evidencia", id, String(tipo), "--dados", String(dados), ...resto]));
@@ -313,24 +293,6 @@ test("anexo: a classe vem dos bytes iniciais, não da extensão, e o limite da c
   falha(await cli(env, EVIDENCIA(id, "comportamento", comportamento, "grande.png")), 1, /grande\.png tem 5\.0 MiB/);
 });
 
-test("CA-11: custos depois do envio, sem custo informado", async () => {
-  const env = novaRaiz();
-  const id = await registrar(env);
-  await completar(env, id);
-  json(await cli(env, ["demanda", "enviar", id]));
-  const r = json(
-    await cli(env, ["demanda", "evidencia", id, "custos_realizados", "--dados", "-"], JSON.stringify(CUSTOS)),
-  );
-  assert.equal(r.evidencias.filter((e: { tipo: string }) => e.tipo === "custos_realizados").length, 1);
-  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
-  assert.ok(b);
-  const linha = b.prepare("SELECT dados FROM evidencia_demanda WHERE tipo = 'custos_realizados'").get();
-  assert.equal(
-    (JSON.parse(String(linha?.dados)) as { sessoes: { linhas: { custo: null }[] }[] }).sessoes[0]?.linhas[0]?.custo,
-    null,
-  );
-});
-
 test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
   const env = novaRaiz();
   const id = await registrar(env);
@@ -341,6 +303,84 @@ test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
     1,
     /não é um JSON válido/,
   );
+});
+
+const USO = {
+  sessoes: [
+    {
+      ferramenta: "claude",
+      sessao: "S1",
+      linhas: [
+        {
+          provedor: "anthropic",
+          modelo: "opus",
+          tokens_entrada: 10,
+          tokens_saida: 2,
+          tokens_cache_leitura: 0,
+          tokens_cache_escrita: 0,
+        },
+      ],
+    },
+  ],
+};
+const linhasDeUso = (env: NodeJS.ProcessEnv) =>
+  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT demanda_id, linhas FROM uso_declarado").all() ?? [];
+
+test("CA-6: uso inválido sai com o caminho do campo e a dica; o válido enviado duas vezes deixa uma só linha", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  arquivo("uso_invalido.json", {
+    sessoes: [{ ...USO.sessoes[0], linhas: [{ ...USO.sessoes[0]?.linhas[0], tokens_entrada: -1 }] }],
+  });
+  falha(
+    await cli(env, ["demanda", "uso", id, "--dados", "uso_invalido.json"]),
+    1,
+    /sessoes\.0\.linhas\.0\.tokens_entrada.*corrija o campo indicado e submeta de novo/s,
+  );
+  assert.deepEqual(linhasDeUso(env), []);
+  arquivo("uso.json", USO);
+  for (let vez = 0; vez < 2; vez++)
+    assert.deepEqual(json(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"])).avisos, []);
+  const [linha, ...resto] = linhasDeUso(env);
+  assert.ok(linha);
+  assert.deepEqual(resto, []);
+  assert.equal(linha.demanda_id, id);
+  assert.deepEqual(JSON.parse(String(linha.linhas)), [
+    {
+      modelo: "anthropic/opus",
+      tokens_entrada: 10,
+      tokens_saida: 2,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo: null,
+      chamadas: 0,
+    },
+  ]);
+});
+
+test("uso: falta --dados, JSON inválido, outra sessão antes do envio e demanda terminada", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  falha(await cli(env, ["demanda", "uso", id]), 2, /^falta --dados/);
+  falha(await cli(env, ["demanda", "uso", id, "--dados", "-"], "{"), 1, /não é um JSON válido/);
+  arquivo("uso.json", USO);
+  falha(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"]), 1, /só a ferramenta claude da sessão S1/);
+  await completar(env, id);
+  json(await cli(env, ["demanda", "enviar", id]));
+  json(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"])); // depois do envio, qualquer sessão
+  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.exec(`UPDATE demanda SET estado = 'concluida' WHERE id = '${id}'`);
+  falha(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"]), 1, /já terminou \(concluida\)/);
+});
+
+test("uso: a sessão que outra demanda já informou é avisada e não é contada de novo", async () => {
+  const env = novaRaiz();
+  const primeira = await registrar(env);
+  const segunda = await registrar(env);
+  arquivo("uso.json", USO);
+  await cli(env, ["demanda", "uso", primeira, "--dados", "uso.json"]);
+  const { avisos } = json(await cli(env, ["demanda", "uso", segunda, "--dados", "uso.json"]));
+  assert.match(String(avisos[0]), /já consta na demanda I-1 e não é contada de novo para I-2/);
+  assert.equal(linhasDeUso(env).length, 1);
 });
 
 test("CA-2: o endereço inválido sai com a mensagem de Endereco.ler e o de rodada ou ticket não é de demanda", async () => {
@@ -354,8 +394,8 @@ test("CA-2: o endereço inválido sai com a mensagem de Endereco.ler e o de roda
 
 test("CA-12: schema do tipo com as regras de arquivo", async () => {
   const env = novaRaiz(); // sem FABRIQUINHA_ROOT, o CLI abriria o banco real da Fabriquinha
-  const s = jsonSchema(await cli(env, ["demanda", "schema", "custos_realizados"]));
-  assert.ok(s.dados.properties.sessoes);
+  const s = jsonSchema(await cli(env, ["demanda", "schema", "criterios_aceite"]));
+  assert.ok(s.dados.properties.criterios);
   assert.equal(s.arquivos.max, 0);
   assert.ok(jsonSchema(await cli(env, ["demanda", "schema", "desenho_solucao"])).arquivos.min >= 1);
 });
@@ -368,7 +408,7 @@ test("CA-13: enviar sem desenho_solucao lista o que falta e não envia", async (
   assert.equal(json(await cli(env, ["demanda", "ver", id])).enviada, false);
 });
 
-test("CA-14 e CA-16: enviar com as três evidências e ver", async () => {
+test("CA-14 e CA-16: enviar com as duas evidências e ver", async () => {
   const env = novaRaiz();
   const id = await registrar(env);
   await completar(env, id);
@@ -376,11 +416,7 @@ test("CA-14 e CA-16: enviar com as três evidências e ver", async () => {
   assert.equal(e.enviada, true);
   assert.equal(e.estado, "gate_demanda");
   const v = json(await cli({ FABRIQUINHA_ROOT: env.FABRIQUINHA_ROOT }, ["demanda", "ver", id]));
-  assert.deepEqual(v.evidencias.map((x: { tipo: string }) => x.tipo).sort(), [
-    "criterios_aceite",
-    "custos_realizados",
-    "desenho_solucao",
-  ]);
+  assert.deepEqual(v.evidencias.map((x: { tipo: string }) => x.tipo).sort(), ["criterios_aceite", "desenho_solucao"]);
 });
 
 test("CA-15: outra sessão não envia", async () => {
@@ -415,7 +451,7 @@ test("CA-19: a skill traz um exemplo de cada comando e cada comando citado exist
   const skill = readFileSync(join(cwd, "pacote-pi", "skills", "demanda-externa", "SKILL.md"), "utf8");
   const citados = [...skill.matchAll(/^fabriquinha demanda (\S+)/gm)].map((m) => m[1]);
   const existentes = COMANDOS_DEMANDA_EXTERNA.map((c) => c.palavras[1]);
-  assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "ver"]);
+  assert.deepEqual(existentes.sort(), ["editar", "enviar", "evidencia", "registrar", "schema", "uso", "ver"]);
   for (const c of citados) assert.ok(existentes.includes(c), c);
   for (const c of existentes) assert.ok(citados.includes(c), c);
   assert.ok(skill.trimEnd().split("\n").length <= 100);

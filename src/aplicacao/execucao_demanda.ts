@@ -180,6 +180,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
           execucao.configuracao_agente?.modelo,
           { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
           pergunta,
+          undefined,
+          { banco: c.banco, ticket: c.ref, execucao: execucao.id },
         ),
       aoLancar: (pgid) => {
         gravarGrupo(c, pgid);

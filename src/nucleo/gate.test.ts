@@ -34,7 +34,7 @@ const demandaRegistrada = (): AgregadoDemanda =>
     agora: t0,
   });
 const demandaEnviada = (): AgregadoDemanda => {
-  const comDefinicao = (["criterios_aceite", "desenho_solucao", "custos_realizados"] as const).reduce(
+  const comDefinicao = (["criterios_aceite", "desenho_solucao"] as const).reduce(
     (agregado, tipo) =>
       comEvidencia(
         agregado,

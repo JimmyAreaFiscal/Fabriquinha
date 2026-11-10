@@ -44,11 +44,12 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   execucoes,
   falhas: 0,
   duracaoMs: 0,
-  tokens: { entrada, saida, cacheLeitura, cacheEscrita },
-  custo: { conhecido: custo, incompleto: false },
+  tokens: { entrada, saida, cacheLeitura, cacheEscrita, total: entrada + saida + cacheLeitura + cacheEscrita },
+  custo: { conhecido: custo, trabalhosSemCusto: 0 },
+  textoDoCusto: `US$ ${custo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
 });
 
-/** Um mês com custo, contagens e nota; as etapas repartem o custo (metade no desenvolvimento). */
+/** Um mês com custo, contagens e nota; a implementação concentra o custo e os tokens, como o total do mês. */
 function mes(
   m: string,
   custo: number,
@@ -68,7 +69,7 @@ function mes(
     retrabalho: { adicionadas: 100, alteradas: 10 * n, porHumanos: n },
     etapas: ETAPAS.map((etapa) => ({
       etapa,
-      ...consumo(etapa === "implementar" ? custo / 2 : 0, etapa === "implementar" ? 1000 : 0),
+      ...consumo(etapa === "implementar" ? custo : 0, etapa === "implementar" ? 1000 * custo : 0),
       execucoes: etapa === "implementar" ? n : 0,
       reprovacoes: 0,
       duracaoMs: etapa === "implementar" ? n * 60_000 : 0,
@@ -102,7 +103,13 @@ const demanda = (
   ...d,
 });
 
-const DADOS: DadosDasMetricas = { projetos: ["loja", "site <x>"], meses: MESES, demandas: [], atual: "2026-10" };
+const DADOS: DadosDasMetricas = {
+  projetos: ["loja", "site <x>"],
+  meses: MESES,
+  demandas: [],
+  totalDasDemandas: consumo(0),
+  atual: "2026-10",
+};
 
 test("meses: somar, contar, o do instante, o rótulo e o período padrão", () => {
   assert.equal(somarMeses("2026-10", -11), "2025-11");
@@ -299,16 +306,16 @@ test("por etapa: o mês em foco contra a média, com barras duplas e duração m
   assert.equal(linhas[0], "Demanda US$ 0,00 US$ 0,00 0 / 0 0 / 0,0 0 / 0,0 0 / 0,0 — / —");
   assert.equal(
     linhas[2],
-    "Implementar US$ 30,00 US$ 7,50 ▲ 300% 1,0 mil / 1,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min",
+    "Implementar US$ 60,00 US$ 15,00 ▲ 300% 60,0 mil / 15,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min",
   );
   // Total: custo com média e Δ, contagens somadas (mês / soma das médias) e duração ponderada pelas execuções.
-  assert.equal(linhas[9], "Total US$ 30,00 US$ 7,50 ▲ 300% 1,0 mil / 1,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min");
+  assert.equal(linhas[9], "Total US$ 60,00 US$ 15,00 ▲ 300% 60,0 mil / 15,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min");
   assert.match(secao, /width:100.0%;background:var\(--foco\)"><\/i><i style="width:25.0%;background:var\(--base\)/);
   assert.equal(linhas[5]?.split(" ").slice(0, 3).join(" "), "Sessão em aberto");
   // Primeiro mês: sem média, e o Total também mostra —.
   const primeiro = paginaDeMetricas(DADOS, { ...ESTADO, foco: "2026-08" });
-  assert.match(texto(primeiro), /Implementar US\$ 5,00 — 1,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
-  assert.match(texto(primeiro), /Total US\$ 5,00 — 1,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
+  assert.match(texto(primeiro), /Implementar US\$ 10,00 — 10,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
+  assert.match(texto(primeiro), /Total US\$ 10,00 — 10,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
   // A duração da média é ponderada pelas execuções: (1 min + 6 min) / 4 = 1 min 45 s, não a média simples de 1 e 2 min.
   const comDuracao = (m: string, execucoes: number, duracaoMs: number) =>
     mes(m, 1, 0, null, {
@@ -322,32 +329,34 @@ test("por etapa: o mês em foco contra a média, com barras duplas e duração m
     ESTADO,
   );
   assert.match(texto(/<tfoot>[\s\S]*?<\/tfoot>/.exec(pesada)?.[0] ?? ""), /— \/ 1 min 45 s$/);
-  // Custo incompleto leva *, no mês e no Total, e o card avisa.
+  // Sem custo em alguma sessão, o texto do custo que a rota entrega aparece com ≥ e o aviso, sem somar nada.
   const incompleto = mes("2026-10", 1, 1, null, {
-    total: { ...consumo(1), custo: { conhecido: 1, incompleto: true }, modelos: [] },
+    total: { ...consumo(1), textoDoCusto: "≥ US$ 1,00 (1 sessão sem custo)", modelos: [] },
     etapas: mes("2026-10", 1, 1).etapas.map((x) =>
-      x.etapa === "implementar" ? { ...x, custo: { conhecido: 0.5, incompleto: true } } : x,
+      x.etapa === "implementar" ? { ...x, textoDoCusto: "≥ US$ 0,50 (1 sessão sem custo)" } : x,
     ),
   });
   const parcial = paginaDeMetricas({ ...DADOS, meses: [incompleto] }, { ...ESTADO, de: "2026-10" });
-  assert.match(texto(parcial), /Implementar US\$ 0,50 \* /);
-  assert.match(texto(parcial), /Total US\$ 0,50 \* /);
-  assert.match(texto(parcial), /Custo US\$ 1,00 \* custo incompleto/);
+  assert.match(texto(parcial), /Implementar ≥ US\$ 0,50 \(1 sessão sem custo\) /);
+  assert.match(texto(parcial), /Total ≥ US\$ 1,00 \(1 sessão sem custo\) /);
+  assert.match(texto(parcial), /Custo ≥ US\$ 1,00 \(1 sessão sem custo\)/);
+  assert.doesNotMatch(texto(parcial), /\*/);
 });
 
 test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho do mês", () => {
-  const nivel = (n: Nivel, grupos: number, custo: Soma["custo"]) => ({
+  const nivel = (n: Nivel, grupos: number, textoDoCusto: string) => ({
     nivel: n,
     grupos,
-    total: { ...consumo(0, 100, 20, 30, 40, 5), custo },
+    total: { ...consumo(0, 100, 20, 30, 40, 5), textoDoCusto },
   });
+  const textoComSessaoSemCusto = "≥ US$ 2,00 (1 sessão sem custo)";
   const niveis = [
-    nivel("execucao", 5, { conhecido: 2, incompleto: false }),
-    nivel("sessao", 3, { conhecido: 2, incompleto: true }),
-    nivel("ticket", 3, { conhecido: 2, incompleto: true }),
-    nivel("rodada", 2, { conhecido: 2, incompleto: true }),
-    nivel("demanda", 1, { conhecido: 2, incompleto: true }),
-    nivel("projeto", 1, { conhecido: 2, incompleto: true }),
+    nivel("execucao", 5, "US$ 2,00"),
+    nivel("sessao", 3, textoComSessaoSemCusto),
+    nivel("ticket", 3, textoComSessaoSemCusto),
+    nivel("rodada", 2, textoComSessaoSemCusto),
+    nivel("demanda", 1, textoComSessaoSemCusto),
+    nivel("projeto", 1, textoComSessaoSemCusto),
   ];
   const html = paginaDeMetricas(
     { ...DADOS, meses: [mes("2026-10", 2, 1, null, { niveis })] },
@@ -357,21 +366,22 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o retrabalho 
   assert.equal(
     texto(secao),
     "Por nível out/26 execução → sessão → ticket → rodada → demanda → projeto: a soma de cada nível é o total do mês " +
-      "Nível Grupos Execuções Tokens Custo Execução 5 5 190 US$ 2,00 Sessão 3 5 190 US$ 2,00 * Ticket 3 5 190 US$ 2,00 * " +
-      "Rodada 2 5 190 US$ 2,00 * Demanda 1 5 190 US$ 2,00 * Projeto 1 5 190 US$ 2,00 * " +
-      "Retrabalho: 10 de 100 linhas escritas no mês foram alteradas depois (1 por humanos). * há execução sem custo informado.",
+      "Nível Grupos Execuções Tokens Custo Execução 5 5 190 US$ 2,00 " +
+      `Sessão 3 5 190 ${textoComSessaoSemCusto} Ticket 3 5 190 ${textoComSessaoSemCusto} Rodada 2 5 190 ${textoComSessaoSemCusto} ` +
+      `Demanda 1 5 190 ${textoComSessaoSemCusto} Projeto 1 5 190 ${textoComSessaoSemCusto} ` +
+      "Retrabalho: 10 de 100 linhas escritas no mês foram alteradas depois (1 por humanos).",
   );
 });
 
 test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo desconhecido à parte e sem segmento vazio", () => {
   const uso = (modelo: string, provedor: string, custo: number | null, entrada = 0, saida = 0, cl = 0, ce = 0) => ({
-    provedor,
-    modelo,
-    entrada,
-    saida,
-    cacheLeitura: cl,
-    cacheEscrita: ce,
+    modelo: `${provedor}/${modelo}`,
+    tokens_entrada: entrada,
+    tokens_saida: saida,
+    tokens_cache_leitura: cl,
+    tokens_cache_escrita: ce,
     custo,
+    chamadas: 0,
   });
   const modelos = [
     uso("qwen <3>", "llamacpp", 0, 100),
@@ -387,7 +397,7 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
   const secao = /<h3>out\/26<\/h3><span class="sub">tokens por tipo[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
   assert.equal(
     texto(secao),
-    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída claude-opus-5-5 anthropic US$ 9,00 8,7 M claude-haiku anthropic US$ 0,00 200 qwen &#60;3&#62; llamacpp US$ 0,00 100 local llamacpp custo desconhecido 50 local-2 llamacpp custo desconhecido 40",
+    "out/26 tokens por tipo e custo como o pi calculou cache entrada saída anthropic/claude-opus-5-5 US$ 9,00 8,7 M anthropic/claude-haiku US$ 0,00 200 llamacpp/qwen &#60;3&#62; US$ 0,00 100 llamacpp/local custo desconhecido 50 llamacpp/local-2 custo desconhecido 40",
   );
   assert.match(
     secao,
@@ -418,13 +428,16 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
       nota: 4,
       falhas: 1,
       reprovacoes: 2,
-      custo: { conhecido: 1, incompleto: true },
+      textoDoCusto: "≥ US$ 1,00 (1 sessão sem custo)",
     }),
     demanda({ demanda: "I-7", titulo: "Cache", estado: "concluida" }),
   ];
+  const totalDasDemandas = { ...consumo(7, 1000), textoDoCusto: "≥ US$ 7,00 (1 sessão sem custo)" };
   const ids = (e: Partial<EstadoDasMetricas>) =>
     [
-      ...paginaDeMetricas({ ...DADOS, demandas }, { ...ESTADO, ...e }).matchAll(/class="id" href="[^"]+">(I-\d+)</g),
+      ...paginaDeMetricas({ ...DADOS, demandas, totalDasDemandas }, { ...ESTADO, ...e }).matchAll(
+        /class="id" href="[^"]+">(I-\d+)</g,
+      ),
     ].map((m) => m[1]);
   assert.deepEqual(ids({}), ["I-3", "I-12", "I-7"]);
   assert.deepEqual(ids({ ordem: ["demanda", 1] }), ["I-3", "I-7", "I-12"]);
@@ -436,7 +449,7 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
   assert.deepEqual(ids({ ordem: ["nota", 1] }), ["I-3", "I-7", "I-12"]);
   assert.deepEqual(ids({ ordem: ["falhas", -1] }), ["I-12", "I-3", "I-7"]);
 
-  const html = paginaDeMetricas({ ...DADOS, demandas }, ESTADO);
+  const html = paginaDeMetricas({ ...DADOS, demandas, totalDasDemandas }, ESTADO);
   assert.match(
     html,
     /<th class="num ordenavel" aria-sort="descending"><button type="button" data-ordem="custo">Custo<\/button><\/th>/,
@@ -445,18 +458,21 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, e
     html,
     /<a class="id" href="\/demandas\/I-12">I-12<\/a><\/td>\s*<td>Demanda I-12<\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill pill-aguarda">Aprovação da demanda<\/span>/,
   );
-  assert.match(html, /<td class="num">US\$ 1,00 \*<\/td>/);
+  assert.match(html, /<td class="num">≥ US\$ 1,00 \(1 sessão sem custo\)<\/td>/);
   assert.match(html, /<td class="num">4,0<\/td>/);
   assert.match(html, /Busca &#60;b&#62;/);
   assert.match(html, /<span class="pill pill-ok">Concluída<\/span>/);
   assert.doesNotMatch(html, /Iterações/);
   assert.equal(
     texto(/<tfoot>(?:(?!<tfoot>)[\s\S])*?<\/tfoot>(?![\s\S]*<tfoot>)/.exec(html)?.[0] ?? ""),
-    "3 demandas US$ 7,00 * 1,0 mil 6 1 2 1 h 2 min",
+    "3 demandas ≥ US$ 7,00 (1 sessão sem custo) 1,0 mil 6 1 2 1 h 2 min",
   );
   assert.match(html, /a out\/26 · todos os projetos · clique/);
 
-  const loja = paginaDeMetricas({ ...DADOS, demandas }, { ...ESTADO, projeto: "loja", ordem: ["custo", 1] });
+  const loja = paginaDeMetricas(
+    { ...DADOS, demandas, totalDasDemandas },
+    { ...ESTADO, projeto: "loja", ordem: ["custo", 1] },
+  );
   assert.doesNotMatch(loja, /data-ordem="projeto"/);
   assert.match(loja, /aria-sort="ascending"/);
   assert.match(loja, /<td colspan="3">3 demandas/);
@@ -479,14 +495,14 @@ test("Projeto: os 6 cards do mês corrente", () => {
   });
   assert.equal(
     texto(cardsDoMes(m)),
-    "Custo · outubro US$ 38,42 902 execuções Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,3 M cache Demandas 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Retrabalho 70 / 100 linhas alteradas / adicionadas",
+    "Custo · outubro US$ 38,42 902 execuções Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,0 M cache lido · 300,0 mil cache escrito Demandas 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Retrabalho 70 / 100 linhas alteradas / adicionadas",
   );
   assert.match(
     cardsDoMes(mes("2026-01", 0, 0, null, { total: { ...consumo(0, 0, 0, 0, 0, 1), modelos: [] } })),
     /1 execução</,
   );
-  const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
-  assert.match(texto(cardsDoMes(parcial)), /Custo · outubro US\$ 1,00 \*/);
+  const parcial = { ...m, total: { ...m.total, textoDoCusto: "≥ US$ 1,00 (1 sessão sem custo)" } };
+  assert.match(texto(cardsDoMes(parcial)), /Custo · outubro ≥ US\$ 1,00 \(1 sessão sem custo\)/);
 });
 
 test("Início: a frase do mês corrente de todos os projetos, com o link para as Métricas", () => {
@@ -519,7 +535,7 @@ test("milhares: as contagens das tabelas e dos cards do Projeto com o separador 
   });
   const html = texto(
     paginaDeMetricas(
-      { ...DADOS, meses: [m], demandas: [demanda({ demanda: "I-1", ...grande })] },
+      { ...DADOS, meses: [m], demandas: [demanda({ demanda: "I-1", ...grande })], totalDasDemandas: grande },
       { ...ESTADO, de: "2026-10" },
     ),
   );

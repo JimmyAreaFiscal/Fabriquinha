@@ -9,7 +9,6 @@ const [TE, TF, TS] = ["todos_comandos_exit_zero", "todas_fitness_passam", "sem_i
 const TABELA = [
   ["entender_e_desenhar", "criterios_aceite", E, true, "demanda", null],
   ["entender_e_desenhar", "desenho_solucao", E, true, "demanda", null],
-  ["entender_e_desenhar", "custos_realizados", E, true, "demanda", null],
   ["entender_e_desenhar", "comportamento", E, false, "demanda", null],
   ["entender_e_desenhar", "prototipo", E, false, "demanda", null],
   ["entender_e_desenhar", "relatorio_complexidade", E, false, "demanda", null],
@@ -45,12 +44,12 @@ const linha = (i: (typeof CATALOGO_ETAPAS)[number]) => [
   i.regraAprovacao,
 ];
 
-test("catálogo bate com a tabela fixa: 28 itens, 23 tipos, 10 regras", () => {
+test("catálogo bate com a tabela fixa: 27 itens, 22 tipos, 10 regras", () => {
   assert.deepEqual(
     CATALOGO_ETAPAS.map(linha),
     TABELA.map((l) => [...l]),
   );
-  assert.equal(new Set(CATALOGO_ETAPAS.map((i) => i.tipo)).size, 23);
+  assert.equal(new Set(CATALOGO_ETAPAS.map((i) => i.tipo)).size, 22);
   assert.equal(CATALOGO_ETAPAS.filter((i) => i.regraAprovacao !== null).length, 10);
 });
 

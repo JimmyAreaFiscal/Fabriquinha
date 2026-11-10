@@ -7,7 +7,7 @@ import { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
 import { carregarDemanda, comDemanda } from "./demandas.ts";
-import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
+import { anexosDaDemanda, gravarAnexos, lerAnexo } from "./evidencia_demanda.ts";
 import { removerProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 
@@ -15,7 +15,7 @@ const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";
-const chave = { demanda_id: "I-1", tipo: "custos_realizados" };
+const chave = { demanda_id: "I-1", tipo: "comportamento" };
 const quem = { ferramenta: "claude", sessao: "s1" };
 
 const novoBanco = () => {
@@ -38,7 +38,7 @@ const submeter = (b: DatabaseSync, anexos: ReturnType<typeof anexoDe>[], dados =
   comDemanda(
     b,
     "I-1",
-    (ag) => comEvidencia(ag, { tipo: "custos_realizados", dados }, { tipo: "externo", ...quem }, em),
+    (ag) => comEvidencia(ag, { tipo: "comportamento", dados }, { tipo: "externo", ...quem }, em),
     () => {
       gravarAnexos(b, chave, anexos);
     },
@@ -60,7 +60,7 @@ test("autoria da evidência: cada tipo de ator é gravado e relido, inclusive na
   ];
   for (const autor of autores) {
     comDemanda(bancoDeAutoria, "I-1", (agregado) =>
-      comEvidencia(agregado, { tipo: "custos_realizados", dados: { total: 42 } }, autor, em),
+      comEvidencia(agregado, { tipo: "comportamento", dados: { total: 42 } }, autor, em),
     );
     const relida = carregarDemanda(bancoDeAutoria, "I-1");
     assert.equal(relida.evidencias.length, 1);
@@ -128,36 +128,6 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
 });
 
-const custosEm = (b: DatabaseSync, id: string, demanda: string, rodada: number | null, sessoes: unknown[]) =>
-  b
-    .prepare(
-      "INSERT OR REPLACE INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)",
-    )
-    .run(id, demanda, rodada, JSON.stringify({ sessoes }), em);
-
-test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as custos da demanda, rodada inclusa; nada vai para a execução interna", () => {
-  const b = novoBanco();
-  b.exec(
-    "INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1')",
-  );
-  custosEm(b, "e1", "I-1", null, [quem, { ferramenta: "codex", sessao: "s2" }]);
-  custosEm(b, "e1r", "I-1", 1, [{ ferramenta: "codex", sessao: "sr" }]);
-  assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
-  custosEm(b, "e2", "I-2", null, [quem, { ferramenta: "codex", sessao: "s3" }]);
-  const { avisos } = registrarSessoesExternas(b, "I-2");
-  assert.deepEqual(avisos, ["a sessão s1 de claude já consta na demanda I-1 e não é contada de novo para I-2"]);
-  custosEm(b, "e1", "I-1", null, [quem]);
-  assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
-  assert.deepEqual(linhas(b, "SELECT ferramenta, sessao, demanda_id FROM trabalho_nao_gerenciado ORDER BY sessao"), [
-    { ferramenta: "claude", sessao: "s1", demanda_id: "I-1" },
-    { ferramenta: "codex", sessao: "s3", demanda_id: "I-2" },
-    { ferramenta: "codex", sessao: "sr", demanda_id: "I-1" },
-  ]);
-  for (const tabela of ["processo_do_trabalho", "uso_modelo_execucao"]) {
-    assert.equal(b.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);
-  }
-});
-
 test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => {
   const b = novoBanco();
   const a = anexoDe(b, "a.txt", "um");
@@ -173,8 +143,8 @@ test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => 
   }
   const x = { nome: "x.txt", mime: "text/plain", bytes: 2, sha256: a.sha256, tipo: "comportamento" };
   assert.deepEqual(anexosDaDemanda(b, "I-1"), [
-    { nome: "a.txt", mime: "text/plain", bytes: 2, sha256: a.sha256, tipo: "custos_realizados" },
-    { nome: "c.txt", mime: "text/plain", bytes: 5, sha256: c.sha256, tipo: "custos_realizados" },
+    { nome: "a.txt", mime: "text/plain", bytes: 2, sha256: a.sha256, tipo: "comportamento" },
+    { nome: "c.txt", mime: "text/plain", bytes: 5, sha256: c.sha256, tipo: "comportamento" },
     { ...x, rodada_id: 1 },
     { ...x, ticket_id: 1 },
   ]);
