@@ -11,7 +11,7 @@ import {
   type Falha,
   linhaDoComando,
   type RegistroDaVerificacao,
-  Verificacao,
+  VerificacaoComRegistro,
 } from "./verificacao.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
@@ -25,7 +25,7 @@ export interface EntradaDeTestes {
   aoTerminarAsLinguagens?: () => void;
 }
 
-export class VerificacaoDeTestes extends Verificacao {
+export class VerificacaoDeTestes extends VerificacaoComRegistro {
   readonly tipo = "testes";
   readonly #entrada: EntradaDeTestes;
 
@@ -42,9 +42,9 @@ export class VerificacaoDeTestes extends Verificacao {
       const falhas: Falha[] = [];
       for (const { caminho, comando_teste: comando } of projeto.verificacoes.linguagens) {
         const r = await rodar(comando, join(worktree, caminho));
-        const log = `teste-${caminho}.log`;
-        comandos.push({ ...linhaDoComando(comando, r, log), caminho });
-        logs.push({ nome: log, texto: r.log });
+        const nomeDoLog = `teste-${caminho}.log`;
+        comandos.push({ ...linhaDoComando(comando, r, nomeDoLog), caminho });
+        logs.push({ nome: nomeDoLog, texto: r.log });
         const falha = classificarComando(comando, r);
         if (falha) falhas.push(falha);
       }

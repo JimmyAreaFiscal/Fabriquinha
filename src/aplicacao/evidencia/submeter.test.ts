@@ -17,6 +17,7 @@ import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporar
 import type { Ator } from "../../nucleo/ator.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { SubmissaoDeEvidencia, TipoEvidencia } from "../../nucleo/evidencia.ts";
+import { relogioFixo } from "../../nucleo/relogio.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { submeterEvidencia } from "./submeter.ts";
@@ -41,7 +42,9 @@ const plano = (criterios: string[]) => ({
   demanda_id: "I-1",
   criterios,
   rodadas: [{ demanda_id: "I-1", rodada_id: 1, titulo: "r", e2e: false, criterios, depende: [] }],
-  tickets: [{ demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d", caminhos: [], depende: [] }],
+  tickets: [
+    { demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d", arquivos_previstos: [], depende: [] },
+  ],
 });
 
 function cenario(agregado: Parameters<typeof gravarAgregadoPronto>[1]) {
@@ -149,6 +152,20 @@ test("plano válido do agente em planejar: aceita e a demanda vai a gate_planeja
     depois.evidencias.filter((e) => e.tipo === "plano").map((e) => e.ticket_id),
     [2],
   );
+});
+
+test("a evidência aceita leva o instante do relógio", () => {
+  const { banco, origens } = cenario({ ...agregadoNoEstado("I-1", "planejar"), evidencias: [definicao] } as never);
+  const instante = "2031-05-06T07:08:09.000Z";
+  const submissao: SubmissaoDeEvidencia = {
+    tipo: "plano",
+    dono: Endereco.doTicket("I-1", 2),
+    produtor: AGENTE,
+    dados: plano(["CA-1"]),
+    anexos: [],
+  };
+  submeterEvidencia(banco, submissao, { origens }, relogioFixo(instante));
+  assert.equal(carregarDemanda(banco, "I-1").evidencias.find((e) => e.tipo === "plano")?.em, instante);
 });
 
 test("erro que não é de regra na guarda dos anexos sobe", () => {

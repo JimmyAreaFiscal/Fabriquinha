@@ -2,11 +2,13 @@
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import type { Instante } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import { instanteMesesAntes } from "../../nucleo/relogio.ts";
 import { git } from "../processo.ts";
 import { exigirGit } from "./worktree.ts";
 
-export interface CommitDoHeatmap {
+interface CommitDoHeatmap {
   hash: string;
   mensagem: string;
   /** Data do commit (ISO 8601). */
@@ -15,7 +17,7 @@ export interface CommitDoHeatmap {
   pr: string | null;
 }
 
-export interface NoDoHeatmap {
+interface NoDoHeatmap {
   nome: string;
   /** Pasta: soma dos arquivos abaixo dela. */
   alteracoes: number;
@@ -25,7 +27,7 @@ export interface NoDoHeatmap {
   commits?: string[];
 }
 
-export interface Heatmap {
+interface Heatmap {
   branch: string;
   /** Início e fim da janela (ISO 8601). */
   desde: string;
@@ -164,10 +166,7 @@ function somar(no: NoDoHeatmap): number {
  * F5 §11: lê a base publicada (`refs/remotes/origin/<branch_base>`, sem fetch) e conta, por arquivo de hoje, os commits
  * não-merge dos 12 meses até `agora` que o tocam. Só lê: roda fora da fila do projeto.
  */
-export async function heatmapDo(
-  projeto: Pick<Projeto, "raiz_git" | "branch_base">,
-  agora = new Date(),
-): Promise<Heatmap> {
+export async function heatmapDo(projeto: Pick<Projeto, "raiz_git" | "branch_base">, agora: Instante): Promise<Heatmap> {
   const { raiz_git: repo, branch_base } = projeto;
   if (!existsSync(repo)) {
     throw new ErroDeRegra(
@@ -183,8 +182,7 @@ export async function heatmapDo(
       `busque-a com git fetch origin ${branch_base} ou corrija a branch base na Configuração`,
     );
   }
-  const desde = new Date(agora);
-  desde.setUTCMonth(desde.getUTCMonth() - MESES_DA_JANELA);
+  const desde = instanteMesesAntes(agora, MESES_DA_JANELA);
   const arquivos = (await exigirGit(repo, "ls-tree", "-r", "-z", "--name-only", ref)).split("\0").filter(Boolean);
   const log = lerLog(
     await exigirGit(
@@ -194,7 +192,7 @@ export async function heatmapDo(
       "log",
       "--no-show-signature",
       "-z",
-      `--since=${desde.toISOString()}`,
+      `--since=${desde}`,
       "--format=%x1e%H%x1f%P%x1f%cI%x1f%s",
       "--name-only",
       ref,
@@ -202,8 +200,8 @@ export async function heatmapDo(
   );
   return {
     branch: branch_base,
-    desde: desde.toISOString(),
-    ate: agora.toISOString(),
+    desde,
+    ate: agora,
     ...montar(basename(repo), arquivos, log, prsDos(log, ponta.saida.trim())),
   };
 }

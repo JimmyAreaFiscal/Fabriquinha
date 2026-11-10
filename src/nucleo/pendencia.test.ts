@@ -203,7 +203,7 @@ test("um caso por tipo: o tipo, o item, a ação esperada e o desde exato", () =
         [],
         [],
         true,
-        { agora: new Date(instante(12)) },
+        { agora: instante(12) },
       ),
       esperado: [
         "revisao_parada",
@@ -334,20 +334,20 @@ test("motivoDaRevisaoParada: parada além da tolerância, rejeitada pela regra, 
     rodadas: [rodada(1, "concluida")],
     tickets: [{ ...ticket(1, 1, "concluido"), estado_alterado_em: instante(9) }],
   });
-  assert.equal(motivoDaRevisaoParada(parada, new Date(instante(10)))?.motivo, undefined);
-  assert.equal(motivoDaRevisaoParada(parada, new Date(instante(11)))?.desde, instante(9));
+  assert.equal(motivoDaRevisaoParada(parada, instante(10))?.motivo, undefined);
+  assert.equal(motivoDaRevisaoParada(parada, instante(11))?.desde, instante(9));
   const comTicketCancelado = agregado("em_execucao", {
     rodadas: [rodada(1, "concluida")],
     tickets: [ticket(1, 1, "cancelado")],
   });
   assert.equal(
-    motivoDaRevisaoParada(comTicketCancelado, new Date(instante(30)))?.motivo,
+    motivoDaRevisaoParada(comTicketCancelado, instante(30))?.motivo,
     "A revisão integral foi rejeitada: o ticket 1 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
   );
 });
 
 test("motivoDaRevisaoParada: nada quando a demanda não está pronta para a revisão", () => {
-  const agora = new Date(instante(60));
+  const agora = instante(60);
   const fechado = ticket(1, 1, "concluido");
   assert.equal(
     motivoDaRevisaoParada(agregado("revisar_demanda", { rodadas: [rodada(1, "concluida")] }), agora),

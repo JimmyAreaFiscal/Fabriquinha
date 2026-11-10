@@ -72,3 +72,28 @@ test("ticket sem custo medido é incompleto e o total é piso, nunca zero somado
   assert.equal(r.total.custo, 1);
   assert.equal(r.total.custoIncompleto, true);
 });
+
+test("a mesma chave repetida conta uma vez, o custo ausente de um modelo deixa o ticket incompleto e uso sem execução é ignorado", () => {
+  const usoDe = (execucao_id: string, modelo_nome: string, tokens_entrada: number, custo?: number) => ({
+    ...uso(3, custo),
+    execucao_id,
+    modelo_nome,
+    tokens_entrada,
+  });
+  const r = produtividadeDaRodada(
+    [sessao(3)],
+    [exec(3), { ...exec(3), id: "e3b" }],
+    [
+      usoDe("e3", "a", 10, 1),
+      usoDe("e3", "a", 10, 1),
+      usoDe("e3b", "a", 20, 2),
+      usoDe("e3b", "b", 30),
+      usoDe("x", "a", 5000, 9),
+    ],
+    [ticket(3, "implementar")],
+  );
+  assert.deepEqual(
+    [r.total.tokensEntrada, r.total.custo, r.total.custoIncompleto, r.total.execucoes],
+    [60, 3, true, 2],
+  );
+});

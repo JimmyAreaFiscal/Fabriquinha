@@ -1,7 +1,7 @@
 // Métricas (F7 §4.4, §7), lidas das tabelas da demanda: mudar o mês em foco faz a média usar só os meses anteriores a ele; o gráfico mostra a dica
 // e troca o foco no clique; o Início mostra a frase do mês e o Projeto, os 5 cards do mês.
 import { abrir } from "../src/armazenamento/banco.ts";
-import { expect, test } from "./apoio.ts";
+import { expect, SECOES_DE_ETAPA, test } from "./apoio.ts";
 
 /** O agora do navegador, fixo em outubro de 2026: o mês corrente é M0, e o período padrão vai de nov/25 a out/26. */
 const AGORA = new Date(2026, 9, 15, 12, 0);
@@ -100,6 +100,113 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
   await expect(custo).toHaveText(/US\$ 10,00\s*sem meses anteriores/);
 });
 
+/**
+ * Sobre o `semear`: a rodada 1 de I-1, com o Gate da demanda (uma reprovação e uma aprovação), a revisão que exigiu
+ * alteração, a devolução do ticket 5, o Gate do PR reprovado e depois aprovado com nota 4, o plano da rodada (a.ts e b.ts) e o commit que alterou só a.ts, em 10 linhas, 3
+ * delas reescritas por uma pessoa.
+ */
+function semearMetricasDeSucesso(raiz: string): void {
+  const banco = abrir(raiz);
+  const sha = (letra: string) => letra.repeat(40);
+  const ticket = (n: number, etapa: string, rodada: string) =>
+    `('I-1', ${String(n)}, '${etapa}', 'concluido', '${em(M0)}', ${rodada})`;
+  const decisao = (ticket: number, id: number, gate: string, resultado: string, nota: string) =>
+    `('I-1', ${String(ticket)}, ${String(id)}, '${gate}', '${resultado}', ${nota}, NULL, 'auditor', '${em(M0)}')`;
+  const plano = {
+    demanda_id: "I-1",
+    criterios: [],
+    arquivos_previstos: ["a.ts", "b.ts"],
+    rodadas: [{ demanda_id: "I-1", rodada_id: 1, titulo: "r", e2e: false, arquivos_previstos: ["a.ts", "b.ts"] }],
+    tickets: [
+      {
+        demanda_id: "I-1",
+        ticket_id: 5,
+        rodada_id: 1,
+        titulo: "t",
+        descricao: "d",
+        arquivos_previstos: ["a.ts", "b.ts"],
+      },
+    ],
+  };
+  banco.exec(`
+    INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '${em(M2)}', 0, 'b1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
+      ${ticket(2, "entender_e_desenhar", "NULL")}, ${ticket(3, "revisar_rodada", "1")}, ${ticket(4, "encerrar_rodada", "1")},
+      ${ticket(5, "implementar", "1")};
+    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES
+      ${decisao(2, 1, "gate_demanda", "reprovado", "NULL")}, ${decisao(2, 2, "gate_demanda", "aprovado", "NULL")},
+      ${decisao(3, 1, "gate_revisao_rodada", "reprovado", "NULL")}, ${decisao(4, 1, "gate_pr", "reprovado", "NULL")},
+      ${decisao(4, 2, "gate_pr", "aprovado", "4")};
+    INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, motivo)
+      VALUES ('I-1', 5, 1, '${em(M0)}', '${em(M0)}', 'reprovacao', 'corrija o teste');
+    INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, criada_em, dados)
+      VALUES ('I-1', 1, 'aprovacao_do_planejamento', 'fabriquinha', '${em(M2)}', '${JSON.stringify(plano)}');
+    INSERT INTO commit_ticket_demanda VALUES ('${sha("c")}', 'I-1', 5, 'm', '${em(M0)}');
+    INSERT INTO arquivo_commit_demanda (sha, caminho, status, adicionadas, removidas) VALUES ('${sha("c")}', 'a.ts', 'A', 10, 0);
+    INSERT INTO commit_humano_posterior (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+      VALUES ('${sha("d")}', 'I-1', NULL, 'ana', 5, 3, NULL);
+  `);
+  banco.close();
+}
+
+test("uma seção por Etapa, com o título e as Métricas de Sucesso que o catálogo declara, em Reprovação e Gate", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz);
+  semearMetricasDeSucesso(fabriquinha.raiz);
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.goto(`${fabriquinha.base}/metrics`);
+
+  await expect(pagina.locator("section.etapa-metricas")).toHaveCount(SECOES_DE_ETAPA.length);
+  const secao = (titulo: string) => pagina.getByRole("region", { name: titulo, exact: true });
+  for (const [titulo, rotulos] of SECOES_DE_ETAPA) {
+    await expect(secao(titulo).getByRole("heading", { level: 3, name: titulo, exact: true })).toBeVisible();
+    await expect(secao(titulo).locator(".rotulo")).toHaveText(rotulos);
+  }
+
+  // O valor, a média e a fonte de cada Métrica de Sucesso, e o Uso da Etapa.
+  const metrica = (titulo: string, rotulo: string) => secao(titulo).locator(".metrica-sucesso", { hasText: rotulo });
+  await expect(metrica("Entender e desenhar", "Reprovações no Gate")).toHaveText(
+    /Reprovações no Gate\s*1 de 2 Gates · 1 aprovação\s*média [\s\S]*Gate da demanda/,
+  );
+  await expect(metrica("Planejar", "Conformidade")).toHaveText(
+    /Conformidade do PR com o plano\s*0,50 Jaccard médio · 1 PR\s*média [\s\S]*Plano × arquivos alterados/,
+  );
+  await expect(metrica("Implementar", "Alterações")).toHaveText(
+    /Alterações posteriores no código\s*3 de 10 linhas adicionadas\s*média [\s\S]*Commits humanos posteriores na base/,
+  );
+  for (const [titulo, reprovacoes] of [
+    ["Revisar rodada", "3 reprovações"],
+    ["Revisar demanda", "0 reprovações"],
+  ] as const) {
+    await expect(metrica(titulo, "Exigências")).toContainText(
+      new RegExp(`Exigências de alteração\\s*${reprovacoes}\\s*média `),
+    );
+    await expect(metrica(titulo, "Bugs")).toContainText(
+      /Bugs nos arquivos revisados\s*3 linhas alteradas por humanos\s*média /,
+    );
+  }
+  await expect(metrica("Encerrar rodada", "Nota humana")).toHaveText(
+    /Nota humana\s*4,0 de 5 · 1 nota\s*média [\s\S]*Gate do PR/,
+  );
+  await expect(secao("Encerrar demanda")).toContainText("Só Uso: o catálogo não declara outra Métrica.");
+  await expect(secao("Implementar").locator(".uso-etapa")).toContainText(/Uso\s*US\$ 65,00\s*média US\$ 2,73/);
+
+  // O vocabulário: Reprovação e Gate, nunca Recusado nem Devolução.
+  await expect(pagina.getByText("Reprovações no Gate")).toBeVisible();
+  await expect(pagina.getByText("3 reprovações", { exact: true }).first()).toBeVisible();
+  // A Reprovação do Gate da demanda, a devolução e as Decisões reprovadas das revisões e do PR: 1 + 1 + 1 + 1.
+  const colunaReprovacoes = pagina.locator(".tabela-demandas th", { hasText: /^Reprovações/ });
+  const posicao = await colunaReprovacoes.evaluate((th) => [...(th.parentElement?.children ?? [])].indexOf(th));
+  await expect(pagina.locator(".tabela-demandas tbody tr", { hasText: "I-1" }).locator("td").nth(posicao)).toHaveText(
+    "4",
+  );
+  await expect(pagina.getByRole("columnheader", { name: "Reprovações" })).toBeVisible();
+  await expect(pagina.getByText("nota: média do Gate do PR")).toBeVisible();
+  await expect(pagina.getByText(/Recusad|Devolu/)).toHaveCount(0);
+});
+
 test("Projeto com os 5 cards do mês", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.clock.setFixedTime(AGORA);
@@ -112,6 +219,34 @@ test("Projeto com os 5 cards do mês", async ({ pagina, fabriquinha }) => {
     /0 \/ 0\s*abertos \/ mergeados/,
     /0 \/ 0\s*linhas alteradas \/ adicionadas/,
   ]);
+});
+
+test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo texto no card, no nível e na demanda", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const banco = abrir(fabriquinha.raiz);
+  banco.exec(`
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
+    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
+      ('I-1', 1, 'implementar', 'aberto', '${em(M0)}'), ('I-1', 2, 'implementar', 'aberto', '${em(M0)}');
+    INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-1', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-1', 2, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xc', 's-com-custo', '${em(M0)}', '${em(M0)}', 0), ('xs', 's-sem-custo', '${em(M0)}', '${em(M0)}', 0);
+    INSERT INTO uso_modelo_execucao VALUES
+      ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2),
+      ('xs', 'anthropic', 'claude-sonnet-5-5', 2000, 500, 0, 0, NULL);
+  `);
+  banco.close();
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.goto(`${fabriquinha.base}/metrics`);
+  const texto = "≥ US$ 4,20 (1 sessão sem custo)";
+  await expect(pagina.locator('[data-metrica="custo"] .kpi-valor')).toHaveText(texto);
+  await expect(pagina.getByRole("row", { name: /^Sessão \d/ })).toContainText(texto);
+  await expect(pagina.getByRole("row", { name: /^I-1 / })).toContainText(texto);
+  await expect(pagina.getByText("custo incompleto")).toHaveCount(0);
 });
 
 /**
@@ -138,8 +273,8 @@ function semearNumerosGrandes(raiz: string): void {
     INSERT INTO commit_ticket_demanda VALUES ('${sha("a")}', 'I-1', 1, 'm', '${em(M0)}');
     INSERT INTO arquivo_commit_demanda (sha, caminho, status, adicionadas, removidas)
       VALUES ('${sha("a")}', 'a.ts', 'A', 289424, 0);
-    INSERT INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
-      VALUES ('${sha("b")}', 'I-1', 2, NULL, 1, 24929, 'I-1');
+    INSERT INTO commit_humano_posterior (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+      VALUES ('${sha("b")}', 'I-1', NULL, 'ana', 1, 24929, NULL);
   `);
   banco.close();
 }
@@ -152,7 +287,7 @@ test("cards do mês: cada legenda inteira ao lado do valor e nenhum card órfão
   await pagina.clock.setFixedTime(AGORA);
   await pagina.goto(`${fabriquinha.base}/metrics`);
   const cards = pagina.locator(".kpis .kpi");
-  await expect(cards.first()).toContainText("US$ 1.351,76 * custo incompleto");
+  await expect(cards.first()).toContainText("≥ US$ 1.351,76 (1 sessão sem custo)");
   await expect(cards.last()).toContainText("24.929 de 289.424 adicionadas");
 
   for (const largura of [1440, 375]) {

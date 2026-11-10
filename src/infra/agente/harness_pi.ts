@@ -1,20 +1,28 @@
 // O harness pi (F4 §6.1): o binário, a linha de comando e o ambiente de cada modo, o lançamento em modo RPC com o
 // framing do stdout e a parada do grupo de processos, a consulta sem ferramentas, a lista de modelos e o arquivo da sessão.
-import { appendFileSync, existsSync, readdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
+import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
 import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
+import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
 import { PACOTE, type EventoPi } from "./pi.ts";
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
+
+/** O que a consulta devolve: o stdout do pi e o Uso que ela gastou. */
+export interface RespostaDaConsulta {
+  saida: string;
+  uso: LinhaDeUso[];
+}
 
 export interface Lancamento {
   raiz: string;
@@ -81,6 +89,11 @@ interface ProcessoPi {
   parar(): Promise<void>;
 }
 
+/** O Uso de todos os arquivos do diretório de sessão (o pi só grava os `.jsonl` dela), sem janela: a consulta é um Trabalho só. */
+function usoDaSessaoEm(dir: string): LinhaDeUso[] {
+  return readdirSync(dir).flatMap((nome) => lerUsoDoPi(readFileSync(join(dir, nome), "utf8"), 0, Infinity));
+}
+
 export class HarnessPi {
   /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
   binarioPi(): string {
@@ -130,20 +143,22 @@ export class HarnessPi {
 
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
-   * pasta do processo) e as variáveis da Fabriquinha. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), não
-   * há `FABRIQUINHA_EXECUCAO`, porque ela não é de nenhum ticket, e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket (`execucao`) fala com a API pelo cliente
+   * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
+   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
+   * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
    */
   ambiente(raiz: string, dir: string, execucao?: number | string): NodeJS.ProcessEnv {
-    const { FABRIQUINHA_EXECUCAO: _herdada, ...semCredenciais } = ambienteSemCredenciais(
-      process.env,
-      join(dir, "vazio"),
-    );
+    const {
+      FABRIQUINHA_EXECUCAO: _execucaoHerdada,
+      FABRIQUINHA_ROOT: _raizHerdada,
+      ...semCredenciais
+    } = ambienteSemCredenciais(process.env, join(dir, "vazio"));
     return execucao === undefined
       ? { ...semCredenciais, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
       : {
           ...semCredenciais,
-          FABRIQUINHA_EXECUCAO: String(execucao),
-          FABRIQUINHA_ROOT: raiz,
+          PATH: [join(PACOTE, "bin"), semCredenciais.PATH].filter(Boolean).join(delimiter),
           FABRIQUINHA_SAIDA: join(dir, "saida"),
         };
   }
@@ -200,20 +215,22 @@ export class HarnessPi {
   }
 
   /**
-   * O modo consulta: uma chamada única do pi (`-p`) sem ferramentas, skills, contexto do projeto nem sessão: o modelo
-   * só lê o `prompt`. As extensões ficam, porque provedores como o claude-bridge são extensões do pi. Sem `modelo`,
+   * O modo consulta: uma chamada única do pi (`-p`) sem ferramentas, skills nem contexto do projeto: o modelo só lê o
+   * `prompt`. A sessão do pi vai para um diretório temporário, apagado ao fim, só para o Uso ser lido por `lerUsoDoPi`. As extensões ficam, porque provedores como o claude-bridge são extensões do pi. Sem `modelo`,
    * vale o padrão do pi. O ambiente é o dos outros modos, sem credenciais de hospedagem nem do Sonar.
-   * Devolve o stdout, ou `undefined` se o pi falhou, saiu com código diferente de 0 ou passou de `limiteMs`.
+   * Devolve o stdout e o Uso, ou `undefined` se o pi falhou, saiu com código diferente de 0 ou passou de `limiteMs`.
    */
   async perguntar(
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
     rodar: RodarComando = executar,
-  ): Promise<string | undefined> {
+  ): Promise<RespostaDaConsulta | undefined> {
+    const dirDaSessao = mkdtempSync(join(tmpdir(), "fabriquinha-consulta-"));
     const args = [
       "-p",
-      "--no-session",
+      "--session-dir",
+      dirDaSessao,
       "--no-tools",
       "--no-skills",
       "--no-context-files",
@@ -222,13 +239,16 @@ export class HarnessPi {
       ...(modelo ? ["--model", `${modelo.provedor}/${modelo.nome}`] : []),
       prompt,
     ];
+    let resposta: RespostaDaConsulta | undefined;
     try {
       const env = ambienteSemCredenciais(process.env, join(tmpdir(), "fabriquinha-vazio"));
       const r = await rodar(this.binarioPi(), args, { env, limiteMs });
-      return r.codigo === 0 ? r.saida : undefined;
+      if (r.codigo === 0) resposta = { saida: r.saida, uso: usoDaSessaoEm(dirDaSessao) };
     } catch {
-      return undefined;
+      resposta = undefined;
     }
+    rmSync(dirDaSessao, { recursive: true, force: true });
+    return resposta;
   }
 
   /** Os pares da tabela de `pi --list-models [busca]`; a busca do pi é aproximada. */

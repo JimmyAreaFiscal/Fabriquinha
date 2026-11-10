@@ -8,18 +8,19 @@ import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
-import { type Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
+import type { Relogio } from "../../nucleo/relogio.ts";
+import { Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { configuracao } from "../../armazenamento/servico.ts";
-import { logDaOperacao } from "../../infra/registro.ts";
+import { anotar, logDaOperacao } from "../../infra/registro.ts";
 import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
-import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
+import { ConducaoDeAjustarResultado } from "../etapas/conducao_de_ajustar_resultado.ts";
+import { guardarMarcoDaSessao, sessaoDaRodada } from "../sessao_ajustes.ts";
+import { condutor } from "../trabalho/condutor.ts";
 
 const gate = GATES.gate_pr;
-const contexto = () => ({ agora: new Date().toISOString() });
 
 const referenciaDaRodada = (endereco: Endereco) => ({
   demanda_id: endereco.demanda_id,
@@ -39,6 +40,7 @@ export async function aprovarPR(
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
+  relogio: Relogio,
 ): Promise<AgregadoDemanda> {
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
@@ -63,7 +65,7 @@ export async function aprovarPR(
     );
   }
 
-  gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
+  gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de integrar na hospedagem
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
@@ -76,7 +78,7 @@ export async function aprovarPR(
   await cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico()).integrar();
 
   return comDemanda(banco, ref.demanda_id, (a) => {
-    const { agora } = contexto();
+    const agora = relogio.agora();
     const decidida = gate.decidir(a, endereco, entrada, ator, { agora });
     return {
       ...decidida,
@@ -100,13 +102,21 @@ export async function reprovarPR(
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
-  motivo: string,
+  relogio: Relogio,
 ): Promise<{ demanda: AgregadoDemanda; sessao: string }> {
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
-  gate.ensaiar(ag, endereco, entrada, ator, contexto());
+  gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() });
   await guardarMarcoDaSessao(banco, ref, ag);
-  const demanda = comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
-  const { id } = abrirSessaoDeAjustes(banco, ref, demanda, motivo, { limiteMin: configuracao(banco).timeoutMin });
-  return { demanda, sessao: id };
+  const demanda = comDemanda(banco, ref.demanda_id, (a) =>
+    gate.decidir(a, endereco, entrada, ator, { agora: relogio.agora() }),
+  );
+  const conducao = new ConducaoDeAjustarResultado({ banco, relogio, condutor, registro: anotar });
+  const sessao = sessaoDaRodada(demanda, ref);
+  const execucao = existe(
+    await conducao.iniciar(Endereco.doTicket(ref.demanda_id, sessao.ticket_id)),
+    "a sessão de ajustes não subiu",
+    "confira o log da operação",
+  );
+  return { demanda, sessao: execucao.id };
 }

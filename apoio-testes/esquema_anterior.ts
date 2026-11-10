@@ -108,6 +108,25 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
+    // A 50 deu ao processo o hash do token da API do agente: a volta apaga o índice e a coluna.
+    banco.exec(`
+      DROP INDEX ux_processo_do_trabalho_hash_do_token;
+      ALTER TABLE processo_do_trabalho DROP COLUMN hash_do_token;
+    `);
+    // A 49 renomeou a tabela dos commits humanos posteriores e os índices dela: a volta devolve os nomes antigos.
+    banco.exec(`
+      ALTER TABLE commit_humano_posterior RENAME TO retrabalho_demanda;
+      DROP INDEX ix_commit_humano_posterior_origem;
+      DROP INDEX ix_commit_humano_posterior_alterador;
+      CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
+      CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(alterador_demanda_id, ticket_id);
+    `);
+    // A 47 criou o Plano com versões e os arquivos previstos de rodada e demanda: a volta apaga as três tabelas.
+    banco.exec(`
+      DROP TABLE versao_plano;
+      DROP TABLE arquivo_previsto_rodada;
+      DROP TABLE arquivo_previsto_demanda;
+    `);
     // A 45 abriu o conjunto de Ambientes em container: a volta apaga a tabela e as colunas novas.
     banco.exec(`
       DROP TABLE ambiente;
@@ -118,9 +137,17 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       ALTER TABLE projeto DROP COLUMN imagem_do_ambiente;
       ALTER TABLE processo_do_trabalho DROP COLUMN ambiente_id;
     `);
-    // A 42 renomeou as tabelas da sessão (e os índices delas) e deu `grupo_processo` à avaliação: a volta desfaz tudo.
+    // A 46 criou `uso_declarado` e fez `trabalho_nao_gerenciado` apontar para ele: a volta recria a tabela sem a FK. A 42 renomeou as tabelas da sessão (e os índices delas) e deu `grupo_processo` à avaliação: a volta desfaz tudo.
     banco.exec(`
-      ALTER TABLE trabalho_nao_gerenciado RENAME TO sessao_externa_demanda;
+      CREATE TABLE sessao_externa_demanda (
+        ferramenta TEXT NOT NULL,
+        sessao     TEXT NOT NULL,
+        demanda_id TEXT NOT NULL REFERENCES demanda(id),
+        PRIMARY KEY (ferramenta, sessao)
+      );
+      INSERT INTO sessao_externa_demanda SELECT ferramenta, sessao, demanda_id FROM trabalho_nao_gerenciado;
+      DROP TABLE trabalho_nao_gerenciado;
+      DROP TABLE uso_declarado;
       ALTER TABLE processo_do_trabalho RENAME COLUMN trabalho_id TO sessao_id;
       ALTER TABLE processo_do_trabalho RENAME TO execucao_sessao;
       ALTER TABLE trabalho_agentico RENAME TO sessao;

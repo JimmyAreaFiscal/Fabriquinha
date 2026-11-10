@@ -5,6 +5,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { ErroDeRegra, encontrado } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 import { escrever } from "./banco.ts";
+import { lerEmSnapshot } from "./snapshot.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, unknown>;
@@ -13,17 +14,6 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
-
-/** Lê sem abrir transação dentro de `escrever`; fora dela, num snapshot só. */
-function noSnapshot<T>(banco: DatabaseSync, leitura: () => T): T {
-  const propria = !banco.isTransaction;
-  if (propria) banco.exec("BEGIN");
-  try {
-    return leitura();
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
-}
 
 const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente";
 
@@ -69,7 +59,7 @@ function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
 
 /** O projeto, ou `undefined` se não existe; lido num snapshot só. */
 export function buscarProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  return noSnapshot(banco, () => {
+  return lerEmSnapshot(banco, () => {
     const linha = banco.prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto WHERE nome = ?`).get(nome);
     return linha && montarProjeto(banco, linha);
   });
@@ -92,7 +82,7 @@ export function carregarProjeto(banco: DatabaseSync, nome: string): Projeto {
 
 /** Todos os projetos, em ordem de nome. */
 export function listarProjetos(banco: DatabaseSync): Projeto[] {
-  return noSnapshot(banco, () =>
+  return lerEmSnapshot(banco, () =>
     banco
       .prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto ORDER BY nome`)
       .all()
@@ -236,14 +226,14 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   ).map((a) => a.sha256);
 
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
-  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, retrabalho, achado) saem ou
+  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, commit humano posterior, achado) saem ou
   // são soltas, para não deixar FK pendurada.
   banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
   apagar("uso_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
   apagar("avaliacao_demanda", `avaliacao_id IN (${DAS_AVALIACOES}) OR demanda_id IN (${DAS_DEMANDAS})`);
   apagar("achado_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
   apagar("avaliacao", "projeto = $p");
-  apagar("retrabalho_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("commit_humano_posterior", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
   apagar(
     "arquivo_commit_demanda",
     `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,
@@ -254,6 +244,7 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("processo_do_trabalho", `trabalho_id IN (${DAS_TRABALHOS})`);
   apagar("trabalho_agentico", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("trabalho_nao_gerenciado", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("uso_declarado", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("iteracao_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("proposta_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR demanda_criada_id IN (${DAS_DEMANDAS})`);
   apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
@@ -263,6 +254,9 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("encerramento_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("caminho_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("arquivo_previsto_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("arquivo_previsto_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("versao_plano", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("tentativa", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("criterio_citado_rodada", `demanda_id IN (${DAS_DEMANDAS})`);

@@ -5,18 +5,21 @@ import type { DatabaseSync } from "node:sqlite";
 import { existe, mensagem } from "../../nucleo/erros.ts";
 import { falhaPorServicoReiniciado, type FalhaDaTentativa } from "../../nucleo/tentativa.ts";
 import {
+  acumularUso,
   encerrarProcesso,
-  registrarUso,
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
-import { somar } from "../../nucleo/uso.ts";
+import { type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
+import type { LinhaDeUso } from "../../nucleo/uso.ts";
+import { colunasDoModelo, lerUsoDoPi } from "../../infra/agente/leitor_de_uso_pi.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
   processosAbertos,
+  ticketsEmExecucaoSemProcesso,
 } from "../../armazenamento/trabalho_agentico.ts";
 import { HarnessPi } from "../../infra/agente/harness_pi.ts";
 import { anotar, pastasDoProcesso } from "../../infra/registro.ts";
@@ -34,21 +37,25 @@ interface ProcessoEncerravel {
 /** Avisa quem assina a sessão que o estado dela pode ter mudado (`CondutorDeTrabalhos.avisar`). */
 export type AvisarSessao = (sessao: string, log: string) => void;
 
+/** A linha de Uso como o banco a guarda, na execução; custo desconhecido fica sem a chave, nunca zero. */
+const usoDaExecucao = (execucao_id: string, l: LinhaDeUso): UsoModeloExecucao => ({
+  execucao_id,
+  ...colunasDoModelo(l.modelo),
+  tokens_entrada: l.tokens_entrada,
+  tokens_saida: l.tokens_saida,
+  tokens_cache_leitura: l.tokens_cache_leitura,
+  tokens_cache_escrita: l.tokens_cache_escrita,
+  ...(l.custo !== null && { custo: l.custo }),
+});
+
 /** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
 function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloExecucao[] {
   try {
     const arquivo = new HarnessPi().arquivoDaSessao(raizDo(c.banco), c.sessao.id);
-    const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
-    return somas.map((s) => ({
-      execucao_id: c.execucao.id,
-      modelo_provedor: s.provedor,
-      modelo_nome: s.modelo,
-      tokens_entrada: s.input,
-      tokens_saida: s.output,
-      tokens_cache_leitura: s.cacheRead,
-      tokens_cache_escrita: s.cacheWrite,
-      ...(!s.semCusto && { custo: s.custo }),
-    }));
+    const linhas = arquivo
+      ? lerUsoDoPi(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim))
+      : [];
+    return linhas.map((l) => usoDaExecucao(c.execucao.id, l));
   } catch (error_) {
     // Métrica nunca impede o encerramento.
     anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
@@ -57,13 +64,32 @@ function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloE
 }
 
 /** O único escritor do encerramento: fim, falha e uso na mesma transação; não toca ticket, etapa nem gate. */
-export function encerrarProcessoDoTicket(c: ProcessoEncerravel, falhou: boolean, log: string): void {
-  const fim = new Date().toISOString();
+export function encerrarProcessoDoTicket(
+  c: ProcessoEncerravel,
+  falhou: boolean,
+  log: string,
+  relogio: Relogio = relogioDoSistema,
+): void {
+  const fim = relogio.agora();
   const usos = coletarUso(c, fim, log);
   comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
     execucoes: encerrarProcesso(estado.execucoes, c.execucao.id, fim, falhou),
-    usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
+    // Soma, não substitui: a execução pode já ter o Uso de uma consulta (`registrarUsoDaConsulta`).
+    usos: usos.reduce((acc, u) => acumularUso(acc, u), estado.usos),
+  }));
+}
+
+/** Soma o Uso de uma consulta à execução do ticket que a pediu, para ele contar no ticket e na rodada dele. */
+export function registrarUsoDaConsulta(
+  banco: DatabaseSync,
+  ref: TicketRef,
+  execucao: string,
+  linhas: readonly LinhaDeUso[],
+): void {
+  comTrabalhosDoTicket(banco, ref, (estado) => ({
+    ...estado,
+    usos: linhas.reduce((acc, l) => acumularUso(acc, usoDaExecucao(execucao, l)), estado.usos),
   }));
 }
 
@@ -74,6 +100,7 @@ export function encerrarProcessoOrfao(
   id: string,
   falha: FalhaDaTentativa,
   avisar: AvisarSessao,
+  relogio: Relogio = relogioDoSistema,
 ): void {
   const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
@@ -87,27 +114,24 @@ export function encerrarProcessoOrfao(
     "confira o banco",
   );
   const { log } = pastasDoProcesso(raizDo(banco), id);
-  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log);
-  falharTicketDemanda(banco, ref, falha);
+  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log, relogio);
+  falharTicketDemanda(banco, ref, falha, relogio);
   avisar(sessao.id, log);
 }
 
 /** Reinício do serviço (§4.2): todo processo aberto é de uma instância anterior e falha, sem avançar etapa nem gate. */
-export function recuperarProcessosAbertos(banco: DatabaseSync, avisar: AvisarSessao): void {
+export function recuperarProcessosAbertos(
+  banco: DatabaseSync,
+  avisar: AvisarSessao,
+  relogio: Relogio = relogioDoSistema,
+): void {
   for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
-    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar);
+    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar, relogio);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
-  const presos = banco
-    .prepare(
-      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
-         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
-         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
-           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
-    )
-    .all() as unknown as TicketRef[];
+  const presos = ticketsEmExecucaoSemProcesso(banco);
   for (const { demanda_id, ticket_id } of presos) {
-    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado);
+    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado, relogio);
   }
 }

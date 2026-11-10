@@ -9,8 +9,16 @@ import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { registrarDemanda } from "../nucleo/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
-import { gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  carregarDemanda,
+  carregarDemandas,
+  carregarEscopoDoProcesso,
+  comDemanda,
+  criarDemandaNova,
+  listarDemandas,
+  situacaoDasDemandas,
+} from "./demandas.ts";
+import { abrirTrabalhoDoAgente, gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -94,6 +102,38 @@ const completo = (): AgregadoDemanda => ({
   })),
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
+  arquivos_previstos_rodada: [{ demanda_id: "I-1", rodada_id: 1, caminho: "src/a.ts" }],
+  arquivos_previstos_demanda: [
+    { demanda_id: "I-1", caminho: "src/a.ts" },
+    { demanda_id: "I-1", caminho: "src/b.ts" },
+  ],
+  versoes_plano: [
+    {
+      demanda_id: "I-1",
+      numero: 1,
+      origem: "aprovacao_do_planejamento",
+      autor: { tipo: "fabriquinha" },
+      criada_em: em,
+      dados: { rodadas: [] },
+    },
+    {
+      demanda_id: "I-1",
+      numero: 2,
+      origem: "revisao_rodada",
+      autor: { tipo: "agente", trabalho_id: "E-revisor" },
+      rodada_id: 1,
+      criada_em: em,
+      dados: { tickets_novos: [] },
+    },
+    {
+      demanda_id: "I-1",
+      numero: 3,
+      origem: "conferencia_do_pr",
+      autor: { tipo: "externo", ferramenta: "pi", sessao: "s1" },
+      criada_em: em,
+      dados: {},
+    },
+  ],
   decisoes: [
     decisao({ resultado: "reprovado", motivo: "m", por: { tipo: "auditor" } }),
     decisao({ decisao_id: 2, nota: 5 }),
@@ -289,6 +329,9 @@ test("grava só a diferença: atualiza, apaga e insere", () => {
     demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, estado: "concluido" } : t)),
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: ag.decisoes.slice(1),
     evidencias: ag.evidencias.map((e) => (e.ticket_id === 2 ? { ...e, dados: { v: 9 } } : e)),
     rodadas: [...ag.rodadas, rodada(3)],
@@ -574,6 +617,9 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
       })),
       dependencias_ticket: ag.dependencias_ticket.map(t),
       caminhos_ticket: ag.caminhos_ticket.map(t),
+      arquivos_previstos_rodada: ag.arquivos_previstos_rodada.map(t),
+      arquivos_previstos_demanda: ag.arquivos_previstos_demanda.map(t),
+      versoes_plano: ag.versoes_plano.map(t),
       decisoes: ag.decisoes.map(t),
       evidencias: ag.evidencias.map(t),
     } as AgregadoDemanda);
@@ -599,4 +645,40 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
   escrever(b, () => {
     assert.equal(listarDemandas(b).length, 4);
   });
+});
+
+test("carregarEscopoDoProcesso traz o ticket, a sessão e o projeto da execução, aberta ou terminada", () => {
+  const b = comBase();
+  const trabalho_id = "e-I-1-T2"; // o id que abrirTrabalhoDoAgente dá ao processo
+  abrirTrabalhoDoAgente(b, { demanda_id: "I-1", ticket_id: 2 });
+  const escopo = { sessao: `s-${trabalho_id}`, demanda_id: "I-1", ticket_id: 2, projeto: "p" };
+  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: null, ...escopo });
+  b.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = ?").run(em, trabalho_id);
+  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: em, ...escopo });
+  assert.equal(carregarEscopoDoProcesso(b, "inexistente"), undefined);
+});
+
+test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na mesma quantidade com 1 ou 3 ids", () => {
+  const b = comBase();
+  const preparacoesDe = (ids: string[]) => {
+    const original = b.prepare.bind(b);
+    let preparacoes = 0;
+    b.prepare = (sql) => (preparacoes++, original(sql));
+    carregarDemandas(b, ids);
+    b.prepare = original;
+    return preparacoes;
+  };
+  assert.deepEqual(carregarDemandas(b, ["I-1", "I-1"]), [carregarDemanda(b, "I-1"), carregarDemanda(b, "I-1")]);
+  assert.equal(preparacoesDe(["I-1", "I-1", "I-1"]), preparacoesDe(["I-1"]));
+  assert.throws(() => carregarDemandas(b, ["I-9"]), ErroDeInexistente);
+});
+
+test("situacaoDasDemandas devolve só o id e o estado das demandas do projeto pedido", () => {
+  const b = comBase();
+  const { estado } = carregarDemanda(b, "I-1").demanda;
+  assert.deepEqual(
+    situacaoDasDemandas(b, "p").map((linha) => ({ ...linha })),
+    [{ id: "I-1", estado }],
+  );
+  assert.deepEqual(situacaoDasDemandas(b, "outro"), []);
 });

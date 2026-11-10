@@ -10,11 +10,12 @@ import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
-import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import * as gestao from "./gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "./gestao_demandas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -57,25 +58,6 @@ const anexo = (nome: string, conteudo: string | Buffer): string => {
   return join(pasta, nome);
 };
 const html = () => [anexo("d.html", HTML)];
-const custos = (sessao = "ext1") => ({
-  sessoes: [
-    {
-      ferramenta: "claude",
-      sessao,
-      linhas: [
-        {
-          provedor: "a",
-          modelo: "m",
-          tokens_entrada: 1,
-          tokens_saida: 1,
-          tokens_cache_leitura: 0,
-          tokens_cache_escrita: 0,
-        },
-      ],
-    },
-  ],
-});
-
 const submeter = (
   b: DatabaseSync,
   id: string,
@@ -88,7 +70,6 @@ const submeter = (
 const completar = (b: DatabaseSync, id: string) => {
   submeter(b, id, "criterios_aceite", criterios);
   submeter(b, id, "desenho_solucao", desenho, html());
-  submeter(b, id, "custos_realizados", custos());
 };
 
 const evidencias = (b: DatabaseSync, id: string, tipo: string) =>
@@ -158,6 +139,35 @@ test("CA-3: dependência que fecha ciclo é reprovada e nenhuma aresta nova é g
   const idC = registrar(b);
   registrarDependenciaDemanda(b, idC, idB);
   assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 2);
+});
+
+test("CA-2 a CA-5: dependência recusada (enviada, autorreferência, repetida) não grava nada e fecha a transação", () => {
+  const b = novoBanco();
+  const idA = registrar(b);
+  const idB = registrar(b, [idA]);
+  b.exec(`UPDATE demanda SET enviada = 1 WHERE id = '${idA}'`);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idA, idB);
+  }, /já foi enviada/);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idB, idB);
+  }, /não pode depender de si mesma/);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, idB, idA);
+  }, /já depende/);
+  assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 1);
+  assert.equal(b.isTransaction, false);
+});
+
+test("dependência com demanda inexistente, dona ou predecessora, dá ErroDeInexistente", () => {
+  const b = novoBanco();
+  const id = registrar(b);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, "I-999", id);
+  }, ErroDeInexistente);
+  assert.throws(() => {
+    registrarDependenciaDemanda(b, id, "I-999");
+  }, ErroDeInexistente);
 });
 
 test("CA-4: editar só o título mantém tipo e descrição", () => {
@@ -250,13 +260,13 @@ test("anexos: quantidade, repetido, classe, tamanho e temClasse seguem o schema 
   const cada: [string, string, string[], RegExp][] = [
     ["desenho_solucao", "desenho", [], /pelo menos 1/],
     ["desenho_solucao", "desenho", [...html(), ...html()], /no máximo 1/],
-    ["custos_realizados", "custos", html(), /no máximo 0/],
+    ["criterios_aceite", "criterios", html(), /no máximo 0/],
     ["desenho_solucao", "desenho", [texto("a.txt")], /é texto, e desenho_solucao aceita só html/],
     ["desenho_solucao", "desenho", [texto("a.html", Buffer.alloc(5 * 1024 * 1024 + 1, "a"))], /aceitam até/],
     ["prototipo", "proto", [texto("a.txt")], /vídeo ou print/],
     ["prototipo", "proto", [texto("a.txt"), texto("a.txt")], /dois anexos se chamam a.txt/],
   ];
-  const dados: Record<string, unknown> = { desenho, custos: custos(), proto: { descricao: "d" } };
+  const dados: Record<string, unknown> = { desenho, criterios, proto: { descricao: "d" } };
   for (const [tipo, d, arquivos, erro] of cada) assert.throws(() => submeter(b, id, tipo, dados[d], arquivos), erro);
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   submeter(b, id, "prototipo", dados.proto, [anexo("p.png", png)]);
@@ -264,36 +274,16 @@ test("anexos: quantidade, repetido, classe, tamanho e temClasse seguem o schema 
   assert.equal(b.prepare("SELECT count(*) AS n FROM arquivo_evidencia").get()?.n, 1);
 });
 
-test("CA-12: sessão já contada em outra demanda vira aviso e não é contada duas vezes", () => {
-  const b = novoBanco();
-  const a = registrar(b);
-  const c = registrar(b);
-  assert.deepEqual(submeter(b, a, "custos_realizados", custos()).avisos, []);
-  const { avisos } = submeter(b, c, "custos_realizados", custos());
-  assert.equal(avisos.length, 1);
-  assert.match(avisos[0] ?? "", new RegExp(`já consta na demanda ${a}`));
-  assert.deepEqual({ ...b.prepare("SELECT demanda_id FROM trabalho_nao_gerenciado").get() }, { demanda_id: a });
-});
-
-test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e não substitui o da demanda", () => {
+test("CA-SDLC-24: evidência com rodada_id é recusada: a definição da demanda não tem dono de rodada", () => {
   const b = novoBanco();
   const id = registrar(b);
-  completar(b, id);
   b.exec(
     `INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1')`,
   );
-  const entrada = { tipo: "custos_realizados", dados: custos("ext-r1"), rodada_id: 1, arquivos: [] };
-  gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, origens);
-  assert.deepEqual(
-    evidencias(b, id, "custos_realizados").map((e) => e.rodada_id),
-    [undefined, 1],
-  );
-  assert.deepEqual(
-    b
-      .prepare("SELECT sessao FROM trabalho_nao_gerenciado ORDER BY sessao")
-      .all()
-      .map((l) => l.sessao),
-    ["ext-r1", "ext1"],
+  const entrada = { tipo: "criterios_aceite", dados: criterios, rodada_id: 1, arquivos: [] };
+  assert.throws(
+    () => gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, origens),
+    /tem dono errado/,
   );
 });
 
@@ -303,12 +293,12 @@ test("CA-13: envio sem as obrigatórias lista as faltantes", () => {
   submeter(b, id, "criterios_aceite", criterios);
   assert.throws(
     () => gestao.enviar(b, id, autor, ctx),
-    (e: Error) => e.message.includes("desenho_solucao, custos_realizados"),
+    (e: Error) => e.message.includes("desenho_solucao"),
   );
   assert.equal(carregarDemanda(b, id).demanda.enviada, false);
 });
 
-test("CA-14: com as três obrigatórias, enviar vai a gate_demanda", () => {
+test("CA-14: com as obrigatórias, enviar vai a gate_demanda", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
@@ -317,7 +307,7 @@ test("CA-14: com as três obrigatórias, enviar vai a gate_demanda", () => {
   assert.equal(carregarDemanda(b, id).demanda.enviada, true);
 });
 
-test("CA-15: depois do envio criterios_aceite está congelado e custos_realizados segue livre", () => {
+test("CA-15: depois do envio criterios_aceite está congelado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
@@ -327,9 +317,6 @@ test("CA-15: depois do envio criterios_aceite está congelado e custos_realizado
     /congelada/,
   );
   assert.deepEqual(evidencias(b, id, "criterios_aceite")[0]?.dados, criterios);
-  submeter(b, id, "custos_realizados", custos("ext2"));
-  const [custo] = evidencias(b, id, "custos_realizados");
-  assert.equal((custo?.dados as ReturnType<typeof custos>).sessoes[0]?.sessao, "ext2");
 });
 
 test("CA-27: arquivar demanda concluída muda só o estado", () => {
@@ -345,6 +332,25 @@ test("CA-27: arquivar demanda concluída muda só o estado", () => {
   );
 });
 
+test("arquivarConcluidas: arquiva só as concluídas do projeto, no instante do relógio, e recusa o projeto inexistente", () => {
+  const b = novoBanco();
+  const concluida = registrar(b);
+  const andamento = registrar(b);
+  b.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(concluida);
+  const relogio = relogioFixo("2026-03-01T00:00:00.000Z");
+  const projeto = "fabriquinha";
+  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio, "oriente"), { arquivadas: 1 });
+  const arquivada = carregarDemanda(b, concluida).demanda;
+  assert.equal(arquivada.estado, "arquivada");
+  assert.equal(arquivada.estado_alterado_em, "2026-03-01T00:00:00.000Z");
+  assert.notEqual(estado(b, andamento), "arquivada");
+  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio, "oriente"), { arquivadas: 0 });
+  assert.throws(
+    () => gestao.arquivarConcluidas(b, "nao-existe", relogio, "oriente"),
+    /o projeto nao-existe não existe/,
+  );
+});
+
 test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
@@ -354,8 +360,26 @@ test("CA-28: arquivar fora de concluida é reprovado", () => {
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });
 
+test("reabrir: só o Auditor reabre o ticket falho, com a instrução e o instante do relógio", () => {
+  const b = novoBanco();
+  const id = registrar(b);
+  b.prepare("UPDATE ticket_demanda SET estado = 'falhou' WHERE demanda_id = ?").run(id);
+  const relogio = relogioFixo("2026-02-01T00:00:00.000Z");
+  assert.throws(
+    () => gestao.reabrir(b, id, { ticket_id: 1, instrucao: "tente de novo" }, autor, relogio),
+    /só o Auditor pode reabrir/,
+  );
+  assert.equal(carregarDemanda(b, id).tickets[0]?.estado, "falhou");
+  const ticket = gestao.reabrir(b, id, { ticket_id: 1, instrucao: "tente de novo" }, AUDITOR, relogio);
+  assert.deepEqual(
+    [ticket.estado, ticket.instrucao, ticket.estado_alterado_em],
+    ["aberto", "tente de novo", "2026-02-01T00:00:00.000Z"],
+  );
+  assert.throws(() => gestao.reabrir(b, id, { ticket_id: 1, instrucao: "de novo" }, AUDITOR, relogio), /falhou/);
+});
+
 test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, cancelamento e arquivamento", () => {
-  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "cancelar", "arquivar"];
+  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "cancelar", "arquivar", "arquivarConcluidas"];
   for (const nome of nomes) {
     assert.equal(typeof (gestao as Record<string, unknown>)[nome], "function", nome);
   }

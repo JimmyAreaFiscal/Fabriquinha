@@ -38,20 +38,22 @@ const base = (enviada = false): AgregadoDemanda => ({
   criterios_citados: [],
   dependencias_ticket: [],
   caminhos_ticket: [],
+  arquivos_previstos_rodada: [],
+  arquivos_previstos_demanda: [],
+  versoes_plano: [],
   pull_requests: [],
 });
 test("catálogo: obrigatórias e opcionais da demanda", () => {
-  assert.equal(TIPOS_DA_DEMANDA.length, 7);
-  assert.deepEqual(pendentesDeEnvio(base()), ["criterios_aceite", "desenho_solucao", "custos_realizados"]);
+  assert.equal(TIPOS_DA_DEMANDA.length, 6);
+  assert.deepEqual(pendentesDeEnvio(base()), ["criterios_aceite", "desenho_solucao"]);
   const ag = comEvidencia(base(), { tipo: "desenho_solucao", dados: { v: 1 } }, autora, em);
-  assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite", "custos_realizados"]);
+  assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite"]);
 });
 
 test("pendentesDeEnvio só conta evidência do dono demanda", () => {
   const ag = comEvidencia(base(), { tipo: "criterios_aceite", dados: { v: 1 }, ticket_id: 1 }, autora, em);
-  assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite", "desenho_solucao", "custos_realizados"]);
+  assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite", "desenho_solucao"]);
   assert.deepEqual(pendentesDeEnvio(comEvidencia(ag, { tipo: "criterios_aceite", dados: { v: 1 } }, autora, em)), [
     "desenho_solucao",
-    "custos_realizados",
   ]);
 });

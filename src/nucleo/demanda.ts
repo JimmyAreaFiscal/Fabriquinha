@@ -1,9 +1,7 @@
-// Contratos SDLC puros (comparacao-sdlc-implementacao.md §2.2, §2.3, §4.1 e §7.2): identidades, branches e plano.
+// Contratos SDLC puros (comparacao-sdlc-implementacao.md §2.2, §2.3, §4.1 e §7.2): identidades e branches.
 import { z } from "zod";
-import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { GrafoDeDependencias } from "./item_de_trabalho.ts";
-import { Id, Markdown, Titulo } from "./primitivos.ts";
+import { Id } from "./primitivos.ts";
 
 // Letras + hífen + número (`I-196`): sem `/`, `.`, `..`, espaço ou `-` duplo, e sem colidir `fabriquinha/{demanda}-{rodada}`
 // com a branch de outra demanda (uma demanda sempre termina em `-n` com prefixo só de letras).
@@ -39,95 +37,11 @@ export const formatarTicketRef = (ref: z.infer<typeof TicketRef>): string => for
 export const formatarRodadaRef = (ref: z.infer<typeof RodadaRef>): string => formatar(RodadaRef, ref, "R", "rodada_id");
 
 /** Caminho relativo à raiz git: sem absoluto (POSIX ou drive Windows), barra invertida nem segmento `..`. */
-export const CaminhoTicket = z
+export const CaminhoPrevisto = z
   .string()
   .min(1)
   .refine((c) => !c.startsWith("/") && !/^[A-Za-z]:/.test(c) && !c.includes("\\") && !c.split("/").includes(".."), {
     message: "use caminho relativo à raiz git, sem `/` inicial, drive, `\\` nem `..`",
   });
 
-const Rodada = RodadaRef.extend({
-  titulo: Titulo,
-  e2e: z.boolean(),
-  criterios: z.array(CriterioId).default([]),
-  depende: z.array(RodadaRef).default([]),
-});
-const Ticket = TicketIdentidade.extend({
-  titulo: Titulo,
-  descricao: Markdown,
-  caminhos: z.array(CaminhoTicket).default([]),
-  depende: z.array(TicketRef).default([]),
-  configuracao_agente: ConfiguracaoAgente.optional(),
-});
-
-/** Plano flat de uma demanda: `criterios` são os `CA-n` da demanda; cada rodada e ticket carrega o seu `demanda_id`. */
-export const Plano = z
-  .object({
-    demanda_id: DemandaId,
-    criterios: z.array(CriterioId),
-    rodadas: z.array(Rodada),
-    tickets: z.array(Ticket),
-  })
-  .superRefine((plano, ctx) => {
-    const erro = (message: string) => {
-      ctx.addIssue({ code: "custom", message });
-    };
-    const { demanda_id: demanda } = plano;
-    const rodadas = new Set<number>();
-    for (const r of plano.rodadas) {
-      if (r.demanda_id !== demanda) erro(`a rodada ${String(r.rodada_id)} é de outra demanda (${r.demanda_id})`);
-      if (rodadas.has(r.rodada_id)) erro(`a rodada ${String(r.rodada_id)} se repete`);
-      rodadas.add(r.rodada_id);
-    }
-    for (const r of plano.rodadas) {
-      for (const c of r.criterios) {
-        if (!plano.criterios.includes(c)) erro(`a rodada ${String(r.rodada_id)} cita o ${c}, que a demanda não tem`);
-      }
-      for (const d of r.depende) {
-        if (d.demanda_id !== demanda)
-          erro(`a rodada ${String(r.rodada_id)} depende de rodada de outra demanda (${d.demanda_id})`);
-        else if (d.rodada_id === r.rodada_id) erro(`a rodada ${String(r.rodada_id)} não pode depender de si mesma`);
-        else if (!rodadas.has(d.rodada_id))
-          erro(`a rodada ${String(r.rodada_id)} depende da rodada ${String(d.rodada_id)}, que não existe`);
-      }
-    }
-    const cicloDeRodadas = new GrafoDeDependencias(
-      plano.rodadas.flatMap((r) => r.depende.map((d): [number, number] => [r.rodada_id, d.rodada_id])),
-      "as rodadas",
-    ).descreverCiclo();
-    if (cicloDeRodadas) erro(cicloDeRodadas);
-
-    const tickets = new Map<number, number | undefined>();
-    for (const t of plano.tickets) {
-      if (t.demanda_id !== demanda) erro(`o ticket ${String(t.ticket_id)} é de outra demanda (${t.demanda_id})`);
-      if (tickets.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
-      if (new Set(t.caminhos).size !== t.caminhos.length) erro(`o ticket ${String(t.ticket_id)} repete caminho`);
-      if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
-        erro(`o ticket ${String(t.ticket_id)} está na rodada ${String(t.rodada_id)}, que não existe`);
-      tickets.set(t.ticket_id, t.rodada_id);
-    }
-    for (const r of plano.rodadas) {
-      if (!plano.tickets.some((t) => t.rodada_id === r.rodada_id))
-        erro(`a rodada ${String(r.rodada_id)} não tem ticket de implementação`);
-    }
-    for (const t of plano.tickets) {
-      for (const d of t.depende) {
-        const alvo = tickets.get(d.ticket_id);
-        const nome = `o ticket ${String(t.ticket_id)} depende do ${String(d.ticket_id)}`;
-        if (d.demanda_id !== demanda) erro(`${nome}, de outra demanda (${d.demanda_id})`);
-        else if (d.ticket_id === t.ticket_id) erro(`o ticket ${String(t.ticket_id)} não pode depender de si mesmo`);
-        else if (!tickets.has(d.ticket_id)) erro(`${nome}, que não existe`);
-        else if (t.rodada_id === undefined || alvo === undefined)
-          erro(`${nome}: ticket sem rodada não participa de dependência`);
-        else if (t.rodada_id !== alvo) erro(`${nome}, de outra rodada`);
-      }
-    }
-    const cicloDeTickets = new GrafoDeDependencias(
-      plano.tickets.flatMap((t) => t.depende.map((d): [number, number] => [t.ticket_id, d.ticket_id])),
-      "os tickets",
-    ).descreverCiclo();
-    if (cicloDeTickets) erro(cicloDeTickets);
-  });
-
 export type DemandaId = z.infer<typeof DemandaId>;
-export type Plano = z.infer<typeof Plano>;

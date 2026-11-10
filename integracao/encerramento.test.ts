@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../src/nucleo/ator.ts";
 import { formatarTicketRef } from "../src/nucleo/demanda.ts";
+import { relogioFixo } from "../src/nucleo/relogio.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
 import { registrarFalhaEncerramento, registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/aplicacao/evidencias/encerramento_demanda.ts";
@@ -296,7 +297,7 @@ test("falha de infraestrutura no passo integracao é retomada sozinha e a nova T
   assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "falhou");
 
   // Sem ação do Auditor: depois da espera da falha transitória, a retomada automática reabre o encerramento.
-  const passadaAEspera = new Date(Date.now() + 3 * 60_000);
+  const passadaAEspera = relogioFixo(new Date(Date.now() + 3 * 60_000).toISOString());
   assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, passadaAEspera), [formatarTicketRef(ticket)]);
   assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
   assert.deepEqual(demanda(c, id).pull_requests, esperando.pull_requests);

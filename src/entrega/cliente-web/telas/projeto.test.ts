@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
   abas,
@@ -11,7 +10,6 @@ import {
   type Escolhas,
   escolherProjeto,
   estadoDaDemanda,
-  ha,
   paginaDoProjeto,
   projetoNaoEncontrado,
   situacaoNaDemanda,
@@ -27,30 +25,41 @@ const projeto = (nome: string): ProjetoListado => ({
   verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
   chave_sonarqube: nome,
 });
+const DEMANDA_TERMINAL: readonly string[] = ["concluida", "arquivada", "cancelada"];
+const DEMANDA_SATISFAZ_DEPENDENCIA: readonly string[] = ["concluida", "arquivada"];
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 
 /** O mês corrente de `GET /api/metricas`, para os cards do Projeto. */
-const MES: MetricasMesDemanda = {
+const MES: MetricasDoMes = {
   mes: "2026-10",
   projeto: null,
   total: {
     execucoes: 3,
     falhas: 0,
     duracaoMs: 0,
-    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0 },
-    custo: { conhecido: 1.5, incompleto: false },
+    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0, total: 1500 },
+    custo: { conhecido: 1.5, trabalhosSemCusto: 0 },
+    textoDoCusto: "US$ 1,50",
     modelos: [],
   },
   niveis: [],
   demandas: { registradas: 2, concluidas: 1 },
   tickets: { criados: 4, concluidos: 3 },
   prs: { abertos: 1, mergeados: 0 },
-  nota: { media: null, notas: 0 },
-  retrabalho: { adicionadas: 40, alteradas: 10, porHumanos: 2 },
-  etapas: [],
+  etapas: [
+    {
+      etapa: "implementar",
+      metricas: [
+        {
+          definicao: { tipo: "alteracoes_posteriores", rotulo: "Alterações posteriores no código", fonte: "Commits" },
+          valor: { adicionadas: 40, alteradasPorHumanos: 2 },
+        },
+      ],
+    },
+  ],
 };
 
-const AGORA = new Date("2026-10-28T12:00:00.000Z");
+const AGORA = Date.parse("2026-10-28T12:00:00.000Z");
 const SEM_ESCOLHAS: Escolhas = {
   mostrar: { concluidas: false, arquivadas: false, canceladas: false },
   gavetas: new Map(),
@@ -70,8 +79,8 @@ const ticket = (
   ref,
   etapa,
   estado: status,
-  terminal: CICLO_DO_TICKET.ehTerminal(status),
-  satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(status),
+  terminal: ["concluido", "cancelado"].includes(status),
+  satisfazDependencia: status === "concluido",
   estadoAlteradoEm: "2026-10-28T11:55:00.000Z",
   ...resto,
 });
@@ -93,11 +102,11 @@ const demanda = (id: string, estado: DemandaDoProjeto["estado"], resto: Partial<
     titulo: `Demanda ${id}`,
     tipo: "funcionalidade",
     estado,
-    terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
-    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(estado),
-    estadoNaLinhaDoTempo: CICLO_DA_DEMANDA.satisfazDependencia(estado)
+    terminal: DEMANDA_TERMINAL.includes(estado),
+    satisfazDependencia: DEMANDA_SATISFAZ_DEPENDENCIA.includes(estado),
+    estadoNaLinhaDoTempo: DEMANDA_SATISFAZ_DEPENDENCIA.includes(estado)
       ? "concluida"
-      : CICLO_DA_DEMANDA.estaEmAndamento(estado)
+      : !DEMANDA_TERMINAL.includes(estado)
         ? estado
         : "entender_e_desenhar",
     estadoAlteradoEm: "2026-10-03T12:00:00",
@@ -327,7 +336,7 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
       bloqueadaPor: ["I-5", "I-6"],
       tickets: [
         ticket("I-7.T1", "entender_e_desenhar", "concluido"),
-        ticket("I-7.T2", "planejar", "em_execucao", { piAtivo: true }),
+        ticket("I-7.T2", "planejar", "em_execucao", { pi_ativo: true }),
       ],
     }),
   ]);
@@ -512,12 +521,6 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
   // A cancelada na execução mostra as rodadas onde pararam, apagadas, e nenhum destaque.
   assert.match(linhaDe(html, "I-3"), /<div class="pista-rodada">[\s\S]*<ol class="trilho-estados cancelada"/);
   assert.match(linhaDe(html, "I-3"), /<div class="pista-estado"><\/div>/);
-});
-
-test("há quanto tempo: menos de 1 min, minutos, e horas com minutos, sem quebrar", () => {
-  assert.equal(ha("2026-10-28T11:59:30.000Z", AGORA), "há menos\u00a0de\u00a01\u00a0min");
-  assert.equal(ha("2026-10-28T11:15:00.000Z", AGORA), "há 45\u00a0min");
-  assert.equal(ha("2026-10-28T09:50:00.000Z", AGORA), "há 2\u00a0h\u00a010\u00a0min");
 });
 
 test("a gaveta abre com um item por Pendência: tipo, item, motivo, há quanto tempo e o chat do diálogo", () => {

@@ -19,7 +19,7 @@ import {
 } from "../src/aplicacao/avaliacao.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
-import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
+import { metricasDasEtapas } from "../src/aplicacao/metricas/metricas_das_etapas.ts";
 import { achadoDaDemanda } from "../src/armazenamento/avaliacoes.ts";
 import { predecessorasDaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/armazenamento/servico.ts";
@@ -44,7 +44,7 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "./apoio.ts";
-import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b
@@ -69,7 +69,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
-  const fins = despacharDemandas(c.banco, config, despacho());
+  const fins = cicloDoDespacho(c.banco, config, despacho());
   assert.equal(fins.length, 2);
   await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);
@@ -148,7 +148,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   assert.ok(existsSync(metricas));
   assert.deepEqual(
     JSON.parse(readFileSync(metricas, "utf8")),
-    JSON.parse(JSON.stringify(metricasDaDemanda(c.banco, origem))),
+    JSON.parse(JSON.stringify(Object.fromEntries(metricasDasEtapas(c.banco, { demandaId: origem })))),
   );
 
   // O Auditor encaminha um achado: uma demanda nova, em registro, e o outro achado segue sem demanda.
@@ -189,24 +189,6 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
     [anexoHtml()],
   );
-  submeter("custos_realizados", {
-    sessoes: [
-      {
-        ferramenta: "avaliacao",
-        sessao: autor.sessao,
-        linhas: [
-          {
-            provedor: "a",
-            modelo: "m",
-            tokens_entrada: 1,
-            tokens_saida: 1,
-            tokens_cache_leitura: 0,
-            tokens_cache_escrita: 0,
-          },
-        ],
-      },
-    ],
-  });
   gestao.enviar(c.banco, nova.id, autor, CTX);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);

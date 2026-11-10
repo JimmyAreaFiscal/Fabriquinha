@@ -87,7 +87,7 @@ test("toda etapa pede leitura por faixa, edit em vez de heredoc e exploração d
 
 test("revisar_rodada mostra o formato do --correcoes e pede espera num único comando", () => {
   const rodada = montar("revisar_rodada");
-  assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "caminhos": \["src\/a\.ts"\]\}\]/);
+  assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "arquivos_previstos": \["src\/a\.ts"\]\}\]/);
   assert.match(rodada, /espere num único comando/);
 });
 
@@ -126,7 +126,7 @@ test("a falha de outro ticket ou do ambiente não trava: o implementar corrige e
   assert.match(montar("implementar"), /Docker, containers e deploy de teste estão liberados/);
   assert.match(
     montar("implementar"),
-    /Se a falha vier de outro ticket ou do ambiente .* corrija a causa mesmo fora dos seus caminhos/,
+    /Se a falha vier de outro ticket ou do ambiente .* corrija a causa mesmo fora dos seus arquivos previstos/,
   );
   assert.match(
     montar("revisar_rodada"),
@@ -154,6 +154,18 @@ test("CA-1: planejar manda deixar fora da rodada o critério provado só no PR f
     montar("planejar"),
     /Critério cujo ponto de prova é o PR final da demanda, o deploy ou critérios gerais do projeto \(ex\.: "PR pronto", CG-1 a CG-9\) não é citado em rodada: fica só para a revisão da demanda/,
   );
+});
+
+test("I-280 CA-5: planejar explica os três níveis de arquivos previstos, a inclusão e que mudança de rumo é correção", () => {
+  const prompt = montar("planejar");
+  assert.match(prompt, /cada um com seus critérios e arquivos previstos/);
+  assert.match(prompt, /`arquivos_previstos` na demanda, em cada rodada e em cada ticket/);
+  assert.match(
+    prompt,
+    /\(Ticket ⊆ Rodada ⊆ Demanda\); o plano que viola isso é recusado na submissão, com o arquivo e o nível/,
+  );
+  assert.match(prompt, /não há replanejamento: mudança de rumo é correção do Plano/);
+  assert.doesNotMatch(prompt, /caminhos/);
 });
 
 test("CA-3, CA-4: critério que nenhuma rodada cita aparece na revisão da demanda e não na da rodada", () => {
@@ -216,8 +228,8 @@ test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", ()
 
 test("etapa sem modo de trabalhar recusa nomeando a etapa (CA-9)", () => {
   assert.throws(
-    () => montar("demanda"),
-    (e: Error) => e.constructor === Error && e.message.includes("demanda"),
+    () => montar("entender_e_desenhar"),
+    (e: Error) => e.constructor === Error && e.message.includes("entender_e_desenhar"),
   );
 });
 
@@ -229,6 +241,9 @@ test("sem critérios, citações, título, descrição, dependências nem caminh
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
   };
   const p = montarPromptDemanda({
     ...base,
@@ -497,4 +512,8 @@ test("as revisões recebem o que a Fabriquinha já verificou no último commit d
   );
   assert.match(montar("revisar_demanda"), /## Verificações já feitas\n\n.*\n\n\(nenhuma\)/);
   assert.doesNotMatch(montar("implementar"), /## Verificações já feitas/);
+});
+
+test("o prompt não leva o caminho do banco: o agente fala com a Fabriquinha pela API", () => {
+  for (const etapa of NOVAS) assert.doesNotMatch(montar(etapa), /fabriquinha\.db/);
 });

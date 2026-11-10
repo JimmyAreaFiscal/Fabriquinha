@@ -32,9 +32,8 @@ export const limiteParalelismo = (banco: DatabaseSync): number =>
   (banco.prepare("SELECT limite_paralelismo FROM configuracao").get() as { limite_paralelismo: number })
     .limite_paralelismo;
 
-/** Grava a configuração inteira; campo ausente volta ao padrão. */
-export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Configuracao {
-  const c = Configuracao.parse(entrada);
+/** Grava a configuração inteira, já validada pela aplicação. */
+export function salvarConfiguracao(banco: DatabaseSync, c: Configuracao): Configuracao {
   banco
     .prepare(
       `UPDATE configuracao SET agendador_ativo = ?, intervalo_min = ?, timeout_min = ?, ociosidade_min = ?,
@@ -71,10 +70,9 @@ export function configuracaoDoAmbiente(banco: DatabaseSync): ConfiguracaoDoAmbie
 }
 
 /**
- * Grava a configuração do Ambiente inteira; campo ausente volta ao padrão.
+ * Grava a configuração do Ambiente inteira, já validada pela aplicação.
  */
-export function salvarConfiguracaoDoAmbiente(banco: DatabaseSync, entrada: unknown): ConfiguracaoDoAmbiente {
-  const a = ConfiguracaoDoAmbiente.parse(entrada);
+export function salvarConfiguracaoDoAmbiente(banco: DatabaseSync, a: ConfiguracaoDoAmbiente): ConfiguracaoDoAmbiente {
   banco
     .prepare(
       `UPDATE configuracao SET ambiente_tipo = ?, ambiente_memoria_maxima_mb = ?, ambiente_cpus = ?,

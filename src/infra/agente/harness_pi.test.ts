@@ -100,6 +100,8 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
 });
 
 test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num diretório vazio", () => {
+  process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdadas do serviço
+  process.env.FABRIQUINHA_ROOT = "/herdada";
   process.env.GH_TOKEN = "segredo";
   process.env.SYSTEM_ACCESSTOKEN = "segredo";
   process.env.SONAR_TOKEN = "segredo";
@@ -108,12 +110,16 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
     assert.equal(env.GH_TOKEN, undefined);
     assert.equal(env.SYSTEM_ACCESSTOKEN, undefined);
     assert.equal(env.SONAR_TOKEN, undefined);
-    assert.equal(env.PATH, process.env.PATH);
+    assert.equal(env.PATH, `${PACOTE}/bin:${String(process.env.PATH)}`);
+    assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
+    assert.equal(env.FABRIQUINHA_ROOT, undefined);
     assert.deepEqual(
-      [env.FABRIQUINHA_EXECUCAO, env.FABRIQUINHA_ROOT, env.FABRIQUINHA_SAIDA, env.GH_CONFIG_DIR, env.AZURE_CONFIG_DIR],
-      ["7", "/r", "/r/execucoes/E-7/saida", "/r/execucoes/E-7/vazio", "/r/execucoes/E-7/vazio"],
+      [env.FABRIQUINHA_SAIDA, env.GH_CONFIG_DIR, env.AZURE_CONFIG_DIR],
+      ["/r/execucoes/E-7/saida", "/r/execucoes/E-7/vazio", "/r/execucoes/E-7/vazio"],
     );
   } finally {
+    delete process.env.FABRIQUINHA_EXECUCAO;
+    delete process.env.FABRIQUINHA_ROOT;
     delete process.env.GH_TOKEN;
     delete process.env.SYSTEM_ACCESSTOKEN;
     delete process.env.SONAR_TOKEN;
@@ -159,6 +165,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   try {
     const env = harness.ambiente("/r", `/r/avaliacoes/${sessao}`);
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
+    assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.GH_TOKEN, undefined);
     assert.deepEqual(
       [env.FABRIQUINHA_ROOT, env.FABRIQUINHA_AUDITORIA, env.GH_CONFIG_DIR],
@@ -245,21 +252,47 @@ test("padrões do Auditor: o pi do PATH", () => {
   assert.equal(harness.binarioPi(), "pi");
 });
 
-test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem credenciais, e devolve o stdout", async () => {
+test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem credenciais, e devolve o stdout e o Uso", async () => {
   const credenciais = ["GH_TOKEN", "GITHUB_TOKEN", "AZURE_DEVOPS_EXT_PAT", "SYSTEM_ACCESSTOKEN", "SONAR_TOKEN"];
   for (const nome of credenciais) process.env[nome] = "segredo";
   const chamadas: { args: readonly string[]; env: NodeJS.ProcessEnv }[] = [];
+  const sessao = JSON.stringify({
+    type: "message",
+    timestamp: "2026-01-01T00:00:00.000Z",
+    message: {
+      role: "assistant",
+      provider: "p",
+      model: "m",
+      usage: { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, cost: { total: 0.5 } },
+    },
+  });
+  // O pi falso grava a sessão no diretório que a consulta lhe deu, como o pi de verdade.
   const pi =
     (codigo: number | null): typeof executar =>
     (_comando, args, opcoes) => {
       chamadas.push({ args, env: opcoes?.env ?? {} });
+      writeFileSync(join(args[args.indexOf("--session-dir") + 1] ?? "", "consulta.jsonl"), sessao + "\n");
       return Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
     };
   try {
-    assert.equal(await harness.perguntar("pergunta", { provedor: "p", nome: "m" }, 1000, pi(0)), "resposta");
-    assert.deepEqual(chamadas[0]?.args, [
+    assert.deepEqual(await harness.perguntar("pergunta", { provedor: "p", nome: "m" }, 1000, pi(0)), {
+      saida: "resposta",
+      uso: [
+        {
+          modelo: "p/m",
+          tokens_entrada: 10,
+          tokens_saida: 5,
+          tokens_cache_leitura: 2,
+          tokens_cache_escrita: 1,
+          custo: 0.5,
+          chamadas: 1,
+        },
+      ],
+    });
+    const dirDaSessao = chamadas[0]?.args[2] ?? "";
+    assert.deepEqual(chamadas[0]?.args.toSpliced(2, 1), [
       "-p",
-      "--no-session",
+      "--session-dir",
       "--no-tools",
       "--no-skills",
       "--no-context-files",
@@ -269,6 +302,7 @@ test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem creden
       "p/m",
       "pergunta",
     ]);
+    assert.ok(!existsSync(dirDaSessao), "o diretório temporário da sessão é apagado");
     for (const nome of credenciais) assert.equal(chamadas[0].env[nome], undefined, nome);
     assert.equal(chamadas[0].env.PATH, process.env.PATH);
     assert.equal(await harness.perguntar("pergunta", undefined, 1000, pi(1)), undefined);

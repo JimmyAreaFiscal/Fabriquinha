@@ -2,12 +2,14 @@
 // processo e protocolo nos modos autônomo e interativo, guarda os processos vivos com os diálogos de extensão pendentes
 // (F4 §5.4), repassa os eventos a quem assina a sessão, espera os condutores na parada do serviço e, na subida, mata
 // os grupos de processos que a instância anterior deixou.
+import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, type Ator } from "../../nucleo/ator.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import { ErroDeRegra, existe, mensagem } from "../../nucleo/erros.ts";
 import type { Id } from "../../nucleo/primitivos.ts";
+import { instanteDepois, type Relogio, relogioDoSistema } from "../../nucleo/relogio.ts";
 import {
   type CausaDeInfraestrutura,
   type FalhaDaTentativa,
@@ -16,8 +18,8 @@ import {
 } from "../../nucleo/tentativa.ts";
 import { recolherGruposDasAvaliacoes } from "../../armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../armazenamento/simulacao.ts";
-import { processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
-import { HarnessPi, type RodarComando } from "../../infra/agente/harness_pi.ts";
+import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
+import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/agente/harness_pi.ts";
 import type { EventoPi } from "../../infra/agente/pi.ts";
 import type { IdentificadorDoProcesso } from "../../infra/ambiente/ambiente.ts";
 import { anotar, noLog } from "../../infra/registro.ts";
@@ -155,6 +157,8 @@ export interface PedidoDeProcesso {
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /** Com o banco, o processo é de um ticket e recebe o token com que o agente fala com a API (`FABRIQUINHA_TOKEN`). */
+  banco?: DatabaseSync;
   log: string;
   prompt: string | undefined;
   limiteMin: number;
@@ -191,6 +195,23 @@ export class CondutorDeTrabalhos {
   private readonly sessoesEmCurso = new Set<string>();
   /** Desde o início do `parar`, o pi que sai é efeito da parada do serviço. */
   private parando = false;
+  /** O endereço da API do agente (`FABRIQUINHA_API`): o serviço o informa depois do listen e o retira ao parar. */
+  urlDaApi: string | undefined;
+
+  /**
+   * O ambiente do pi com o token novo do processo: só o hash vai ao banco, e o token vale até o `fim` do processo, que o
+   * invalida. Sem banco (consulta, simulação), o ambiente segue como veio.
+   */
+  private ambienteComToken(r: PedidoDeProcesso): NodeJS.ProcessEnv {
+    if (r.banco === undefined) return r.env;
+    const token = randomBytes(32).toString("hex");
+    gravarTokenDoProcesso(r.banco, String(r.execucao.id), token);
+    return {
+      ...r.env,
+      FABRIQUINHA_TOKEN: token,
+      ...(this.urlDaApi !== undefined && { FABRIQUINHA_API: this.urlDaApi }),
+    };
+  }
 
   private vivaDaSessao(sessao: string): Viva | undefined {
     return [...this.vivas.values()].find((v) => v.sessaoPi === sessao);
@@ -362,14 +383,14 @@ export class CondutorDeTrabalhos {
    * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, de
    * cada avaliação e de cada execução simulada pendente (que falha); os processos dos tickets se encerram com falha.
    */
-  recuperarNaSubida(banco: DatabaseSync): void {
+  recuperarNaSubida(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): void {
     const gruposDosTickets = processosAbertos(banco).flatMap((p) =>
       p.grupo_processo === null ? [] : [p.grupo_processo],
     );
     const grupos = [
       ...gruposDosTickets,
       ...recolherGruposDasAvaliacoes(banco),
-      ...falharPendentes(banco, falhaPorServicoReiniciado.motivo),
+      ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
     ];
     const { id: ambiente_id } = ambienteDoServico();
     // ponytail: o host local sinaliza na hora; com Ambiente remoto a recuperação passa a esperar os sinais (demanda 24).
@@ -378,15 +399,15 @@ export class CondutorDeTrabalhos {
   }
 
   /**
-   * A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas nem sessão, no ambiente sem credenciais dos
-   * outros modos. Devolve a resposta, ou `undefined` se o pi falhou ou passou de `limiteMs`.
+   * A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas, no ambiente sem credenciais dos outros
+   * modos. Devolve a resposta e o Uso dela, ou `undefined` se o pi falhou ou passou de `limiteMs`.
    */
   consultar(
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
     rodar?: RodarComando,
-  ): Promise<string | undefined> {
+  ): Promise<RespostaDaConsulta | undefined> {
     return this.harness.perguntar(prompt, modelo, limiteMs, rodar);
   }
 
@@ -402,9 +423,11 @@ export class CondutorDeTrabalhos {
    * relógio parado) até o Auditor respondê-lo ou cancelá-lo, ou até o pi terminar. Se a extensão que faz isso existir,
    * dar o diálogo por resolvido no `turn_start` seguinte.
    */
-  iniciar(r: PedidoDeProcesso): Promise<FalhaDaTentativa | undefined> {
+  iniciar(r: PedidoDeProcesso, relogio: Relogio = relogioDoSistema): Promise<FalhaDaTentativa | undefined> {
     return new Promise((resolve) => {
+      const agoraEmMs = () => Date.parse(relogio.agora());
       const { id, sessaoPi } = r.execucao;
+      const env = this.ambienteComToken(r);
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
       const expiracoes = new Map<string, NodeJS.Timeout>();
@@ -413,7 +436,7 @@ export class CondutorDeTrabalhos {
       let ultima: Mensagem = {};
       let restante = r.limiteMin * 60_000;
       let desde = 0;
-      let relogio: NodeJS.Timeout | undefined;
+      let temporizadorDoLimite: NodeJS.Timeout | undefined;
       /** As ferramentas em execução, por `toolCallId`: enquanto alguma roda, o silêncio do pi não é do modelo. */
       const ferramentasRodando = new Set<string>();
       let vigiaDoModelo: NodeJS.Timeout | undefined;
@@ -422,7 +445,7 @@ export class CondutorDeTrabalhos {
       const fim = (falha?: FalhaDaTentativa) => {
         if (feito) return;
         feito = true;
-        clearTimeout(relogio);
+        clearTimeout(temporizadorDoLimite);
         clearTimeout(vigiaDoModelo);
         for (const t of expiracoes.values()) clearTimeout(t);
         this.vivas.delete(id);
@@ -437,13 +460,13 @@ export class CondutorDeTrabalhos {
         // Depois do fim, eventos atrasados do pi não armam relógio novo: ele seguraria o processo à toa.
         if (feito) return;
         if (autonoma) {
-          if (pendentes.size > 0 && relogio) {
-            clearTimeout(relogio);
-            relogio = undefined;
-            restante -= Date.now() - desde;
-          } else if (pendentes.size === 0 && !relogio) {
-            desde = Date.now();
-            relogio = setTimeout(() => {
+          if (pendentes.size > 0 && temporizadorDoLimite) {
+            clearTimeout(temporizadorDoLimite);
+            temporizadorDoLimite = undefined;
+            restante -= agoraEmMs() - desde;
+          } else if (pendentes.size === 0 && !temporizadorDoLimite) {
+            desde = agoraEmMs();
+            temporizadorDoLimite = setTimeout(() => {
               fim({
                 tipo: "falha_infraestrutura",
                 causa: "tempo_limite",
@@ -453,10 +476,10 @@ export class CondutorDeTrabalhos {
           }
           return;
         }
-        clearTimeout(relogio);
-        relogio = undefined;
+        clearTimeout(temporizadorDoLimite);
+        temporizadorDoLimite = undefined;
         if (!estaViva.ocupado && pendentes.size === 0) {
-          relogio = setTimeout(() => {
+          temporizadorDoLimite = setTimeout(() => {
             anotar(r.log, `sessão ociosa por ${String(r.limiteMin)} min; o pi para`);
             fim();
           }, restante);
@@ -487,7 +510,7 @@ export class CondutorDeTrabalhos {
       };
       const ocupar = (ocupado: boolean) => {
         estaViva.ocupado = ocupado;
-        estaViva.desde = new Date().toISOString();
+        estaViva.desde = relogio.agora();
       };
 
       const aoRecusar = (evento: EventoPi) => {
@@ -541,15 +564,15 @@ export class CondutorDeTrabalhos {
       };
       const aoDialogo = (evento: EventoPi) => {
         const dialogo = String(evento.id);
-        const em = Date.now();
+        const em = relogio.agora();
         // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
         const timeout = typeof evento.timeout === "number" ? evento.timeout : undefined;
         const pergunta = evento.method === "select" ? daPergunta(evento, perguntas.values()) : undefined;
         pendentes.set(dialogo, {
           ...evento,
           ...pergunta,
-          em: new Date(em).toISOString(),
-          ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
+          em,
+          ...(timeout !== undefined && { expiraEm: instanteDepois(em, timeout) }),
         });
         const chamada = [...perguntas].find(
           ([, a]) => evento.title === a.question || String(evento.title).startsWith(`${String(a.question)}\n\n`),
@@ -596,7 +619,7 @@ export class CondutorDeTrabalhos {
       const pi = this.harness.lancar(
         ambienteDoServico(),
         r.args,
-        { cwd: r.cwd, env: r.env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
+        { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
         (evento) => {
           // O `--mode json` não fala o protocolo RPC: o resultado do trabalho é o que ele grava em disco.
           if (r.terminaSozinho) return;
@@ -678,7 +701,7 @@ export class CondutorDeTrabalhos {
         execucao: id,
         sessaoPi,
         ocupado: r.prompt !== undefined,
-        desde: new Date().toISOString(),
+        desde: relogio.agora(),
         pendentes,
         eventosDaMensagemEmEscrita: [],
         naoGravadas: [],

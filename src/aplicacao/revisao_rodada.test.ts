@@ -13,11 +13,7 @@ import { carregarProjeto, gravarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
-import {
-  caminhoDaWorktreeDemanda,
-  caminhoDaWorktreeRodada,
-  garantirWorktreeRodada,
-} from "../infra/repositorio/worktree-demanda.ts";
+import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
@@ -26,7 +22,7 @@ import {
   REF_RODADA,
 } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
-import { conduzirRevisaoRodada, prepararRevisaoRodada } from "./revisao_rodada.ts";
+import { prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -205,7 +201,15 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
     resultado: "reprovado",
     motivo: "corrigir o lint",
     correcoes: [
-      { demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] },
+      {
+        demanda_id: "I-1",
+        ticket_id: 1,
+        rodada_id: 1,
+        titulo: "corrige",
+        descricao: "d",
+        arquivos_previstos: [],
+        depende: [],
+      },
     ],
   });
   const ag = carregarDemanda(banco, "I-1");
@@ -267,23 +271,6 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
   evidenciar(banco, 0, true);
   await decidir(banco, { resultado: "aprovado" });
   assert.equal(estadoDaPrimeiraRodada(banco), "encerrar_rodada");
-});
-
-test("CA-1: conduzirRevisaoRodada reserva o revisar_rodada, prepara e roda o pi na worktree da rodada", async () => {
-  const { c, banco, pastas } = await cenarioRevisao();
-  assert.equal(await conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1 }, { limiteMin: 1 }), "falhou");
-  const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
-  assert.equal(evidencia(banco, "matriz_fitness").length, 1);
-  assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
-});
-
-test("conduzirRevisaoRodada recusa rodada sem revisar_rodada", async () => {
-  const { banco } = await cenarioRevisao();
-  await assert.rejects(
-    conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 9 }, { limiteMin: 1 }),
-    /I-1.R9 não tem ticket revisar_rodada/,
-  );
 });
 
 test("I-266: a decisão do agente com o trabalho de outro ticket é reprovada e nada é gravado", async () => {

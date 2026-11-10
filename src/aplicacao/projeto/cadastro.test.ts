@@ -1,17 +1,28 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { ZodError } from "zod";
 import type { DatabaseSync } from "node:sqlite";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../../nucleo/erros.ts";
+import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
+import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../infra/registro.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
+import { cursorDaBase } from "../../armazenamento/commits_humanos.ts";
 import { buscarProjeto, listarProjetos } from "../../armazenamento/projetos.ts";
-import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto, removerProjeto } from "./cadastro.ts";
+import {
+  cadastrarProjetoDoFormulario,
+  editarProjeto,
+  editarProjetoDoFormulario,
+  gravarConfiguracaoSdlc,
+  registrarProjeto,
+  removerProjeto,
+} from "./cadastro.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;
@@ -277,7 +288,7 @@ const TABELAS = [
   "usuario_simulado_anexo",
   "usuario_simulado",
   "uso_modelo_execucao",
-  "retrabalho_demanda",
+  "commit_humano_posterior",
   "arquivo_commit_demanda",
   "commit_ticket_demanda",
   "arquivo_evidencia",
@@ -345,7 +356,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
       INSERT INTO commit_ticket_demanda VALUES ('${n.padStart(40, "b")}', '${d}', 1, 'm', 't');
       INSERT INTO arquivo_commit_demanda (sha, caminho, status) VALUES ('${n.padStart(40, "b")}', 'f', 'A');
-      INSERT INTO retrabalho_demanda VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
+      INSERT INTO commit_humano_posterior VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
     `);
     mkdirSync(pastaDe(raiz, execucao), { recursive: true });
     writeFileSync(join(pastaDe(raiz, execucao), "log"), "x");
@@ -535,7 +546,7 @@ const TABELAS_DEMANDA = [
   "avaliacao_demanda",
   "achado_avaliacao",
   "uso_avaliacao",
-  "retrabalho_demanda",
+  "commit_humano_posterior",
   "arquivo_commit_demanda",
   "commit_ticket_demanda",
   "uso_modelo_historico",
@@ -543,6 +554,7 @@ const TABELAS_DEMANDA = [
   "processo_do_trabalho",
   "trabalho_agentico",
   "trabalho_nao_gerenciado",
+  "uso_declarado",
   "decisao_ticket",
   "arquivo_evidencia",
   "evidencia_historico",
@@ -551,6 +563,9 @@ const TABELAS_DEMANDA = [
   "encerramento_demanda",
   "dependencia_ticket",
   "caminho_ticket",
+  "arquivo_previsto_rodada",
+  "arquivo_previsto_demanda",
+  "versao_plano",
   "ticket_demanda",
   "criterio_citado_rodada",
   "dependencia_rodada",
@@ -580,6 +595,10 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
       VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
     INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
     INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
+    INSERT INTO arquivo_previsto_rodada VALUES ('${d}', 1, 'src');
+    INSERT INTO arquivo_previsto_demanda VALUES ('${d}', 'src');
+    INSERT INTO versao_plano (demanda_id, numero, origem, autor_tipo, rodada_id, criada_em, dados)
+      VALUES ('${d}', 1, 'aprovacao_do_planejamento', 'fabriquinha', NULL, 't', '{}');
     INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
     INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');
@@ -587,13 +606,14 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');
     INSERT INTO limpeza_pendente_encerramento VALUES ('${d}', 'x');
     INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
+    INSERT INTO uso_declarado VALUES ('pi', '${d}x', '${d}', '[]');
     INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
     INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
     INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);
-    INSERT INTO retrabalho_demanda VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
+    INSERT INTO commit_humano_posterior VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
     INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
     INSERT INTO avaliacao_demanda VALUES ('${d}av', '${d}');
     INSERT INTO achado_avaliacao VALUES ('${d}av', 1, 't', 'd', 'e', '${d}');
@@ -606,7 +626,7 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
   popularDemanda(banco, "outro", "I-9001");
   const antes = contagensDemanda(banco);
   popularDemanda(banco, "demo", "I-9101");
-  // demanda do outro projeto que depende da do projeto removido, e retrabalho dela sobre o ticket do removido
+  // demanda do outro projeto que depende da do projeto removido, e a linha de commit posterior dela sobre o ticket do removido
   banco.exec(`
     INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
     INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');
@@ -615,5 +635,156 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
   banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
   assert.deepEqual(contagensDemanda(banco), antes);
   assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);
+  banco.close();
+});
+
+// Cadastro e edição pelo formulário: um clone com remoto de cara GitHub (o acesso desviado para um bare no disco), gh e
+// pi falsos. realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
+const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-cadastro-")));
+after(() => {
+  rmSync(base, { recursive: true, force: true });
+});
+const gitconfig = join(base, "gitconfig");
+writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+process.env.GIT_CONFIG_GLOBAL = gitconfig;
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+const bin = join(base, "bin");
+mkdirSync(bin);
+writeFileSync(join(bin, "gh"), "#!/bin/sh\nexit 0\n");
+chmodSync(join(bin, "gh"), 0o755);
+process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
+const piFalso = instalarPiFalso(base);
+const modelosDoPi: PassoPi = {
+  listaDeModelos: {
+    tabela:
+      "provider   model              context  max-out  thinking  images\n" +
+      "anthropic  claude-opus-5-5    200K     64K      yes       yes\n" +
+      "llamacpp   qwen3-coder-30b    32.8K    8.2K     yes       no\n",
+  },
+};
+const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
+const qwen = { provedor: "llamacpp", nome: "qwen3-coder-30b" };
+
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+
+/** Clone com `origin` de cara GitHub e a branch `main` publicada num bare no disco. */
+function clonePublicado(): string {
+  const bare = mkdtempSync(join(base, "origin-"));
+  git(bare, "init", "--bare", "-q");
+  const repo = mkdtempSync(join(base, "repo-"));
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "commit", "-q", "--allow-empty", "-m", "início");
+  git(repo, "push", "-q", bare, "HEAD:refs/heads/main");
+  const url = "https://github.com/dono/repo.git";
+  git(repo, "remote", "add", "origin", url);
+  git(repo, "config", `url.${bare}.insteadOf`, url);
+  return repo;
+}
+
+const formularioDeLoja = (repo: string) => ({
+  nome: "loja",
+  raiz_git: repo,
+  branch_base: "main",
+  preparacao: [],
+  configuracoes: {},
+});
+
+const linhasDasEtapas = (banco: DatabaseSync) =>
+  banco
+    .prepare("SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto ORDER BY etapa")
+    .all()
+    .map((linha) => ({ ...linha }));
+
+test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava as etapas escolhidas e fixa o cursor da base", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  const configuracoes = {
+    planejar: { modelo: opus, effort: "high" as const },
+    implementar: { modelo: qwen },
+    revisar_rodada: { effort: "low" as const },
+    entender_e_desenhar: {},
+  };
+  const salvo = await cadastrarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    hospedagem: "azure-devops",
+    configuracoes,
+  });
+  assert.equal(salvo.hospedagem, "github");
+  assert.equal(salvo.chave_sonarqube, "loja");
+  assert.deepEqual(salvo.configuracoes, {
+    planejar: configuracoes.planejar,
+    implementar: configuracoes.implementar,
+    revisar_rodada: configuracoes.revisar_rodada,
+  });
+  assert.deepEqual(
+    linhasDasEtapas(banco).map((linha) => linha.etapa),
+    ["implementar", "planejar", "revisar_rodada"],
+    "a etapa sem modelo nem effort não deixa linha",
+  );
+  assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
+  await assert.rejects(cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo)), /já existe o projeto loja/);
+  banco.close();
+});
+
+test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e não varre a base", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  await cadastrarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    configuracoes: { planejar: { modelo: opus } },
+  });
+  const cursor = cursorDaBase(banco, "loja");
+  git(repo, "commit", "-q", "--allow-empty", "-m", "outro");
+
+  // O modelo que o pi não lista: erro no campo da etapa, e nada muda.
+  await assert.rejects(
+    editarProjetoDoFormulario(banco, {
+      ...formularioDeLoja(repo),
+      preparacao: ["npm ci"],
+      configuracoes: { planejar: { modelo: opus }, implementar: { modelo: { provedor: "inexistente", nome: "xyz" } } },
+    }),
+    (erro: unknown) =>
+      erro instanceof ZodError &&
+      erro.issues.length === 1 &&
+      erro.issues[0]?.path.join(".") === "configuracoes.implementar.modelo" &&
+      erro.issues[0].message.includes("o modelo inexistente/xyz não existe no pi"),
+  );
+  assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes.preparacao, []);
+  assert.deepEqual(
+    linhasDasEtapas(banco).map((linha) => linha.etapa),
+    ["planejar"],
+  );
+
+  // Com o pi quebrado: o igual ao gravado salva sem chamá-lo; o trocado é rejeitado.
+  piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
+  const editado = await editarProjetoDoFormulario(banco, {
+    ...formularioDeLoja(repo),
+    preparacao: ["npm ci"],
+    configuracoes: { planejar: { modelo: opus, effort: "low" } },
+  });
+  assert.deepEqual(editado.verificacoes.preparacao, ["npm ci"]);
+  assert.deepEqual(linhasDasEtapas(banco), [
+    { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "low" },
+  ]);
+  await assert.rejects(
+    editarProjetoDoFormulario(banco, { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } }),
+    ZodError,
+  );
+  assert.equal(cursorDaBase(banco, "loja"), cursor, "a edição não varre a base");
+  banco.close();
+});
+
+test("o cadastro pelo formulário recusa o repositório que a conferência reprova como ErroExterno, sem gravar", async () => {
+  const banco = novoBanco();
+  const pasta = mkdtempSync(join(base, "nao-git-"));
+  await assert.rejects(
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta)),
+    (erro: unknown) =>
+      erro instanceof ErroExterno &&
+      erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
+  );
+  assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });

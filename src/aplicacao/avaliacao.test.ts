@@ -1,13 +1,14 @@
 // Avaliação de melhoria do SDLC: escopo, recusas, achados, uso fora das métricas, encaminhamento, contra banco real e pi falso.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
-import { metricasDaDemanda } from "./demanda.ts";
+import { relogioFixo } from "../nucleo/relogio.ts";
+import { metricasDasEtapas } from "./metricas/metricas_das_etapas.ts";
 import {
   abortarAvaliacao,
   abrir as abrirAv,
@@ -105,9 +106,12 @@ test("recusa o escopo sem demanda com sessão, citando período e projeto (CA-2)
 });
 
 test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, conversa e encaminha (CA-1, 3, 4, 7, 8, 9, 10, 13, 14, 15)", async () => {
-  const antes = JSON.stringify(metricasDaDemanda(banco, "I-10"));
+  const metricas = () => JSON.stringify([...metricasDasEtapas(banco, { demandaId: "I-10" })]);
+  const antes = metricas();
   piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
-  const id = await iniciarAvaliacao(banco, { ...escopo, demandas: ["I-10", "I-10"] }, opcoes);
+  const instante = "2031-05-06T07:08:09.000Z";
+  const relogio = relogioFixo(instante);
+  const id = await iniciarAvaliacao(banco, { ...escopo, demandas: ["I-10", "I-10"] }, opcoes, relogio);
   await ate(
     () => banco.prepare("SELECT count(*) AS n FROM achado_avaliacao").get()?.n === 2,
     "a importação dos achados",
@@ -115,7 +119,15 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   const dir = join(raiz, "avaliacoes", id);
   assert.deepEqual(readdirSync(join(dir, "demandas")), ["I-10"]);
   assert.match(readFileSync(join(dir, "demandas", "I-10", "demanda.md"), "utf8"), /Título I-10/);
-  assert.ok(existsSync(join(dir, "demandas", "I-10", "metricas.json")));
+  const metricasPorEtapa = JSON.parse(readFileSync(join(dir, "demandas", "I-10", "metricas.json"), "utf8")) as Record<
+    string,
+    { definicao: { tipo: string } }[]
+  >;
+  assert.deepEqual(
+    metricasPorEtapa.implementar?.map((m) => m.definicao.tipo),
+    ["uso", "alteracoes_posteriores"],
+  );
+  assert.deepEqual(Object.keys(metricasPorEtapa), [...metricasDasEtapas(banco, { demandaId: "I-10" }).keys()]);
   const sessao = readFileSync(join(dir, "sessoes", "I-10-s-I-10.md"), "utf8");
   assert.match(sessao, /feito/);
   assert.match(readFileSync(join(dir, "indice.md"), "utf8"), /sessoes\/I-10-s-I-10\.md/);
@@ -129,9 +141,10 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   const av = abrirAv(banco, id);
   assert.deepEqual(av.demandas, ["I-10"]);
   assert.equal(av.pedido, "");
+  assert.equal(av.criada_em, instante);
   assert.equal(av.achados.length, 2);
   assert.equal(av.uso[0]?.custo, 0.5);
-  assert.equal(JSON.stringify(metricasDaDemanda(banco, "I-10")), antes);
+  assert.equal(metricas(), antes);
 
   await parar(id);
   assert.equal(abrirAv(banco, id).estado, "concluida");
@@ -154,7 +167,8 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   await ate(() => banco.prepare("SELECT chamadas FROM uso_avaliacao").get()?.chamadas === 2, "o uso regravado");
   assert.equal(registro().find((r) => r.comando?.message === "e o custo?")?.comando?.type, "prompt");
 
-  const demanda = encaminharAchado(banco, id, 1);
+  const demanda = encaminharAchado(banco, id, 1, relogio);
+  assert.equal(demanda.demanda.estado_alterado_em, instante);
   assert.equal(demanda.demanda.estado, "entender_e_desenhar");
   assert.equal(demanda.demanda.titulo, "Achado 1");
   assert.equal(demanda.demanda.projeto, "loja");

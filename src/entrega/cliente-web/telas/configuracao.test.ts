@@ -1,19 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
 import {
   agendador,
   ambiente,
   confirmacaoDeEliminar,
   confirmacaoDeRemover,
   errosDoZod,
-  type EstadoDaConfiguracao,
-  type EstadoDoAmbiente,
   formularioDeProjeto,
   menu,
   modeloDasAvaliacoes,
   NOVO,
   pagina,
-  type ProjetoCadastrado,
   projetoInexistente,
   rascunhoDe,
   selecao,

@@ -10,9 +10,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../apoio-testes/ambiente_falso.ts";
 import { montarAmbienteDoServico } from "../src/aplicacao/espaco/ambiente_do_servico.ts";
-import type { DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
+import type { DepsDespacho } from "../src/aplicacao/despacho.ts";
 import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "./apoio-execucao.ts";
@@ -53,11 +51,7 @@ after(() => {
 
 /** O despacho que fecha o ticket com as Verificações de verdade, e não com as injetadas dos outros testes. */
 const despachoComVerificacoesReais: DepsDespacho = {
-  iniciarProcesso: (banco, ticket, opcoes) =>
-    iniciarExecucaoDemanda(banco, ticket, {
-      ...opcoes,
-      fechar: (b, ref, r) => fecharTicketDemanda(b, ref, r, { opcoes: { limiteMs: 60_000, intervaloMs: 1 } }),
-    }),
+  implementacao: { opcoesSonar: { limiteMs: 60_000, intervaloMs: 1 } },
 };
 
 test("CA-4: git da worktree, Preparação, Verificações e pi de cada ticket da rodada passam pelo Ambiente", async (t) => {

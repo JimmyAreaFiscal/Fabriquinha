@@ -5,9 +5,9 @@ import { z } from "zod";
 import type { AgregadoDemanda, Decisao, NomeGate, TicketDemanda } from "./agregado_demanda.ts";
 import { AUDITOR, type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
-import { materializarCorrecoesRodada, materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { ErroDeRegra, existe } from "./erros.ts";
 import { criarTicket, type Endereco, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
+import { correcaoDasRodadasNovas, correcaoDosTicketsDaRodada, materializar } from "./plano.ts";
 import { type EstadoDemanda, type EstadoRodada, type EtapaTicket, Motivo } from "./primitivos.ts";
 import { falhaQueExigeOAuditor } from "./tentativa.ts";
 import {
@@ -328,13 +328,10 @@ class GateDaRevisaoDaRodada extends Gate {
       return mudarTicket(ag, ticket, "falhou", decisao.em, {}, falhaQueExigeOAuditor(motivo));
     }
     // Os mesmos erros de correção vazia ou inválida recusam antes de qualquer retorno.
-    const base = materializarCorrecoesRodada(
-      ag,
-      { demanda_id: ticket.demanda_id, rodada_id: ticket.rodada_id },
-      correcoes,
-      decisao.por,
-      decisao.em,
-    );
+    const rodada_id = existe(ticket.rodada_id, "o ticket de revisão não tem rodada", "confira a rodada");
+    const base = materializar(ag, correcaoDosTicketsDaRodada("revisao_rodada", decisao.por, rodada_id, correcoes), {
+      agora: decisao.em,
+    });
     const concluido = mudarTicket(base, ticket, "concluido", decisao.em);
     return { ...concluido, rodadas: rodadasComEstadoMudado(concluido, ticket, "implementar", decisao.em) };
   }
@@ -381,7 +378,7 @@ class GateDaRevisaoDaDemanda extends Gate {
     { correcoes }: EntradaReprovada,
   ): AgregadoDemanda {
     // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
-    const base = materializarRodadasCorretivas(ag, correcoes, decisao.por, decisao.em);
+    const base = materializar(ag, correcaoDasRodadasNovas(decisao.por, correcoes), { agora: decisao.em });
     return {
       ...mudarTicket(base, ticket, "concluido", decisao.em),
       demanda: CICLO_DA_DEMANDA.mudar(base.demanda, "em_execucao", decisao.em),

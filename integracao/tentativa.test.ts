@@ -2,7 +2,8 @@
 // um ticket com duas Tentativas encerradas (motivos A e depois B): o esquema não tem mais os contadores nem o `erro`, e
 // o CLI do agente e a página da demanda mostram o motivo B.
 import assert from "node:assert/strict";
-import { Readable } from "node:stream";
+import { execFile } from "node:child_process";
+import { join } from "node:path";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
@@ -17,9 +18,9 @@ import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
 import type { Tentativa } from "../src/nucleo/tentativa.ts";
-import { comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { principal } from "../src/entrega/cli/cli.ts";
-import { pagina, type DadosDaPagina } from "../src/entrega/cliente-web/telas/demandas.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../src/armazenamento/trabalho_agentico.ts";
+import type { PaginaDaDemanda } from "../src/entrega/contrato/demanda.ts";
+import { pagina } from "../src/entrega/cliente-web/telas/demandas.ts";
 
 const ticket = Endereco.doTicket("I-206", 3);
 const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({
@@ -31,7 +32,7 @@ const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({
 });
 
 test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece no CLI e na página da demanda", async () => {
-  const { raiz, banco } = abrirBancoTemporario();
+  const { banco } = abrirBancoTemporario();
   cadastrarProjetoLoja(banco);
   gravarAgregadoPronto(
     banco,
@@ -63,19 +64,22 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
     const execucao = { id: "exec-3", trabalho_id: "s-exec-3", inicio: INSTANTE_DO_CENARIO, falha: false };
     return { ...estado, sessoes, execucoes: iniciarProcesso(sessoes, estado.execucoes, execucao) };
   });
-  let saida = "";
-  const codigo = await principal(["ticket", "ver", "I-206.T3"], {
-    env: { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "exec-3" },
-    stdin: Readable.from([""]),
-    stdout: { write: (texto: string) => (saida += texto) },
-    stderr: { write: () => true },
-    parada: () => Promise.resolve(),
+  gravarTokenDoProcesso(banco, "exec-3", "token-exec-3");
+  const { pedir, porta } = await servir(banco);
+  const { codigo, saida } = await new Promise<{ codigo: number; saida: string }>((resolve) => {
+    execFile(
+      process.execPath,
+      [join(import.meta.dirname, "../pacote-pi/bin/fabriquinha"), "ticket", "ver", "I-206.T3"],
+      { env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-3" } },
+      (erro, stdout) => {
+        resolve({ codigo: typeof erro?.code === "number" ? erro.code : 0, saida: stdout });
+      },
+    );
   });
   assert.equal(codigo, 0);
   assert.equal((JSON.parse(saida) as { motivo?: string }).motivo, "motivo B");
 
-  const { pedir } = await servir(banco);
-  const demanda = (await pedir("/api/demandas/I-206")).json<DadosDaPagina>();
+  const demanda = (await pedir("/api/demandas/I-206")).json<PaginaDaDemanda>();
   assert.equal(demanda.tickets.find((t) => t.ref === "I-206.T3")?.motivo, "motivo B");
   const html = pagina(demanda);
   assert.match(html, /Motivo da falha:<\/strong> motivo B/);

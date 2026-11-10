@@ -1,9 +1,10 @@
 // A Pendência (CONCEITOS.md §11): tudo o que está parado esperando o Auditor. É sempre derivada do estado dos outros
 // conceitos, nunca gravada; esta é a única regra que decide o que aguarda o Auditor. Esperar uma Dependência não é Pendência.
 import type { AgregadoDemanda, PullRequestDoEspaco } from "./agregado_demanda.ts";
+import { Despacho, prontosParaExecutarAgora, situacaoDeUmaDemanda } from "./despacho.ts";
 import { Endereco, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
-import { selecionarTrabalho } from "./selecao_trabalho.ts";
 import type { Instante } from "./primitivos.ts";
+import { relogioDoSistema } from "./relogio.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "./tentativa.ts";
 import { exigirSemPendencias } from "./transicoes_demanda.ts";
 
@@ -48,7 +49,7 @@ const TOLERANCIA_REVISAO_PARADA_MS = 2 * 60_000;
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function motivoDaRevisaoParada(
   ag: AgregadoDemanda,
-  agora: Date,
+  agora: Instante,
 ): { motivo: string; desde: Instante } | undefined {
   const { estado, estado_alterado_em } = ag.demanda;
   const prontaParaRevisao =
@@ -62,7 +63,7 @@ export function motivoDaRevisaoParada(
     (ultimo, t) => (t.estado_alterado_em > ultimo ? t.estado_alterado_em : ultimo),
     estado_alterado_em,
   );
-  if (agora.getTime() - Date.parse(desde) < TOLERANCIA_REVISAO_PARADA_MS) return undefined;
+  if (Date.parse(agora) - Date.parse(desde) < TOLERANCIA_REVISAO_PARADA_MS) return undefined;
   try {
     exigirSemPendencias(ag);
     return {
@@ -85,7 +86,10 @@ export function pendenciasDaDemanda(
   vivos: readonly TrabalhoVivo[],
   prs: readonly PullRequestDoEspaco[],
   agendadorLigado: boolean,
-  { agora = new Date(), predecessorasSatisfeitas = true } = {},
+  {
+    agora = relogioDoSistema.agora(),
+    predecessorasSatisfeitas = true,
+  }: { agora?: Instante; predecessorasSatisfeitas?: boolean } = {},
 ): Pendencia[] {
   const { id: demandaId, estado, estado_alterado_em } = ag.demanda;
   const daDemanda = Endereco.daDemanda(demandaId);
@@ -178,9 +182,8 @@ export function pendenciasDaDemanda(
     });
   }
   if (!agendadorLigado) {
-    for (const t of selecionarTrabalho(ag, predecessorasSatisfeitas)) {
-      // O encerrar_demanda à espera do merge pede o merge na plataforma, não a execução.
-      if (t.etapa === "encerrar_demanda" && aguardandoMerge) continue;
+    const selecao = new Despacho().selecionar(situacaoDeUmaDemanda(ag, predecessorasSatisfeitas));
+    for (const t of prontosParaExecutarAgora(selecao)) {
       pendencias.push({
         tipo: "despacho_parado",
         item: Endereco.doTicket(demandaId, t.ticket_id),

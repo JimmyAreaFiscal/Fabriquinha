@@ -46,7 +46,7 @@ test("a migração 45 acrescenta o conjunto e deixa tudo o que existe no host lo
   );
   const projetosAntes = linhas(banco, "SELECT * FROM projeto");
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES + 1 - VERSAO_LINHA_DE_BASE));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);

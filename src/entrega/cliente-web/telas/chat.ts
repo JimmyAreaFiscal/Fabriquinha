@@ -2,16 +2,17 @@
 // do sistema e o erro da falha, as peças que chegam ao vivo e o envio conforme o estado, como funções puras que
 // devolvem HTML. O texto de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
-import type { CabecalhoDemanda, ExecucaoDoChat } from "../../../aplicacao/sessoes_demanda.ts";
-import type { Entrada } from "../../http/rotas/chat.ts";
+import type { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import { escapar, MODO_DA_SESSAO, nomeDoModelo, plural, rotuloDoModelo } from "../render.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
+import { ROTULO_DA_ETAPA } from "../rotulos.ts";
 import { ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 
-export type Cabecalho = CabecalhoDemanda;
-export type Dados = Cabecalho & { conversa: Entrada[] };
+export type Dados = DadosDoChatDemanda;
+export type Cabecalho = Omit<Dados, "conversa">;
+export type Entrada = Dados["conversa"][number];
+export type Dialogo = Dados["sessao"]["dialogos"][number];
+type ExecucaoDoChat = Dados["execucoes"][number];
 
 const caminhoDaPaginaDaDemanda = (id: string): string => `/demandas/${encodeURIComponent(id)}`;
 
@@ -119,7 +120,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
     `<a class="demanda" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
     (rodada === undefined ? "" : `<span class="sep">│</span><span class="id">${escapar(rodada)}</span>`) +
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
-    `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
+    `<span class="muted">${ROTULO_DA_ETAPA[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
     rotuloDoModelo(modelo) +
     pendenciasDaDemandaNaBarra(c) +
     `<div class="direita"><span class="muted pequeno">${rotuloDaExecucao(sessao.execucao)}</span>` +

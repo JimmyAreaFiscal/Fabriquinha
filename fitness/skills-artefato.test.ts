@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { TipoEvidencia } from "../src/nucleo/evidencia.ts";
+import { PlanoProposto } from "../src/nucleo/plano.ts";
 import { CATALOGO_ETAPAS } from "../src/nucleo/evidencia_etapa.ts";
 import { PACOTE, skillDoTipo } from "../src/infra/agente/pi.ts";
 
@@ -16,17 +17,12 @@ const NOME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_NOME = 64;
 const MAX_DESCRICAO = 1024;
 const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submeter"];
-/** A evidência da demanda que a ferramenta de fora submete sem skill: os custos vêm da própria sessão dela. */
-const SEM_SKILL: readonly string[] = ["custos_realizados"];
 /** Skills do fluxo externo (CLI da ferramenta de fora): não são de evidência de agente e têm forma própria. */
 const EXTERNAS = ["demanda-externa"];
 /** As evidências de produtor agente das etapas e as da demanda (produtor externo), que a ferramenta de fora registra. */
 const DE_ARTEFATO = new Set(
   TipoEvidencia.options
-    .filter(
-      (tipo) =>
-        CATALOGO_ETAPAS.some((c) => c.tipo === tipo && c.produtor !== "fabriquinha") && !SEM_SKILL.includes(tipo),
-    )
+    .filter((tipo) => CATALOGO_ETAPAS.some((c) => c.tipo === tipo && c.produtor !== "fabriquinha"))
     .map(skillDoTipo),
 );
 
@@ -108,4 +104,15 @@ test("CA-14: nenhuma skill do pacote cita comando removido; acima de 30 arquivos
     assert.match(texto(dir), /Mais de 30|mais de 30/, dir);
     assert.match(texto(dir), /`fabriquinha demanda registrar \.\.\. --dep I-<n>`/, dir);
   }
+});
+
+test("I-280 CA-5: o exemplo JSON da skill artefato-plano é um PlanoProposto válido, com os três níveis e a inclusão no texto", () => {
+  const texto = readFileSync(join(PACOTE, "skills", "artefato-plano", "SKILL.md"), "utf8");
+  const exemplo = /```json\n([\s\S]*?)\n```/.exec(texto)?.[1] ?? "";
+  const plano = PlanoProposto.parse(JSON.parse(exemplo));
+  assert.ok(plano.arquivos_previstos.length > 0);
+  assert.ok(plano.rodadas.every((r) => r.arquivos_previstos.length > 0));
+  assert.ok(plano.tickets.every((t) => t.arquivos_previstos.length > 0));
+  assert.match(texto, /Ticket ⊆ Rodada ⊆ Demanda/);
+  assert.doesNotMatch(texto, /caminhos/);
 });

@@ -2,21 +2,22 @@
 // filtros, e uma linha por demanda com a linha do tempo dos estados, as rodadas da execução e a gaveta de tickets. O DOM
 // e a rede ficam em projeto-montar.ts.
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
-import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
   diaMes,
   escapar,
+  ha,
   pilulaDoEstadoDoTicket,
   rotuloDoEstadoDoTicket,
   plural,
   rotuloDoModelo,
   nomeDoEstadoDoTicket,
 } from "../render.ts";
+import { ROTULO_DA_ETAPA, TITULO_PADRAO_DA_ETAPA, faseDoProcesso } from "../rotulos.ts";
 import type { ProjetoListado } from "./configuracao.ts";
-import { ETAPA_DO_TICKET } from "./demandas.ts";
 import { ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 import { cardsDoMes } from "./metricas.ts";
 
@@ -90,12 +91,12 @@ const COLUNAS: readonly Coluna[] = [
 ];
 
 /** As 5 etapas do processo sobre as colunas, com quantas colunas cada uma agrupa: Implementar é o trecho das rodadas. */
-const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
-  ["Registrar", 2],
-  ["Planejar", 2],
-  ["Implementar", 5],
-  ["Revisar", 1],
-  ["Encerrar", 1],
+const FASES_DO_PROCESSO: readonly (readonly [EtapaTicket, number])[] = [
+  ["entender_e_desenhar", 2],
+  ["planejar", 2],
+  ["implementar", 5],
+  ["revisar_demanda", 1],
+  ["encerrar_demanda", 1],
 ];
 
 /** A cor do marco atual e da borda da linha: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
@@ -184,27 +185,17 @@ function linhaDoTempo(colunas: ColunasDaLinha, estado: EstadoDaLinha | undefined
   return `<ol class="${["trilho-estados", estado].filter(Boolean).join(" ")}" aria-label="${rotulo}">${passos.join("")}</ol>`;
 }
 
-/** Há quanto tempo, em minutos ou horas e minutos, com espaços não separáveis: "1 min" nunca se separa. */
-/** @testes função pura da tela, testada sem montar o DOM */
-export function ha(desde: string, agora: Date): string {
-  const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
-  let duracao = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
-  if (minutos < 1) duracao = "menos de 1 min";
-  else if (minutos < 60) duracao = `${String(minutos)} min`;
-  return `há ${duracao.replaceAll(" ", " ")}`;
-}
-
 /** O estado do ticket que dá a cor da linha, à direita, quando ela falhou ou roda. */
 const ESTADO_DO_DESTAQUE: Partial<Record<EstadoDaLinha, EstadoTicket>> = { falha: "falhou", rodando: "em_execucao" };
 
 /** À direita da linha: o gate com o link para a demanda, ou o ticket falho ou em execução com o chat. */
-function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora: Date): string {
+function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora: number): string {
   if (estado === "aguarda") {
     return `<a class="chat" href="${caminhoDaDemanda(d.id)}"><span class="pill pill-aguarda">Aguarda você</span><span class="ir">abrir →</span></a>`;
   }
   const ticket = estado && d.tickets.find((t) => t.estado === ESTADO_DO_DESTAQUE[estado]);
   if (!ticket) return "";
-  const conteudo = `<span class="pill ${pilulaDoEstadoDoTicket(ticket.estado, ticket.piAtivo)}">${rotuloDoEstadoDoTicket(ticket.estado, ticket.piAtivo)}</span><span class="muted quando">${ha(ticket.estadoAlteradoEm, agora)}</span>`;
+  const conteudo = `<span class="pill ${pilulaDoEstadoDoTicket(ticket.estado, ticket.pi_ativo)}">${rotuloDoEstadoDoTicket(ticket.estado, ticket.pi_ativo)}</span><span class="muted quando">${ha(ticket.estadoAlteradoEm, agora)}</span>`;
   return ticket.sessao === undefined
     ? `<span class="chat">${conteudo}</span>`
     : `<a class="chat" href="${caminhoDaSessao(ticket.sessao)}">${conteudo}<span class="ir">chat →</span></a>`;
@@ -220,7 +211,7 @@ const SAIDA_DO_ANDAMENTO: Partial<Record<EstadoDemanda, { rotulo: string; classe
 /** Quando a demanda saiu do andamento: cancelada, arquivada ou concluída. */
 function quando(d: DemandaDoProjeto): string {
   const saida = SAIDA_DO_ANDAMENTO[d.estado];
-  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(new Date(d.estadoAlteradoEm))}</span>` : "";
+  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(d.estadoAlteradoEm)}</span>` : "";
 }
 
 /** O que fica sob o título: `I-n`, tipo, a dependência que bloqueia, o progresso e quando saiu do andamento. */
@@ -260,21 +251,8 @@ function rodadas(d: DemandaDoProjeto): string {
     .join("");
 }
 
-/** O título do ticket que não tem um: o que a etapa faz, como o antigo mostrava. */
-const TITULO_DA_ETAPA: Record<EtapaTicket, string> = {
-  entender_e_desenhar: "Registrar a demanda",
-  planejar: "Planejar a demanda",
-  implementar: "Implementar",
-  revisar_rodada: "Revisar a rodada",
-  encerrar_rodada: "Encerrar a rodada",
-  ajustar_resultado: "Sessão de ajustes",
-  resolver_conflito: "Resolver o conflito",
-  revisar_demanda: "Revisar a demanda",
-  encerrar_demanda: "Encerrar a demanda",
-};
-
 /** Um item por Pendência no alto da gaveta: o tipo, o item, o motivo, há quanto tempo e o chat do diálogo. */
-function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: Date): string {
+function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: number): string {
   const chat =
     p.sessao === undefined
       ? ""
@@ -283,7 +261,7 @@ function itemDaPendencia(p: DemandaDoProjeto["pendencias"][number], agora: Date)
 }
 
 /** A gaveta: as Pendências e os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
-function gaveta(d: DemandaDoProjeto, agora: Date): string {
+function gaveta(d: DemandaDoProjeto, agora: number): string {
   const linhas = d.tickets.map((t) => {
     const encerrado = t.terminal;
     // A sessão de ajustes conversa na página da demanda, não no chat.
@@ -292,10 +270,10 @@ function gaveta(d: DemandaDoProjeto, agora: Date): string {
         ? ""
         : `<a class="chat" href="${caminhoDaSessao(t.sessao)}"><span class="ir">chat →</span></a>`;
     return `<tr${encerrado ? ' class="apagada"' : ""}>
-      <td class="etapa-cel">${ETAPA_DO_TICKET[t.etapa].toLowerCase()}</td>
+      <td class="etapa-cel">${ROTULO_DA_ETAPA[t.etapa].toLowerCase()}</td>
       <td class="id-cel"><span class="id">${escapar(t.ref)}</span></td>
-      <td class="titulo-cel">${escapar(t.titulo ?? TITULO_DA_ETAPA[t.etapa])}</td>
-      <td class="status-cel"><span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.piAtivo)}">${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}</span></td>
+      <td class="titulo-cel">${escapar(t.titulo ?? TITULO_PADRAO_DA_ETAPA[t.etapa])}</td>
+      <td class="status-cel"><span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.pi_ativo)}">${nomeDoEstadoDoTicket(t.estado, t.pi_ativo)}</span></td>
       <td class="modelo-cel">${rotuloDoModelo(t.modelo ?? "padrão do pi")}</td>
       <td class="sessao-cel">${chat}</td>
     </tr>`;
@@ -308,7 +286,7 @@ function gaveta(d: DemandaDoProjeto, agora: Date): string {
 }
 
 /** Uma linha por demanda: título e marcas, a linha do tempo, o destaque, as rodadas na execução e a gaveta. */
-function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string {
+function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: number): string {
   const corDaLinha = estadoDaDemanda(d);
   const aberta = gavetas.get(d.id) ?? (corDaLinha === "aguarda" || corDaLinha === "falha");
   const estado = d.estadoNaLinhaDoTempo;
@@ -332,8 +310,9 @@ function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string 
  * horizontal na janela estreita: dentro dela, deixaria de ficar fixo ao rolar a página (a montagem o acompanha).
  */
 function cabeca(): string {
-  const etapas = ETAPAS_DO_PROCESSO.map(
-    ([nome, estados]) => `<div class="pista-etapa" style="grid-column: span ${String(estados)}">${nome}</div>`,
+  const etapas = FASES_DO_PROCESSO.map(
+    ([etapa, estados]) =>
+      `<div class="pista-etapa" style="grid-column: span ${String(estados)}">${faseDoProcesso(etapa)}</div>`,
   );
   const estados = COLUNAS.map(
     ({ rotulo, gate }) => `<div class="${gate ? "pista-coluna gate" : "pista-coluna"}">${rotulo}</div>`,
@@ -360,9 +339,9 @@ export function paginaDoProjeto(
   projetos: readonly ProjetoListado[],
   nome: string,
   { demandas, contagem }: ListaDoProjeto,
-  mes: MetricasMesDemanda,
+  mes: MetricasDoMes,
   escolhas: Escolhas,
-  agora: Date,
+  agora: number,
 ): string {
   const alternar = (chave: keyof Escolhas["mostrar"], rotulo: string) =>
     `<label class="alternar"><input type="checkbox" data-mostrar="${chave}"${escolhas.mostrar[chave] ? " checked" : ""}> ${rotulo}</label>`;

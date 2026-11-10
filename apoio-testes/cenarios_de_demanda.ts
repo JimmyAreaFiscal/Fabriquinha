@@ -96,6 +96,9 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     pull_requests: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
@@ -250,7 +253,10 @@ export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", 
 }
 
 /** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `processo_do_trabalho.id`. */
-export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: string; ticket_id: number }): Ator {
+export function abrirTrabalhoDoAgente(
+  banco: DatabaseSync,
+  ref: { demanda_id: string; ticket_id: number },
+): Extract<Ator, { tipo: "agente" }> {
   const trabalho_id = `e-${ref.demanda_id}-T${String(ref.ticket_id)}`;
   banco
     .prepare(

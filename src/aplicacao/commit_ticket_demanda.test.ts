@@ -159,7 +159,7 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   );
 });
 
-test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior", async () => {
+test("o commit do ticket grava os commits posteriores sobre as linhas do ticket anterior", async () => {
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
   await commitarTicketDemanda(banco, ref(1), {
@@ -180,7 +180,7 @@ test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior",
   assert.deepEqual(
     banco
       .prepare(
-        "SELECT ticket_id AS alterador_ticket_id, ticket_origem_id AS origem_ticket_id, linhas FROM retrabalho_demanda",
+        "SELECT ticket_id AS alterador_ticket_id, ticket_origem_id AS origem_ticket_id, linhas FROM commit_humano_posterior",
       )
       .all()
       .map((l) => ({ ...l })),

@@ -1,6 +1,6 @@
-// CLI (F7 §7, CLI) contra banco real numa raiz temporária: os comandos legados fora do alcance, com e sem
-// FABRIQUINHA_EXECUCAO; a ajuda; o servidor, o abrir e o executável de verdade. Os comandos do agente e os da
-// ferramenta externa têm os testes deles.
+// CLI (F7 §7, CLI) contra banco real numa raiz temporária: os comandos legados e os do agente fora do alcance, com e sem
+// FABRIQUINHA_EXECUCAO; a ajuda; o servidor, o abrir e o executável de verdade. Os comandos da ferramenta externa têm o
+// teste deles; os do agente são do cliente empacotado.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -12,7 +12,7 @@ import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { comandoDoNavegador, principal } from "./cli.ts";
+import { comandoDoNavegador, executarFabriquinha } from "../../composicao/cli.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-cli-"));
@@ -32,7 +32,7 @@ let saidas = 0;
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = ""): Promise<Saida> {
   let out = "";
   let err = "";
-  const codigo = await principal(args, {
+  const codigo = await executarFabriquinha(args, {
     env,
     stdin: Readable.from([stdin]),
     stdout: { write: (t: string) => (out += t) },
@@ -123,24 +123,24 @@ test("CA-1: sem FABRIQUINHA_EXECUCAO, o grupo do fluxo antigo, ticket e necessid
   }
 });
 
-test("CA-2: com FABRIQUINHA_EXECUCAO de uma execução que não existe, nenhum comando legado é alcançável", async () => {
+test("CA-2: com FABRIQUINHA_EXECUCAO, nenhum comando é alcançável, nem os do agente, que agora são do cliente empacotado", async () => {
   const { raiz, banco } = novoBancoTemporario();
   banco.close();
   const env = { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "1" };
-  for (const args of [...LEGADOS, ["servidor"], ["abrir"]]) {
+  const doAgente = [
+    ["projeto", "ver"],
+    ["demanda", "ver", "I-1"],
+    ["ticket", "ver", "I-1.T1"],
+    ["ticket", "criar", "I-1.R1", "--titulo", "Cache"],
+    ["revisao", "decidir", "I-1.T1", "aprovar"],
+    ["evidencia", "schema", "plano"],
+    ["evidencia", "add", "I-1.T1", "plano", "--dados", "-"],
+  ];
+  for (const args of [...LEGADOS, ...doAgente, ["servidor"], ["abrir"]]) {
     desconhecido(await cli(env, args), args);
   }
-  // Os comandos do agente da demanda existem, mas a execução não.
-  for (const args of [
-    ["projeto", "ver"],
-    ["ticket", "ver", "I-1.T1"],
-    ["revisao", "decidir", "I-1.T1", "aprovar"],
-  ]) {
-    falha(await cli(env, args), "a execução 1 não existe (confira FABRIQUINHA_EXECUCAO)");
-  }
   const ajuda = (await cli(env, ["--help"])).out;
-  assert.match(ajuda, /^ {2}fabriquinha demanda ver I-<n>$/m);
-  assert.doesNotMatch(ajuda, new RegExp(`fabriquinha (servidor|abrir|${GRUPO_REMOVIDO_DO_FLUXO_ANTIGO}|necessidade)`));
+  assert.doesNotMatch(ajuda, /fabriquinha (projeto|ticket|revisao|evidencia) /);
 });
 
 test("argumento que falta é uso inválido, com a ajuda do grupo", async () => {
@@ -206,8 +206,8 @@ test("abrir lê web.url e abre o navegador; sem o arquivo, diz que o serviço n�
   const url = "http://127.0.0.1:8123/entrar?token=abc";
   writeFileSync(join(raiz, "web.url"), `${url}\n`);
   assert.deepEqual(json(await cli(env, ["abrir"])), { url });
-  while (!existsSync(aberto)) await dormir(10);
-  await dormir(10);
+  // O `>` cria o arquivo vazio antes do printf: espera o conteúdo, que o printf escreve de uma vez.
+  while (!existsSync(aberto) || readFileSync(aberto, "utf8") === "") await dormir(10);
   assert.equal(readFileSync(aberto, "utf8"), url);
 
   falha(
@@ -233,11 +233,9 @@ test("o executável roda o CLI direto, sem aviso no stderr, com os códigos de s
   const ajuda = rodar(["--help"], {});
   assert.deepEqual([ajuda.status, ajuda.stderr], [0, ""]);
   assert.match(ajuda.stdout, /^ {2}fabriquinha abrir$/m);
-  assert.deepEqual(rodar(["projeto", "ver"], { FABRIQUINHA_ROOT: base, FABRIQUINHA_EXECUCAO: "7" }), {
-    status: 1,
-    stdout: "",
-    stderr: "a execução 7 não existe (confira FABRIQUINHA_EXECUCAO)\n",
-  });
+  const doAgente = rodar(["projeto", "ver"], { FABRIQUINHA_ROOT: base, FABRIQUINHA_EXECUCAO: "7" });
+  assert.deepEqual([doAgente.status, doAgente.stdout], [2, ""]);
+  assert.match(doAgente.stderr, /^comando desconhecido: projeto ver\n/);
   assert.equal(rodar([], {}).status, 2);
 });
 

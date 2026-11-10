@@ -24,6 +24,12 @@ interface DiferencaIntencional {
 }
 
 const MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO = "I-269.R4: o texto cita o campo do projeto pelo nome novo, branch_base";
+const MOTIVO_ARQUIVOS_PREVISTOS =
+  "I-280.R1: o campo `caminhos` do ticket passa a se chamar `arquivos_previstos`, o mesmo nome dos três níveis do plano";
+const MOTIVO_TRES_NIVEIS =
+  "I-280.R1: o plano prevê `arquivos_previstos` na demanda, na rodada e no ticket (Ticket ⊆ Rodada ⊆ Demanda), e mudança de rumo é correção do Plano";
+const TRES_NIVEIS_NO_PLANEJAR =
+  "   Os arquivos previstos existem em três níveis: `arquivos_previstos` na demanda, em cada rodada e em cada ticket. Todo arquivo previsto do ticket está na sua rodada e todo arquivo previsto da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda); o plano que viola isso é recusado na submissão, com o arquivo e o nível no motivo.\n   Depois da aprovação não há replanejamento: mudança de rumo é correção do Plano, nunca um plano novo.\n";
 const MOTIVO_NOME_NOVO = "o fluxo de issues foi desligado (cutover de 2026-10-28), e o texto passa a falar de demanda";
 const MOTIVO_REVISOES_ANTERIORES =
   "I-294: a revisar_rodada recebe as revisões anteriores da rodada e confere primeiro os motivos, sem reabrir o decidido";
@@ -39,7 +45,7 @@ const MOTIVO_RODADAS_EM_CADEIA =
 const MOTIVO_VERIFICACOES_JA_FEITAS =
   "otimização: a revisão usa os testes, as fitness e o Sonar que a Fabriquinha já rodou no commit, sem sleep de espera";
 const LINHA_DO_ESTRESSE =
-  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho_demanda.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).";
+  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/entrega/http/`, `src/entrega/cli/`, `src/armazenamento/`, `src/infra/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/aplicacao/despacho.ts`, `execucao_demanda.ts`, `gerente.ts`, `sessoes_demanda.ts`, `fechamento_ticket.ts`).";
 const USE_AS_VERIFICACOES_JA_FEITAS =
   ' Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).';
 const SECAO_VERIFICACOES_JA_FEITAS =
@@ -90,9 +96,16 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   })),
   {
     arquivo: "textos/src/execucao/avaliacao.md.txt",
-    de: "etapas, devoluções e reprovações.",
-    para: "etapas, exigências de alteração (`exigenciasDeAlteracao`, as Tentativas reprovadas) e reprovações.",
-    motivo: "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido",
+    de: "custo, chamadas, etapas, devoluções e reprovações.",
+    para: "as Métricas de Sucesso de cada Etapa (uso: tokens, modelo e custo; aprovações e reprovações; conformidade com o plano; alterações posteriores; exigências de alteração; bugs nos arquivos revisados; nota humana), cada uma com o rótulo e a fonte de onde deriva.",
+    motivo:
+      "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido; I-284: ele traz as Métricas de Sucesso de cada Etapa",
+  },
+  {
+    arquivo: "textos/src/execucao/avaliacao.md.txt",
+    de: "retrabalho, devoluções, reprovações,",
+    para: "alterações posteriores, exigências de alteração, reprovações,",
+    motivo: "I-284: retrabalho deixa de ser conceito e o vocabulário é o das Métricas de Sucesso",
   },
   ...PROMPTS_DA_BASE.map((arquivo) => ({
     arquivo,
@@ -118,6 +131,51 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de,
     para,
     motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
+  })),
+  ...(
+    [
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "`custos_realizados` (obrigatória) traz o uso desta sessão do Claude Code, somado do transcript por modelo.",
+        "O Uso desta sessão do Claude Code, somado do transcript por modelo, é declarado com `fabriquinha demanda uso` (não é evidência nem trava o envio).",
+      ],
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "fabriquinha demanda evidencia I-<n> custos_realizados --dados custos.json",
+        "fabriquinha demanda uso I-<n> --dados custos.json",
+      ],
+      [
+        "textos/skills/registrar-necessidade/SKILL.md.txt",
+        "Depois do envio, só `custos_realizados` aceita nova submissão;",
+        "Depois do envio, só `fabriquinha demanda uso` aceita nova submissão (até a demanda terminar);",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "(`criterios_aceite`, `desenho_solucao` e `custos_realizados` são obrigatórias)",
+        "(`criterios_aceite` e `desenho_solucao` são obrigatórias)",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "fabriquinha demanda evidencia I-30 custos_realizados --dados custos.json\n```\n",
+        "```\n",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "`custos.json` (sessões externas; omita `custo` se desconhecido, nunca ponha 0):",
+        "Declarar o Uso das sessões externas (opcional; vale até a demanda terminar, repetir a mesma sessão não duplica):\n\n```\nfabriquinha demanda uso I-30 --dados custos.json\n```\n\n`custos.json` (omita `custo` se desconhecido, nunca ponha 0):",
+      ],
+      [
+        "textos/pacote-pi/skills/demanda-externa/SKILL.md.txt",
+        "Depois do envio só `custos_realizados` aceita nova submissão;",
+        "Depois do envio só `fabriquinha demanda uso` aceita nova submissão;",
+      ],
+    ] as const
+  ).map(([arquivo, de, para]) => ({
+    arquivo,
+    de,
+    para,
+    motivo:
+      "I-278: custos_realizados deixa de ser Evidência e vira o Uso declarado, pelo comando `fabriquinha demanda uso`",
   })),
   {
     arquivo: "textos/skills/registrar-necessidade/SKILL.md.txt",
@@ -301,6 +359,64 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de,
     para,
     motivo: MOTIVO_VEREDITO_DO_PARECER,
+  })),
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: '"caminhos": ["src/a.ts"]',
+    para: '"arquivos_previstos": ["src/a.ts"]',
+    motivo: MOTIVO_ARQUIVOS_PREVISTOS,
+  })),
+  ...(
+    [
+      ["cada um com seus critérios e caminhos.", "cada um com seus critérios e arquivos previstos."],
+      ["com dependências e caminhos.\n", "com dependências e arquivos previstos.\n"],
+      ["fica só para a revisão da demanda.\n", "fica só para a revisão da demanda.\n" + TRES_NIVEIS_NO_PLANEJAR],
+    ] as const
+  ).flatMap(([de, para]) =>
+    emPromptETexto("planejar").map((arquivo) => ({ arquivo, de, para, motivo: MOTIVO_TRES_NIVEIS })),
+  ),
+  ...emPromptETexto("implementar").flatMap((arquivo) =>
+    (
+      [
+        ["só nos caminhos do ticket", "só nos arquivos previstos do ticket"],
+        ["fora dos seus caminhos,", "fora dos seus arquivos previstos,"],
+        ["mexa em caminhos de outros tickets", "mexa em arquivos previstos de outros tickets"],
+      ] as const
+    ).map(([de, para]) => ({ arquivo, de, para, motivo: MOTIVO_TRES_NIVEIS })),
+  ),
+  ...(
+    [
+      ["com os `caminhos` (arquivos", "com os `arquivos_previstos` (arquivos"],
+      ["fora dos `caminhos` dos tickets", "fora dos `arquivos_previstos` dos tickets"],
+      [
+        "o PR dela é o que o Auditor revisa.\n",
+        "o PR dela é o que o Auditor revisa.\n8. Os `arquivos_previstos` existem nos três níveis: todo arquivo previsto do ticket está na sua rodada e todo arquivo previsto da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda).\n   O plano que viola isso é recusado na submissão, com o arquivo e o nível no motivo.\n   Depois da aprovação não há replanejamento: mudança de rumo é correção do Plano, nunca um plano novo.\n",
+      ],
+      [
+        "- `demanda_id` e `criterios`: a demanda (`I-206`) e todos os seus `CA-n`.\n- `rodadas`: `demanda_id`, `rodada_id`, `titulo`, `e2e`, `criterios`, `depende`.\n- `tickets`: `demanda_id`, `ticket_id`, `rodada_id`, `titulo`, `descricao`, `caminhos`, `depende`.",
+        "- `demanda_id`, `criterios` e `arquivos_previstos`: a demanda (`I-206`), todos os seus `CA-n` e os arquivos que o trabalho todo toca.\n- `rodadas`: `demanda_id`, `rodada_id`, `titulo`, `e2e`, `criterios`, `arquivos_previstos`, `depende`.\n- `tickets`: `demanda_id`, `ticket_id`, `rodada_id`, `titulo`, `descricao`, `arquivos_previstos`, `depende`.",
+      ],
+      [
+        '  "criterios": ["CA-1", "CA-2"],\n  "rodadas": [\n    { "demanda_id": "I-206", "rodada_id": 1, "titulo": "Cadastro", "e2e": false, "criterios": ["CA-1"], "depende": [] },',
+        '  "criterios": ["CA-1", "CA-2"],\n  "arquivos_previstos": ["src/cadastro/**", "src/listagem/**"],\n  "rodadas": [\n    {\n      "demanda_id": "I-206",\n      "rodada_id": 1,\n      "titulo": "Cadastro",\n      "e2e": false,\n      "criterios": ["CA-1"],\n      "arquivos_previstos": ["src/cadastro/**"],\n      "depende": []\n    },',
+      ],
+      [
+        '      "criterios": ["CA-2"],\n',
+        '      "criterios": ["CA-2"],\n      "arquivos_previstos": ["src/listagem/**"],\n',
+      ],
+      ['"caminhos": ["src/cadastro/**"]', '"arquivos_previstos": ["src/cadastro/**"]'],
+      ['"caminhos": ["src/listagem/**"]', '"arquivos_previstos": ["src/listagem/**"]'],
+      [
+        "- [ ] Os `caminhos` cobrem os `arquivosPrevistos` do desenho, e nada do `foraDeEscopo` entra no plano.\n",
+        "- [ ] Os `arquivos_previstos` cobrem os `arquivosPrevistos` do desenho, e nada do `foraDeEscopo` entra no plano.\n- [ ] Todo arquivo previsto do ticket está na sua rodada e todo o da rodada está na demanda (Ticket ⊆ Rodada ⊆ Demanda).\n",
+      ],
+      ["- [ ] Os `caminhos` de rodadas", "- [ ] Os `arquivos_previstos` de rodadas"],
+    ] as const
+  ).map(([de, para]) => ({
+    arquivo: "textos/pacote-pi/skills/artefato-plano/SKILL.md.txt",
+    de,
+    para,
+    motivo: MOTIVO_TRES_NIVEIS,
   })),
 ];
 

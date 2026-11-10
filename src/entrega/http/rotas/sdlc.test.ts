@@ -5,8 +5,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { Projeto } from "../../../nucleo/projeto.ts";
+import { relogioDoSistema } from "../../../nucleo/relogio.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
-import { casar } from "../../cliente-web/caminhos.ts";
+import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
@@ -24,10 +25,12 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
   for (const rota of ROTAS) {
     const params = rota.metodo === metodo ? casar(rota.caminho, caminho) : undefined;
     if (!params) continue;
+    let valor: unknown;
     try {
-      return await rota.tratar({
+      valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
         corpo,
@@ -37,6 +40,12 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     } catch (erro) {
       return traduzir(erro);
     }
+    // CA-3: o corpo 2xx em JSON passa pelo schema do contrato da rota; sem schema, o teste nomeia a rota.
+    if (valor !== undefined) {
+      assert.ok(rota.resposta, `${rota.metodo} ${rota.caminho} sem schema de resposta em entrega/contrato`);
+      rota.resposta.parse(valor);
+    }
+    return valor;
   }
   throw new Error(`${metodo} ${caminho} não existe`);
 }
