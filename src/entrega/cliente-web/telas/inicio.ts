@@ -3,7 +3,7 @@
 // rede ficam em inicio-montar.ts.
 import type { NomeGate } from "../../../nucleo/agregado_demanda.ts";
 import type { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
+import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio, SessaoRodando } from "../../contrato/inicio.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../contrato/despacho.ts";

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasDoMes } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
+import type { MetricasDoMes } from "../../contrato/metricas.ts";
 import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
-import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../http/rotas/inicio.ts";
+import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../contrato/inicio.ts";
 import type { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
 import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
 

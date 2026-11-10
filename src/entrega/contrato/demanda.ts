@@ -41,7 +41,7 @@ export type PendenciaDoInicio = z.infer<typeof PendenciaDoInicio>;
 
 const PrDaRodada = z.object({ id: z.string(), url: z.string() });
 /** Um ticket com a sessão do pi aberta: o `em_execucao` é o pi, não o sistema. */
-const PiAtivo = z.literal(true);
+export const PiAtivo = z.literal(true);
 const Predecessora = z.object({ demanda_id: z.string(), estado: EstadoDemanda });
 
 /** `GET /api/demandas`: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
