@@ -3,7 +3,7 @@ process.env.TZ = "America/Sao_Paulo"; // UTC−3, sem horário de verão desde 2
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { inicioDoMes, type Relogio, relogioDoSistema, relogioFixo } from "./relogio.ts";
+import { inicioDoMes, instanteAntes, type Relogio, relogioDoSistema, relogioFixo } from "./relogio.ts";
 
 test("relogioDoSistema devolve o instante de agora em ISO", () => {
   const antes = Date.now();
@@ -21,4 +21,8 @@ test("inicioDoMes: a meia-noite do dia 1 no fuso do serviço, em UTC, e a virada
   assert.equal(inicioDoMes(2026, 12), "2026-12-01T03:00:00.000Z");
   assert.equal(inicioDoMes(2026, 13), "2027-01-01T03:00:00.000Z");
   assert.equal(inicioDoMes(2026, 0), "2025-12-01T03:00:00.000Z");
+});
+
+test("instanteAntes recua o instante em milissegundos", () => {
+  assert.equal(instanteAntes("2026-10-11T12:00:00.000Z", 24 * 60 * 60_000), "2026-10-10T12:00:00.000Z");
 });

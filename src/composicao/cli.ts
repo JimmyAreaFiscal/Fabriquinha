@@ -2,6 +2,7 @@
 import { abrir as abrirBanco, raizPadrao } from "../armazenamento/banco.ts";
 import { type DepsDoCli } from "../entrega/cli/comando.ts";
 import { principal } from "../entrega/cli/cli.ts";
+import { relogioDoSistema } from "../nucleo/relogio.ts";
 import { lancarSolto } from "../infra/processo.ts";
 import { iniciarServico } from "./servico.ts";
 
@@ -19,6 +20,7 @@ export function executarFabriquinha(args: readonly string[], processo: ProcessoD
   return principal(args, {
     ...processo,
     raiz,
+    relogio: relogioDoSistema,
     async comBanco(usar) {
       const banco = abrirBanco(raiz);
       try {

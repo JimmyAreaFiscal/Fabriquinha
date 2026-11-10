@@ -2,16 +2,18 @@
 // testes usam `relogioFixo`. Aqui também ficam as contas de calendário que precisam de `Date`.
 import type { Instante } from "./primitivos.ts";
 
-/** @testes ainda sem consumidor de produção; a composição e as bordas passam a injetá-lo nos próximos tickets */
 export interface Relogio {
   agora(): Instante;
 }
 
-/** @testes ainda sem consumidor de produção; a composição e as bordas passam a injetá-lo nos próximos tickets */
 export const relogioDoSistema: Relogio = { agora: () => new Date().toISOString() };
 
-/** @testes ainda sem consumidor de produção; a composição e as bordas passam a injetá-lo nos próximos tickets */
+/** @testes o relógio de produção é o do sistema; os testes fixam o instante */
 export const relogioFixo = (instante: Instante): Relogio => ({ agora: () => instante });
 
 /** O instante UTC da meia-noite do dia 1 do mês `mes` (1 a 12; fora disso, vira o ano) do `ano`, no fuso do serviço. */
 export const inicioDoMes = (ano: number, mes: number): Instante => new Date(ano, mes - 1, 1).toISOString();
+
+/** O `instante` recuado em `ms` milissegundos. */
+export const instanteAntes = (instante: Instante, ms: number): Instante =>
+  new Date(Date.parse(instante) - ms).toISOString();
