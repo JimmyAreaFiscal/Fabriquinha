@@ -3,11 +3,11 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { Plano } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { lerPlanoGravado } from "../../nucleo/plano.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
@@ -58,7 +58,7 @@ export async function aprovarGateDoPlanejamento(
   const ag = carregarDemanda(banco, demanda_id);
   gate.ensaiar(ag, endereco, entrada, ator, instanteAtual()); // recusa antes de tocar o git (estado, falha, plano ausente)
   const { ticket_id } = gate.ancora(ag, endereco);
-  const plano = Plano.parse(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
+  const plano = lerPlanoGravado(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);

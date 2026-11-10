@@ -105,6 +105,9 @@ async function cenario() {
     tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);

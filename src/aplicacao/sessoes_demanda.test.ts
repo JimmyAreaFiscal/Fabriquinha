@@ -100,6 +100,9 @@ const demanda = (id: string, estado: string, descricao: string, tickets: object[
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
   }) as unknown as AgregadoDemanda;
 
 const mensagem = (role: string, texto: string, extra: object = {}) => ({

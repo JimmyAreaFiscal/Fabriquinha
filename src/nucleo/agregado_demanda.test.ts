@@ -207,6 +207,15 @@ test("CA-11: schema aceita dono null/null e normaliza para a demanda", () => {
   assert.equal(donoDe({ ...e, rodada_id: 2, ticket_id: undefined }), "rodada");
 });
 
+const versaoDoPlano = (mudanca: Record<string, unknown> = {}) => ({
+  demanda_id: "I-1",
+  numero: 1,
+  origem: "aprovacao_do_planejamento",
+  autor: { tipo: "fabriquinha" },
+  criada_em: "2026-01-01T00:00:00Z",
+  dados: {},
+  ...mudanca,
+});
 const rodada = (rodada_id = 1, m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   rodada_id,
@@ -233,6 +242,9 @@ test("estado materializado do plano: rodadas, critérios, caminhos e dependênci
         criterios_citados: [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }],
         dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
         caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
+        arquivos_previstos_rodada: [{ demanda_id: "I-1", rodada_id: 1, caminho: "src/a.ts" }],
+        arquivos_previstos_demanda: [{ demanda_id: "I-1", caminho: "src/a.ts" }],
+        versoes_plano: [versaoDoPlano(), versaoDoPlano({ numero: 2, origem: "revisao_rodada", rodada_id: 2 })],
       }),
     ).success,
   );
@@ -253,6 +265,14 @@ test("estado materializado do plano: rodadas, critérios, caminhos e dependênci
   );
   recusa(agregado({ criterios_citados: [d({ rodada_id: 3, criterio_id: "CA-1" })] }), "rodada 3, que não existe");
   recusa(agregado({ caminhos_ticket: [d({ ticket_id: 7, caminho: "a" })] }), "ticket 7, que não existe");
+  recusa(
+    agregado({ arquivos_previstos_rodada: [d({ rodada_id: 4, caminho: "a.ts" })] }),
+    "arquivo previsto a.ts cita a rodada 4, que não existe",
+  );
+  recusa(agregado({ arquivos_previstos_demanda: [{ ...d({ caminho: "a.ts" }), demanda_id: "I-2" }] }), "outra demanda");
+  recusa(agregado({ versoes_plano: [versaoDoPlano({ demanda_id: "I-2" })] }), "outra demanda");
+  recusa(agregado({ versoes_plano: [versaoDoPlano({ rodada_id: 8 })] }), "versão 1 do plano cita a rodada 8");
+  recusa(agregado({ versoes_plano: [versaoDoPlano({ origem: "replanejamento" })] }), "");
   recusa(agregado({ dependencias_ticket: [d({ ticket_id: 1, depende_ticket_id: 1 })] }), "de si mesmo");
   recusa(agregado({ dependencias_ticket: [d({ ticket_id: 1, depende_ticket_id: 7 })] }), "ticket que não existe");
   recusa(

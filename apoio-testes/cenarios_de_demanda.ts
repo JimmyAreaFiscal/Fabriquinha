@@ -96,6 +96,9 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     pull_requests: [],
     ...resto,
   }) as unknown as AgregadoDemanda;

@@ -179,6 +179,25 @@ const TABELAS: readonly Tabela[] = [
   },
   { nome: "caminho_ticket", chave: ["demanda_id", "ticket_id", "caminho"], linhas: (ag) => ag.caminhos_ticket },
   {
+    nome: "arquivo_previsto_rodada",
+    chave: ["demanda_id", "rodada_id", "caminho"],
+    linhas: (ag) => ag.arquivos_previstos_rodada,
+  },
+  { nome: "arquivo_previsto_demanda", chave: ["demanda_id", "caminho"], linhas: (ag) => ag.arquivos_previstos_demanda },
+  {
+    nome: "versao_plano",
+    chave: ["demanda_id", "numero"],
+    linhas: (ag) =>
+      ag.versoes_plano.map(({ autor, ...v }) => ({
+        ...v,
+        ...colunasDoAtor("autor", autor),
+        autor_ferramenta: autor.tipo === "externo" ? autor.ferramenta : null,
+        autor_sessao: autor.tipo === "externo" ? autor.sessao : null,
+        rodada_id: v.rodada_id ?? null,
+        dados: JSON.stringify(v.dados),
+      })),
+  },
+  {
     nome: "decisao_ticket",
     chave: ["demanda_id", "ticket_id", "decisao_id"],
     linhas: (ag) =>
@@ -299,6 +318,12 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     })),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),
+    arquivos_previstos_rodada: filhas("arquivo_previsto_rodada"),
+    arquivos_previstos_demanda: filhas("arquivo_previsto_demanda"),
+    versoes_plano: filhas("versao_plano").map(({ dados, ...v }) => ({
+      ...semNulos(comAtor(v, "autor")),
+      dados: JSON.parse(dados as string) as unknown,
+    })),
     decisoes: filhas("decisao_ticket").map((d) =>
       semNulos(
         comAtor(

@@ -91,6 +91,9 @@ function semear(raiz: string, descricao: string, integral = false): void {
     criterios_citados: [{ demanda_id: "I-250", rodada_id: 1, criterio_id: "CA-1" }],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    arquivos_previstos_rodada: [],
+    arquivos_previstos_demanda: [],
+    versoes_plano: [],
     tentativas: [],
   } as unknown as AgregadoDemanda);
   banco.close();

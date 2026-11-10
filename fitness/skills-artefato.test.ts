@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { TipoEvidencia } from "../src/nucleo/evidencia.ts";
+import { PlanoProposto } from "../src/nucleo/plano.ts";
 import { CATALOGO_ETAPAS } from "../src/nucleo/evidencia_etapa.ts";
 import { PACOTE, skillDoTipo } from "../src/infra/agente/pi.ts";
 
@@ -103,4 +104,15 @@ test("CA-14: nenhuma skill do pacote cita comando removido; acima de 30 arquivos
     assert.match(texto(dir), /Mais de 30|mais de 30/, dir);
     assert.match(texto(dir), /`fabriquinha demanda registrar \.\.\. --dep I-<n>`/, dir);
   }
+});
+
+test("I-280 CA-5: o exemplo JSON da skill artefato-plano é um PlanoProposto válido, com os três níveis e a inclusão no texto", () => {
+  const texto = readFileSync(join(PACOTE, "skills", "artefato-plano", "SKILL.md"), "utf8");
+  const exemplo = /```json\n([\s\S]*?)\n```/.exec(texto)?.[1] ?? "";
+  const plano = PlanoProposto.parse(JSON.parse(exemplo));
+  assert.ok(plano.arquivos_previstos.length > 0);
+  assert.ok(plano.rodadas.every((r) => r.arquivos_previstos.length > 0));
+  assert.ok(plano.tickets.every((t) => t.arquivos_previstos.length > 0));
+  assert.match(texto, /Ticket ⊆ Rodada ⊆ Demanda/);
+  assert.doesNotMatch(texto, /caminhos/);
 });

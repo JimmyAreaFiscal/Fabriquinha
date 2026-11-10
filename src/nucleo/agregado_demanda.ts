@@ -3,11 +3,12 @@ import { z } from "zod";
 import { Ator, AtorExterno } from "./ator.ts";
 import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
-import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
+import { branchDemanda, branchRodada, CaminhoPrevisto, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import { PullRequest, prDoEscopo } from "./espaco_de_trabalho.ts";
 import { TipoEvidencia } from "./evidencia.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
+import { OrigemDaVersao } from "./plano.ts";
 import {
   EstadoDemanda,
   EstadoRodada,
@@ -78,7 +79,21 @@ const PullRequestDoEspaco = PullRequest.extend({ rodada_id: Id.optional(), atual
 const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
 const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
 const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
-const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
+const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoPrevisto });
+const ArquivoPrevistoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, caminho: CaminhoPrevisto });
+const ArquivoPrevistoDemanda = z.object({ demanda_id: DemandaId, caminho: CaminhoPrevisto });
+
+/** Uma versão do Plano: 1 é o plano aprovado; as seguintes são correções, com o `dados` de cada uma (`plano.ts`). */
+const VersaoPlano = z.object({
+  demanda_id: DemandaId,
+  numero: Id,
+  origem: OrigemDaVersao,
+  autor: Ator,
+  // A rodada que a correção atinge; ausente na aprovação e nas rodadas corretivas novas.
+  rodada_id: Id.optional(),
+  criada_em: Instante,
+  dados: z.record(z.string(), z.json()),
+});
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
 const IdDono = Id.nullish().transform((v) => v ?? undefined);
@@ -143,12 +158,16 @@ export const AgregadoDemanda = z
     tickets: z.array(TicketDemanda),
     decisoes: z.array(Decisao),
     evidencias: z.array(EvidenciaDemanda),
-    // Estado materializado pela aprovação do planejamento; o `Plano` em si só existe como evidência.
+    // Estado materializado pela aprovação do planejamento e pelas correções (`materializar`, em `plano.ts`).
     rodadas: z.array(RodadaDemanda).default([]),
     dependencias_rodada: z.array(DependenciaRodada).default([]),
     criterios_citados: z.array(CriterioCitadoRodada).default([]),
     dependencias_ticket: z.array(DependenciaTicket).default([]),
     caminhos_ticket: z.array(CaminhoDoTicket).default([]),
+    // Os arquivos previstos dos outros dois níveis (CONCEITOS.md §10), com Ticket ⊆ Rodada ⊆ Demanda.
+    arquivos_previstos_rodada: z.array(ArquivoPrevistoRodada).default([]),
+    arquivos_previstos_demanda: z.array(ArquivoPrevistoDemanda).default([]),
+    versoes_plano: z.array(VersaoPlano).default([]),
     // As execuções das etapas, na ordem; os limites e a retomada derivam delas (D05).
     tentativas: z.array(Tentativa).default([]),
     encerramento: ProgressoEncerramento.optional(),
@@ -185,6 +204,9 @@ export const AgregadoDemanda = z
       ...ag.criterios_citados,
       ...ag.dependencias_ticket,
       ...ag.caminhos_ticket,
+      ...ag.arquivos_previstos_rodada,
+      ...ag.arquivos_previstos_demanda,
+      ...ag.versoes_plano,
     ]) {
       if (l.demanda_id !== id) erro(`um vínculo é de outra demanda (${l.demanda_id})`);
     }
@@ -201,6 +223,14 @@ export const AgregadoDemanda = z
     for (const c of ag.caminhos_ticket) {
       if (!tickets.has(c.ticket_id))
         erro(`o caminho ${c.caminho} cita o ticket ${String(c.ticket_id)}, que não existe`);
+    }
+    for (const a of ag.arquivos_previstos_rodada) {
+      if (!rodadas.has(a.rodada_id))
+        erro(`o arquivo previsto ${a.caminho} cita a rodada ${String(a.rodada_id)}, que não existe`);
+    }
+    for (const v of ag.versoes_plano) {
+      if (v.rodada_id !== undefined && !rodadas.has(v.rodada_id))
+        erro(`a versão ${String(v.numero)} do plano cita a rodada ${String(v.rodada_id)}, que não existe`);
     }
     for (const d of ag.dependencias_ticket) {
       const nome = `a dependência do ticket ${String(d.ticket_id)} no ${String(d.depende_ticket_id)}`;

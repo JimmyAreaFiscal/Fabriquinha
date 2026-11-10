@@ -5,11 +5,12 @@ import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_dem
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
-import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
+import { branchDemanda, DemandaId, formatarTicketRef } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria } from "./evidencia.ts";
 import { pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
+import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
+import { lerPlanoGravado, materializar, PlanoProposto } from "./plano.ts";
 import { Id, type Instante, Markdown, Slug, Titulo } from "./primitivos.ts";
 import {
   comReaberturaDoAuditor,
@@ -129,7 +130,7 @@ function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
 }
 
 /** O plano submetido, guardado como evidência do ticket de planejamento. */
-export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
+export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): PlanoProposto {
   const evidencia = ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket.ticket_id);
   if (evidencia === undefined) {
     throw new ErroDeRegra(
@@ -137,18 +138,18 @@ export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plan
       "o agente de planejamento o submete antes",
     );
   }
-  return Plano.parse(evidencia.dados);
+  return lerPlanoGravado(evidencia.dados);
 }
 
 /**
- * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `Plano` e
+ * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `PlanoProposto` e
  * citar só `CA-n` da definição congelada. Devolve o plano e o ticket de planejamento, ou lança a recusa.
  */
 export function validarPlano(
   ag: AgregadoDemanda,
   entrada: unknown,
   ator: Ator,
-): { plano: Plano; ticket: TicketDemanda } {
+): { plano: PlanoProposto; ticket: TicketDemanda } {
   const { demanda } = ag;
   const ticket = ticketPlanejamento(ag);
   if (ator.tipo !== "agente") {
@@ -159,7 +160,7 @@ export function validarPlano(
   }
   CICLO_DA_DEMANDA.exigir(demanda, "planejar");
   exigirSemFalha(ag, "planejar");
-  const plano = Plano.safeParse(entrada);
+  const plano = PlanoProposto.safeParse(entrada);
   if (!plano.success) {
     throw new ErroDeRegra(
       `plano inválido: ${plano.error.issues.map((i) => i.message).join("; ")}`,
@@ -195,58 +196,15 @@ export function validarPlano(
 }
 
 /**
- * CA-6 e CA-7: o que a aprovação do planejamento cria. Rodadas, tickets de implementação e vínculos do plano; o
- * `planejar` conclui e a demanda vai a `em_execucao`. Os `ticket_id` do plano são renumerados depois dos já existentes
- * (mesma ordem), pois o agente não vê os IDs da demanda.
+ * CA-6 e CA-7: o que a aprovação do planejamento faz. O `planejar` conclui, a demanda vai a `em_execucao` e o plano
+ * aprovado (versão 1) é materializado em rodadas e tickets de implementação por `materializar`.
  */
 export function materializarPlano(ag: AgregadoDemanda, planejamento: TicketDemanda, agora: Instante): AgregadoDemanda {
   const plano = planoSubmetido(ag, planejamento);
-  const demanda_id = ag.demanda.id;
-  const primeiroId = proximoIdDeTicket(ag);
-  const planos = [...plano.tickets].sort((a, b) => a.ticket_id - b.ticket_id);
-  const novoId = new Map(planos.map((t, i) => [t.ticket_id, primeiroId + i]));
-  const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
   const planejado = mudarTicket(ag, planejamento, "concluido", agora);
   return AgregadoDemanda.parse({
-    ...ag,
+    ...materializar(planejado, plano, { agora }),
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "em_execucao", agora),
-    tentativas: planejado.tentativas,
-    tickets: [
-      ...planejado.tickets,
-      ...planos.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
-        demanda_id,
-        ticket_id: id(ticket_id),
-        rodada_id,
-        titulo,
-        descricao,
-        etapa: "implementar",
-        estado: "aberto",
-        estado_alterado_em: agora,
-        criado_por: FABRIQUINHA,
-        configuracao_agente,
-      })),
-    ],
-    rodadas: plano.rodadas.map((r) => ({
-      demanda_id,
-      rodada_id: r.rodada_id,
-      titulo: r.titulo,
-      estado: "implementar",
-      estado_alterado_em: agora,
-      e2e: r.e2e,
-      branch: branchRodada(demanda_id, r.rodada_id),
-    })),
-    dependencias_rodada: plano.rodadas.flatMap((r) =>
-      r.depende.map((d) => ({ demanda_id, rodada_id: r.rodada_id, depende_rodada_id: d.rodada_id })),
-    ),
-    criterios_citados: plano.rodadas.flatMap((r) =>
-      r.criterios.map((criterio_id) => ({ demanda_id, rodada_id: r.rodada_id, criterio_id })),
-    ),
-    dependencias_ticket: planos.flatMap((t) =>
-      t.depende.map((d) => ({ demanda_id, ticket_id: id(t.ticket_id), depende_ticket_id: id(d.ticket_id) })),
-    ),
-    caminhos_ticket: planos.flatMap((t) =>
-      t.caminhos.map((caminho) => ({ demanda_id, ticket_id: id(t.ticket_id), caminho })),
-    ),
   });
 }
 
