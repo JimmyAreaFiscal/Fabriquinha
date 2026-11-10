@@ -6,11 +6,13 @@ import {
   caminhoDaSessao,
   compacto,
   custo,
+  diaMes,
   duracao,
   escapar,
   APARENCIA_DO_ESTADO_DA_DEMANDA,
   APARENCIA_DO_ESTADO_DA_RODADA,
   ha,
+  hora,
   modeloDoSeletor,
   NAO_ENCONTRADA,
   navegacao,
@@ -104,6 +106,17 @@ test("ha: menos de 1 min, minutos e horas, com espaços que não separam", () =>
   assert.equal(ha("2026-10-28T11:59:30.000Z", agora), "há menos\u00a0de\u00a01\u00a0min");
   assert.equal(ha("2026-10-28T11:15:00.000Z", agora), "há 45\u00a0min");
   assert.equal(ha("2026-10-28T09:58:00.000Z", agora), "há 2\u00a0h\u00a02\u00a0min");
+});
+
+test("ha aceita o agora em milissegundos", () => {
+  assert.equal(ha("2026-10-28T11:15:00.000Z", Date.parse("2026-10-28T12:00:00.000Z")), "há 45\u00a0min");
+});
+
+test("diaMes e hora leem o instante ISO no fuso do navegador, com zero à esquerda e meia-noite como 00", () => {
+  const instante = new Date(2026, 9, 9, 0, 5).toISOString();
+  assert.equal(diaMes(instante), "09/10");
+  assert.equal(hora(instante), "00:05");
+  assert.equal(hora(new Date(2026, 9, 9, 23, 59).toISOString()), "23:59");
 });
 
 test("todo estado da demanda e da rodada tem rótulo e cor de pílula", () => {

@@ -220,7 +220,7 @@ const SAIDA_DO_ANDAMENTO: Partial<Record<EstadoDemanda, { rotulo: string; classe
 /** Quando a demanda saiu do andamento: cancelada, arquivada ou concluída. */
 function quando(d: DemandaDoProjeto): string {
   const saida = SAIDA_DO_ANDAMENTO[d.estado];
-  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(new Date(d.estadoAlteradoEm))}</span>` : "";
+  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(d.estadoAlteradoEm)}</span>` : "";
 }
 
 /** O que fica sob o título: `I-n`, tipo, a dependência que bloqueia, o progresso e quando saiu do andamento. */
