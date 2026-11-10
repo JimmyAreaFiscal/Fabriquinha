@@ -2,7 +2,7 @@
 // com a cor de calor e o detalhe de cada arquivo. Tudo o que vem do git passa por `escapar`. O DOM e a rede ficam em
 // heatmap-montar.ts.
 import type { Heatmap } from "../../contrato/projeto.ts";
-import { diaMes, escapar, plural } from "../render.ts";
+import { escapar, plural } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { abas, caminhoDoProjeto, seletor } from "./projeto.ts";
 
@@ -23,7 +23,8 @@ export const calor = (n: number, total: number): number => (total === 0 ? 0 : Ma
 /** @testes função pura da tela, testada sem montar o DOM */
 export const cor = (c: number): string => `hsl(${String(220 * (1 - c))} 70% 50%)`;
 
-const dia = (instante: string): string => `${diaMes(instante)}/${String(new Date(instante).getFullYear())}`;
+const FORMATO_DIA = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+const dia = (instante: string): string => FORMATO_DIA.format(Date.parse(instante));
 
 /** O nó em `caminho` (nomes separados por `/`, a partir da raiz); o caminho vem das linhas desenhadas aqui. */
 function achar(raiz: NoDoHeatmap, caminho: string): NoDoHeatmap {

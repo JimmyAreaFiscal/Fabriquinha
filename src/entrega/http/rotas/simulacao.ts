@@ -10,7 +10,7 @@ import {
 import { iniciarExecucaoDaTarefa } from "../../../aplicacao/executor.ts";
 import { Anexo, Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { ErroHttp } from "../erros.ts";
-import { IdDoCaminho, type Rota } from "../rotas.ts";
+import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";
 
 export const ROTAS_DA_SIMULACAO: Rota[] = [
   {
@@ -40,6 +40,7 @@ export const ROTAS_DA_SIMULACAO: Rota[] = [
   {
     metodo: "DELETE",
     caminho: "/api/usuarios-simulados/:id/anexos/:nome",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params }) => {
       removerAnexoDoUsuarioSimulado(banco, IdDoCaminho.parse(params.id), String(params.nome));
     },
@@ -60,6 +61,7 @@ export const ROTAS_DA_SIMULACAO: Rota[] = [
     // As execuções seguem em segundo plano: a resposta é 204 assim que estão na fila (409 sem link ou com pendente).
     metodo: "POST",
     caminho: "/api/tarefas/:id/executar",
+    resposta: SemCorpoEmJson,
     tratar: ({ banco, params, relogio }) => {
       iniciarExecucaoDaTarefa(banco, IdDoCaminho.parse(params.id), relogio);
     },

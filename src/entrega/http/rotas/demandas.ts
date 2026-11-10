@@ -7,7 +7,7 @@ import {
   consultarDemanda,
 } from "../../../aplicacao/consultas/demanda.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
-import { IdDoCaminho, type Rota } from "../rotas.ts";
+import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";
 
 const DonoDoAnexo = z.object({
   tipo: z.string().min(1),
@@ -49,5 +49,5 @@ export const ROTAS_DAS_DEMANDAS: Rota[] = [
     tratar: ({ banco, params, relogio }) => consultarDemanda(banco, String(params.id), relogio),
     resposta: PaginaDaDemanda,
   },
-  { metodo: "GET", caminho: "/api/demandas/:id/anexos/:sha256", tratar: anexo },
+  { metodo: "GET", caminho: "/api/demandas/:id/anexos/:sha256", tratar: anexo, resposta: SemCorpoEmJson },
 ];
