@@ -8,12 +8,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after } from "node:test";
-import { relogioDoSistema } from "../src/nucleo/relogio.ts";
-import { raizDo } from "../src/armazenamento/banco.ts";
-import { gravarTokenDoProcesso } from "../src/armazenamento/trabalho_agentico.ts";
+import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
+import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
+import { gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
 import type { RotaDoAgente } from "../src/entrega/http/agente/rotas.ts";
 import { servirWeb } from "../src/entrega/http/servidor.ts";
-import { noLog } from "../src/infra/registro.ts";
+import { noLog } from "../src/compartilhado/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,

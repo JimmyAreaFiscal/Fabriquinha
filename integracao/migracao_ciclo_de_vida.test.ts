@@ -3,17 +3,17 @@
 // e os Auditores levam a demanda até `concluida`. O pi e o `gh` são falsos; o git é real.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/nucleo/ator.ts";
-import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
-import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
-import { iniciarRevisaoIntegral } from "../src/aplicacao/revisao_demanda.ts";
-import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
-import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
-import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
-import { abrir } from "../src/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
-import { configuracao } from "../src/armazenamento/servico.ts";
-import { integrarPR } from "../src/infra/repositorio/pr.ts";
+import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { iniciarRevisaoIntegral } from "../src/fluxo/aplicacao/revisao_demanda.ts";
+import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
+import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
+import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
+import { integrarPR } from "../src/ambiente/infra/repositorio/pr.ts";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
   agregadoNoEstado,
@@ -63,7 +63,7 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
-import * as gestao from "../src/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];

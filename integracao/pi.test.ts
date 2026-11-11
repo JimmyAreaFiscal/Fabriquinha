@@ -7,10 +7,10 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
-import { PACOTE } from "../src/infra/agente/pi.ts";
-import { skillsDaEtapaDemanda } from "../src/aplicacao/pi_demanda.ts";
-import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
+import { HarnessPi } from "../src/execucao/infra/harness_pi.ts";
+import { PACOTE } from "../src/execucao/infra/pi.ts";
+import { skillsDaEtapaDemanda } from "../src/execucao/aplicacao/trabalho/pi_demanda.ts";
+import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 
 const harness = new HarnessPi();
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));

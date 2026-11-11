@@ -5,9 +5,9 @@ import { mkdirSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as servidorTcp } from "node:net";
 import { join } from "node:path";
-import { abrir } from "../src/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
-import { criarTarefa, criarUsuarioSimulado } from "../src/armazenamento/simulacao.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
+import { registrarProjeto } from "../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../src/qualidade/armazenamento/simulacao.ts";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./apoio.ts";
 

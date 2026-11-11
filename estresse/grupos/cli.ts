@@ -9,12 +9,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/entrega/cli/demanda_externa.ts";
 import { COMANDOS_DO_AGENTE } from "../../src/entrega/cli-agente/comandos.ts";
-import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
-import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demandas.ts";
-import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/armazenamento/trabalho_agentico.ts";
+import type { AgregadoDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/execucao/nucleo/trabalho_agentico.ts";
+import { registrar, submeterEvidencia } from "../../src/demanda/aplicacao/gestao_demandas.ts";
+import { abrir, escrever, novoId } from "../../src/compartilhado/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../src/demanda/armazenamento/demandas.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 

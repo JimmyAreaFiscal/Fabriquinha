@@ -3,7 +3,7 @@
 // filtros lembrados e o Arquivar concluídas; o heatmap, a Configuração SDLC e a simulação do projeto abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
-import { abrir } from "../src/armazenamento/banco.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";

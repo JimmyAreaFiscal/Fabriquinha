@@ -1,7 +1,7 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
 import { ROTULO_DA_ETAPA } from "../rotulos.ts";
-import type { EtapaTicket, EstadoDemanda } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket, EstadoDemanda } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import {

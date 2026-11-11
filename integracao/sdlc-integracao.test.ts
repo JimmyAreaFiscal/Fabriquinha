@@ -3,10 +3,10 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../src/nucleo/ator.ts";
-import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
-import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
-import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
+import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
+import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

@@ -5,9 +5,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsConfig } from "node:util";
 import { z } from "zod";
-import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
-import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
-import type { Relogio } from "../../nucleo/relogio.ts";
+import { ErroDeRegra, mensagem } from "../../compartilhado/nucleo/erros.ts";
+import { schemaDoTipo, type TipoEvidencia } from "../../qualidade/nucleo/evidencias/evidencia.ts";
+import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 export class ErroDeUso extends Error {}

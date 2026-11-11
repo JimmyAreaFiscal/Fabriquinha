@@ -11,9 +11,9 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
-import { abrir } from "../src/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
+import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
+import { registrarProjeto } from "../src/ambiente/aplicacao/projeto/cadastro.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */

@@ -1,8 +1,12 @@
 // O esquema anterior à migração 38 (I-267.R1): os valores antigos de estado, o mapeamento para os novos e a volta de um
 // banco migrado para esse esquema, para o teste que precisa de uma demanda em cada valor antigo antes de migrar.
 import { DatabaseSync } from "node:sqlite";
-import { migrar } from "../src/armazenamento/banco.ts";
-import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "../src/armazenamento/migracoes.ts";
+import { migrar } from "../src/compartilhado/armazenamento/banco.ts";
+import {
+  ESQUEMA_V36,
+  MIGRACOES,
+  VERSAO_LINHA_DE_BASE,
+} from "../src/compartilhado/armazenamento/migracoes/migracoes.ts";
 
 /** O valor antigo → o novo, por tabela (as etapas valem para `ticket_demanda` e `configuracao_etapa_projeto`). */
 export const ESTADO_NOVO_DA_DEMANDA: Readonly<Record<string, string>> = {

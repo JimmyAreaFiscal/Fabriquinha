@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasDoMes } from "../../contrato/metricas.ts";
-import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
+import type { TipoPendencia } from "../../../demanda/nucleo/pendencia.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../contrato/inicio.ts";
 import type { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";

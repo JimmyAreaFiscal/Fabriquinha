@@ -1,7 +1,7 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Modelo } from "../../../nucleo/configuracao_agente.ts";
-import type { Effort } from "../../../nucleo/primitivos.ts";
+import type { Modelo } from "../../../execucao/nucleo/configuracao_agente.ts";
+import type { Effort } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
 import type { UsuarioSimulado } from "../../contrato/simulacao.ts";

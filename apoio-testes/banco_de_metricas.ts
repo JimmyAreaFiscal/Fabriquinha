@@ -1,9 +1,9 @@
 // Banco em memória, migrado, com duas lojas de demandas e dois meses de execuções, decisões e commits, para os testes das Métricas.
 import { DatabaseSync } from "node:sqlite";
-import { migrar } from "../src/armazenamento/banco.ts";
-import { MIGRACOES } from "../src/armazenamento/migracoes.ts";
-import type { Recorte } from "../src/nucleo/metrica.ts";
-import { intervalo } from "../src/nucleo/periodo.ts";
+import { migrar } from "../src/compartilhado/armazenamento/banco.ts";
+import { MIGRACOES } from "../src/compartilhado/armazenamento/migracoes/migracoes.ts";
+import type { Recorte } from "../src/custos/nucleo/metrica.ts";
+import { intervalo } from "../src/compartilhado/nucleo/periodo.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */
 export const em = (mes: string) => new Date(`${mes}-15T12:00:00`).toISOString();

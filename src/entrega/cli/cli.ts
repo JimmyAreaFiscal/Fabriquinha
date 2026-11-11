@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra, mensagem } from "../../compartilhado/nucleo/erros.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, ErroDeUso } from "./comando.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";
 

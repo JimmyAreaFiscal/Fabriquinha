@@ -1,19 +1,19 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../src/nucleo/agregado_demanda.ts";
-import type { Ator } from "../src/nucleo/ator.ts";
-import { CICLO_DA_DEMANDA } from "../src/nucleo/ciclos.ts";
-import { validarPlano } from "../src/nucleo/transicoes_demanda.ts";
-import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
-import { gravarProjeto } from "../src/armazenamento/projetos.ts";
-import { Projeto } from "../src/nucleo/projeto.ts";
-import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
-import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../src/demanda/nucleo/agregado_demanda.ts";
+import type { Ator } from "../src/fluxo/nucleo/ator.ts";
+import { CICLO_DA_DEMANDA } from "../src/fluxo/nucleo/ciclo_de_vida/ciclos.ts";
+import { validarPlano } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
+import { gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
+import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { criarDemandaNova } from "../src/demanda/armazenamento/demandas.ts";
+import { garantirWorktreeDemanda } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
-import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../src/ambiente/infra/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

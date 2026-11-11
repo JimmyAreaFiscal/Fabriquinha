@@ -5,16 +5,19 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/nucleo/ator.ts";
-import { formatarTicketRef } from "../src/nucleo/demanda.ts";
-import { relogioFixo } from "../src/nucleo/relogio.ts";
-import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
-import { registrarFalhaEncerramento, registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
-import { marcaDoPRFinal } from "../src/aplicacao/evidencias/encerramento_demanda.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
-import { comDemanda } from "../src/armazenamento/demandas.ts";
-import { integrarPR } from "../src/infra/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
+import { AUDITOR, FABRIQUINHA } from "../src/fluxo/nucleo/ator.ts";
+import { formatarTicketRef } from "../src/demanda/nucleo/demanda.ts";
+import { relogioFixo } from "../src/compartilhado/nucleo/relogio.ts";
+import { reabrirTicket } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import {
+  registrarFalhaEncerramento,
+  registrarTentativaEncerramento,
+} from "../src/fluxo/nucleo/transicoes/transicoes_encerramento.ts";
+import { marcaDoPRFinal } from "../src/qualidade/aplicacao/pull_request/encerramento_demanda.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
+import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { integrarPR } from "../src/ambiente/infra/repositorio/pr.ts";
+import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

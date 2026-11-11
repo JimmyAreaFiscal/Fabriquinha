@@ -6,11 +6,11 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { type Ator } from "../src/nucleo/ator.ts";
-import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
-import * as gestao from "../src/aplicacao/gestao_demandas.ts";
-import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
-import { Projeto } from "../src/nucleo/projeto.ts";
+import { type Ator } from "../src/fluxo/nucleo/ator.ts";
+import { HarnessPi } from "../src/execucao/infra/harness_pi.ts";
+import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
+import { buscarProjeto, gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
+import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
 import {
   AUTOR,
   base,

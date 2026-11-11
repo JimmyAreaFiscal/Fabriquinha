@@ -1,8 +1,8 @@
 // Simulação (F7 §4.4, F8) como funções puras: as abas por projeto, o aviso de link, o formulário de nova Tarefa, os
 // cartões das Tarefas com os Usuários Simulados alocados, as execuções e o relatório. O DOM e a rede ficam em
 // simulacao-montar.ts.
-import type { Id } from "../../../nucleo/primitivos.ts";
-import type { RelatorioSimulacao, StatusExecucaoSimulada } from "../../../nucleo/simulacao.ts";
+import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { RelatorioSimulacao, StatusExecucaoSimulada } from "../../../qualidade/nucleo/simulacao.ts";
 import type { Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { escapar } from "../render.ts";
 import { type Erros, idDe, marca, type ProjetoListado } from "./configuracao.ts";

@@ -7,13 +7,17 @@ import { Buffer } from "node:buffer";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
-import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../src/armazenamento/ambientes.ts";
-import { abrir } from "../../src/armazenamento/banco.ts";
-import { carregarDemanda } from "../../src/armazenamento/demandas.ts";
-import { buscarProjeto } from "../../src/armazenamento/projetos.ts";
-import { configuracao, configuracaoDoAmbiente } from "../../src/armazenamento/servico.ts";
-import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
-import { anexar } from "../../src/armazenamento/simulacao.ts";
+import {
+  inserirAmbienteAlocado,
+  liberarAmbiente,
+  listarAmbientes,
+} from "../../src/ambiente/armazenamento/ambientes.ts";
+import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
+import { carregarDemanda } from "../../src/demanda/armazenamento/demandas.ts";
+import { buscarProjeto } from "../../src/ambiente/armazenamento/projetos.ts";
+import { configuracao, configuracaoDoAmbiente } from "../../src/compartilhado/armazenamento/servico.ts";
+import { exigirGit } from "../../src/ambiente/infra/worktree/worktree.ts";
+import { anexar } from "../../src/qualidade/armazenamento/simulacao.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";

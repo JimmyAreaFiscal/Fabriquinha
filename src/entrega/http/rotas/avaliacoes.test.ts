@@ -16,10 +16,10 @@ import {
   DadosDaAvaliacao,
   DemandaDoPeriodo,
 } from "../../contrato/avaliacoes.ts";
-import { estadoDaAvaliacao } from "../../../aplicacao/avaliacao.ts";
-import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
+import { estadoDaAvaliacao } from "../../../qualidade/aplicacao/avaliacao/avaliacao.ts";
+import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
-import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-rotas-")));

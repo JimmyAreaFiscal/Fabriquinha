@@ -1,4 +1,4 @@
-import type { EtapaTicket } from "../../nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 
 /** A etapa do ticket como as telas a mostram: o `tsc` exige as nove chaves. */
 export const ROTULO_DA_ETAPA: Record<EtapaTicket, string> = {

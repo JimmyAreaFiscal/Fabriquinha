@@ -16,17 +16,17 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { AgregadoDemanda, TicketDemanda } from "../../src/nucleo/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/nucleo/primitivos.ts";
-import { relogioDoSistema } from "../../src/nucleo/relogio.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
-import { montarPromptDemanda } from "../../src/aplicacao/prompt_demanda.ts";
-import { abrir, raizDo } from "../../src/armazenamento/banco.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
+import { EtapaTicket } from "../../src/compartilhado/nucleo/primitivos.ts";
+import { relogioDoSistema } from "../../src/compartilhado/nucleo/relogio.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/execucao/nucleo/trabalho_agentico.ts";
+import { montarPromptDemanda } from "../../src/fluxo/aplicacao/prompt_demanda.ts";
+import { abrir, raizDo } from "../../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/armazenamento/trabalho_agentico.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
 import { servirWeb } from "../../src/entrega/http/servidor.ts";
-import { noLog } from "../../src/infra/registro.ts";
-import { publicarPRDe } from "../../src/infra/repositorio/pr.ts";
+import { noLog } from "../../src/compartilhado/infra/registro.ts";
+import { publicarPRDe } from "../../src/ambiente/infra/repositorio/pr.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");
@@ -57,16 +57,16 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/aplicacao/avaliacao.md",
-  ...arquivosMarkdown("src/aplicacao/etapas"),
+  "src/qualidade/aplicacao/avaliacao/avaliacao.md",
+  ...arquivosMarkdown("src/fluxo/aplicacao/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
-  gravarFoto(
-    join("textos", caminho.replace("src/aplicacao/", "src/execucao/")),
-    readFileSync(join(raizDoCodigo, caminho), "utf8"),
-  );
+  const caminhoNaFotoBase = caminho
+    .replace("src/fluxo/aplicacao/etapas/", "src/execucao/etapas/")
+    .replace("src/qualidade/aplicacao/avaliacao/", "src/execucao/");
+  gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 
 // 2. O prompt montado de cada etapa, com o contexto fixo.
