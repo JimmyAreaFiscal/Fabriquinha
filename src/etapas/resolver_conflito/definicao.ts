@@ -15,6 +15,12 @@ export const DEFINICAO_DO_RESOLVER_CONFLITO = {
   verificacoes: VERIFICACOES_DE_CODIGO,
   metricas: ["uso"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
+  exibicao: {
+    rotulo: "Resolução de conflito",
+    acao: "Resolver conflito",
+    tituloPadrao: "Resolver o conflito",
+    nasMetricas: { titulo: "Resolver conflito", modo: "Gerenciado" },
+  },
   instrucao: new URL("resolver_conflito.md", import.meta.url),
   papel: "resolve_o_conflito_da_integracao",
   devolveAoAgente: true,

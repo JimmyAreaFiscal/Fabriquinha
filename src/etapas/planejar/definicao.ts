@@ -10,7 +10,25 @@ export const DEFINICAO_DO_PLANEJAR = {
   verificacoes: [],
   metricas: ["uso", "conformidade_com_o_plano"],
   capacidades: { skills: ["artefato-plano"], extensoes: EXTENSOES_DO_AGENTE },
+  exibicao: {
+    rotulo: "Planejamento",
+    acao: "Planejar",
+    tituloPadrao: "Planejar a demanda",
+    nasMetricas: { titulo: "Planejar", modo: "Gerenciado" },
+    comoEstado: {
+      rotulo: "Planejamento",
+      tom: "rodando",
+      colunaNoInicio: "Planejamento",
+      colunaNoProjeto: "Planejamento",
+    },
+  },
   instrucao: new URL("planejar.md", import.meta.url),
-  gate: { nome: "gate_planejamento", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "planejar" },
+  gate: {
+    nome: "gate_planejamento",
+    rotulo: "aprovação do planejamento",
+    decisor: "auditor",
+    esperaEmEstadoProprio: true,
+    reprovadoVaiPara: "planejar",
+  },
   papel: "planeja_a_demanda",
 } as const satisfies DefinicaoDaEtapa;

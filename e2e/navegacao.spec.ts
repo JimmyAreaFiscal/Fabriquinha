@@ -157,7 +157,7 @@ test("o Início da navegação conta o que aguarda o Auditor nas demandas em and
 test("só o chat baixa o componente React da conversa", async ({ pagina, fabriquinha }) => {
   const pedidos: string[] = [];
   pagina.on("request", (pedido) => pedidos.push(new URL(pedido.url()).pathname));
-  const conversa = "/static/telas/chat-conversa.tsx";
+  const conversa = "/static/telas/chat/chat-conversa.tsx";
   const nav = pagina.getByRole("navigation", { name: "Páginas" });
   for (const [item, titulo] of [
     ["Início", "Início"],
@@ -195,7 +195,7 @@ test("a caixa abre sobre a página e fecha com Esc, com o ✕ e clicando fora", 
     pagina.evaluate(async () => {
       // O módulo é o mesmo que o app.ts carregou: o navegador guarda um por endereço.
       const modulo = "/static/dom.ts";
-      const dom = (await import(modulo)) as typeof import("../src/entrega/cliente-web/dom.ts");
+      const dom = (await import(modulo)) as typeof import("../src/web/dom.ts");
       dom.abrirCaixa({
         titulo: "Desenho da solução",
         meta: "desenho_solucao · desenho · T-109",

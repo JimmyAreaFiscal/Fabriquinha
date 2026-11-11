@@ -19,8 +19,26 @@ export const DEFINICAO_DO_ENCERRAR_RODADA = {
     skills: ["artefato-mensagem-pr", "artefato-aula-codigo", "artefato-video-demonstracao"],
     extensoes: EXTENSOES_DO_AGENTE,
   },
+  exibicao: {
+    rotulo: "Encerramento da rodada",
+    acao: "Encerrar rodada",
+    tituloPadrao: "Encerrar a rodada",
+    nasMetricas: { titulo: "Encerrar rodada", modo: "Gerenciado" },
+    comoEstado: {
+      rotulo: "Encerramento",
+      tom: "rodando",
+      colunaNoInicio: "Encerramento da rodada",
+      colunaNoProjeto: "Encerramento",
+    },
+  },
   instrucao: new URL("encerrar_rodada.md", import.meta.url),
-  gate: { nome: "gate_pr", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "ajustar_resultado" },
+  gate: {
+    nome: "gate_pr",
+    rotulo: "aprovação do PR",
+    decisor: "auditor",
+    esperaEmEstadoProprio: true,
+    reprovadoVaiPara: "ajustar_resultado",
+  },
   devolvePara: "implementar",
   papel: "publica_o_pr_da_rodada",
 } as const satisfies DefinicaoDaEtapa;

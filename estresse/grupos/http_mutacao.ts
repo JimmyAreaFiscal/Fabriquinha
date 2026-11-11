@@ -6,7 +6,7 @@
 import { Buffer } from "node:buffer";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ROTAS } from "../../src/entrega/http/servidor.ts";
+import { ROTAS } from "../../src/api/servidor.ts";
 import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../src/sandbox/armazenamento/ambientes.ts";
 import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
 import { carregarDemanda } from "../../src/sdlc/armazenamento/demandas.ts";

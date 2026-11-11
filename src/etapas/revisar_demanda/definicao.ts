@@ -17,9 +17,22 @@ export const DEFINICAO_DO_REVISAR_DEMANDA = {
     skills: ["artefato-comprovacao-criterios", "artefato-testes-estresse", "artefato-analise-seguranca"],
     extensoes: EXTENSOES_DO_AGENTE,
   },
+  exibicao: {
+    rotulo: "Revisão da demanda",
+    acao: "Revisar demanda",
+    tituloPadrao: "Revisar a demanda",
+    nasMetricas: { titulo: "Revisar demanda", modo: "Gerenciado" },
+    comoEstado: {
+      rotulo: "Revisão da demanda",
+      tom: "rodando",
+      colunaNoInicio: "Revisão da demanda",
+      colunaNoProjeto: "Revisão da demanda",
+    },
+  },
   instrucao: new URL("revisar_demanda.md", import.meta.url),
   gate: {
     nome: "gate_revisao_demanda",
+    rotulo: "revisão da demanda",
     decisor: "agente",
     esperaEmEstadoProprio: false,
     reprovadoVaiPara: "em_execucao",

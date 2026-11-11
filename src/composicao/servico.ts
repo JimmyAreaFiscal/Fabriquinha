@@ -17,7 +17,7 @@ import { dirDoPiDoAuditor, PACOTE } from "../harness/pi/pi.ts";
 import { noLog } from "../compartilhado/infra/registro.ts";
 import { projetosAVarrer } from "../repositorio/armazenamento/commits_humanos.ts";
 import { configuracao } from "../compartilhado/armazenamento/servico.ts";
-import { servirWeb } from "../entrega/http/servidor.ts";
+import { servirWeb } from "../api/servidor.ts";
 import { cicloDoDespacho, executarAgora } from "../sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../etapas/conducoes.ts";
 import { condutor, type RecuperacaoDaSubida } from "../trabalho_agentico/aplicacao/trabalho/condutor.ts";

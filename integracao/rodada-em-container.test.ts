@@ -32,7 +32,7 @@ import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/workt
 import { exigirGit } from "../src/repositorio/infra/worktree/worktree.ts";
 import { iniciarServico } from "../src/composicao/servico.ts";
 import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
-import { servirWeb } from "../src/entrega/http/servidor.ts";
+import { servirWeb } from "../src/api/servidor.ts";
 import {
   atual,
   demandaEmExecucao,

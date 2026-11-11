@@ -27,7 +27,7 @@ import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
 } from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { servirWeb } from "../../src/entrega/http/servidor.ts";
+import { servirWeb } from "../../src/api/servidor.ts";
 import { noLog } from "../../src/compartilhado/infra/registro.ts";
 import { publicarPRDe } from "../../src/repositorio/infra/hospedagem/pr.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.

@@ -7,6 +7,7 @@ import { formatarTicketRef, type TicketRef } from "../../compartilhado/nucleo/vo
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
+import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
 import {
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
@@ -212,18 +213,31 @@ export const trabalhosComTicketDaDemanda = (
     .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef> & { id: string });
 
 /**
- * Os tickets `em_execucao` que nenhuma execução aberta segura: etapas cujo fechamento roda depois que a execução fecha
- * (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também).
+ * As Etapas cujo fechamento roda depois que a execução fecha: as que o agente faz sozinho ou a Fabriquinha faz (as
+ * interativas ficam de fora: a retomada do despacho as assume). A Etapa da rodada cujo Gate espera num estado próprio só
+ * conta enquanto a rodada está no estado da Etapa: no do Gate, o ticket espera o Auditor.
+ * ponytail: só a Etapa da rodada com Gate em estado próprio; a da demanda com Gate assim ficaria de fora, e não há nenhuma.
  */
+const etapasFechadasDepoisDaExecucao = Object.values(CATALOGO_DE_ETAPAS).filter(
+  ({ executor }) => executor === "agente_autonomo" || executor === "fabriquinha",
+);
+const ETAPAS_FECHADAS_SEMPRE = etapasFechadasDepoisDaExecucao
+  .filter(({ gate }) => gate?.esperaEmEstadoProprio !== true)
+  .map(({ nome }) => nome);
+const ETAPAS_FECHADAS_NO_ESTADO_DA_RODADA = etapasFechadasDepoisDaExecucao
+  .filter(({ gate, escopo }) => gate?.esperaEmEstadoProprio === true && escopo === "rodada")
+  .map(({ nome }) => nome);
+
+/** Os tickets `em_execucao` que nenhuma execução aberta segura, das Etapas que fecham depois da execução. */
 export const ticketsEmExecucaoSemProcesso = (banco: DatabaseSync): z.infer<typeof TicketRef>[] =>
   banco
     .prepare(
       `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
-         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
-         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
-           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
+         etapa IN (SELECT value FROM json_each(?))
+         OR (etapa IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM rodada r
+           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = t.etapa)))`,
     )
-    .all()
+    .all(JSON.stringify(ETAPAS_FECHADAS_SEMPRE), JSON.stringify(ETAPAS_FECHADAS_NO_ESTADO_DA_RODADA))
     .map((l) => ({ ...l }) as unknown as z.infer<typeof TicketRef>);
 
 /**

@@ -10,6 +10,18 @@ export const DEFINICAO_DO_AJUSTAR_RESULTADO = {
   verificacoes: [],
   metricas: ["uso"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
+  exibicao: {
+    rotulo: "Sessão em aberto",
+    acao: "Sessão em aberto",
+    tituloPadrao: "Sessão de ajustes",
+    nasMetricas: { titulo: "Ajustar Resultado", modo: "Gerenciado (interativo)" },
+    comoEstado: {
+      rotulo: "Sessão de ajustes",
+      tom: "aguarda",
+      colunaNoInicio: "Ajustes do PR",
+      colunaNoProjeto: "Ajustes do PR",
+    },
+  },
   instrucao: new URL("ajustar_resultado.md", import.meta.url),
   seguePara: "implementar",
   papel: "ajusta_o_pr_reprovado",

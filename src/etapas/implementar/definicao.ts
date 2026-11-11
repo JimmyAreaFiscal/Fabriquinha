@@ -15,6 +15,18 @@ export const DEFINICAO_DO_IMPLEMENTAR = {
   verificacoes: VERIFICACOES_DE_CODIGO,
   metricas: ["uso", "alteracoes_posteriores"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
+  exibicao: {
+    rotulo: "Implementação",
+    acao: "Implementar",
+    tituloPadrao: "Implementar",
+    nasMetricas: { titulo: "Implementar", modo: "Gerenciado" },
+    comoEstado: {
+      rotulo: "Desenvolvimento",
+      tom: "rodando",
+      colunaNoInicio: "Desenvolvimento",
+      colunaNoProjeto: "Desenvol\u00advimento",
+    },
+  },
   instrucao: new URL("implementar.md", import.meta.url),
   devolveAoAgente: true,
 } as const satisfies DefinicaoDaEtapa;

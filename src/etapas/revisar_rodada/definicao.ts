@@ -18,9 +18,17 @@ export const DEFINICAO_DO_REVISAR_RODADA = {
     skills: ["artefato-explicacao-fitness", "artefato-comprovacao-criterios"],
     extensoes: EXTENSOES_DO_AGENTE,
   },
+  exibicao: {
+    rotulo: "Revisão da rodada",
+    acao: "Revisar rodada",
+    tituloPadrao: "Revisar a rodada",
+    nasMetricas: { titulo: "Revisar rodada", modo: "Gerenciado" },
+    comoEstado: { rotulo: "Revisão", tom: "rodando", colunaNoInicio: "Revisão da rodada", colunaNoProjeto: "Revisão" },
+  },
   instrucao: new URL("revisar_rodada.md", import.meta.url),
   gate: {
     nome: "gate_revisao_rodada",
+    rotulo: "revisão da rodada",
     decisor: "agente",
     esperaEmEstadoProprio: false,
     reprovadoVaiPara: "implementar",

@@ -9,7 +9,9 @@ import { test } from "node:test";
 import ts from "typescript";
 import { EtapaTicket } from "../src/etapas/catalogo.ts";
 
-const MODULO_CLIENTE_WEB = "entrega/cliente-web";
+const MODULO_CLIENTE_WEB = "web";
+const MODULO_COMPARTILHADO_COM_O_NAVEGADOR = "web/compartilhado";
+const MODULO_DAS_CONSULTAS_DAS_TELAS = "api/consultas";
 const MODULO_DO_HARNESS = "harness";
 const MODULO_DO_ADAPTER_PI = "harness/pi";
 
@@ -38,7 +40,7 @@ const MATRIZ: Record<string, RegraDoModulo> = {
   armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   aplicacao: {
-    modulosPermitidos: ["nucleo", "armazenamento", "infra", "entrega/contrato", MODULO_DO_HARNESS],
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", MODULO_DO_HARNESS],
     externoPermitido: QUALQUER_EXTERNO,
   },
   // A interface do Harness: só tipos, que o adapter implementa e o condutor usa.
@@ -49,21 +51,34 @@ const MATRIZ: Record<string, RegraDoModulo> = {
     externoPermitido: QUALQUER_EXTERNO,
   },
   // Puro: importável pelo servidor e pelo navegador.
-  "entrega/compartilhado": { modulosPermitidos: [], externoPermitido: () => false },
-  // Os tipos e schemas da API: só o núcleo e o zod. O cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
-  "entrega/contrato": { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
-  "entrega/http": {
-    modulosPermitidos: ["aplicacao", "nucleo", "entrega/compartilhado", "entrega/contrato"],
+  [MODULO_COMPARTILHADO_COM_O_NAVEGADOR]: { modulosPermitidos: [], externoPermitido: () => false },
+  // Os tipos e schemas da API: só o núcleo e o zod. Nenhum domínio o importa (as consultas das telas ficam em
+  // api/consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  contrato: { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
+  // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios: a regra da aplicação, mais o contrato.
+  [MODULO_DAS_CONSULTAS_DAS_TELAS]: {
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", "aplicacao", "contrato"],
     externoPermitido: QUALQUER_EXTERNO,
   },
-  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo", "entrega/contrato"], externoPermitido: QUALQUER_EXTERNO },
+  api: {
+    modulosPermitidos: [
+      "aplicacao",
+      "nucleo",
+      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
+      "contrato",
+      MODULO_DAS_CONSULTAS_DAS_TELAS,
+    ],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  cli: { modulosPermitidos: ["aplicacao", "nucleo", "contrato"], externoPermitido: QUALQUER_EXTERNO },
   // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
-  "entrega/cli-agente": { modulosPermitidos: ["entrega/contrato"], externoPermitido: SO_NODE_SEM_SQLITE },
-  // Roda no navegador: de valor, só o `entrega/compartilhado` (o `casar`); do contrato e do núcleo, só `import type`;
-  // de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes, que a matriz não lê).
+  "cli-agente": { modulosPermitidos: ["contrato"], externoPermitido: SO_NODE_SEM_SQLITE },
+  // Roda no navegador: de valor, só o `web/compartilhado` (o `casar` e o relógio do navegador); do contrato e do núcleo,
+  // só `import type`; de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes,
+  // que a matriz não lê).
   [MODULO_CLIENTE_WEB]: {
-    modulosPermitidos: ["entrega/compartilhado"],
-    modulosSoComoTipo: ["entrega/contrato", "nucleo"],
+    modulosPermitidos: [MODULO_COMPARTILHADO_COM_O_NAVEGADOR],
+    modulosSoComoTipo: ["contrato", "nucleo"],
     externoPermitido: (alvo) => PACOTES_DO_NAVEGADOR.has(pacoteDe(alvo)),
   },
   composicao: {
@@ -72,10 +87,10 @@ const MATRIZ: Record<string, RegraDoModulo> = {
       "armazenamento",
       "infra",
       "aplicacao",
-      "entrega/http",
-      "entrega/cli",
-      "entrega/compartilhado",
-      "entrega/contrato",
+      "api",
+      "cli",
+      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
+      "contrato",
       MODULO_CLIENTE_WEB,
       MODULO_DO_HARNESS,
       MODULO_DO_ADAPTER_PI,
@@ -94,7 +109,7 @@ interface Excecao extends Achado {
   demanda: string;
 }
 
-// Cada exceção cita a demanda (04 a 26) que a remove. Vazia: a 20 limpou entrega/http e nada mais ficou pendente.
+// Cada exceção cita a demanda (04 a 26) que a remove. Vazia: a 20 limpou a API (ex-entrega/http) e nada mais ficou pendente.
 const EXCECOES: Excecao[] = [];
 
 // `src/<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
@@ -117,11 +132,14 @@ const DOMINIOS = new Set([
 const DOMINIO_DAS_ETAPAS = "etapas";
 const VALOR_PURO_DAS_ETAPAS = /^etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/(definicao|gate)\.ts)$/;
 
-// `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter.
+// `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter. `src/api/consultas/` e
+// `src/web/compartilhado/` são módulos à parte dentro da API e da web; `contrato/`, `cli/` e `cli-agente/`, cada um o seu.
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
   if (primeiro === DOMINIO_DAS_ETAPAS) return VALOR_PURO_DAS_ETAPAS.test(caminhoRelativoASrc) ? "nucleo" : "aplicacao";
-  if (primeiro === "entrega" && segundo) return `entrega/${segundo}`;
+  if (primeiro === "api") return segundo === "consultas" ? MODULO_DAS_CONSULTAS_DAS_TELAS : "api";
+  if (primeiro === MODULO_CLIENTE_WEB)
+    return segundo === "compartilhado" ? MODULO_COMPARTILHADO_COM_O_NAVEGADOR : MODULO_CLIENTE_WEB;
   if (primeiro === MODULO_DO_HARNESS)
     return segundo === undefined || segundo.endsWith(".ts") ? MODULO_DO_HARNESS : `${MODULO_DO_HARNESS}/${segundo}`;
   if (primeiro !== undefined && DOMINIOS.has(primeiro)) return segundo ?? "";
@@ -278,15 +296,15 @@ test("toda exceção cita arquivo, import e uma demanda de 04 a 26", () => {
   }
 });
 
-test("a lista de exceções está vazia: entrega/http não importa armazenamento nem chama .prepare(", () => {
+test("a lista de exceções está vazia: a API não importa armazenamento nem chama .prepare(", () => {
   assert.deepEqual(EXCECOES, []);
-  const daHttp = acharViolacoes(SRC, []).filter(({ arquivo }) => arquivo.startsWith("entrega/http/"));
-  assert.deepEqual(daHttp.map(descrever), []);
+  const daApi = acharViolacoes(SRC, []).filter(({ arquivo }) => arquivo.startsWith("api/"));
+  assert.deepEqual(daApi.map(descrever), []);
 });
 
-// A matriz libera `aplicacao` inteira a entrega/http; a API do agente só alcança os casos de uso do agente.
-test("entrega/http/agente só importa de aplicacao o etapas/agente", () => {
-  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("entrega/http/agente/"));
+// A matriz libera `aplicacao` inteira à API; a API do agente só alcança os casos de uso do agente.
+test("api/agente só importa de aplicacao o etapas/agente", () => {
+  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("api/agente/"));
   assert.ok(daApiDoAgente.length > 0);
   const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
     const caminho = join(SRC, arquivo);
@@ -299,10 +317,10 @@ test("entrega/http/agente só importa de aplicacao o etapas/agente", () => {
   assert.deepEqual(deAplicacaoFora, []);
 });
 
-test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
+test("nenhum importador da API fora de composicao e da própria API", () => {
   const importadores = listarArquivosDeProducao(SRC)
-    .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("entrega/http/"))
-    .filter((arquivo) => /from ['"][^'"]*entrega\/http/.test(readFileSync(join(SRC, arquivo), "utf8")));
+    .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("api/"))
+    .filter((arquivo) => /from ['"](\.\.\/)+api\//.test(readFileSync(join(SRC, arquivo), "utf8")));
   assert.deepEqual(importadores, []);
 });
 
@@ -322,19 +340,22 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "aplicacao/ok.ts":
       'import { a } from "../armazenamento/ok.ts";\nimport { b } from "../infra/ok.ts";\nconst achou = /a/.exec(texto);\n',
     "infra/ok.ts": 'import { spawn } from "node:child_process";\nimport { z } from "../nucleo/ok.ts";\n',
-    "entrega/compartilhado/ok.ts": "export const c = 1;\n",
-    "entrega/contrato/ok.ts": 'import { z } from "zod";\nimport { Id } from "../../nucleo/ok.ts";\n',
-    "entrega/cli-agente/ok.ts":
+    "web/compartilhado/ok.ts": "export const c = 1;\n",
+    "contrato/ok.ts": 'import { z } from "zod";\nimport { Id } from "../nucleo/ok.ts";\n',
+    "cli-agente/ok.ts":
       'import { Resposta } from "../contrato/ok.ts";\nimport { readFileSync } from "node:fs";\nimport { b } from "./sub.ts";\n',
-    "entrega/http/ok.ts":
-      'import { a } from "../../aplicacao/ok.ts";\nimport { c } from "../compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\n',
-    "entrega/cliente-web/ok.ts":
-      'import type { N } from "../../nucleo/ok.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "../compartilhado/ok.ts";\n',
-    "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
-    "entrega/cliente-web/pacotes.ts":
+    "api/ok.ts":
+      'import { a } from "../aplicacao/ok.ts";\nimport { c } from "../web/compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\nimport { t } from "./consultas/tela.ts";\n',
+    // A consulta da tela junta os domínios no formato do contrato: lê o banco como a aplicação.
+    "api/consultas/tela.ts":
+      'import { a } from "../../armazenamento/ok.ts";\nimport { b } from "../../aplicacao/ok.ts";\nimport type { R } from "../../contrato/ok.ts";\n',
+    "web/ok.ts":
+      'import type { N } from "../nucleo/ok.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "./compartilhado/ok.ts";\n',
+    "web/sub.ts": 'export type { Z } from "../nucleo/ok.ts";\n',
+    "web/pacotes.ts":
       'import markdownit from "markdown-it/browser";\nimport { createRoot } from "react-dom/client";\nimport { useThread } from "@assistant-ui/react";\n',
     "composicao/ok.ts":
-      'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\nimport { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
+      'import { a } from "../api/ok.ts";\nimport express from "express";\nimport { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
     "harness/harness.ts":
       'import type { N } from "../nucleo/ok.ts";\nimport type { Ambiente } from "../infra/ok.ts";\nexport interface Harness { n: N }\n',
     "harness/pi/harness_pi.ts":
@@ -351,26 +372,26 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
-    "entrega/compartilhado/impuro.ts":
-      'import { z } from "../../nucleo/ok.ts";\nimport { readFileSync } from "node:fs";\n',
-    "entrega/contrato/impuro.ts":
-      'import { readFileSync } from "node:fs";\nimport { a } from "../../armazenamento/ok.ts";\n',
-    "entrega/cliente-web/aplicacao_tipo.ts": 'import type { B } from "../../aplicacao/ok.ts";\n',
-    "entrega/cliente-web/aplicacao_valor.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
-    "entrega/cliente-web/contrato_valor.ts": 'import { Resposta } from "../contrato/ok.ts";\n',
-    "entrega/cliente-web/nucleo_valor.ts": 'import { n } from "../../nucleo/ok.ts";\n',
-    "entrega/cliente-web/lodash.ts": 'import _ from "lodash";\n',
-    "entrega/cliente-web/node.ts": 'import { readFileSync } from "node:fs";\n',
-    "entrega/cliente-web/react_puro.ts": 'import { useState } from "react";\n',
-    "entrega/cliente-web/node.test.ts":
-      'import { test } from "node:test";\nimport { a } from "../../aplicacao/ok.ts";\n',
-    "entrega/cli-agente/aplicacao.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
-    "entrega/cli-agente/armazenamento.ts": 'import { a } from "../../armazenamento/ok.ts";\n',
-    "entrega/cli-agente/nucleo.ts": 'import { n } from "../../nucleo/ok.ts";\n',
-    "entrega/cli-agente/sqlite.ts": 'import { DatabaseSync } from "node:sqlite";\n',
-    "entrega/cli-agente/zod.ts": 'import { z } from "zod";\n',
-    "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
-    "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
+    "web/compartilhado/impuro.ts": 'import { z } from "../../nucleo/ok.ts";\nimport { readFileSync } from "node:fs";\n',
+    "contrato/impuro.ts": 'import { readFileSync } from "node:fs";\nimport { a } from "../armazenamento/ok.ts";\n',
+    "web/aplicacao_tipo.ts": 'import type { B } from "../aplicacao/ok.ts";\n',
+    "web/aplicacao_valor.ts": 'import { a } from "../aplicacao/ok.ts";\n',
+    "web/contrato_valor.ts": 'import { Resposta } from "../contrato/ok.ts";\n',
+    "web/nucleo_valor.ts": 'import { n } from "../nucleo/ok.ts";\n',
+    "web/lodash.ts": 'import _ from "lodash";\n',
+    "web/node.ts": 'import { readFileSync } from "node:fs";\n',
+    "web/react_puro.ts": 'import { useState } from "react";\n',
+    "web/node.test.ts": 'import { test } from "node:test";\nimport { a } from "../aplicacao/ok.ts";\n',
+    "cli-agente/aplicacao.ts": 'import { a } from "../aplicacao/ok.ts";\n',
+    "cli-agente/armazenamento.ts": 'import { a } from "../armazenamento/ok.ts";\n',
+    "cli-agente/nucleo.ts": 'import { n } from "../nucleo/ok.ts";\n',
+    "cli-agente/sqlite.ts": 'import { DatabaseSync } from "node:sqlite";\n',
+    "cli-agente/zod.ts": 'import { z } from "zod";\n',
+    "aplicacao/ciclo.ts": 'import { a } from "../api/ciclo.ts";\n',
+    "api/ciclo.ts": 'import { a } from "../aplicacao/ciclo.ts";\n',
+    "api/usa_o_banco.ts": 'import { a } from "../armazenamento/ok.ts";\n',
+    // Nenhum domínio importa o contrato da API: a consulta que o devolve é da API.
+    "aplicacao/usa_o_contrato.ts": 'import type { R } from "../contrato/ok.ts";\n',
     "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
     "aplicacao/usa_o_pi.ts": 'import { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
     "harness/valor.ts": 'import { b } from "../infra/ok.ts";\nimport { readFileSync } from "node:fs";\n',
@@ -388,32 +409,34 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
   assert.deepEqual(
     acharViolacoes(raiz, []).map(descrever).sort(),
     [
-      "aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → entrega/http → aplicacao",
+      "api/ciclo.ts importa ciclo entre módulos: api → aplicacao → api",
       // A definição que importa a condução põe o núcleo a depender da aplicação: além do import, fecha ciclo.
-      "aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → entrega/http → entrega/compartilhado → nucleo → aplicacao",
-      "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
+      "aplicacao/ok.ts importa ciclo entre módulos: aplicacao → armazenamento → nucleo → aplicacao",
+      "aplicacao/ciclo.ts importa ../api/ciclo.ts",
+      "aplicacao/usa_o_contrato.ts importa ../contrato/ok.ts",
+      "api/usa_o_banco.ts importa ../armazenamento/ok.ts",
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
       "aplicacao/usa_o_pi.ts importa ../harness/pi/harness_pi.ts",
       "harness/pi/armazenamento.ts importa ../../armazenamento/ok.ts",
       "harness/valor.ts importa ../infra/ok.ts",
       "harness/valor.ts importa node:fs",
-      "entrega/cli-agente/aplicacao.ts importa ../../aplicacao/ok.ts",
-      "entrega/cli-agente/armazenamento.ts importa ../../armazenamento/ok.ts",
-      "entrega/cli-agente/nucleo.ts importa ../../nucleo/ok.ts",
-      "entrega/cli-agente/sqlite.ts importa node:sqlite",
-      "entrega/cli-agente/zod.ts importa zod",
-      "entrega/cliente-web/aplicacao_tipo.ts importa ../../aplicacao/ok.ts",
-      "entrega/cliente-web/aplicacao_valor.ts importa ../../aplicacao/ok.ts",
-      "entrega/compartilhado/impuro.ts importa ../../nucleo/ok.ts",
-      "entrega/compartilhado/impuro.ts importa node:fs",
-      "entrega/contrato/impuro.ts importa ../../armazenamento/ok.ts",
-      "entrega/contrato/impuro.ts importa node:fs",
-      "entrega/cliente-web/contrato_valor.ts importa ../contrato/ok.ts",
-      "entrega/cliente-web/lodash.ts importa lodash",
-      "entrega/cliente-web/node.ts importa node:fs",
-      "entrega/cliente-web/nucleo_valor.ts importa ../../nucleo/ok.ts",
-      "entrega/cliente-web/react_puro.ts importa react",
+      "cli-agente/aplicacao.ts importa ../aplicacao/ok.ts",
+      "cli-agente/armazenamento.ts importa ../armazenamento/ok.ts",
+      "cli-agente/nucleo.ts importa ../nucleo/ok.ts",
+      "cli-agente/sqlite.ts importa node:sqlite",
+      "cli-agente/zod.ts importa zod",
+      "web/aplicacao_tipo.ts importa ../aplicacao/ok.ts",
+      "web/aplicacao_valor.ts importa ../aplicacao/ok.ts",
+      "web/compartilhado/impuro.ts importa ../../nucleo/ok.ts",
+      "web/compartilhado/impuro.ts importa node:fs",
+      "contrato/impuro.ts importa ../armazenamento/ok.ts",
+      "contrato/impuro.ts importa node:fs",
+      "web/contrato_valor.ts importa ../contrato/ok.ts",
+      "web/lodash.ts importa lodash",
+      "web/node.ts importa node:fs",
+      "web/nucleo_valor.ts importa ../nucleo/ok.ts",
+      "web/react_puro.ts importa react",
       "etapas/implementar/definicao.ts importa ./conducao_de_implementar.ts",
       "etapas/implementar/definicao.ts importa node:fs",
       "etapas/revisar_rodada/definicao.ts importa ./secao_do_prompt.ts",
@@ -459,8 +482,8 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
     [ARQUIVO_DO_RELOGIO]: "export const agora = () => new Date().toISOString();\n",
     "composicao/servico.ts": "const batida = new Date(inicio);\n",
     "aplicacao/ruim.ts": "const agora = new Date().toISOString();\n",
-    "entrega/cliente-web/ruim.ts": "const ano = new Date(instante).getFullYear();\n",
-    "entrega/compartilhado/ruim.ts": "export const dia = (i: string) => new Date(i);\n",
+    "web/ruim.ts": "const ano = new Date(instante).getFullYear();\n",
+    "web/compartilhado/ruim.ts": "export const dia = (i: string) => new Date(i);\n",
     "aplicacao/inocente.ts":
       "// new Date() em comentário\nconst d = Date.parse(x);\nconst n = Date.now();\nconst o = new Datas();\n",
     "aplicacao/ruim.test.ts": "const d = new Date();\n",
@@ -473,8 +496,8 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 
   assert.deepEqual(acharNewDateForaDoRelogio(raiz).sort(), [
     "aplicacao/ruim.ts chama new Date(",
-    "entrega/cliente-web/ruim.ts chama new Date(",
-    "entrega/compartilhado/ruim.ts chama new Date(",
+    "web/compartilhado/ruim.ts chama new Date(",
+    "web/ruim.ts chama new Date(",
   ]);
 });
 
@@ -685,28 +708,22 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   ]);
 });
 
-// Os domínios de src/ (a primeira pasta; cada `entrega/<sub>` é um, como na matriz e no mapa-alvo) não formam ciclo de
-// import, de valor ou de tipo. Dependência que fecha ciclo hoje é tolerada aqui com o passo da migração SDLC por seams que a
-// remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor derivado do
-// catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 ex-entrega); a
-// partir do 5 só resta o 6. A ordem que o 5 deixou, de cima para baixo: etapas, avaliacao → metricas → sdlc →
-// trabalho_agentico → harness, verificacao → projeto → repositorio → sandbox → etapas/definicao → compartilhado.
-// A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar ciclo, a fitness também falha.
+// Os domínios de src/ (a primeira pasta, como no mapa-alvo) não formam ciclo de import, de valor ou de tipo. A migração
+// SDLC por seams (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor
+// derivado do catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 api/,
+// web/, cli/, cli-agente/ e contrato/ no lugar de entrega/) tolerava aqui, com o passo que a removia, a dependência que
+// fechava ciclo; desde o 6 não resta nenhuma. A ordem, de cima para baixo: api, cli, cli-agente, web, composicao →
+// contrato → etapas, avaliacao → metricas → sdlc → trabalho_agentico → harness, verificacao → projeto → repositorio →
+// sandbox → etapas/definicao → compartilhado. A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar
+// ciclo, a fitness também falha.
 interface DependenciaToleradaEntreDominios {
   de: string;
   para: string;
-  passo: 5 | 6;
+  /** O passo da migração, ou a demanda, que remove a dependência. */
+  removidaEm: string;
 }
 
-const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
-  // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
-  { de: "entrega/contrato", para: "projeto", passo: 6 },
-  { de: "entrega/contrato", para: "sdlc", passo: 6 },
-  { de: "entrega/contrato", para: "avaliacao", passo: 6 },
-  // As consultas das páginas do Início e da Demanda (`sdlc/aplicacao/consultas/`) juntam o motor e as Métricas; saem do
-  // motor com as outras consultas que devolvem o contrato da API.
-  { de: "sdlc", para: "metricas", passo: 6 },
-];
+const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [];
 
 // O que as Etapas declaram (o catálogo, `definicao/` e o `definicao.ts` de cada uma) conta como um domínio à parte, embaixo
 // do motor: todo o serviço lê os nomes das Etapas e o que cada uma declara, e a declaração só depende de `compartilhado`.
@@ -716,8 +733,7 @@ const DOMINIO_DAS_DECLARACOES_DAS_ETAPAS = "etapas/definicao";
 
 function dominioDoArquivo(caminhoRelativoASrc: string): string {
   if (DECLARACOES_DAS_ETAPAS.test(caminhoRelativoASrc)) return DOMINIO_DAS_DECLARACOES_DAS_ETAPAS;
-  const [primeiro, segundo] = caminhoRelativoASrc.split("/");
-  return primeiro === "entrega" && segundo ? `entrega/${segundo}` : (primeiro ?? "");
+  return caminhoRelativoASrc.split("/")[0] ?? "";
 }
 
 const descreverDependencia = ({ de, para }: { de: string; para: string }): string => `${de} → ${para}`;
@@ -779,11 +795,10 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
   const arquivos: Record<string, string> = {
     "fluxo/nucleo/gate.ts": 'import { Demanda } from "../../demanda/nucleo/demanda.ts";\n',
     "demanda/nucleo/demanda.ts": 'import type { Gate } from "../../fluxo/nucleo/gate.ts";\n',
-    "demanda/aplicacao/tela.tsx": 'import { c } from "../../entrega/contrato/x.ts";\n',
-    "entrega/contrato/x.ts": 'import { z } from "zod";\n',
-    "entrega/http/rota.ts":
-      'import { a } from "../../demanda/nucleo/demanda.ts";\nimport { c } from "../contrato/x.ts";\n',
-    "fluxo/nucleo/gate.test.ts": 'import { r } from "../../entrega/http/rota.ts";\n',
+    "demanda/aplicacao/tela.tsx": 'import { c } from "../../contrato/x.ts";\n',
+    "contrato/x.ts": 'import { z } from "zod";\n',
+    "api/rota.ts": 'import { a } from "../demanda/nucleo/demanda.ts";\nimport { c } from "../contrato/x.ts";\n',
+    "fluxo/nucleo/gate.test.ts": 'import { r } from "../../api/rota.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -792,12 +807,12 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 
   assert.deepEqual(acharCiclosEntreDominios(raiz, []), ["ciclo entre módulos: demanda → fluxo → demanda"]);
   const toleradas: DependenciaToleradaEntreDominios[] = [
-    { de: "demanda", para: "fluxo", passo: 5 },
-    { de: "entrega/http", para: "demanda", passo: 6 },
-    { de: "execucao", para: "fluxo", passo: 5 },
+    { de: "demanda", para: "fluxo", removidaEm: "5" },
+    { de: "api", para: "demanda", removidaEm: "6" },
+    { de: "execucao", para: "fluxo", removidaEm: "5" },
   ];
   assert.deepEqual(acharCiclosEntreDominios(raiz, toleradas), []);
-  assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), ["entrega/http → demanda", "execucao → fluxo"]);
+  assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), ["api → demanda", "execucao → fluxo"]);
 });
 
 test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de etapas/ fica em cima dele", (t) => {
@@ -837,34 +852,30 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
   assert.deepEqual(acharCiclosEntreDominios(raiz, []), []);
 });
 
-// O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
-// em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. O motor
-// (sdlc/, trabalho_agentico/, projeto/, repositorio/, verificacao/, avaliacao/) já pergunta ao catálogo desde o passo 4b,
-// desde o 4c os enums de Etapa, de Gate e de estado saem do catálogo (`etapas/catalogo.ts` e
-// `sdlc/nucleo/ciclo_de_vida/ciclos.ts`), e desde o 5 as Métricas também (metricas/). Sai entrega/ no passo 6.
-// shortcut: o SQL em template não entra na conta (`ts.isStringLiteralLike` não vê o literal dentro de `'...'` no SQL);
-// `trabalho_agentico/armazenamento/trabalho_agentico.ts` ainda cita Etapas no SQL.
-// Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
+// O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto, chave de objeto (`{ planejar: … }`) ou
+// entre aspas simples no SQL de um literal ou template (`etapa = 'planejar'`), só em src/etapas/ e nas migrações, que
+// guardam o esquema do passado. A catraca encolheu a cada passo da migração SDLC por seams: o motor (sdlc/,
+// trabalho_agentico/, projeto/, repositorio/, verificacao/, avaliacao/) pergunta ao catálogo desde o passo 4b, os enums
+// de Etapa, de Gate e de estado saem do catálogo desde o 4c, as Métricas desde o 5 e, desde o 6, a API, a web (que lê as
+// Etapas de `GET /api/etapas`) e o SQL do Trabalho Agêntico. A lista dos arquivos tolerados fica vazia; arquivo novo
+// citando o nome falha, e arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
-const PASTA_DAS_ETAPAS = "etapas/";
-const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
-  "entrega/cliente-web/render.ts",
-  "entrega/cliente-web/rotulos.ts",
-  "entrega/cliente-web/telas/demandas.ts",
-  "entrega/cliente-web/telas/inicio.ts",
-  "entrega/cliente-web/telas/metricas.ts",
-  "entrega/cliente-web/telas/projeto.ts",
-  "entrega/contrato/inicio.ts",
-];
+const NOME_DE_ETAPA_NO_SQL = new RegExp(`'(${[...NOMES_DE_ETAPA].join("|")})'`);
+const PASTAS_QUE_CITAM_NOME_DE_ETAPA = ["etapas/", "compartilhado/armazenamento/migracoes/"];
+const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA: string[] = [];
+
+/** O texto de um literal, de um trecho de template ou da chave de um objeto; `undefined` em qualquer outro nó. */
+function textoDoNo(no: ts.Node): string | undefined {
+  if (ts.isStringLiteralLike(no) || ts.isTemplateHead(no) || ts.isTemplateMiddle(no) || ts.isTemplateTail(no))
+    return no.text;
+  return ts.isPropertyAssignment(no) && ts.isIdentifier(no.name) ? no.name.text : undefined;
+}
 
 // `forEachChild` para no primeiro filho que devolve verdadeiro: basta um nome por arquivo.
 function citaNomeDeEtapa(no: ts.Node): boolean {
-  const texto = ts.isStringLiteralLike(no)
-    ? no.text
-    : ts.isPropertyAssignment(no) && ts.isIdentifier(no.name)
-      ? no.name.text
-      : undefined;
-  return (texto !== undefined && NOMES_DE_ETAPA.has(texto)) || ts.forEachChild(no, citaNomeDeEtapa) === true;
+  const texto = textoDoNo(no);
+  const cita = texto !== undefined && (NOMES_DE_ETAPA.has(texto) || NOME_DE_ETAPA_NO_SQL.test(texto));
+  return cita || ts.forEachChild(no, citaNomeDeEtapa) === true;
 }
 
 function acharArquivosQueCitamNomeDeEtapa(src: string): string[] {
@@ -873,10 +884,12 @@ function acharArquivosQueCitamNomeDeEtapa(src: string): string[] {
   );
 }
 
-test("nome de Etapa só em src/etapas/ e nos arquivos da catraca", () => {
+test("nome de Etapa só em src/etapas/ e nas migrações", () => {
   assert.deepEqual(
     acharArquivosQueCitamNomeDeEtapa(SRC).filter(
-      (arquivo) => !arquivo.startsWith(PASTA_DAS_ETAPAS) && !ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA.includes(arquivo),
+      (arquivo) =>
+        !PASTAS_QUE_CITAM_NOME_DE_ETAPA.some((pasta) => arquivo.startsWith(pasta)) &&
+        !ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA.includes(arquivo),
     ),
     [],
   );
@@ -890,7 +903,7 @@ test("todo arquivo da catraca de nomes de Etapa ainda cita um nome", () => {
   );
 });
 
-test("a fitness de nomes de Etapa acusa literal e chave de objeto, em .ts e .tsx, e ignora comentário e teste", (t) => {
+test("a fitness de nomes de Etapa acusa literal, chave de objeto e SQL, em .ts e .tsx, e ignora comentário e teste", (t) => {
   const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-etapas-"));
   t.after(() => {
     rmSync(raiz, { recursive: true, force: true });
@@ -898,11 +911,14 @@ test("a fitness de nomes de Etapa acusa literal e chave de objeto, em .ts e .tsx
   const arquivos: Record<string, string> = {
     "fluxo/nucleo/literal.ts": 'if (etapa === "revisar_rodada") pular();\n',
     "fluxo/nucleo/template.ts": "const etapa = `planejar`;\n",
-    "entrega/cliente-web/rotulos.ts": 'export const ROTULOS = { encerrar_demanda: "Encerrar" };\n',
-    "entrega/cliente-web/tela.tsx": 'export const Tela = () => <p title="implementar">ok</p>;\n',
+    "web/rotulos.ts": 'export const ROTULOS = { encerrar_demanda: "Encerrar" };\n',
+    "web/tela.tsx": 'export const Tela = () => <p title="implementar">ok</p>;\n',
     "etapas/planejar/definicao.ts": 'export const nome = "planejar";\n',
     "fluxo/nucleo/comentario.ts": '// planejar e "implementar"\nconst planejar = 1;\nconst x = "planejar_demanda";\n',
     "fluxo/nucleo/literal.test.ts": 'const etapa = "planejar";\n',
+    "fluxo/armazenamento/sql.ts": "banco.prepare(`SELECT 1 FROM t WHERE etapa = 'implementar' AND x = ${y}`);\n",
+    "fluxo/armazenamento/sql_no_meio.ts": "banco.prepare(`SELECT ${a} FROM t WHERE etapa IN ('planejar')`);\n",
+    "fluxo/armazenamento/parametro.ts": "banco.prepare(`SELECT 1 FROM t WHERE etapa = ? AND e = 'implementar_x'`);\n",
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -910,11 +926,13 @@ test("a fitness de nomes de Etapa acusa literal e chave de objeto, em .ts e .tsx
   }
 
   assert.deepEqual(acharArquivosQueCitamNomeDeEtapa(raiz).sort(), [
-    "entrega/cliente-web/rotulos.ts",
-    "entrega/cliente-web/tela.tsx",
     "etapas/planejar/definicao.ts",
+    "fluxo/armazenamento/sql.ts",
+    "fluxo/armazenamento/sql_no_meio.ts",
     "fluxo/nucleo/literal.ts",
     "fluxo/nucleo/template.ts",
+    "web/rotulos.ts",
+    "web/tela.tsx",
   ]);
 });
 

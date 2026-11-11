@@ -8,10 +8,13 @@ import type {
   TipoMetrica,
   TipoVerificacao,
 } from "./tipos_declaraveis.ts";
+import type { ExibicaoDaEtapa } from "./exibicao_da_etapa.ts";
 
 /** O Gate que decide depois do trabalho da Etapa; a mecânica é do motor, os efeitos ficam no `gate.ts` da Etapa. */
 interface GateDaEtapa<NomeDoGate extends string> {
   nome: NomeDoGate;
+  /** O Gate como as telas o citam no meio da frase: "aprovação do PR". */
+  rotulo: string;
   decisor: "auditor" | "agente";
   /** O Gate espera a decisão num estado do ciclo só dele, com o nome do Gate; sem isso, decide no estado da Etapa. */
   esperaEmEstadoProprio: boolean;
@@ -50,6 +53,7 @@ export interface DefinicaoDaEtapa<NomeDaEtapa extends string = string, NomeDoGat
   verificacoes: readonly TipoVerificacao[];
   metricas: readonly TipoMetrica[];
   capacidades: { skills: readonly string[]; extensoes: readonly string[] };
+  exibicao: ExibicaoDaEtapa;
   /** O modo de trabalhar da Etapa: o `.md` na pasta dela, lido ao montar o prompt. */
   instrucao?: URL;
   gate?: GateDaEtapa<NomeDoGate>;

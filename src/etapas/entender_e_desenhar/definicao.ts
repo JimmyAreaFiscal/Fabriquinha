@@ -30,5 +30,18 @@ export const DEFINICAO_DO_ENTENDER_E_DESENHAR = {
   verificacoes: [],
   metricas: ["uso", "aprovacoes_e_reprovacoes"],
   capacidades: SEM_CAPACIDADES,
-  gate: { nome: "gate_demanda", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "cancelada" },
+  exibicao: {
+    rotulo: "Demanda",
+    acao: "Demanda",
+    tituloPadrao: "Registrar a demanda",
+    nasMetricas: { titulo: "Entender e desenhar", modo: "Não Gerenciado" },
+    comoEstado: { rotulo: "Registro", tom: "neutro", colunaNoInicio: "Registro", colunaNoProjeto: "Registro" },
+  },
+  gate: {
+    nome: "gate_demanda",
+    rotulo: "aprovação da demanda",
+    decisor: "auditor",
+    esperaEmEstadoProprio: true,
+    reprovadoVaiPara: "cancelada",
+  },
 } as const satisfies DefinicaoDaEtapa;

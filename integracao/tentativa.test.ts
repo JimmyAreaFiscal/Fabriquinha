@@ -22,8 +22,12 @@ import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
 } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { PaginaDaDemanda } from "../src/entrega/contrato/demanda.ts";
-import { pagina } from "../src/entrega/cliente-web/telas/demandas.ts";
+import type { PaginaDaDemanda } from "../src/contrato/demanda.ts";
+import { pagina } from "../src/web/telas/demandas/demandas.ts";
+import { descreverEtapasDoSdlc } from "../src/api/rotas/etapas.ts";
+import { definirEtapasDoSdlc } from "../src/web/apresentacao/etapas.ts";
+
+definirEtapasDoSdlc(descreverEtapasDoSdlc());
 
 const ticket = Endereco.doTicket("I-206", 3);
 const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({
