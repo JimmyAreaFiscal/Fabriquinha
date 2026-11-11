@@ -27,7 +27,20 @@ import { relogioDoSistema } from "../src/nucleo/relogio.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../src/infra/repositorio/worktree.ts";
 import { iniciarServico } from "../src/composicao/servico.ts";
-import { demandaEmExecucao, encerrar, execucoesDe, revisar, rodadaDe, statusDe, ticketDe } from "./apoio-execucao.ts";
+import { raizDo } from "../src/armazenamento/banco.ts";
+import { gravarTokenDoProcesso } from "../src/armazenamento/trabalho_agentico.ts";
+import { servirWeb } from "../src/entrega/http/servidor.ts";
+import { noLog } from "../src/infra/registro.ts";
+import {
+  atual,
+  demandaEmExecucao,
+  encerrar,
+  execucoesDe,
+  revisar,
+  rodadaDe,
+  statusDe,
+  ticketDe,
+} from "./apoio-execucao.ts";
 import { base, CTX, ciclo, criarCenario, demanda, demandaAprovada, esperar, git, type Cenario } from "./apoio.ts";
 import {
   ghFalso,
@@ -732,6 +745,81 @@ test(
     git(c.repo, "branch", "nova");
     await exigirGit(c.repo, "push", "origin", "nova");
     assert.ok(!existsSync(marca), "nem o git do usuário nem o push do core executaram o que o container tentou gravar");
+  },
+);
+
+test(
+  "o fabriquinha empacotado, num comando no container, anexa à evidência um arquivo de $FABRIQUINHA_SAIDA",
+  COM_DOCKER,
+  async (t) => {
+    // A API do agente de verdade, em todas as interfaces: o container a alcança pelo `host.docker.internal`.
+    const apiDoAgente = createServidorHttp().listen(0, "0.0.0.0");
+    await once(apiDoAgente, "listening");
+    t.after(() => {
+      apiDoAgente.closeAllConnections();
+      apiDoAgente.close();
+    });
+    const porta = (apiDoAgente.address() as AddressInfo).port;
+    const { c, pi } = cenarioEmContainer(t, porta);
+    apiDoAgente.on(
+      "request",
+      servirWeb({
+        banco: c.banco,
+        raiz: raizDo(c.banco),
+        porta,
+        agendador: { proximaBusca: () => new Date() },
+        relogio: relogioDoSistema,
+        registrarErro: noLog,
+      }),
+    );
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    // A comprovação dos critérios é do ticket de revisão da rodada, que nasce quando o `implementar` conclui.
+    pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, uso: null }]);
+    await ciclo(c, despachoComVerificacoesReais);
+    const revisao = atual(c, id, "revisar_rodada", 1);
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    c.banco
+      .prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ? AND ticket_id = ?")
+      .run(id, revisao.ticket_id);
+    c.banco
+      .prepare(
+        "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', ?, ?, 'autonomo', 's1')",
+      )
+      .run(id, revisao.ticket_id);
+    c.banco
+      .prepare("INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', ?, 0)")
+      .run(relogioDoSistema.agora());
+    gravarTokenDoProcesso(c.banco, "e1", "token-do-processo");
+
+    // Como o `conduzir` faz: a pasta do processo vira link para a do Ambiente, e a saída nasce dentro dela.
+    const { dir } = pastasDoProcesso(c.raiz, "e1");
+    mkdirSync(dir, { recursive: true });
+    ambiente.abrigarProcesso(dir, "sessao-1");
+    const saida = join(dir, "saida");
+    mkdirSync(saida, { recursive: true });
+    const dados = { criterios: [{ id: "CA-1", atendido: true, comoVerificado: "tela", arquivos: ["prova.png"] }] };
+    writeFileSync(join(saida, "dados.json"), JSON.stringify(dados));
+
+    const { codigo, saida: resposta } = await ambiente.executar({
+      programa: `printf '\\211PNG\\r\\n\\032\\n' > "$FABRIQUINHA_SAIDA/prova.png" && fabriquinha evidencia add ${id}.T${String(revisao.ticket_id)} comprovacao_criterios --dados "$FABRIQUINHA_SAIDA/dados.json" --arquivo "$FABRIQUINHA_SAIDA/prova.png"`,
+      noShell: true,
+      argumentos: [],
+      cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
+      env: {
+        FABRIQUINHA_API: `host.docker.internal:${String(porta)}`,
+        FABRIQUINHA_TOKEN: "token-do-processo",
+        FABRIQUINHA_SAIDA: saida,
+      },
+    });
+
+    assert.equal(codigo, 0, resposta);
+    assert.deepEqual(
+      c.banco
+        .prepare("SELECT caminho FROM arquivo_evidencia WHERE caminho = 'prova.png'")
+        .all()
+        .map((a) => a.caminho),
+      ["prova.png"],
+    );
   },
 );
 
