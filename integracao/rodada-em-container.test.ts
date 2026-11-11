@@ -633,7 +633,7 @@ test(
     // Porta 0: a instância nova não disputa a porta com a Fabriquinha de quem roda o teste.
     const portaAntes = process.env.FABRIQUINHA_PORTA;
     process.env.FABRIQUINHA_PORTA = "0";
-    const servico = await iniciarServico(c.raiz);
+    const servico = await iniciarServico(c.raiz, join(PACOTE, "bin"));
     try {
       assert.notEqual(await pi.saiu, 0);
       assert.partialDeepStrictEqual(

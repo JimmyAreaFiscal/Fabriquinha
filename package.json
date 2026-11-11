@@ -30,7 +30,7 @@
     "typescript-eslint": "^8.71.1"
   },
   "scripts": {
-    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/infra/agente/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
+    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/execucao/infra/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
     "types": "tsc",
     "lint": "eslint --max-warnings=0 .",
     "format:check": "prettier --check .",
