@@ -10,7 +10,7 @@ import { dirname, join, sep } from "node:path";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente.ts";
 import { executar } from "../../processo.ts";
-import { DIR_DO_PI_NO_HOME } from "./ambiente_container.ts";
+import { DIR_DO_PI_NO_HOME, PADRAO_DE_TOKEN_DO_GITHUB } from "./ambiente_container.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
@@ -124,7 +124,6 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
   return montagensComModo.flatMap(([origem, destino, modo]) => ["-v", `${origem}:${destino}:${modo}`]);
 }
 
-const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
 /** O container não leva credencial de hospedagem (o push é do core): o token do GitHub que estiver nas pastas copiadas sai da cópia. */
 const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
 

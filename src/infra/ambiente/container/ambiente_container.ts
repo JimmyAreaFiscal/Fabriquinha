@@ -28,6 +28,8 @@ const VARIAVEIS_DA_FABRIQUINHA = new Set(["FABRIQUINHA_API", "FABRIQUINHA_TOKEN"
 const SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM = "_API_KEY";
 // O pi aceita `AZURE_OPENAI_API_KEY`, mas o container nunca recebe variável de hospedagem ou do SonarQube.
 const CREDENCIAL_QUE_NUNCA_ENTRA = /^(GH_|AZURE_|SONAR_)/;
+export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
+const VALOR_COM_TOKEN_DO_GITHUB = new RegExp(PADRAO_DE_TOKEN_DO_GITHUB);
 
 interface ContainerDoAmbiente {
   /** O id do Ambiente, o valor do rótulo `fabriquinha.ambiente`. */
@@ -183,7 +185,10 @@ export class AmbienteContainer implements Ambiente {
     return Object.fromEntries(
       Object.entries(variaveis).filter(
         (entrada): entrada is [string, string] =>
-          entrada[1] !== undefined && !ehCredencialDeHospedagemOuSonar(entrada[0]),
+          entrada[1] !== undefined &&
+          !CREDENCIAL_QUE_NUNCA_ENTRA.test(entrada[0]) &&
+          !ehCredencialDeHospedagemOuSonar(entrada[0]) &&
+          !VALOR_COM_TOKEN_DO_GITHUB.test(entrada[1]),
       ),
     );
   }

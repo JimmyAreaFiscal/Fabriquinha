@@ -148,6 +148,14 @@ test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as 
   writeFileSync(join(raizGit, ".env"), 'COM_QUEBRA="a\nSONAR_TOKEN=x"\n');
   ambiente.levarEnvDoProjeto(raizGit);
   await assert.rejects(ambiente.executar(comando("true", [])), /quebra de linha/);
+  writeFileSync(
+    join(raizGit, ".env"),
+    "GH_PAT=ghp_0123456789abcdefghijklmnopqrstuvwxyz\nSONAR_HOST_URL=http://sonar\nAZURE_DEVOPS_PAT=az\nGITHUB_PAT=github_pat_0123456789abcdefghijklmn\nVARIAVEL_COMUM=fica\n",
+  );
+  ambiente.levarEnvDoProjeto(raizGit);
+  const saidaSemCredenciais = (await ambiente.executar(comando("env", []))).saida;
+  assert.doesNotMatch(saidaSemCredenciais, /^(GH_PAT|SONAR_HOST_URL|AZURE_DEVOPS_PAT|GITHUB_PAT)=/m); // prefixo e padrão de token do GitHub
+  assert.match(saidaSemCredenciais, /^VARIAVEL_COMUM=fica$/m);
   rmSync(join(raizGit, ".env"));
   ambiente.levarEnvDoProjeto(raizGit); // sem .env, as variáveis do projeto anterior somem
   assert.doesNotMatch((await ambiente.executar(comando("env", []))).saida, /DATABASE_URL|COM_ASPAS/);

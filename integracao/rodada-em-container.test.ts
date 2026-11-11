@@ -813,7 +813,10 @@ test(
   async (t) => {
     const { c } = cenarioEmContainer(t);
     definirNoEnvDoCore(t, { GH_TOKEN: TOKEN_DO_GITHUB, GITHUB_TOKEN: TOKEN_DO_GITHUB });
-    writeFileSync(join(c.repo, ".env"), `GH_TOKEN=${TOKEN_DO_GITHUB}\nGITHUB_TOKEN=${TOKEN_DO_GITHUB}\n`);
+    writeFileSync(
+      join(c.repo, ".env"),
+      `GH_TOKEN=${TOKEN_DO_GITHUB}\nGITHUB_TOKEN=${TOKEN_DO_GITHUB}\nGH_PAT=${TOKEN_DO_GITHUB}\n`,
+    );
     for (const [pasta, arquivo] of [
       [".claude", "settings.json"],
       [".codex", "config.toml"],
