@@ -2255,7 +2255,7 @@
         <mxCell id="texto_81" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="Retornar à etapa 4. As rodadas corretivas passam por implementação, revisão, encerramento e gate do PR; depois a revisão integral se repete." vertex="1">
           <mxGeometry height="48" width="2550" x="55" y="7004" as="geometry" />
         </mxCell>
-        <mxCell id="texto_88" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=19;" value="6 · Integrar e encerrar definitivamente — UC-ENC-03" vertex="1">
+        <mxCell id="texto_88" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=19;" value="6 · Acompanhar o PR final e encerrar definitivamente — UC-ENC-03" vertex="1">
           <mxGeometry height="42" width="2610" x="30" y="7281" as="geometry" />
         </mxCell>
         <mxCell id="cabecalho_89" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=14;align=center;verticalAlign=middle;fillColor=#f5f5f5;strokeColor=#666666;" value="CLI" vertex="1">
@@ -2285,7 +2285,7 @@
         <mxCell id="cabecalho_97" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=14;align=center;verticalAlign=middle;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Ajustes de PR" vertex="1">
           <mxGeometry height="40" width="230" x="2375" y="7343" as="geometry" />
         </mxCell>
-        <mxCell id="texto_98" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="O encerramento final não abre agente e não tem novo gate humano. Só a resolução de conflito exige trabalho do agente." vertex="1">
+        <mxCell id="texto_98" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="O encerramento final não abre agente e espera a Ação externa do humano (merge do PR final na plataforma). Só a resolução de conflito exige trabalho do agente." vertex="1">
           <mxGeometry height="48" width="2550" x="55" y="7405" as="geometry" />
         </mxCell>
         <mxCell id="texto_99" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;" value="A delegação da resolução para Implementação representa reutilização lógica das verificações. O contrato entre esses serviços ainda precisa ser definido." vertex="1">
@@ -2333,8 +2333,8 @@
         <mxCell id="texto_184" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontSize=14;" value="52. Publicar ou atualizar o PR final e conferir condições" vertex="1">
           <mxGeometry height="66" width="190" x="2272" y="7718" as="geometry" />
         </mxCell>
-        <mxCell id="texto_192" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontSize=14;" value="59. Integrar a demanda" vertex="1">
-          <mxGeometry height="66" width="190" x="2272" y="8494" as="geometry" />
+        <mxCell id="texto_192" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontSize=14;" value="59. Ação externa: o humano faz o merge do PR final na plataforma; confirmar o merge e limpar" vertex="1">
+          <mxGeometry height="110" width="190" x="2272" y="8494" as="geometry" />
         </mxCell>
         <mxCell id="texto_197" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontSize=14;" value="63. Retomar somente a limpeza pendente" vertex="1">
           <mxGeometry height="66" width="190" x="2272" y="8989" as="geometry" />
@@ -2552,7 +2552,7 @@
         <mxCell id="mensagem_188" edge="1" parent="1" source="vida_implementacao" style="edgeStyle=none;html=1;rounded=0;endArrow=open;endFill=0;startArrow=none;strokeWidth=1.5;strokeColor=#666666;dashed=1;exitX=0.5;exitY=0.777514559273517;entryX=0.5;entryY=0.777514559273517;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_execucao" value="&lt;div style=&quot;width:550px;text-align:center;&quot;&gt;55. Resolução concluída; liberar nova tentativa&lt;/div&gt;">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="mensagem_189" edge="1" parent="1" source="vida_encerramento" style="edgeStyle=none;html=1;rounded=0;endArrow=open;endFill=0;startArrow=none;strokeWidth=1.5;strokeColor=#666666;dashed=1;exitX=0.5;exitY=0.7973546540321784;entryX=0.5;entryY=0.7973546540321784;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_execucao" value="&lt;div style=&quot;width:800px;text-align:center;&quot;&gt;56. Registrar falha; não integrar nem limpar&lt;/div&gt;">
+        <mxCell id="mensagem_189" edge="1" parent="1" source="vida_encerramento" style="edgeStyle=none;html=1;rounded=0;endArrow=open;endFill=0;startArrow=none;strokeWidth=1.5;strokeColor=#666666;dashed=1;exitX=0.5;exitY=0.7973546540321784;entryX=0.5;entryY=0.7973546540321784;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_execucao" value="&lt;div style=&quot;width:800px;text-align:center;&quot;&gt;56. Registrar falha; não confirmar o merge nem limpar&lt;/div&gt;">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="mensagem_190" edge="1" parent="1" source="vida_execucao" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;startArrow=none;strokeWidth=1.5;strokeColor=#333333;dashed=0;exitX=0.5;exitY=0.8050537952818083;entryX=0.5;entryY=0.8050537952818083;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_http" value="&lt;div style=&quot;width:550px;text-align:center;&quot;&gt;57. Informar a falha&lt;/div&gt;">
@@ -2594,7 +2594,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="mensagem_201" edge="1" parent="1" source="vida_encerramento" style="edgeStyle=none;html=1;rounded=0;endArrow=open;endFill=0;startArrow=none;strokeWidth=1.5;strokeColor=#666666;dashed=1;exitX=0.5;exitY=0.9043529760142138;entryX=0.5;entryY=0.9043529760142138;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_execucao" value="&lt;div style=&quot;width:800px;text-align:center;&quot;&gt;65. Registrar pendências sem desfazer a integração&lt;/div&gt;">
+        <mxCell id="mensagem_201" edge="1" parent="1" source="vida_encerramento" style="edgeStyle=none;html=1;rounded=0;endArrow=open;endFill=0;startArrow=none;strokeWidth=1.5;strokeColor=#666666;dashed=1;exitX=0.5;exitY=0.9043529760142138;entryX=0.5;entryY=0.9043529760142138;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_execucao" value="&lt;div style=&quot;width:800px;text-align:center;&quot;&gt;65. Registrar pendências sem desfazer o merge confirmado&lt;/div&gt;">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="mensagem_202" edge="1" parent="1" source="vida_execucao" style="edgeStyle=none;html=1;rounded=0;endArrow=block;endFill=1;startArrow=none;strokeWidth=1.5;strokeColor=#333333;dashed=0;exitX=0.5;exitY=0.9120521172638436;entryX=0.5;entryY=0.9120521172638436;exitPerimeter=0;entryPerimeter=0;fontSize=15;labelBackgroundColor=#ffffff;verticalAlign=bottom;spacingBottom=7;" target="vida_http" value="&lt;div style=&quot;width:550px;text-align:center;&quot;&gt;66. Informar a falha parcial&lt;/div&gt;">
@@ -2699,16 +2699,16 @@
         <mxCell id="texto_103" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontStyle=2;fontSize=14;" value="[condições satisfeitas]" vertex="1">
           <mxGeometry height="30" width="222" x="70" y="8465" as="geometry" />
         </mxCell>
-        <mxCell id="texto_105" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="opt [integração falhou]" vertex="1">
+        <mxCell id="texto_105" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="opt [merge do PR final não confirmado]" vertex="1">
           <mxGeometry height="34" width="243" x="66" y="8593" as="geometry" />
         </mxCell>
         <mxCell id="texto_107" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="alt [conflito de merge]" vertex="1">
           <mxGeometry height="34" width="243" x="54" y="7817" as="geometry" />
         </mxCell>
-        <mxCell id="texto_109" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontStyle=2;fontSize=14;" value="[integração já confirmada em tentativa anterior]" vertex="1">
+        <mxCell id="texto_109" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontStyle=2;fontSize=14;" value="[merge do PR final já confirmado em tentativa anterior]" vertex="1">
           <mxGeometry height="30" width="422" x="58" y="8960" as="geometry" />
         </mxCell>
-        <mxCell id="texto_111" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="alt [integração final ainda pendente]" vertex="1">
+        <mxCell id="texto_111" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="alt [merge do PR final ainda não confirmado]" vertex="1">
           <mxGeometry height="34" width="355" x="42" y="7685" as="geometry" />
         </mxCell>
         <mxCell id="texto_113" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#ffffff;fontStyle=2;fontSize=14;" value="[limpeza confirmada]" vertex="1">
@@ -2717,10 +2717,10 @@
         <mxCell id="texto_115" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="alt [limpeza incompleta]" vertex="1">
           <mxGeometry height="34" width="251" x="54" y="9258" as="geometry" />
         </mxCell>
-        <mxCell id="texto_117" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="opt [integração final confirmada]" vertex="1">
+        <mxCell id="texto_117" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="opt [merge do PR final confirmado]" vertex="1">
           <mxGeometry height="34" width="323" x="42" y="9126" as="geometry" />
         </mxCell>
-        <mxCell id="texto_119" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="loop [até a integração e a limpeza estarem confirmadas]" vertex="1">
+        <mxCell id="texto_119" parent="1" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;spacing=7;fontSize=15;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;fontSize=14;" value="loop [até o merge e a limpeza estarem confirmados]" vertex="1">
           <mxGeometry height="34" width="499" x="30" y="7475" as="geometry" />
         </mxCell>
         <mxCell id="cabecalho_208" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=14;align=center;verticalAlign=middle;fillColor=#f5f5f5;strokeColor=#666666;" value="CLI" vertex="1">
