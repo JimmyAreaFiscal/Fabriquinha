@@ -52,6 +52,7 @@ import type { ContextoDoPrompt } from "../../etapas/definicao/secoes_do_prompt.t
 import { montarPromptDemanda } from "../../etapas/prompt/prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes/sessoes_demanda.ts";
 import type { ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
+import { CATALOGO_DE_ETAPAS, oAgenteDecideOGate } from "../../etapas/catalogo.ts";
 
 export interface OpcoesExecucaoDemanda {
   limiteMin: number;
@@ -156,9 +157,11 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         worktree: caminhoNoAmbiente(worktree),
         saida: caminhoNoAmbiente(join(dir, "saida")),
         retomada: opcoes.retomada,
-        ...(c.ticket.etapa === "revisar_rodada" && {
-          perguntasDasRevisoesAnteriores: perguntasDosTicketsReprovadosDaRodada(c),
-        }),
+        // A revisão da rodada confere as perguntas que as revisões reprovadas antes dela fizeram.
+        ...(oAgenteDecideOGate(c.ticket.etapa) &&
+          CATALOGO_DE_ETAPAS[c.ticket.etapa].escopo === "rodada" && {
+            perguntasDasRevisoesAnteriores: perguntasDosTicketsReprovadosDaRodada(c),
+          }),
         commitsDosTickets: commitsDosTickets(c), // só as revisões leem
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,

@@ -5,7 +5,7 @@ import { type Ator, AUDITOR, FABRIQUINHA } from "../ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import { CICLO_DA_RODADA } from "../ciclo_de_vida/ciclos.ts";
 import { ErroDeEscopo } from "../../../compartilhado/nucleo/erros.ts";
-import { GATES } from "../gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
 import {
   conferirPullRequestRodada,

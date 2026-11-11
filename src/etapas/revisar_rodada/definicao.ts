@@ -21,5 +21,10 @@ export const DEFINICAO_DO_REVISAR_RODADA: DefinicaoDaEtapa = {
   },
   instrucao: new URL("revisar_rodada.md", import.meta.url),
   secaoDoPrompt: secaoDoPromptDoRevisarRodada,
-  gate: "gate_revisao_rodada",
+  gate: {
+    nome: "gate_revisao_rodada",
+    decisor: "agente",
+    esperaEmEstadoProprio: false,
+    reprovadoVaiPara: "implementar",
+  },
 };

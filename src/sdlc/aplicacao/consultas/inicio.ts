@@ -3,7 +3,8 @@
 // navegação conta o que aguarda pela mesma consulta.
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DO_TICKET } from "../../nucleo/ciclo_de_vida/ciclos.ts";
+import { CICLO_DO_TICKET, estadoDaRodadaNaEtapa, PRIMEIRA_ETAPA_DA_RODADA } from "../../nucleo/ciclo_de_vida/ciclos.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
 import { mesDoInstante, type Relogio } from "../../../compartilhado/nucleo/relogio.ts";
@@ -53,8 +54,9 @@ function ticketEmCurso(tickets: readonly TicketDemanda[], apoio: ApoioDosTickets
  * primeira ou depois da última, até a revisão abrir), que fica no Desenvolvimento.
  */
 const COLUNA_DO_ESTADO: Partial<Record<EstadoDemanda, ColunaDoBoard>> = {
-  em_execucao: "implementar",
-  encerrar_demanda: "encerramento_demanda",
+  // O cast vale porque a primeira Etapa da rodada é estado de rodada em andamento, e todo estado desses é coluna.
+  em_execucao: estadoDaRodadaNaEtapa(PRIMEIRA_ETAPA_DA_RODADA) as ColunaDoBoard,
+  [etapaDoPapel("integra_a_demanda")]: "encerramento_demanda",
 };
 
 /** Os cartões da demanda: um por rodada que não concluiu, na execução; senão, um só, o da demanda. */

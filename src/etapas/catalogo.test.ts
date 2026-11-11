@@ -3,9 +3,10 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CATALOGO_DE_ETAPAS, exigirEtapaConduzida } from "./catalogo.ts";
+import { CATALOGO_DE_ETAPAS, etapaDoPapel, exigirEtapaConduzida, oAgenteDecideOGate } from "./catalogo.ts";
 import { catalogoDaEtapa } from "./definicao/evidencia_exigida.ts";
 import { EtapaTicket } from "../compartilhado/nucleo/primitivos.ts";
+import { NomeGate } from "../sdlc/nucleo/demanda/agregado_demanda.ts";
 
 // A tabela Etapa × Executor × Escopo do CONCEITOS.md §2: Não Gerenciado = externo, Fabriquinha = fabriquinha,
 // Gerenciado = agente_autonomo, Gerenciado (interativo) = agente_interativo.
@@ -23,7 +24,8 @@ const TABELA_DO_CONCEITOS = {
 
 test("o catálogo tem as 9 etapas e o executor e o escopo de cada uma batem com o CONCEITOS.md §2", () => {
   assert.deepEqual(Object.keys(CATALOGO_DE_ETAPAS).sort(), Object.keys(TABELA_DO_CONCEITOS).sort());
-  assert.deepEqual(Object.keys(CATALOGO_DE_ETAPAS).sort(), [...EtapaTicket.options].sort());
+  // O enum fica em compartilhado/nucleo/primitivos.ts, que o catálogo importa: as chaves do catálogo o repetem, na ordem.
+  assert.deepEqual(Object.keys(CATALOGO_DE_ETAPAS), EtapaTicket.options);
   assert.deepEqual(
     Object.fromEntries(Object.values(CATALOGO_DE_ETAPAS).map((d) => [d.nome, [d.executor, d.escopo]])),
     TABELA_DO_CONCEITOS,
@@ -57,4 +59,27 @@ test("toda etapa conduzida tem o modo de trabalhar num .md que existe na pasta d
     assert.equal(dirname(caminho), join(import.meta.dirname, definicao.nome));
     assert.ok(existsSync(caminho), `${caminho} não existe`);
   }
+});
+
+test("cada papel do motor é de uma Etapa só, e as revisões são as Etapas cujo agente decide o Gate", () => {
+  const papeis = Object.values(CATALOGO_DE_ETAPAS).flatMap((d) => (d.papel ? [[d.papel, d.nome] as const] : []));
+  assert.deepEqual(Object.fromEntries(papeis), {
+    planeja_a_demanda: "planejar",
+    publica_o_pr_da_rodada: "encerrar_rodada",
+    ajusta_o_pr_reprovado: "ajustar_resultado",
+    integra_a_demanda: "encerrar_demanda",
+    resolve_o_conflito_da_integracao: "resolver_conflito",
+  });
+  assert.equal(new Set(papeis.map(([papel]) => papel)).size, papeis.length);
+  for (const [papel, etapa] of papeis) assert.equal(etapaDoPapel(papel), etapa);
+  assert.deepEqual(EtapaTicket.options.filter(oAgenteDecideOGate), ["revisar_rodada", "revisar_demanda"]);
+  assert.deepEqual(
+    EtapaTicket.options.filter((etapa) => CATALOGO_DE_ETAPAS[etapa].devolveAoAgente),
+    ["implementar", "resolver_conflito"],
+  );
+});
+
+test("o enum NomeGate do agregado repete os Gates que as Etapas declaram, um por Etapa", () => {
+  const gates = Object.values(CATALOGO_DE_ETAPAS).flatMap((d) => (d.gate ? [d.gate.nome] : []));
+  assert.deepEqual([...gates].sort(), [...NomeGate.options].sort());
 });

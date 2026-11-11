@@ -22,6 +22,7 @@ import {
   Titulo,
 } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Tentativa } from "../tentativa.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 
 export const TicketDemanda = z.object({
   demanda_id: DemandaId,
@@ -253,15 +254,17 @@ export const AgregadoDemanda = z
     const enc = ag.encerramento;
     if (enc !== undefined) {
       if (enc.integracao !== undefined && prDaDemanda(ag) === undefined) erro("a integração exige o PR final");
-      if (ag.demanda.estado !== "encerrar_demanda" && !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado))
-        erro("o progresso do encerramento só existe nos estados encerrar_demanda, concluida, cancelada e arquivada");
+      const integradora = etapaDoPapel("integra_a_demanda");
+      if (ag.demanda.estado !== integradora && !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado))
+        erro(`o progresso do encerramento só existe nos estados ${integradora}, concluida, cancelada e arquivada`);
       if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
       const conflito = enc.conflito_pendente?.ticket_id;
+      const resolucaoDoConflito = etapaDoPapel("resolve_o_conflito_da_integracao");
       if (
         conflito !== undefined &&
-        !ag.tickets.some((t) => t.ticket_id === conflito && t.etapa === "resolver_conflito")
+        !ag.tickets.some((t) => t.ticket_id === conflito && t.etapa === resolucaoDoConflito)
       )
-        erro(`o conflito pendente cita o ticket ${String(conflito)}, que não é um resolver_conflito existente`);
+        erro(`o conflito pendente cita o ticket ${String(conflito)}, que não é um ${resolucaoDoConflito} existente`);
     }
     const decisoes = new Set<string>();
     for (const d of ag.decisoes) {

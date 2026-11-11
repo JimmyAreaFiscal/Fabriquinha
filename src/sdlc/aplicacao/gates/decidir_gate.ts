@@ -3,7 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda, NomeGate } from "../../nucleo/demanda/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { GATES } from "../../nucleo/gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";

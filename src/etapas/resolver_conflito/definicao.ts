@@ -16,4 +16,6 @@ export const DEFINICAO_DO_RESOLVER_CONFLITO: DefinicaoDaEtapa = {
   metricas: ["uso"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
   instrucao: new URL("resolver_conflito.md", import.meta.url),
+  papel: "resolve_o_conflito_da_integracao",
+  devolveAoAgente: true,
 };

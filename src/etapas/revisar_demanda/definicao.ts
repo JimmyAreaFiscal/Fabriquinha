@@ -20,5 +20,10 @@ export const DEFINICAO_DO_REVISAR_DEMANDA: DefinicaoDaEtapa = {
   },
   instrucao: new URL("revisar_demanda.md", import.meta.url),
   secaoDoPrompt: secaoVerificacoesJaFeitas,
-  gate: "gate_revisao_demanda",
+  gate: {
+    nome: "gate_revisao_demanda",
+    decisor: "agente",
+    esperaEmEstadoProprio: false,
+    reprovadoVaiPara: "em_execucao",
+  },
 };

@@ -3,7 +3,15 @@
 import { z } from "zod";
 import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "../demanda/agregado_demanda.ts";
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "../ator.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
+import {
+  CICLO_DA_DEMANDA,
+  CICLO_DO_TICKET,
+  estadoDaDemandaNaEtapa,
+  etapaSeguinte,
+  PRIMEIRA_ETAPA_DA_DEMANDA,
+  PRIMEIRA_ETAPA_DA_RODADA,
+} from "../ciclo_de_vida/ciclos.ts";
+import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { branchDemanda, DemandaId, formatarTicketRef } from "../demanda/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { exigirAutoria } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
@@ -47,13 +55,13 @@ export function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"
   }
 }
 
-/** CA-1: cria a demanda em `entender_e_desenhar` com o autor externo em `criada_por` e o ticket 1 da etapa `entender_e_desenhar`. */
+/** CA-1: cria a demanda no estado da primeira Etapa, com o autor externo em `criada_por` e o ticket 1 dessa Etapa. */
 export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const e = EntradaRegistro.parse(entrada);
   return AgregadoDemanda.parse({
     demanda: {
       ...e,
-      estado: "entender_e_desenhar",
+      estado: PRIMEIRA_ETAPA_DA_DEMANDA,
       estado_alterado_em: ctx.agora,
       criada_por: AtorExterno.parse(autor),
       enviada: false,
@@ -63,7 +71,7 @@ export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDem
       {
         demanda_id: e.id,
         ticket_id: 1,
-        etapa: "entender_e_desenhar",
+        etapa: PRIMEIRA_ETAPA_DA_DEMANDA,
         estado: "em_execucao",
         estado_alterado_em: ctx.agora,
         criado_por: FABRIQUINHA,
@@ -103,7 +111,7 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
     throw new ErroDeRegra(`a demanda ${demanda.id} já foi enviada`, "aguarde a decisão do Auditor");
   }
   exigirAutoria(demanda, autor, "enviar");
-  exigirSemFalha(ag, "entender_e_desenhar");
+  exigirSemFalha(ag, PRIMEIRA_ETAPA_DA_DEMANDA);
   const pendentes = pendentesDeEnvio(ag);
   if (pendentes.length > 0) {
     throw new ErroDeRegra(
@@ -118,10 +126,10 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
 
 function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
-  const ticket = ticketAtualDaEtapa(ag, "planejar");
+  const ticket = ticketAtualDaEtapa(ag, etapaDoPapel("planeja_a_demanda"));
   if (ticket === undefined) {
     throw new ErroDeRegra(
-      `a demanda ${ag.demanda.id} não tem ticket de etapa planejar`,
+      `a demanda ${ag.demanda.id} não tem ticket de etapa ${etapaDoPapel("planeja_a_demanda")}`,
       "abra o ticket de planejamento",
     );
   }
@@ -157,8 +165,9 @@ export function validarPlano(
       "peça à sessão de planejamento",
     );
   }
-  CICLO_DA_DEMANDA.exigir(demanda, "planejar");
-  exigirSemFalha(ag, "planejar");
+  const planejamento = etapaDoPapel("planeja_a_demanda");
+  CICLO_DA_DEMANDA.exigir(demanda, estadoDaDemandaNaEtapa(planejamento));
+  exigirSemFalha(ag, planejamento);
   const plano = PlanoProposto.safeParse(entrada);
   if (!plano.success) {
     throw new ErroDeRegra(
@@ -166,7 +175,7 @@ export function validarPlano(
       "corrija o plano e submeta de novo",
     );
   }
-  // A aprovação materializa todo ticket do plano como `implementar`, e a seleção só enxerga tickets de rodada.
+  // A aprovação materializa todo ticket do plano na primeira Etapa da rodada, e a seleção só enxerga tickets de rodada.
   const semRodada = plano.data.tickets.filter((t) => t.rodada_id === undefined).map((t) => String(t.ticket_id));
   if (semRodada.length > 0) {
     throw new ErroDeRegra(
@@ -306,10 +315,11 @@ export function devolverTicket(
   exigirDemandaEmAndamento(ag, "devolver");
   const ticket = ticketDaDemanda(ag, ticket_id);
   CICLO_DO_TICKET.exigir(ticket, "em_execucao");
-  if (ticket.etapa !== "implementar" && ticket.etapa !== "resolver_conflito") {
+  if (CATALOGO_DE_ETAPAS[ticket.etapa].devolveAoAgente !== true) {
+    const quemDevolve = Object.values(CATALOGO_DE_ETAPAS).filter((definicao) => definicao.devolveAoAgente);
     throw new ErroDeRegra(
       `o ticket ${String(ticket_id)} é da etapa ${ticket.etapa} e não admite devolução técnica`,
-      "só implementar e resolver_conflito",
+      `só ${quemDevolve.map((definicao) => definicao.nome).join(" e ")}`,
     );
   }
   const reprovacao: ResultadoDaTentativa = { tipo: "reprovacao", motivo: instrucao };
@@ -401,7 +411,7 @@ export function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void
       t.ticket_id !== ignorar &&
       (CICLO_DO_TICKET.estaEmAndamento(t.estado) ||
         t.estado === "falhou" ||
-        (t.etapa === "implementar" && t.estado !== "concluido")),
+        (t.etapa === PRIMEIRA_ETAPA_DA_RODADA && t.estado !== "concluido")),
   );
   if (pendente !== undefined) {
     throw new ErroDeRegra(
@@ -411,7 +421,7 @@ export function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void
   }
 }
 
-/** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisar_demanda`. */
+/** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre a Etapa seguinte à execução e vai a ela. */
 export function iniciarRevisaoDemanda(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -422,9 +432,10 @@ export function iniciarRevisaoDemanda(
   exigirDemandaDaEntrada(ag, EntradaDemanda.parse(entrada).demanda_id);
   CICLO_DA_DEMANDA.exigir(ag.demanda, "em_execucao");
   exigirSemPendencias(ag);
+  const revisao = etapaSeguinte("em_execucao");
   return {
     ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "revisar_demanda", ctx.agora),
-    tickets: [...ag.tickets, criarTicket(ag, { etapa: "revisar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora })],
+    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, estadoDaDemandaNaEtapa(revisao), ctx.agora),
+    tickets: [...ag.tickets, criarTicket(ag, { etapa: revisao, criado_por: FABRIQUINHA, agora: ctx.agora })],
   };
 }

@@ -7,7 +7,8 @@ import { type Ator, exigirAtor } from "../../nucleo/ator.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda/demanda.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { espacoDoTicket } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
+import type { EntradaDoGate } from "../../nucleo/gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";
 import { Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
@@ -50,8 +51,8 @@ export async function aprovarPR(
     "use uma rodada da demanda",
   );
   const ticket = existe(
-    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
-    `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
+    ticketAtualDaEtapa(ag, gate.etapaAncora, ref.rodada_id),
+    `a rodada ${formatarRodadaRef(ref)} não tem ticket ${gate.etapaAncora}`,
     "confira o estado da rodada",
   );
 

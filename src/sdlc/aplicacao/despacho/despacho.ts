@@ -15,9 +15,9 @@ import {
   type SituacaoDoDespacho,
 } from "../../nucleo/despacho/despacho.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
-import { exigirEtapaConduzida } from "../../../etapas/catalogo.ts";
+import { CATALOGO_DE_ETAPAS, type EtapaConduzida, exigirEtapaConduzida } from "../../../etapas/catalogo.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EstadoDemanda, type EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EstadoDemanda } from "../../../compartilhado/nucleo/primitivos.ts";
 import { reservarTicket } from "../../nucleo/despacho/reserva_ticket.ts";
 import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
@@ -29,43 +29,29 @@ import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts"
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../../../compartilhado/armazenamento/servico.ts";
 import type { ConducaoDeEtapa, DepsDaConducao } from "../../../etapas/conducao/conducao_de_etapa.ts";
-import {
-  ConducaoDeEncerrarDemanda,
-  type OpcoesDoEncerramentoDaDemanda,
-} from "../../../etapas/encerrar_demanda/conducao_de_encerrar_demanda.ts";
-import { ConducaoDeAjustarResultado } from "../../../etapas/ajustar_resultado/conducao_de_ajustar_resultado.ts";
-import { ConducaoDeEncerrarRodada } from "../../../etapas/encerrar_rodada/conducao_de_encerrar_rodada.ts";
-import {
-  ConducaoDeImplementar,
-  type OpcoesDaImplementacao,
-} from "../../../etapas/implementar/conducao_de_implementar.ts";
-import { ConducaoDePlanejar } from "../../../etapas/planejar/conducao_de_planejar.ts";
-import { ConducaoDeResolverConflito } from "../../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
-import { ConducaoDeRevisarDemanda } from "../../../etapas/revisar_demanda/conducao_de_revisar_demanda.ts";
-import { ConducaoDeRevisarRodada } from "../../../etapas/revisar_rodada/conducao_de_revisar_rodada.ts";
+import { montarConducoesDasEtapas, type OpcoesDasConducoes } from "../../../etapas/conducoes.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "../revisao_demanda.ts";
 import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
-export interface DepsDespacho {
-  /** Coleta das verificações e limite do commit do `implementar` e do `resolver_conflito`; injetáveis nos testes. */
-  implementacao?: OpcoesDaImplementacao;
+export interface DepsDespacho extends OpcoesDasConducoes {
   /** Substitui conduções nos testes que não sobem pi nem git. */
-  conducoesSubstitutas?: (
-    deps: DepsDaConducao,
-  ) => Partial<Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa>>;
-  /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
-  verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
+  conducoesSubstitutas?: (deps: DepsDaConducao) => Partial<Record<EtapaConduzida, ConducaoDeEtapa>>;
 }
 
-// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
+const ehDaEtapaExterna = (estado: EstadoDemanda): boolean => {
+  const etapa = etapaDoEstado(estado);
+  return etapa !== undefined && CATALOGO_DE_ETAPAS[etapa].executor === "externo";
+};
+
+// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (a Etapa externa) e dos Gates,
 // cuja Etapa é a do ticket que eles esperam, não a do estado.
 const ESTADOS_DESPACHADOS = EstadoDemanda.options.filter(
   (estado) =>
     CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
-    estado !== "entender_e_desenhar" &&
+    !ehDaEtapaExterna(estado) &&
     (etapaDoEstado(estado) ?? estado) === estado,
 );
 
@@ -110,15 +96,8 @@ function iniciarEtapa(
 ): Promise<unknown> {
   exigirEtapaConduzida(t.etapa);
   const depsDaConducao = depsDaConducaoDe(banco, c, relogio);
-  const CONDUCAO_DA_ETAPA: Record<Exclude<EtapaTicket, "entender_e_desenhar">, ConducaoDeEtapa> = {
-    planejar: new ConducaoDePlanejar(depsDaConducao),
-    implementar: new ConducaoDeImplementar(depsDaConducao, deps.implementacao),
-    resolver_conflito: new ConducaoDeResolverConflito(depsDaConducao, deps.implementacao),
-    revisar_rodada: new ConducaoDeRevisarRodada(depsDaConducao),
-    revisar_demanda: new ConducaoDeRevisarDemanda(depsDaConducao),
-    encerrar_rodada: new ConducaoDeEncerrarRodada(depsDaConducao),
-    encerrar_demanda: new ConducaoDeEncerrarDemanda(depsDaConducao, { verificacao: deps.verificacao }),
-    ajustar_resultado: new ConducaoDeAjustarResultado(depsDaConducao),
+  const CONDUCAO_DA_ETAPA: Record<EtapaConduzida, ConducaoDeEtapa> = {
+    ...montarConducoesDasEtapas(depsDaConducao, deps),
     ...deps.conducoesSubstitutas?.(depsDaConducao),
   };
   return CONDUCAO_DA_ETAPA[t.etapa].conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));

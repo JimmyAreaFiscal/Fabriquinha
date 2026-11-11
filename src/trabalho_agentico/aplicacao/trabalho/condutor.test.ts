@@ -24,6 +24,7 @@ import { type Relogio, relogioDoSistema, relogioFixo } from "../../../compartilh
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../../sdlc/nucleo/tentativa.ts";
 import type { Harness } from "../../../harness/harness.ts";
 import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import {
   atividadeDo,
   condutor,
@@ -270,7 +271,7 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
 });
 
 /** A triagem de verdade (`triarPergunta`) com o pi da triagem trocado por uma saída fixa do modelo. */
-function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
+function triagemComSaida(etapa: EtapaTicket, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
   const piDaTriagem: typeof executar = () =>
     Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
   return (p) => {

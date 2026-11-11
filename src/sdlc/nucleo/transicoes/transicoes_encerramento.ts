@@ -8,7 +8,8 @@ import {
   type PullRequestDoEspaco,
   type TicketDemanda,
 } from "../demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, estadoDaDemandaNaEtapa } from "../ciclo_de_vida/ciclos.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { branchDemanda, DemandaId } from "../demanda/demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
@@ -56,10 +57,11 @@ const comPrDaDemanda = (ag: AgregadoDemanda, pr: Omit<PullRequestDoEspaco, "roda
 ];
 
 function exigirEncerramento(ag: AgregadoDemanda) {
-  CICLO_DA_DEMANDA.exigir(ag.demanda, "encerrar_demanda");
-  const atual = ticketAtualDaEtapa(ag, "encerrar_demanda");
+  const integradora = etapaDoPapel("integra_a_demanda");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, estadoDaDemandaNaEtapa(integradora));
+  const atual = ticketAtualDaEtapa(ag, integradora);
   if (atual === undefined) {
-    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem ticket encerrar_demanda`, "volte à revisão integral");
+    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem ticket ${integradora}`, "volte à revisão integral");
   }
   return atual;
 }
@@ -70,10 +72,10 @@ const resolverPendente = (ag: AgregadoDemanda): TicketDemanda | undefined =>
 const conflitoLiberado = (ag: AgregadoDemanda): boolean =>
   ag.encerramento?.conflito_pendente === undefined || resolverPendente(ag)?.estado === "concluido";
 
-/** Elegibilidade para a aplicação: `encerrar_demanda` aberto e, havendo conflito, o `resolver_conflito` concluído. */
+/** Elegibilidade para a aplicação: o ticket da integração aberto e, havendo conflito, o da resolução concluído. */
 export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
-  if (ag.demanda.estado !== "encerrar_demanda" || ticketAtualDaEtapa(ag, "encerrar_demanda")?.estado !== "aberto")
-    return false;
+  const integradora = etapaDoPapel("integra_a_demanda");
+  if (ag.demanda.estado !== integradora || ticketAtualDaEtapa(ag, integradora)?.estado !== "aberto") return false;
   return conflitoLiberado(ag);
 }
 
@@ -149,7 +151,11 @@ export function registrarConflitoEncerramento(
       "registre o conflito em tentativa ativa",
     );
   }
-  const resolver = criarTicket(ag, { etapa: "resolver_conflito", criado_por: FABRIQUINHA, agora: ctx.agora });
+  const resolver = criarTicket(ag, {
+    etapa: etapaDoPapel("resolve_o_conflito_da_integracao"),
+    criado_por: FABRIQUINHA,
+    agora: ctx.agora,
+  });
   const reaberto = mudarTicket(ag, atual, "aberto", ctx.agora);
   return AgregadoDemanda.parse({
     ...reaberto,

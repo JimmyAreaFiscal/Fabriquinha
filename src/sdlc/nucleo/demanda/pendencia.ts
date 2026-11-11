@@ -7,6 +7,7 @@ import type { Instante } from "../../../compartilhado/nucleo/primitivos.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "../tentativa.ts";
 import { exigirSemPendencias } from "../transicoes/transicoes_demanda.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 
 /** Por que o Auditor é esperado. */
 /** @testes o teste confere o tipo de cada Pendência; a produção o usa pelo `Pendencia` */
@@ -125,9 +126,10 @@ export function pendenciasDaDemanda(
         desde: r.estado_alterado_em,
       });
     }
-    if (r.estado === "ajustar_resultado") {
+    const etapaDeAjustes = etapaDoPapel("ajusta_o_pr_reprovado");
+    if (r.estado === etapaDeAjustes) {
       // Com a sessão viva no ticket de ajustes, a pergunta dela (ou a conversa) já é a Pendência.
-      const ticketDeAjustes = ticketAtualDaEtapa(ag, "ajustar_resultado", r.rodada_id);
+      const ticketDeAjustes = ticketAtualDaEtapa(ag, etapaDeAjustes, r.rodada_id);
       const jaVivo = vivosDaDemanda.some((v) => v.ticket.ticket_id === ticketDeAjustes?.ticket_id);
       if (!jaVivo) {
         pendencias.push({
@@ -143,7 +145,7 @@ export function pendenciasDaDemanda(
   const aguardandoMerge = ag.encerramento?.aguardando_merge_humano === true;
   if (aguardandoMerge) {
     const prFinal = prs.find((p) => p.rodada_id === undefined);
-    const ticketDoMerge = ticketAtualDaEtapa(ag, "encerrar_demanda");
+    const ticketDoMerge = ticketAtualDaEtapa(ag, etapaDoPapel("integra_a_demanda"));
     pendencias.push({
       tipo: "acao_externa",
       item: daDemanda,

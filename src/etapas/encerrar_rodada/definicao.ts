@@ -22,5 +22,7 @@ export const DEFINICAO_DO_ENCERRAR_RODADA: DefinicaoDaEtapa = {
   },
   instrucao: new URL("encerrar_rodada.md", import.meta.url),
   secaoDoPrompt: secaoDoPromptDoEncerrarRodada,
-  gate: "gate_pr",
+  gate: { nome: "gate_pr", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "ajustar_resultado" },
+  devolvePara: "implementar",
+  papel: "publica_o_pr_da_rodada",
 };

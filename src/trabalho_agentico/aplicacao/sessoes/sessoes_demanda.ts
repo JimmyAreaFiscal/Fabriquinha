@@ -37,6 +37,7 @@ import {
   type Situacao,
 } from "../trabalho/condutor.ts";
 import type { EventoDoAgente } from "../../../harness/harness.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
 type Estado = "rodando" | "aguardando_humano" | "terminada";
@@ -520,7 +521,8 @@ export function enviarDemanda(
   }
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
   if (estado === "rodando" || viva) condutor.mandar(ultimaDe(c).id, { type: modo, message: texto });
-  else if (c.ticket.etapa === "ajustar_resultado") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
+  else if (c.ticket.etapa === etapaDoPapel("ajusta_o_pr_reprovado"))
+    retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
   else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto }, relogio);
   return true;
 }

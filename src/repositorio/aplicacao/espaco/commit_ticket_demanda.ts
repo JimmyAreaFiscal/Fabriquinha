@@ -10,6 +10,7 @@ import { gravarCommitDemanda } from "../../../sdlc/armazenamento/commits_demanda
 import { arquivosDe, commitar } from "../../infra/git/commit.ts";
 import { exigirGitNoAmbiente, gitNoAmbiente } from "../../infra/worktree/worktree.ts";
 import { type Ambiente, LIMITE_COMANDO_MS } from "../../../sandbox/infra/ambiente.ts";
+import { PRIMEIRA_ETAPA_DA_RODADA } from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
 
@@ -53,8 +54,8 @@ export async function acharCommitTicketDemanda(
 /**
  * `git add -A` e commit `feat|fix: <título> [I-n.Tm]` com os hooks e sem credenciais; se o commit do ticket já
  * existe (queda antes da gravação), reaproveita. Grava o commit e os arquivos e o devolve.
- * No `resolver_conflito`, o commit conclui o merge em andamento na worktree, mesmo sem alteração; o `implementar`
- * sem alteração não gera commit vazio e é rejeitado com `ErroDeReprovacao`.
+ * Na resolução do conflito, o commit conclui o merge em andamento na worktree, mesmo sem alteração; o ticket do Plano
+ * (a primeira Etapa da rodada) sem alteração não gera commit vazio e é rejeitado com `ErroDeReprovacao`.
  */
 export async function commitarTicketDemanda(
   banco: DatabaseSync,
@@ -72,7 +73,7 @@ export async function commitarTicketDemanda(
   if (!commit) {
     await exigirGitNoAmbiente(ambiente, worktree, "add", "-A");
     const semAlteracao = (await gitNoAmbiente(ambiente, worktree, "diff", "--cached", "--quiet")).codigo === 0;
-    if (semAlteracao && etapa === "implementar") {
+    if (semAlteracao && etapa === PRIMEIRA_ETAPA_DA_RODADA) {
       throw new ErroDeReprovacao(
         `o ticket ${formatarTicketRef(ref)} terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede; o corpo do PR nasce da mensagem do PR no encerramento da rodada e não muda nesta etapa`,
       );

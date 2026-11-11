@@ -6,10 +6,13 @@ import { VerificacaoDeFitness } from "../../infra/tipos_de_verificacao/fitness.t
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/tipos_de_verificacao/sonar.ts";
 import { VerificacaoDeTestes } from "../../infra/tipos_de_verificacao/testes.ts";
 import { montarVerificacoesDaEtapa, type RegistroDaVerificacao } from "../../infra/verificacao.ts";
+import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 
 export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao.ts";
 
 interface EntradaVerificacoes {
+  /** A Etapa que verifica o código depois do agente; as verificações são as que ela declara. */
+  etapa: EtapaTicket;
   /** O Ambiente do ciclo do Espaço, onde os comandos configurados rodam. */
   ambiente: Ambiente;
   projeto: Projeto;
@@ -24,13 +27,13 @@ interface EntradaVerificacoes {
  * começa assim que eles terminam e roda junto com o E2E e as fitness functions, que seguem em série como antes.
  */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
-  const { ambiente, projeto, e2e, worktree, opcoes } = entrada;
+  const { etapa, ambiente, projeto, e2e, worktree, opcoes } = entrada;
   const arquivos = await arquivosAlterados(ambiente, worktree);
   const contexto = { ambiente, worktree, limiteMs: opcoes?.limiteMs };
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;
   const iniciarSonar = () => (sonarEmAndamento ??= sonar.coletar(contexto));
-  // Os hooks ficam com o fechamento; resolver_conflito exige a mesma lista.
-  const { testes, fitness, sonar } = montarVerificacoesDaEtapa("implementar", {
+  // Os hooks ficam com o fechamento.
+  const { testes, fitness, sonar } = montarVerificacoesDaEtapa(etapa, {
     testes: () =>
       new VerificacaoDeTestes({
         projeto,

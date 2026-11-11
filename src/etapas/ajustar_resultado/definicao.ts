@@ -11,4 +11,6 @@ export const DEFINICAO_DO_AJUSTAR_RESULTADO: DefinicaoDaEtapa = {
   metricas: ["uso"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
   instrucao: new URL("ajustar_resultado.md", import.meta.url),
+  seguePara: "implementar",
+  papel: "ajusta_o_pr_reprovado",
 };

@@ -22,6 +22,8 @@ import {
   proximoIdDeTicket,
 } from "../item_de_trabalho/item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
+import { etapaDoPapel } from "../../../etapas/catalogo.ts";
+import { estadoDaRodadaNaEtapa, PRIMEIRA_ETAPA_DA_RODADA } from "../ciclo_de_vida/ciclos.ts";
 
 const ArquivosPrevistos = CaminhoPrevisto.array().default([]);
 
@@ -189,7 +191,13 @@ function completarArquivosPrevistos(dados: unknown): unknown {
 export const lerPlanoGravado = (dados: unknown): PlanoProposto =>
   PlanoProposto.parse(completarArquivosPrevistos(dados));
 
-const OrigemDaCorrecao = z.enum(["revisao_rodada", "revisao_demanda", "ajustar_resultado", "conferencia_do_pr"]);
+// A sessão que ajusta o PR reprovado corrige com o nome da Etapa dela como origem.
+const OrigemDaCorrecao = z.enum([
+  "revisao_rodada",
+  "revisao_demanda",
+  etapaDoPapel("ajusta_o_pr_reprovado"),
+  "conferencia_do_pr",
+]);
 /** De onde vem uma versão do Plano: a aprovação do planejamento (versão 1) ou uma das correções. */
 export const OrigemDaVersao = z.enum(["aprovacao_do_planejamento", ...OrigemDaCorrecao.options]);
 
@@ -430,7 +438,7 @@ export function materializar(
         rodada_id,
         titulo,
         descricao,
-        etapa: "implementar" as const,
+        etapa: PRIMEIRA_ETAPA_DA_RODADA,
         estado: "aberto" as const,
         estado_alterado_em: agora,
         criado_por: acrescimo.autor,
@@ -455,7 +463,7 @@ export function materializar(
         demanda_id,
         rodada_id: x.rodada_id,
         titulo: x.titulo,
-        estado: "implementar" as const,
+        estado: estadoDaRodadaNaEtapa(PRIMEIRA_ETAPA_DA_RODADA),
         estado_alterado_em: agora,
         e2e: x.e2e,
         branch: branchRodada(demanda_id, x.rodada_id),

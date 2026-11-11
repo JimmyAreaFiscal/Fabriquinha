@@ -13,5 +13,6 @@ export const DEFINICAO_DO_PLANEJAR: DefinicaoDaEtapa = {
   capacidades: { skills: ["artefato-plano"], extensoes: EXTENSOES_DO_AGENTE },
   instrucao: new URL("planejar.md", import.meta.url),
   secaoDoPrompt: secaoDoPromptDoPlanejar,
-  gate: "gate_planejamento",
+  gate: { nome: "gate_planejamento", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "planejar" },
+  papel: "planeja_a_demanda",
 };

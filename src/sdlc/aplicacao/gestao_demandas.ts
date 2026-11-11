@@ -9,7 +9,7 @@ import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { registrarDependencia } from "../nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
 import { exigirAutoria } from "../../qualidade/nucleo/evidencias/evidencia.ts";
-import { TIPOS_DA_DEMANDA } from "../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
+import { TIPOS_DA_DEMANDA } from "../../etapas/entender_e_desenhar/definicao.ts";
 import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
 import { CustosRealizados } from "../../qualidade/nucleo/evidencias/schemas.ts";

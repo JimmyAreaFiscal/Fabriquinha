@@ -4,7 +4,7 @@ import { comEvidencia, comPlanoSubmetido } from "../../../../apoio-testes/cenari
 import { clonarAgregadoDemanda as structuredClone } from "../../../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
-import { GATES } from "../gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
 import {
   comTentativaAberta,

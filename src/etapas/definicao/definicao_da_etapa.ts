@@ -3,9 +3,33 @@
 import type { ItemCatalogoEtapa } from "./evidencia_exigida.ts";
 import type { NomeGate } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type { TipoMetrica } from "../../custos/nucleo/metrica.ts";
-import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda, EstadoRodada, EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import type { TipoVerificacao } from "../../qualidade/nucleo/verificacao.ts";
 import type { ContextoDoPrompt } from "./secoes_do_prompt.ts";
+
+/** Um estado do Ciclo de Vida da demanda ou da rodada, aonde uma Etapa leva. */
+type EstadoDoCiclo = EstadoDemanda | EstadoRodada;
+
+/** O Gate que decide depois do trabalho da Etapa; a mecânica é do motor, os efeitos ficam no `gate.ts` da Etapa. */
+interface GateDaEtapa {
+  nome: NomeGate;
+  decisor: "auditor" | "agente";
+  /** O Gate espera a decisão num estado do ciclo só dele, com o nome do Gate; sem isso, decide no estado da Etapa. */
+  esperaEmEstadoProprio: boolean;
+  /** O estado a que o ciclo vai quando o Gate reprova. */
+  reprovadoVaiPara: EstadoDoCiclo;
+}
+
+/**
+ * O que uma Etapa só faz nas regras do motor que nenhuma outra cumpre: o motor pergunta ao catálogo qual Etapa tem o
+ * papel, em vez de citá-la pelo nome.
+ */
+export type PapelDaEtapa =
+  | "planeja_a_demanda"
+  | "publica_o_pr_da_rodada"
+  | "ajusta_o_pr_reprovado"
+  | "integra_a_demanda"
+  | "resolve_o_conflito_da_integracao";
 
 export interface DefinicaoDaEtapa {
   nome: EtapaTicket;
@@ -20,7 +44,17 @@ export interface DefinicaoDaEtapa {
   instrucao?: URL;
   /** As seções do prompt que só a Etapa lê, com dados que já existem quando o agente dela é lançado. */
   secaoDoPrompt?: (contexto: ContextoDoPrompt) => string;
-  gate?: NomeGate;
+  gate?: GateDaEtapa;
+  /**
+   * Fora da ordem do SDLC (`ORDEM_DO_SDLC` do catálogo): o estado a que a Etapa leva ao terminar. A Etapa na ordem ou
+   * com `seguePara` é estado do ciclo do escopo dela; sem nenhum dos dois, roda dentro do estado de outra.
+   */
+  seguePara?: EstadoDoCiclo;
+  /** O estado a que a Etapa devolve o ciclo sem decisão de Gate, quando a conferência dela acha problema. */
+  devolvePara?: EstadoDoCiclo;
+  papel?: PapelDaEtapa;
+  /** A Fabriquinha verifica o código depois do agente e, reprovado, devolve o ticket a ele (D05). */
+  devolveAoAgente?: true;
 }
 
 type RegraDeAprovacao = ItemCatalogoEtapa["regraAprovacao"];

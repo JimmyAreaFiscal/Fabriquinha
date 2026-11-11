@@ -14,4 +14,5 @@ export const DEFINICAO_DO_ENCERRAR_DEMANDA: DefinicaoDaEtapa = {
   metricas: ["uso"],
   capacidades: SEM_CAPACIDADES,
   instrucao: new URL("encerrar_demanda.md", import.meta.url),
+  papel: "integra_a_demanda",
 };

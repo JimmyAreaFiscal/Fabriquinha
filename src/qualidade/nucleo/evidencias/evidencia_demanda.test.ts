@@ -3,7 +3,8 @@ import { test } from "node:test";
 import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { comEvidencia } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { type Ator, FABRIQUINHA } from "../../../sdlc/nucleo/ator.ts";
-import { pendentesDeEnvio, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
+import { pendentesDeEnvio } from "./evidencia_demanda.ts";
+import { TIPOS_DA_DEMANDA } from "../../../etapas/entender_e_desenhar/definicao.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const autora: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };

@@ -3,14 +3,22 @@
 import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "../ator.ts";
 import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "../demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
+import {
+  CICLO_DA_DEMANDA,
+  CICLO_DA_RODADA,
+  CICLO_DO_TICKET,
+  estadoDaRodadaNaEtapa,
+  etapaSeguinte,
+  PRIMEIRA_ETAPA_DA_RODADA,
+} from "../ciclo_de_vida/ciclos.ts";
+import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { DemandaId } from "../demanda/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
 import { correcaoDosTicketsDaRodada, materializar } from "../demanda/plano.ts";
 import {
   type EtapaTicket,
-  type EstadoRodada,
+  EstadoRodada,
   Id,
   type Instante,
   palavras,
@@ -18,6 +26,9 @@ import {
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };
+
+/** O estado da rodada que a definição de uma Etapa declara (aonde ela leva). */
+const estadoDaRodada = (declarado: string | undefined): EstadoRodada => EstadoRodada.parse(declarado);
 const TicketRef = { ...RodadaRef, ticket_id: Id };
 
 const EntradaConclusao = z.strictObject(RodadaRef);
@@ -98,7 +109,10 @@ const comTicketConcluido = (
   return { tickets, tentativas };
 };
 
-/** CA-1: todas as implementações `concluido` (processo encerrado não conta) levam a rodada a `revisar_rodada`, com um `revisar_rodada` novo. */
+/**
+ * CA-1: todas as implementações `concluido` (processo encerrado não conta) levam a rodada à Etapa seguinte da ordem, com
+ * um ticket novo dela.
+ */
 export function concluirImplementacoesRodada(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -107,11 +121,11 @@ export function concluirImplementacoesRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "concluir as implementações da rodada", "fabriquinha");
   const e = EntradaConclusao.parse(entrada);
-  const rodada = rodadaNoEstado(ag, e, "implementar");
-  const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
+  const rodada = rodadaNoEstado(ag, e, estadoDaRodadaNaEtapa(PRIMEIRA_ETAPA_DA_RODADA));
+  const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === PRIMEIRA_ETAPA_DA_RODADA);
   if (impl.length === 0) {
     throw new ErroDeRegra(
-      `a rodada ${String(rodada.rodada_id)} não tem ticket de implementar`,
+      `a rodada ${String(rodada.rodada_id)} não tem ticket de ${PRIMEIRA_ETAPA_DA_RODADA}`,
       "não há o que concluir",
     );
   }
@@ -122,13 +136,14 @@ export function concluirImplementacoesRodada(
       "todas as implementações da rodada precisam estar concluído",
     );
   }
+  const revisao = etapaSeguinte(rodada.estado);
   return {
     ...ag,
     tickets: [
       ...ag.tickets,
-      criarTicket(ag, { etapa: "revisar_rodada", rodada: rodada.rodada_id, criado_por: FABRIQUINHA, agora: ctx.agora }),
+      criarTicket(ag, { etapa: revisao, rodada: rodada.rodada_id, criado_por: FABRIQUINHA, agora: ctx.agora }),
     ],
-    rodadas: rodadasComEstadoMudado(ag, rodada, "revisar_rodada", ctx.agora),
+    rodadas: rodadasComEstadoMudado(ag, rodada, estadoDaRodadaNaEtapa(revisao), ctx.agora),
   };
 }
 
@@ -160,8 +175,8 @@ export function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAM
 
 /**
  * CA-4 e CA-5: a Fabriquinha confere o PR depois da documentação, com fatos explícitos. Com conflito ou check falho exige
- * correções, conclui a etapa técnica e volta a `implementar` sem decisão humana; sem problema, vai a
- * `gate_pr` e o `encerrar_rodada` segue como âncora do gate.
+ * correções, conclui a etapa técnica e devolve a rodada sem decisão humana (o `devolvePara` da Etapa que publica o PR);
+ * sem problema, vai ao estado de espera do Gate dela, e o ticket dela segue como âncora do gate.
  */
 export function conferirPullRequestRodada(
   ag: AgregadoDemanda,
@@ -171,8 +186,9 @@ export function conferirPullRequestRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "conferir o PR da rodada", "fabriquinha");
   const e = EntradaConferencia.parse(entrada);
-  const rodada = rodadaNoEstado(ag, e, "encerrar_rodada");
-  const ticket = ticketAtual(ag, rodada, "encerrar_rodada", e.ticket_id);
+  const publicacao = CATALOGO_DE_ETAPAS[etapaDoPapel("publica_o_pr_da_rodada")];
+  const rodada = rodadaNoEstado(ag, e, estadoDaRodadaNaEtapa(publicacao.nome));
+  const ticket = ticketAtual(ag, rodada, publicacao.nome, e.ticket_id);
   if (!e.documentacao_entregue) {
     throw new ErroDeRegra("a documentação ainda não foi entregue", "confira o PR só depois da entrega");
   }
@@ -180,7 +196,8 @@ export function conferirPullRequestRodada(
     if (e.correcoes !== undefined) {
       throw new ErroDeRegra("o PR sem conflito nem check falho não leva correções", "omita as correções");
     }
-    return { ...ag, rodadas: rodadasComEstadoMudado(ag, rodada, "gate_pr", ctx.agora) };
+    const espera = existe(publicacao.gate, `a etapa ${publicacao.nome} não declara gate`, "declare o gate do PR").nome;
+    return { ...ag, rodadas: rodadasComEstadoMudado(ag, rodada, estadoDaRodada(espera), ctx.agora) };
   }
   const base = materializar(
     ag,
@@ -190,7 +207,7 @@ export function conferirPullRequestRodada(
   return {
     ...base,
     ...comTicketConcluido(base, ticket, ctx.agora),
-    rodadas: rodadasComEstadoMudado(base, rodada, "implementar", ctx.agora),
+    rodadas: rodadasComEstadoMudado(base, rodada, estadoDaRodada(publicacao.devolvePara), ctx.agora),
   };
 }
 
@@ -202,15 +219,19 @@ export function registrarCorrecoesSessao(
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
   const e = EntradaCorrecoesSessao.parse(entrada);
-  const rodada = rodadaNoEstado(ag, e, "ajustar_resultado");
-  ticketAtual(ag, rodada, "ajustar_resultado", e.ticket_id); // recusa se não for o ticket da sessão
+  const etapaDeAjustes = etapaDoPapel("ajusta_o_pr_reprovado");
+  const rodada = rodadaNoEstado(ag, e, estadoDaRodadaNaEtapa(etapaDeAjustes));
+  ticketAtual(ag, rodada, etapaDeAjustes, e.ticket_id); // recusa se não for o ticket da sessão
   if (ator.tipo !== "agente" && ator.tipo !== "auditor") {
     throw new ErroDeEscopo("só o Auditor ou o agente da sessão registram correções", "peça ao Auditor pelo web");
   }
-  return materializar(ag, correcaoDosTicketsDaRodada("ajustar_resultado", ator, e.rodada_id, e.correcoes), ctx);
+  return materializar(ag, correcaoDosTicketsDaRodada(etapaDeAjustes, ator, e.rodada_id, e.correcoes), ctx);
 }
 
-/** CA-8 e CA-9: só o Auditor, com implementar aberto criado depois da sessão e nenhuma implementação em execução. */
+/**
+ * CA-8 e CA-9: só o Auditor, com ticket do Plano aberto criado depois da sessão e nenhum em execução; a rodada vai aonde
+ * a sessão leva (`seguePara`).
+ */
 export function concluirSessaoRodada(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -219,9 +240,10 @@ export function concluirSessaoRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "concluir a sessão da rodada", "auditor");
   const e = z.strictObject(TicketRef).parse(entrada);
-  const rodada = rodadaNoEstado(ag, e, "ajustar_resultado");
-  const sessao = ticketAtual(ag, rodada, "ajustar_resultado", e.ticket_id);
-  const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
+  const ajustes = CATALOGO_DE_ETAPAS[etapaDoPapel("ajusta_o_pr_reprovado")];
+  const rodada = rodadaNoEstado(ag, e, estadoDaRodadaNaEtapa(ajustes.nome));
+  const sessao = ticketAtual(ag, rodada, ajustes.nome, e.ticket_id);
+  const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === PRIMEIRA_ETAPA_DA_RODADA);
   if (impl.some((t) => t.estado === "em_execucao")) {
     throw new ErroDeRegra("há implementação em execução na rodada", "espere ou encerre a execução antes de concluir");
   }
@@ -234,6 +256,6 @@ export function concluirSessaoRodada(
   return {
     ...ag,
     ...comTicketConcluido(ag, sessao, ctx.agora),
-    rodadas: rodadasComEstadoMudado(ag, rodada, "implementar", ctx.agora),
+    rodadas: rodadasComEstadoMudado(ag, rodada, estadoDaRodada(ajustes.seguePara), ctx.agora),
   };
 }

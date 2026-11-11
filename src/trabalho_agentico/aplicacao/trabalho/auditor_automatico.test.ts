@@ -18,7 +18,7 @@ const triarCom = (rodar: typeof executar, ...argumentos: Parameters<typeof triar
   return triarPergunta(...argumentos);
 };
 
-const contexto = { ticket: "I-7.T3", etapa: "implementar", demanda: "Cadastro" };
+const contexto = { ticket: "I-7.T3", etapa: "implementar" as const, demanda: "Cadastro" };
 const comOpcoes = { pergunta: "Corrijo a issue S6328?", detalhes: "no a.ts:7", opcoes: ["Sim", "Não"] };
 const livre = { pergunta: "Qual handle uso?", opcoes: [] };
 

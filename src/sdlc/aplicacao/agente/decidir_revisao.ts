@@ -4,6 +4,7 @@ import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { decidirGate } from "../gates/decidir_gate.ts";
+import { CATALOGO_DE_ETAPAS, oAgenteDecideOGate } from "../../../etapas/catalogo.ts";
 import {
   enderecoDoTicketDoAgente,
   escopoDoProcessoAberto,
@@ -52,13 +53,13 @@ export async function decidirRevisao(
   const { demanda_id, ticket_id } = agente;
   const ticket = exigirTicket(carregarDemanda(banco, demanda_id), ticket_id);
   const rodada = ticket.rodada_id;
-  if (ticket.etapa !== "revisar_rodada" && ticket.etapa !== "revisar_demanda") {
+  if (!oAgenteDecideOGate(ticket.etapa)) {
     throw new ErroDeRegra(
       `o ticket ${enderecoDoTicketDoAgente(agente)} é de ${ticket.etapa}, não de revisão`,
       "só ticket de revisão decide",
     );
   }
-  const campo = ticket.etapa === "revisar_rodada" ? "correcoes" : "plano";
+  const campo = CATALOGO_DE_ETAPAS[ticket.etapa].escopo === "rodada" ? "correcoes" : "plano";
   let extra: object = {};
   if (resultado === "aprovado") {
     if ([motivo, correcoes, plano].some((v) => v !== undefined)) {

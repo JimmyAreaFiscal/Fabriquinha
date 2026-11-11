@@ -2,9 +2,10 @@
 // paralelismo e diz, para cada item parado, por que não foi despachado. Pura: a aplicação monta a situação e reserva.
 import { z } from "zod";
 import { type AgregadoDemanda, NomeGate, type TicketDemanda } from "../demanda/agregado_demanda.ts";
-import { etapaDoEstado } from "../ciclo_de_vida/ciclos.ts";
+import { etapaDoEstado, gateQueEsperaGenteNaRodada } from "../ciclo_de_vida/ciclos.ts";
+import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { Endereco, estaOcupado, GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
-import { Motivo, motivo, type EstadoRodada } from "../../../compartilhado/nucleo/primitivos.ts";
+import { Motivo, motivo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "../tentativa.ts";
 import { podeTentarEncerramento } from "../transicoes/transicoes_encerramento.ts";
 
@@ -44,9 +45,6 @@ export interface ResultadoDoDespacho {
 
 type Recusar = (ticket: TicketDemanda, motivoDaRecusa: MotivoDeRecusa) => void;
 
-// Rodada nesses estados espera gente (o Gate do PR e a sessão de ajustes): o Despacho não despacha o ticket dela.
-const ESTADOS_QUE_ESPERAM_GENTE: readonly EstadoRodada[] = ["gate_pr", "ajustar_resultado"];
-
 const enderecoDoTicket = (t: TicketDemanda): Endereco => Endereco.doTicket(t.demanda_id, t.ticket_id);
 
 /** `recusas` é indexado pela instância de `Endereco`; quem procura um item usa esta busca pelo endereço público. */
@@ -67,27 +65,31 @@ const estaVivo = (vivos: readonly Endereco[], t: TicketDemanda): boolean =>
 const decisaoMaisRecente = (ag: AgregadoDemanda, t: TicketDemanda) =>
   ag.decisoes.filter((d) => d.ticket_id === t.ticket_id).at(-1);
 
+const planejaADemanda = (t: TicketDemanda): boolean => CATALOGO_DE_ETAPAS[t.etapa].papel === "planeja_a_demanda";
+
 const ehPlanejamentoReprovado = (ag: AgregadoDemanda, t: TicketDemanda): boolean =>
-  t.etapa === "planejar" && decisaoMaisRecente(ag, t)?.resultado === "reprovado";
+  planejaADemanda(t) && decisaoMaisRecente(ag, t)?.resultado === "reprovado";
 
 /**
- * O `planejar` reprovado em execução, sem trabalho vivo e sem Tentativa nova desde a última recusa, é pronto como os
+ * O planejamento reprovado em execução, sem trabalho vivo e sem Tentativa nova desde a última recusa, é pronto como os
  * outros: a retomada abre a Tentativa seguinte, e é ela que o tira daqui (o agente que sai sem submeter não retoma em laço).
  */
 function aguardaRetomada(ag: AgregadoDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
   const recusa = decisaoMaisRecente(ag, t);
-  if (t.etapa !== "planejar" || t.estado !== "em_execucao" || recusa?.resultado !== "reprovado" || estaVivo(vivos, t)) {
+  if (!planejaADemanda(t) || t.estado !== "em_execucao" || recusa?.resultado !== "reprovado" || estaVivo(vivos, t)) {
     return false;
   }
   return !tentativasDoTicket(ag.tentativas, t.ticket_id).some((x) => Date.parse(x.inicio) >= Date.parse(recusa.em));
 }
 
+/** O planejamento é o primeiro trabalho da demanda: espera as predecessoras dela. */
 function prontosDoPlanejamento(
   { agregado: ag, predecessoras_pendentes: pendentes }: DemandaParaDespacho,
+  etapa: TicketDemanda["etapa"],
   vivos: readonly Endereco[],
   recusar: Recusar,
 ): TicketDemanda[] {
-  const [aberto] = menorAberto(ag, "planejar");
+  const [aberto] = menorAberto(ag, etapa);
   const retomado = ag.tickets.find((t) => aguardaRetomada(ag, t, vivos));
   const prontos = retomado ? [retomado] : [];
   if (aberto === undefined) return prontos;
@@ -96,13 +98,14 @@ function prontosDoPlanejamento(
   return prontos;
 }
 
-function prontosDoEncerramento(ag: AgregadoDemanda, recusar: Recusar): TicketDemanda[] {
-  const encerrar = podeTentarEncerramento(ag) ? menorAberto(ag, "encerrar_demanda") : [];
+/** A integração da demanda, quando o encerramento pode ser tentado, e a resolução do conflito que ela abriu. */
+function prontosDoEncerramento(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"], recusar: Recusar): TicketDemanda[] {
+  const encerrar = podeTentarEncerramento(ag) ? menorAberto(ag, etapa) : [];
   // O agendador relê o PR a cada ciclo; o Auditor, não: a ação dele é o merge na plataforma.
   if (ag.encerramento?.aguardando_merge_humano) {
     for (const t of encerrar) recusar(t, { tipo: "aguarda_acao_externa" });
   }
-  return [...encerrar, ...menorAberto(ag, "resolver_conflito")];
+  return [...encerrar, ...menorAberto(ag, etapaDoPapel("resolve_o_conflito_da_integracao"))];
 }
 
 /** Em `em_execucao`, um ticket por rodada livre: a rodada sem Dependência pendente e sem ticket ocupando-a. */
@@ -119,8 +122,10 @@ function prontosDaExecucao(ag: AgregadoDemanda, recusar: Recusar): TicketDemanda
   const ticketOcupandoADemanda = ticketOcupandoARodada(undefined);
   return ag.rodadas.flatMap((rodada) => {
     const abertos = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.estado === "aberto");
-    if (ESTADOS_QUE_ESPERAM_GENTE.includes(rodada.estado)) {
-      for (const t of abertos) recusar(t, { tipo: "gate_aguardando", gate: "gate_pr" });
+    // A rodada que espera gente (o Gate do PR e a sessão de ajustes): o Despacho não despacha o ticket dela.
+    const gateAguardando = gateQueEsperaGenteNaRodada(rodada.estado);
+    if (gateAguardando) {
+      for (const t of abertos) recusar(t, { tipo: "gate_aguardando", gate: gateAguardando });
       return [];
     }
     const etapa = etapaDoEstado(rodada.estado);
@@ -158,27 +163,29 @@ function avaliarDemanda(demanda: DemandaParaDespacho, vivos: readonly Endereco[]
       motivo: motivo(causa === undefined ? "Tentativas esgotadas" : `Tentativas esgotadas: ${causa}`),
     });
   }
-  switch (ag.demanda.estado) {
-    case "planejar":
-      return prontosDoPlanejamento(demanda, vivos, recusar);
-    case "revisar_demanda":
-      return ag.rodadas.every((r) => r.estado === "concluida") ? menorAberto(ag, "revisar_demanda") : [];
-    case "encerrar_demanda":
-      return prontosDoEncerramento(ag, recusar);
-    case "em_execucao":
-      return prontosDaExecucao(ag, recusar);
-    default:
-      return [];
-  }
+  if (ag.demanda.estado === "em_execucao") return prontosDaExecucao(ag, recusar);
+  // Fora da execução das rodadas, o estado é o da Etapa que trabalha nele; no de espera de um Gate, não se despacha.
+  const etapa = etapaDoEstado(ag.demanda.estado);
+  if (etapa === undefined || etapa !== ag.demanda.estado || CATALOGO_DE_ETAPAS[etapa].executor === "externo") return [];
+  const { papel } = CATALOGO_DE_ETAPAS[etapa];
+  if (papel === "planeja_a_demanda") return prontosDoPlanejamento(demanda, etapa, vivos, recusar);
+  if (papel === "integra_a_demanda") return prontosDoEncerramento(ag, etapa, recusar);
+  return ag.rodadas.every((r) => r.estado === "concluida") ? menorAberto(ag, etapa) : [];
 }
 
-/** Ocupa vaga do limite o ticket em execução, menos o que espera gente e o `planejar` reprovado sem trabalho vivo. */
+/**
+ * Ocupa vaga do limite o ticket em execução, menos o que espera gente (o da sessão de ajustes e a âncora do Gate da
+ * rodada no estado de espera dele) e o planejamento reprovado sem trabalho vivo.
+ */
 function ocupaVaga(ag: AgregadoDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
-  const rodadaEmGate = ag.rodadas.some((r) => r.rodada_id === t.rodada_id && r.estado === "gate_pr");
+  const gateDaEtapa = CATALOGO_DE_ETAPAS[t.etapa].gate;
+  const rodadaEsperaOGateDaEtapa = ag.rodadas.some(
+    (r) => r.rodada_id === t.rodada_id && gateDaEtapa?.esperaEmEstadoProprio === true && r.estado === gateDaEtapa.nome,
+  );
   return (
     t.estado === "em_execucao" &&
-    t.etapa !== "ajustar_resultado" &&
-    !(t.etapa === "encerrar_rodada" && rodadaEmGate) &&
+    gateQueEsperaGenteNaRodada(t.etapa) === undefined &&
+    !rodadaEsperaOGateDaEtapa &&
     !(ehPlanejamentoReprovado(ag, t) && !estaVivo(vivos, t))
   );
 }

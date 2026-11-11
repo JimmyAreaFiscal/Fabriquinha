@@ -10,7 +10,7 @@ import {
   type ResultadoDoDespacho,
   situacaoDeUmaDemanda,
 } from "./despacho.ts";
-import { GATES } from "../gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
 import { concluirSessaoRodada, registrarCorrecoesSessao } from "../transicoes/transicoes_rodada.ts";
 

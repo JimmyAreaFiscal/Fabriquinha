@@ -7,7 +7,7 @@ import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import type { Ator } from "../../sdlc/nucleo/ator.ts";
-import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
+import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../etapas/entender_e_desenhar/definicao.ts";
 import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../sdlc/aplicacao/gestao_demandas.ts";
 import { visaoDaDemanda } from "../../sdlc/aplicacao/consultas/visao_da_demanda.ts";

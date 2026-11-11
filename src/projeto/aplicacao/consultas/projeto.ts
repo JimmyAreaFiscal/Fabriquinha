@@ -2,7 +2,13 @@
 // (entrega/contrato) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import {
+  CICLO_DA_DEMANDA,
+  CICLO_DO_TICKET,
+  estadoDaDemandaNaEtapa,
+  etapaDoEstado,
+  PRIMEIRA_ETAPA_DA_DEMANDA,
+} from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
 import { prDoEspaco } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
@@ -48,7 +54,7 @@ export function estadoNaLinhaDoTempo({ demanda, tickets }: AgregadoDemanda): Est
     .reduce<EstadoDemanda>(
       (maisAdiantado, estado) =>
         EstadoDemanda.options.indexOf(estado) > EstadoDemanda.options.indexOf(maisAdiantado) ? estado : maisAdiantado,
-      "entender_e_desenhar",
+      estadoDaDemandaNaEtapa(PRIMEIRA_ETAPA_DA_DEMANDA),
     );
 }
 

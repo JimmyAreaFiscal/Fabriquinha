@@ -1,7 +1,18 @@
 // A definição do `entender_e_desenhar`: a conversa do Auditor com a ferramenta de fora, sem condução (CLI de
 // `gestao_demandas.ts`); as evidências são as da demanda.
-import { OBRIGATORIAS_DEMANDA, TIPOS_DA_DEMANDA } from "../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
 import { type DefinicaoDaEtapa, evidenciaExigida, SEM_CAPACIDADES } from "../definicao/definicao_da_etapa.ts";
+
+/** Obrigatórias da demanda no envio (CA-SDLC-01). */
+export const OBRIGATORIAS_DEMANDA = ["criterios_aceite", "desenho_solucao"] as const;
+const OPCIONAIS_DEMANDA = [
+  "comportamento",
+  "prototipo",
+  "relatorio_complexidade",
+  "relatorio_impactos_arquitetura",
+] as const;
+/** Os tipos que a própria demanda recebe, as obrigatórias primeiro. */
+export const TIPOS_DA_DEMANDA = [...OBRIGATORIAS_DEMANDA, ...OPCIONAIS_DEMANDA] as const;
+export type TipoDaDemanda = (typeof TIPOS_DA_DEMANDA)[number];
 
 export const DEFINICAO_DO_ENTENDER_E_DESENHAR: DefinicaoDaEtapa = {
   nome: "entender_e_desenhar",
@@ -19,5 +30,5 @@ export const DEFINICAO_DO_ENTENDER_E_DESENHAR: DefinicaoDaEtapa = {
   verificacoes: [],
   metricas: ["uso", "aprovacoes_e_reprovacoes"],
   capacidades: SEM_CAPACIDADES,
-  gate: "gate_demanda",
+  gate: { nome: "gate_demanda", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "cancelada" },
 };

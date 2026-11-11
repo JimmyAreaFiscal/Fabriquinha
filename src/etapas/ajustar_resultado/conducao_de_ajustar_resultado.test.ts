@@ -7,7 +7,7 @@ import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
 import { ErroDeEscopo } from "../../compartilhado/nucleo/erros.ts";
-import { GATES } from "../../sdlc/nucleo/gate.ts";
+import { GATES } from "../gates.ts";
 import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";

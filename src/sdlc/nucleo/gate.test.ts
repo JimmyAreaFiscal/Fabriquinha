@@ -5,7 +5,8 @@ import { comEvidencia, comPlanoSubmetido } from "../../../apoio-testes/cenarios_
 import { AgregadoDemanda, type Decisao, type NomeGate } from "./demanda/agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { GATES, MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
+import { GATES } from "../../etapas/gates.ts";
 import { Endereco } from "./item_de_trabalho/item_de_trabalho.ts";
 import { comTentativaAberta, falhaQueExigeOAuditor, motivoDaFalhaDoTicket } from "./tentativa.ts";
 import {

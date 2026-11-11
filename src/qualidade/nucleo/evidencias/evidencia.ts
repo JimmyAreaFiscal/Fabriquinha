@@ -3,11 +3,12 @@ import { basename } from "node:path";
 import { z } from "zod";
 import type { AgregadoDemanda, Demanda, TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type { Ator } from "../../../sdlc/nucleo/ator.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
+import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
 import type { ItemCatalogoEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import type { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { PlanoProposto } from "../../../sdlc/nucleo/demanda/plano.ts";
-import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket, Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Motivo, Slug, unicoPor } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Hospedagem } from "../../../projeto/nucleo/projeto.ts";
 import {
@@ -37,6 +38,14 @@ import {
   type Veredito,
   vereditoDe,
 } from "./schemas.ts";
+
+/** A Etapa que exige o tipo de evidência (a primeira do catálogo, quando mais de uma exige). */
+const etapaQueExige = (tipo: string): EtapaTicket =>
+  existe(
+    Object.values(CATALOGO_DE_ETAPAS).find((definicao) => definicao.evidencias.some((item) => item.tipo === tipo)),
+    `nenhuma etapa exige a evidência ${tipo}`,
+    "declare a evidência na definição da etapa",
+  ).nome;
 
 /** Os tipos de evidência de qualquer dono: da demanda, da rodada ou do ticket. */
 export const TipoEvidencia = z.enum([
@@ -224,7 +233,8 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
     dados: MensagemPR,
     arquivos: Arquivos({ max: 0 }),
     cruzar({ naoPrevistos, reversao }, { ag }) {
-      const alterados = (daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados")?.dados.arquivos ?? []) as {
+      const alterados = (daUltimaConcluida(ag, etapaQueExige("arquivos_alterados"), "arquivos_alterados")?.dados
+        .arquivos ?? []) as {
         caminho: string;
         previsto: string | null;
       }[];
@@ -366,7 +376,8 @@ export function evidenciasPendentes(
   ticket: Pick<TicketDemanda, "ticket_id" | "etapa">,
   catalogo: readonly ItemCatalogoEtapa[],
 ): TipoEvidencia[] {
-  const dono = ticket.etapa === "entender_e_desenhar" ? undefined : ticket.ticket_id;
+  const daDemanda = catalogo.some((i) => i.etapa === ticket.etapa && i.dono === "demanda");
+  const dono = daDemanda ? undefined : ticket.ticket_id;
   const presentes = new Set(
     ag.evidencias.filter((e) => e.rodada_id === undefined && e.ticket_id === dono).map((e) => e.tipo),
   );
@@ -412,7 +423,8 @@ export class AvaliadorDeEvidencia {
       throw new ErroDeRegra(`o ticket ${dono.toString()} não existe`, "use um ticket da demanda");
     }
     const onde = ticket ? `T-${String(ticket.ticket_id)} (${ticket.etapa})` : `a demanda ${ag.demanda.id}`;
-    const daEtapa = this.catalogo.filter((i) => i.etapa === (ticket?.etapa ?? "entender_e_desenhar"));
+    // Sem ticket, a evidência é da própria demanda: a da Etapa cujas evidências são dela.
+    const daEtapa = this.catalogo.filter((i) => (ticket ? i.etapa === ticket.etapa : i.dono === "demanda"));
     const item = daEtapa.find((i) => i.tipo === tipo);
     if (item === undefined) {
       throw new ErroDeRegra(

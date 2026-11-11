@@ -150,6 +150,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const { banco, condutor } = this.deps;
     const e2e = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id)?.e2e ?? false;
     const verificacoes = await (this.opcoes.coletarVerificacoes ?? coletarVerificacoes)({
+      etapa: ticket.etapa,
       ambiente,
       projeto,
       e2e,

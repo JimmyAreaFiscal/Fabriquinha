@@ -5,7 +5,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { registrarUsoDaConsulta, type TicketRef } from "./processo_do_ticket.ts";
 import { condutor } from "./condutor.ts";
-import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket, Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import { oAgenteDecideOGate } from "../../../etapas/catalogo.ts";
 
 export interface PerguntaDoAgente {
   pergunta: string;
@@ -19,7 +20,7 @@ export interface PerguntaDoAgente {
 interface ContextoDaPergunta {
   /** Endereço público do ticket (`I-12.T3`), a etapa e o título da demanda. */
   ticket: string;
-  etapa: string;
+  etapa: EtapaTicket;
   demanda: string;
 }
 
@@ -35,8 +36,6 @@ export interface RespostaDoAuditorAutomatico {
  */
 export const RESPOSTA_FORA_DA_REVISAO =
   "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto.";
-
-const ETAPAS_DE_REVISAO = ["revisar_rodada", "revisar_demanda"];
 
 // Rede de segurança do código: o modelo pode errar e mandar "responder" com uma oferta de acesso; aqui isso escala.
 // shortcut: palavras-chave, com falso positivo que só escala; trocar por classificação do modelo se escalar demais.
@@ -103,7 +102,11 @@ const Decisao = z.discriminatedUnion("decisao", [
  * deploy de teste também escala.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): RespostaDoAuditorAutomatico | undefined {
+export function lerDecisao(
+  saida: string,
+  p: PerguntaDoAgente,
+  etapa: EtapaTicket,
+): RespostaDoAuditorAutomatico | undefined {
   const decisao = saida
     .split("\n")
     .map((linha) => {
@@ -115,7 +118,7 @@ export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): R
     })
     .findLast((d) => d !== undefined);
   if (decisao?.decisao === "fora_da_revisao") {
-    return ETAPAS_DE_REVISAO.includes(etapa)
+    return oAgenteDecideOGate(etapa)
       ? { resposta: RESPOSTA_FORA_DA_REVISAO, justificativa: decisao.justificativa }
       : undefined;
   }

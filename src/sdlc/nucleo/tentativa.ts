@@ -13,6 +13,7 @@ import {
   type Modelo,
   motivo,
 } from "../../compartilhado/nucleo/primitivos.ts";
+import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
 
 export const CausaDeInfraestrutura = z.enum([
   "tempo_limite",
@@ -120,7 +121,6 @@ type ProximoPasso =
 
 const BLOQUEAR: ProximoPasso = { tipo: "bloquear" };
 const ESPERA_INICIAL_MS = 2 * 60_000;
-const ETAPAS_QUE_DEVOLVEM_AO_AGENTE: readonly EtapaTicket[] = ["implementar", "resolver_conflito"];
 
 // shortcut: equivalências fixas entre os provedores em uso (a regra do Auditor: cota estourada troca para o outro
 // provedor, no mesmo nível); vira configuração do projeto quando entrar outro provedor.
@@ -155,7 +155,7 @@ export class PoliticaDeTentativas {
     const ultima = historicoDesdeAReabertura.at(-1)?.resultado;
     if (ultima?.tipo === "reprovacao") {
       const reprovacoes = historicoDesdeAReabertura.filter((t) => t.resultado?.tipo === "reprovacao").length;
-      return ETAPAS_QUE_DEVOLVEM_AO_AGENTE.includes(etapa) && reprovacoes <= this.limites.reprovacoes
+      return CATALOGO_DE_ETAPAS[etapa].devolveAoAgente === true && reprovacoes <= this.limites.reprovacoes
         ? { tipo: "devolver_ao_agente" }
         : BLOQUEAR;
     }

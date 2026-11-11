@@ -16,7 +16,7 @@ import {
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import type { AgregadoDemanda, NomeGate } from "../../nucleo/demanda/agregado_demanda.ts";
 import { AUDITOR, type Ator } from "../../nucleo/ator.ts";
-import { GATES } from "../../nucleo/gate.ts";
+import { GATES } from "../../../etapas/gates.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";

@@ -2,7 +2,7 @@
 // a partir de um snapshot só, com as leituras em lote, sem uma consulta por ticket ou por dependente.
 import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../nucleo/ciclo_de_vida/ciclos.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, gateQueEsperaGenteNaRodada } from "../../nucleo/ciclo_de_vida/ciclos.ts";
 import { predecessorasPendentes } from "../../nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
 import { Despacho, prontosParaExecutarAgora } from "../../nucleo/despacho/despacho.ts";
@@ -35,10 +35,10 @@ const ref = (demanda_id: string) => ({
   ticket: (ticket_id: number) => formatarTicketRef({ demanda_id, ticket_id }),
 });
 
-/** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados de gate. */
+/** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados em que o Gate do PR espera gente. */
 function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
-  const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
-  if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
+  const estado = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.estado;
+  if (estado === undefined || gateQueEsperaGenteNaRodada(estado) === undefined) return undefined;
   const pr = prDoEspaco(ag, rodada_id);
   return pr && { id: String(pr.numero), url: pr.url };
 }

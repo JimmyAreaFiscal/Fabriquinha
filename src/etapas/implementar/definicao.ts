@@ -16,4 +16,5 @@ export const DEFINICAO_DO_IMPLEMENTAR: DefinicaoDaEtapa = {
   metricas: ["uso", "alteracoes_posteriores"],
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
   instrucao: new URL("implementar.md", import.meta.url),
+  devolveAoAgente: true,
 };
