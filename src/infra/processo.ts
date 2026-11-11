@@ -1,7 +1,7 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { access } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
@@ -129,12 +129,9 @@ async function lerConfigsFixasDoServico(dir: string): Promise<string[]> {
  * serviço. O container não escreve no topo do `.git` do clone, mas o core confere antes de usar: um `.git` de clone com
  * `commondir` é forjado. O core só roda git na raiz do clone (nunca numa worktree, que o container controla).
  */
-async function suspeitaDeCommondirForjado(dir: string): Promise<string | null> {
+function suspeitaDeCommondirForjado(dir: string): string | null {
   const commondir = join(dir, ".git", "commondir");
-  return (await access(commondir).then(
-    () => true,
-    () => false,
-  ))
+  return existsSync(commondir)
     ? `${commondir} existe num clone: recusado, o container não deveria tê-lo gravado`
     : null;
 }
@@ -146,7 +143,7 @@ async function suspeitaDeCommondirForjado(dir: string): Promise<string | null> {
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
-  const suspeita = await suspeitaDeCommondirForjado(dir);
+  const suspeita = suspeitaDeCommondirForjado(dir);
   if (suspeita) return { codigo: 128, saida: "", erro: suspeita, limiteEstourado: false };
   const r = await executar("git", [...(await lerConfigsFixasDoServico(dir)), "-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
