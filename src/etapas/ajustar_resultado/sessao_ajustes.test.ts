@@ -2,12 +2,12 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../../fluxo/nucleo/ator.ts";
+import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
 import { ErroDeEscopo } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { cenarioDeAjustes, DEMANDA, MOTIVO, reprovarPRRodada } from "../../../apoio-testes/cenario_de_ajustes.ts";
-import { decidirGate } from "../../fluxo/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../../sdlc/aplicacao/gates/decidir_gate.ts";
 
 test("CA-13: reprovar sem motivo, como agente ou fora do gate é reprovado sem gravar o marco nem abrir a sessão", async () => {
   const { ag, banco, marco, prompts } = await cenarioDeAjustes();

@@ -1,12 +1,12 @@
 // Commit do ticket da demanda (comparacao-sdlc-implementacao.md §6), idempotente pela marca `[I-n.Tm]` na mensagem.
 import type { DatabaseSync } from "node:sqlite";
-import type { TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
-import { formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
+import type { TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarTicketRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeReprovacao } from "../../../compartilhado/nucleo/erros.ts";
 import { registrarCommitsHumanosDoTicket } from "../../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 import { noLog } from "../../../compartilhado/infra/registro.ts";
 import type { Commit } from "../../nucleo/commits.ts";
-import { gravarCommitDemanda } from "../../../demanda/armazenamento/commits_demanda.ts";
+import { gravarCommitDemanda } from "../../../sdlc/armazenamento/commits_demanda.ts";
 import { arquivosDe, commitar } from "../../infra/git/commit.ts";
 import { exigirGitNoAmbiente, gitNoAmbiente } from "../../infra/worktree/worktree.ts";
 import { type Ambiente, LIMITE_COMANDO_MS } from "../../../sandbox/infra/ambiente.ts";

@@ -1,8 +1,8 @@
 // O pi vivo da sessão de uma etapa interativa (o planejar e o ajustar_resultado): vive ocioso entre as mensagens do
 // Auditor, e a Decisão do gate ou a conclusão da sessão o encerra.
 import type { DatabaseSync } from "node:sqlite";
-import { carregarTrabalhosDoTicket } from "../../execucao/armazenamento/trabalho_agentico.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 interface Ticket {
   demanda_id: string;

@@ -11,7 +11,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";

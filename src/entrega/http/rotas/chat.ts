@@ -11,7 +11,7 @@ import {
   enviarDemanda,
   exportarHistoricoDemanda,
   responderDialogoDemanda,
-} from "../../../execucao/aplicacao/sessoes/sessoes_demanda.ts";
+} from "../../../trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts";
 import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../contrato/chat.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 import { abrirFluxoSse } from "../sse.ts";

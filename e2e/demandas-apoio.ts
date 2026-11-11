@@ -1,8 +1,8 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts, e
 // abre o chat do planejamento com o pi falso.
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import type { Page } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { guardarBytes } from "../src/compartilhado/armazenamento/arquivos.ts";
-import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { carregarDemanda, comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { gravarAnexos } from "../src/qualidade/armazenamento/evidencia_demanda.ts";
 import { expect, type Fabriquinha } from "./apoio.ts";

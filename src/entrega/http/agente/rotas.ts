@@ -3,19 +3,19 @@
 // antes de chamar o caso de uso de `aplicacao/agente`, que confere de novo; nenhuma regra mora aqui.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { decidirRevisao } from "../../../execucao/aplicacao/agente/decidir_revisao.ts";
-import { criarTicketCorretivo } from "../../../execucao/aplicacao/agente/criar_ticket_corretivo.ts";
-import { verDemanda, verProjeto, verTicket } from "../../../execucao/aplicacao/agente/consultas.ts";
-import { adicionarEvidenciaComAnexosEnviados } from "../../../execucao/aplicacao/agente/adicionar_evidencia.ts";
+import { decidirRevisao } from "../../../sdlc/aplicacao/agente/decidir_revisao.ts";
+import { criarTicketCorretivo } from "../../../sdlc/aplicacao/agente/criar_ticket_corretivo.ts";
+import { verDemanda, verProjeto, verTicket } from "../../../sdlc/aplicacao/agente/consultas.ts";
+import { adicionarEvidenciaComAnexosEnviados } from "../../../sdlc/aplicacao/agente/adicionar_evidencia.ts";
 import {
   type EscopoDoAgente,
   exigirDemandaPropria,
   exigirTicketProprio,
   type ProcessoDoAgente,
-} from "../../../execucao/aplicacao/agente/escopo.ts";
-import { tipoDoAgente } from "../../../execucao/aplicacao/agente/tipo_do_agente.ts";
+} from "../../../sdlc/aplicacao/agente/escopo.ts";
+import { tipoDoAgente } from "../../../sdlc/aplicacao/agente/tipo_do_agente.ts";
 import { ErroDeEscopo } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import {

@@ -17,7 +17,7 @@ import {
   DemandaDoPeriodo,
 } from "../../contrato/avaliacoes.ts";
 import { estadoDaAvaliacao } from "../../../qualidade/aplicacao/avaliacao/avaliacao.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";

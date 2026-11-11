@@ -1,12 +1,12 @@
 // A lista única dos tipos de evidência e o schema de cada um (F3 §2): `dados`, as regras dos anexos e as regras cruzadas.
 import { basename } from "node:path";
 import { z } from "zod";
-import type { AgregadoDemanda, Demanda, TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
-import type { Ator } from "../../../fluxo/nucleo/ator.ts";
+import type { AgregadoDemanda, Demanda, TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Ator } from "../../../sdlc/nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { ItemCatalogoEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
-import type { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { PlanoProposto } from "../../../demanda/nucleo/plano.ts";
+import type { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { PlanoProposto } from "../../../sdlc/nucleo/demanda/plano.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Motivo, Slug, unicoPor } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Hospedagem } from "../../../projeto/nucleo/projeto.ts";

@@ -2,9 +2,9 @@
 // É a única regra da pasta: o ticket com rodada usa o Espaço da rodada, o outro, o da demanda.
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { branchDemanda, branchRodada, DemandaId } from "../../demanda/nucleo/demanda.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { branchDemanda, branchRodada, DemandaId } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { Slug } from "../../compartilhado/nucleo/primitivos.ts";
 import type { RepositorioDoProjeto } from "./repositorio_do_projeto.ts";
 

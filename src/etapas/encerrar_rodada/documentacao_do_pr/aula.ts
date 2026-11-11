@@ -1,6 +1,6 @@
 // Aula do código (F3 §4.5): o agente escreve a explicação de cada trecho; a Fabriquinha confere que o trecho é código
 // alterado pela demanda e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
-import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
 import { exigirGitNoAmbiente } from "../../../repositorio/infra/worktree/worktree.ts";

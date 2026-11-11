@@ -1,7 +1,7 @@
 // O que cada Etapa do SDLC declara (CONCEITOS.md §2), sem I/O: o motor lê a definição pelo catálogo, sem trazer a
 // condução. Aqui ficam o tipo e os blocos que mais de uma definição reusa.
 import type { ItemCatalogoEtapa } from "./evidencia_exigida.ts";
-import type { NomeGate } from "../../demanda/nucleo/agregado_demanda.ts";
+import type { NomeGate } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type { TipoMetrica } from "../../custos/nucleo/metrica.ts";
 import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import type { TipoVerificacao } from "../../qualidade/nucleo/verificacao.ts";

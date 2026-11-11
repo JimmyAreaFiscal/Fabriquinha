@@ -5,24 +5,27 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../../fluxo/nucleo/ator.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+import type { Ator } from "../../sdlc/nucleo/ator.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { ticketAtualDaEtapa } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { concluirSessaoRodada } from "../../fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { concluirSessaoRodada } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
-import { carregarTrabalhosDoTicket } from "../../execucao/armazenamento/trabalho_agentico.ts";
+import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { descartarAlteracoes, exigirGitNoAmbiente } from "../../repositorio/infra/worktree/worktree.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
-import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../../execucao/aplicacao/execucao_demanda.ts";
+import {
+  type OpcoesExecucaoDemanda,
+  iniciarExecucaoDemanda,
+} from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
 import { encerrarPiVivo } from "../conducao/pi_vivo.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import type { RefRodada } from "../encerrar_rodada/encerramento_rodada.ts";
 
 interface Ponta {

@@ -1,18 +1,18 @@
 // A condução do `planejar` (comparacao-sdlc-implementacao.md §§3 e 6): sessão interativa em que o plano chega pelo CLI e
 // o gate do planejamento decide. A falha do pi não falha o ticket: ele segue em execução à espera de uma nova sessão.
-import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA } from "../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
-import { predecessorasPendentes } from "../../demanda/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { predecessorasPendentes } from "../../sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_PLANEJAR } from "./definicao.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import { reservarTicket } from "../../execucao/nucleo/reserva_ticket.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../execucao/nucleo/tentativa.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../../demanda/armazenamento/dependencias_demanda.ts";
-import { carregarTrabalhosDoTicket } from "../../execucao/armazenamento/trabalho_agentico.ts";
-import type { OpcoesExecucaoDemanda } from "../../execucao/aplicacao/execucao_demanda.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { reservarTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../sdlc/nucleo/tentativa.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
+import { predecessorasDaDemanda } from "../../sdlc/armazenamento/dependencias_demanda.ts";
+import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { OpcoesExecucaoDemanda } from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
 import { ConducaoInterativa, type DepsDaConducao } from "../conducao/conducao_de_etapa.ts";
 
 export class ConducaoDePlanejar extends ConducaoInterativa {

@@ -5,11 +5,11 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR } from "../../fluxo/nucleo/ator.ts";
+import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
 import { ErroDeEscopo } from "../../compartilhado/nucleo/erros.ts";
-import { GATES } from "../../fluxo/nucleo/gate.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { GATES } from "../../sdlc/nucleo/gate.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import {
   ate,
@@ -25,11 +25,11 @@ import {
   URL_PR,
 } from "../../../apoio-testes/cenario_de_ajustes.ts";
 import { limitarTempoDoPi } from "../../../apoio-testes/limite_do_pi.ts";
-import { conferirPromptComFoto } from "../../execucao/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "./sessao_ajustes.ts";
-import { enviarDemanda } from "../../execucao/aplicacao/sessoes/sessoes_demanda.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { enviarDemanda } from "../../trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeAjustarResultado } from "./conducao_de_ajustar_resultado.ts";
 
 /** O mesmo caminho de efeitos do gate, com o pi de ociosidade curta para a execução terminar logo e o `fim` poder ser esperado. */

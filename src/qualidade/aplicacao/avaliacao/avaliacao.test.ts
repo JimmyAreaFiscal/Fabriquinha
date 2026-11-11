@@ -17,7 +17,7 @@ import {
   estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "./avaliacao.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 const { raiz: raizTemporaria, banco, fechar } = abrirBancoTemporario();
 after(fechar);

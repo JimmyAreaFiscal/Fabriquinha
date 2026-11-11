@@ -1,7 +1,7 @@
 // Os hooks do repositório rodam dentro do `git commit`; esta Verificação traz o erro que o commit lança para o
 // resultado de três classes. Não gera Evidência.
 import { ErroDeReprovacao, ErroExterno } from "../../compartilhado/nucleo/erros.ts";
-import { type FalhaDaTentativa, resultadoDoErro } from "../../execucao/nucleo/tentativa.ts";
+import { type FalhaDaTentativa, resultadoDoErro } from "../../sdlc/nucleo/tentativa.ts";
 import type { ResultadoDaVerificacao } from "../nucleo/verificacao.ts";
 import { type ContextoDaVerificacao, Verificacao } from "./verificacao.ts";
 

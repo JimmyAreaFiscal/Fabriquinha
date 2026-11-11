@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { instanteAntes, type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { gravarCommitHumanoPosterior, type LinhasPorDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
+import { gravarCommitHumanoPosterior, type LinhasPorDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
 
 /** As linhas que um commit humano posterior da base reescreveu, por ticket de origem (F6 §4.4). */
 export interface CommitHumano {

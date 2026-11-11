@@ -1,14 +1,14 @@
 // Relatório de produtividade da rodada: consumo por ticket e total (comparacao-sdlc-implementacao.md §7.3).
 // Custo ausente não é zero: o ticket sem custo medido é incompleto e o total de custo vira piso.
-import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { Uso, type LinhaDeUso } from "../nucleo/uso.ts";
 import {
   registrarUso,
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
-} from "../../execucao/nucleo/trabalho_agentico.ts";
-import { formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+} from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 
 interface ConsumoRodada {
   execucoes: number;

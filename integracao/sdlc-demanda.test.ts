@@ -3,15 +3,15 @@
 // temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { AUDITOR } from "../src/sdlc/nucleo/ator.ts";
 import { ErroDeEscopo } from "../src/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { interromperExecucaoDemanda } from "../src/execucao/aplicacao/execucao_demanda.ts";
-import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { registrarDependenciaDemanda } from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { interromperExecucaoDemanda } from "../src/trabalho_agentico/aplicacao/execucao_demanda.ts";
+import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
   AUTOR,

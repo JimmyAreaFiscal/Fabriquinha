@@ -1,7 +1,7 @@
 // Catálogo de evidências por etapa do ticket, produtor e dono (comparacao-sdlc-implementacao.md §§7.4, 8.1 e 8.2).
 // A validação de dono, tipo, produtor e `dados` é do `AvaliadorDeEvidencia`.
 import { z } from "zod";
-import { type Ator } from "../../fluxo/nucleo/ator.ts";
+import { type Ator } from "../../sdlc/nucleo/ator.ts";
 import { TipoEvidencia } from "../../qualidade/nucleo/evidencias/evidencia.ts";
 import { CATALOGO_DE_ETAPAS } from "../catalogo.ts";
 import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";

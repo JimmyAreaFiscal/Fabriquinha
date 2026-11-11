@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { AmbienteContainer } from "../../../sandbox/infra/container/ambiente_container.ts";
 import type { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
 import { ambienteDoServico, montarConjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
-import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { type EspacoDeTrabalho, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { ambienteDoEspaco, ocupanteDoAmbiente } from "./ambiente_do_espaco.ts";
 

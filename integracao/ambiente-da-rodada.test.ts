@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../apoio-testes/ambiente_falso.ts";
 import { montarAmbienteDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
-import type { DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
+import type { DepsDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
 import { gravarProjeto, projetoExistente } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "./apoio-execucao.ts";

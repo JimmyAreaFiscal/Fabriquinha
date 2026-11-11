@@ -1,8 +1,8 @@
 // O contexto do prompt do ticket e as peças de seção que mais de uma Etapa usa, sem I/O: a definição de cada Etapa
 // declara as seções que só ela lê, e a montagem (`prompt/prompt_demanda.ts`) as junta ao modo de trabalhar.
-import type { AgregadoDemanda, TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { ticketAtualDaEtapa } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { RetornoAoAgente } from "../../execucao/nucleo/tentativa.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import type { RetornoAoAgente } from "../../sdlc/nucleo/tentativa.ts";
 
 /** Um anexo de evidência da demanda com o caminho do arquivo no disco, que o agente lê direto. */
 interface AnexoNoDisco {

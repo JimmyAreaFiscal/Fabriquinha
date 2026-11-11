@@ -10,7 +10,7 @@ import {
   AgregadoDemanda,
   type EvidenciaDemanda,
   type TicketDemanda,
-} from "../../../demanda/nucleo/agregado_demanda.ts";
+} from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { ComandoNoAmbiente } from "../../../sandbox/infra/ambiente.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";

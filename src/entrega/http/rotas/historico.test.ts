@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";

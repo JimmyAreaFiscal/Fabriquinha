@@ -4,7 +4,7 @@ import { readdir, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+import { formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeRegra, ErroExterno, mensagem } from "../../compartilhado/nucleo/erros.ts";
 import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { type Hospedagem, Projeto } from "../nucleo/projeto.ts";

@@ -7,7 +7,7 @@ import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
 import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { LIMITE } from "../nucleo/evidencias/schemas.ts";
-import type { CausaDeInfraestrutura } from "../../execucao/nucleo/tentativa.ts";
+import type { CausaDeInfraestrutura } from "../../sdlc/nucleo/tentativa.ts";
 import { classificarSaidaDeComando, type ResultadoDaVerificacao, type TipoVerificacao } from "../nucleo/verificacao.ts";
 import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../../sandbox/infra/ambiente.ts";
 

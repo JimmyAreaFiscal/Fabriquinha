@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 
 export interface OpcoesDaAuditoria {

@@ -2,14 +2,14 @@
 // branch da demanda para a base do projeto (D02), conflito (D06), check final, espera do merge humano na plataforma
 // (a integração final depende do humano), integração confirmada com SHA, limpeza por posse e evidências. Cada efeito
 // externo é seguido da transição do domínio, que decide se ele se repete (progresso recuperável).
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import { type AgregadoDemanda, prDaDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_ENCERRAR_DEMANDA } from "./definicao.ts";
 import { espacoDaDemanda } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import type { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../../execucao/nucleo/tentativa.ts";
-import { registrarFalhaTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../../sdlc/nucleo/tentativa.ts";
+import { registrarFalhaTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import {
   concluirEncerramento,
   registrarConflitoEncerramento,
@@ -17,12 +17,12 @@ import {
   registrarIntegracao,
   registrarTentativaEncerramento,
   solicitarIntegracao,
-} from "../../fluxo/nucleo/transicoes/transicoes_encerramento.ts";
+} from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
-import { carregarTrabalhosDaDemanda } from "../../execucao/armazenamento/trabalho_agentico.ts";
+import { carregarTrabalhosDaDemanda } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { lerUsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
 import { logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../repositorio/infra/worktree/limpeza_demanda.ts";

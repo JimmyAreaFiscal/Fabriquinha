@@ -2,11 +2,11 @@
 // incorpora a ponta da demanda, publica o PR da rodada e o confere. O ticket fica em execução, âncora do gate do PR.
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_ENCERRAR_RODADA } from "./definicao.ts";
-import type { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { falhaDoErro } from "../../execucao/nucleo/tentativa.ts";
+import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { falhaDoErro } from "../../sdlc/nucleo/tentativa.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarDemanda } from "../../demanda/armazenamento/demandas.ts";
-import { aprovarPRRodadaSeAutomatico } from "../../fluxo/aplicacao/gates/aprovacao_pr_rodada.ts";
+import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
+import { aprovarPRRodadaSeAutomatico } from "../../sdlc/aplicacao/gates/aprovacao_pr_rodada.ts";
 import { conferirEncerramentoRodada, type RefRodada } from "./encerramento_rodada.ts";
 import { ConducaoAgentica, type DepsDaConducao, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
 

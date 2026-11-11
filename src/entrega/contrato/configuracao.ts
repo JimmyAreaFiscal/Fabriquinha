@@ -1,6 +1,6 @@
 // O contrato das rotas da Configuração (F7 §4.2): o que cada resposta e cada formulário carregam. Só tipos e schemas.
 import { z } from "zod";
-import { ConfiguracaoAgente } from "../../execucao/nucleo/configuracao_agente.ts";
+import { ConfiguracaoAgente } from "../../trabalho_agentico/nucleo/configuracao_agente.ts";
 import { EtapaTicket, Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 import { ComandosDePreparacao, Hospedagem, Projeto } from "../../projeto/nucleo/projeto.ts";
 import { ConfiguracaoDoAmbiente } from "../../sandbox/nucleo/configuracao_do_ambiente.ts";

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type {
   ProcessoDoTrabalho,
   TrabalhoGerenciado,
   UsoModeloExecucao,
-} from "../../execucao/nucleo/trabalho_agentico.ts";
+} from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,

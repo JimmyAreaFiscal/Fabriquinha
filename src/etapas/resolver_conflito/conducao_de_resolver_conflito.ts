@@ -1,12 +1,12 @@
 // A condução do `resolver_conflito`: o mesmo ciclo do `implementar`, na worktree da demanda; ao concluir, o encerramento
 // da demanda tem o merge resolvido e o agendador o tenta de novo.
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
 import { encontrado } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_RESOLVER_CONFLITO } from "./definicao.ts";
-import type { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { concluirResolucaoConflito } from "../../fluxo/nucleo/transicoes/transicoes_encerramento.ts";
-import { comDemanda } from "../../demanda/armazenamento/demandas.ts";
-import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
+import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { concluirResolucaoConflito } from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+import { comDemanda } from "../../sdlc/armazenamento/demandas.ts";
+import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
 import type { DepsDaConducao } from "../conducao/conducao_de_etapa.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";
 

@@ -23,7 +23,7 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";

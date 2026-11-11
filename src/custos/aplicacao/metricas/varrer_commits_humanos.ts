@@ -9,7 +9,7 @@ import {
   donoDoCommitDemanda,
   gravarCommitsPosterioresDoTicket,
   type LinhasPorDemanda,
-} from "../../../demanda/armazenamento/commits_demanda.ts";
+} from "../../../sdlc/armazenamento/commits_demanda.ts";
 import { type CommitHumano, cursorDaBase, gravarVarredura } from "../../armazenamento/commits_humanos.ts";
 import { buscarProjeto, projetoExistente } from "../../../projeto/armazenamento/projetos.ts";
 import { noLog } from "../../../compartilhado/infra/registro.ts";

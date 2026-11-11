@@ -5,7 +5,7 @@ import { type DepsDoCli } from "../entrega/cli/comando.ts";
 import { principal } from "../entrega/cli/cli.ts";
 import { relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
 import { PACOTE } from "../harness/pi/pi.ts";
-import { condutor } from "../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { lancarSolto } from "../compartilhado/infra/processo.ts";
 import { harnessDoServico, iniciarServico } from "./servico.ts";
 

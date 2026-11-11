@@ -1,7 +1,7 @@
 // O caminho único de uma Evidência (F3 §5): o Avaliador aceita ou recusa, os anexos são guardados por SHA-256 e a
 // evidência entra com eles na transação de `comDemanda`. Quem fecha a Etapa decide o que fazer com a recusa.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   type Avaliacao,
   AvaliadorDeEvidencia,
@@ -10,10 +10,10 @@ import {
 } from "../../nucleo/evidencias/evidencia.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
-import { CICLO_DA_DEMANDA } from "../../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
+import { CICLO_DA_DEMANDA } from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
-import { validarPlano } from "../../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { carregarDemanda, comDemanda } from "../../../demanda/armazenamento/demandas.ts";
+import { validarPlano } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { carregarDemanda, comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
 import { type AnexosEnviados, guardarAnexos, guardarAnexosEnviados, type Origens } from "./submissao.ts";
 

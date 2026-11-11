@@ -6,7 +6,7 @@ import { CATALOGO_DE_ETAPAS } from "../catalogo.ts";
 import { catalogoDaEtapa } from "../definicao/evidencia_exigida.ts";
 import { type ContextoDoPrompt, secao } from "../definicao/secoes_do_prompt.ts";
 import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
-import { skillsDaEtapaDemanda } from "../../execucao/aplicacao/trabalho/lancamento_do_ticket.ts";
+import { skillsDaEtapaDemanda } from "../../trabalho_agentico/aplicacao/trabalho/lancamento_do_ticket.ts";
 
 type Criterio = Record<"id" | "dado" | "quando" | "entao", string>;
 const linhaCriterio = (c: Criterio): string => `- **${c.id}**: dado ${c.dado}, quando ${c.quando}, então ${c.entao}.`;

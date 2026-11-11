@@ -3,7 +3,7 @@
 // Modelo e effort aqui só têm formato: o par provedor/nome é conferido pelo harness, não por catálogo local.
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { ConfiguracaoAgente } from "../../execucao/nucleo/configuracao_agente.ts";
+import { ConfiguracaoAgente } from "../../trabalho_agentico/nucleo/configuracao_agente.ts";
 import { EtapaTicket, Slug } from "../../compartilhado/nucleo/primitivos.ts";
 import { Hospedagem } from "../../repositorio/nucleo/repositorio_do_projeto.ts";
 

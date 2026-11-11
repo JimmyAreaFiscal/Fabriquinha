@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Despacho, situacaoDeUmaDemanda } from "../../execucao/nucleo/despacho.ts";
-import { podeTentarEncerramento } from "../../fluxo/nucleo/transicoes/transicoes_encerramento.ts";
-import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../sdlc/nucleo/despacho/despacho.ts";
+import { podeTentarEncerramento } from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,

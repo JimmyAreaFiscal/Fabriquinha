@@ -8,28 +8,28 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
-import { prDaDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import type { AgregadoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import { prDaDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import type { AgregadoDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import {
   concluirResolucaoConflito,
   podeTentarEncerramento,
-} from "../../fluxo/nucleo/transicoes/transicoes_encerramento.ts";
-import { gravarCommitDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
+} from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+import { gravarCommitDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
 import { cursorDaBase } from "../../custos/armazenamento/commits_humanos.ts";
 import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
 import { pendenciasDeLimpeza } from "../../repositorio/infra/worktree/limpeza_demanda.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 

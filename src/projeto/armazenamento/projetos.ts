@@ -9,7 +9,7 @@ import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 import {
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
-} from "../../execucao/armazenamento/configuracao_agente.ts";
+} from "../../trabalho_agentico/armazenamento/configuracao_agente.ts";
 
 type Linha = Record<string, unknown>;
 

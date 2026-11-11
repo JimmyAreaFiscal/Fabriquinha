@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type {
   ProcessoDoTrabalho,
   TrabalhoGerenciado,
   UsoModeloExecucao,
-} from "../../execucao/nucleo/trabalho_agentico.ts";
+} from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
 
 const ticket = (ticket_id: number, etapa: TicketDemanda["etapa"]): TicketDemanda => ({

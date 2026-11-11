@@ -1,31 +1,34 @@
 // A condução de uma Etapa (CONCEITOS.md §2): o que a Fabriquinha faz do ticket reservado até concluí-lo ou falhá-lo. As
 // etapas agênticas compartilham o ciclo aqui; cada concreta só declara o que difere (preparação, conferência, conclusão).
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { encontrado, existe } from "../../compartilhado/nucleo/erros.ts";
 import type { DefinicaoDaEtapa } from "../definicao/definicao_da_etapa.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { reservarTicket } from "../../execucao/nucleo/reserva_ticket.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { reservarTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
 import {
   type FalhaDaTentativa,
   falhaDoErro,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
   retornoAoAgenteDoTicket,
-} from "../../execucao/nucleo/tentativa.ts";
-import { devolverTicket, registrarFalhaTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
+} from "../../sdlc/nucleo/tentativa.ts";
+import { devolverTicket, registrarFalhaTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
 import type { anotar } from "../../compartilhado/infra/registro.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
-import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../../execucao/aplicacao/execucao_demanda.ts";
+import {
+  type OpcoesExecucaoDemanda,
+  iniciarExecucaoDemanda,
+} from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
 import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
-import type { CondutorDeTrabalhos } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import type { CondutorDeTrabalhos } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 export interface DepsDaConducao {
   banco: DatabaseSync;

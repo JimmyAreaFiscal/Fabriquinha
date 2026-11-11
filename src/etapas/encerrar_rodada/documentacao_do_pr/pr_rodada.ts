@@ -1,7 +1,7 @@
 // Título, marca e corpo do PR da rodada (branch da rodada → branch da demanda). Só endereços públicos (D09):
 // `I-206`, `I-206.R2`, `I-206.T3`; o id interno do ticket nunca aparece.
-import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import {

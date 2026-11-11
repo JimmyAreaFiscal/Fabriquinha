@@ -1,8 +1,8 @@
 // Conteúdo de cada tipo de evidência (F3 §3.1, §4): o schema de `dados` e as regras dos arquivos.
 import { z } from "zod";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type { TipoEvidencia } from "./evidencia.ts";
-import { ticketAtualDaEtapa } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { ticketAtualDaEtapa } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { type EtapaTicket, type Id, Motivo, Slug, Titulo, unicoPor } from "../../../compartilhado/nucleo/primitivos.ts";
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */

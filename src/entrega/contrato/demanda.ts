@@ -1,7 +1,13 @@
 // O contrato das rotas das demandas na API: o board, a página de uma demanda e a reabertura de um ticket. Só tipos e
 // schemas; quem monta cada resposta é a consulta da aplicação, e o cliente web depende só destes tipos.
 import { z } from "zod";
-import { Decisao, Demanda, RodadaDemanda, TicketDemanda, TipoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import {
+  Decisao,
+  Demanda,
+  RodadaDemanda,
+  TicketDemanda,
+  TipoDemanda,
+} from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   EstadoDemanda,
   EstadoRodada,
@@ -9,7 +15,7 @@ import {
   EstadoTicket,
   Instante,
 } from "../../compartilhado/nucleo/primitivos.ts";
-import type { AcaoEsperada, TipoPendencia } from "../../demanda/nucleo/pendencia.ts";
+import type { AcaoEsperada, TipoPendencia } from "../../sdlc/nucleo/demanda/pendencia.ts";
 
 const TIPOS_DE_PENDENCIA = [
   "gate_humano",

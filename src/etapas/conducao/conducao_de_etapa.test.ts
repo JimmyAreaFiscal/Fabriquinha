@@ -1,14 +1,14 @@
 // A base das conduções: o endereço que ela aceita (os passos da condução determinística são cobertos pela `ConducaoDeEncerrarDemanda`).
 import assert from "node:assert/strict";
 import { type TestContext, test } from "node:test";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "../revisar_demanda/conducao_de_revisar_demanda.ts";
 
 test("só se conduz o endereço de um ticket", async () => {

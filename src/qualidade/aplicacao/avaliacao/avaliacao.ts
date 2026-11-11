@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../../../compartilhado/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { metricasDasEtapas } from "../../../custos/aplicacao/metricas/metricas_das_etapas.ts";
@@ -24,9 +24,9 @@ import {
   sessoesDaDemandaNoPeriodo,
   vincularAchado,
 } from "../../armazenamento/avaliacoes.ts";
-import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
   causaDaFalha,
   type Conducao,
@@ -35,9 +35,14 @@ import {
   type OpcoesDaAuditoria,
   subir,
 } from "./auditoria.ts";
-import * as gestao from "../../../demanda/aplicacao/gestao_demandas.ts";
+import * as gestao from "../../../sdlc/aplicacao/gestao_demandas.ts";
 import type { EventoDoAgente } from "../../../harness/harness.ts";
-import { emMarkdown, lerConversa, type Mensagem, texto } from "../../../execucao/aplicacao/sessoes/sessoes_demanda.ts";
+import {
+  emMarkdown,
+  lerConversa,
+  type Mensagem,
+  texto,
+} from "../../../trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts";
 
 interface EscopoDaAvaliacao {
   projeto: string;

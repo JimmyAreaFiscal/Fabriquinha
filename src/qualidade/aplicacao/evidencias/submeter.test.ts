@@ -14,12 +14,12 @@ import {
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { Ator } from "../../../fluxo/nucleo/ator.ts";
+import type { Ator } from "../../../sdlc/nucleo/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { SubmissaoDeEvidencia, TipoEvidencia } from "../../nucleo/evidencias/evidencia.ts";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
+import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { submeterEvidencia } from "./submeter.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

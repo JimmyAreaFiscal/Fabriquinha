@@ -1,14 +1,14 @@
 // A condução do `ajustar_resultado` (comparacao-sdlc-implementacao.md §§4 e 6): o `GateDoPR` reprovado abre a conversa do
 // Auditor com o agente, que só registra tickets corretivos. O ticket nunca sai de `aberto`: o Auditor o conclui com a
 // sessão, e o fim de cada execução devolve as branches da rodada e da demanda aos SHAs gravados ao abrir.
-import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_AJUSTAR_RESULTADO } from "./definicao.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../execucao/nucleo/tentativa.ts";
-import { carregarDemanda } from "../../demanda/armazenamento/demandas.ts";
-import type { OpcoesExecucaoDemanda } from "../../execucao/aplicacao/execucao_demanda.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../sdlc/nucleo/tentativa.ts";
+import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
+import type { OpcoesExecucaoDemanda } from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
 import { espacoComPrPublicado, restaurar } from "./sessao_ajustes.ts";
 import { ConducaoInterativa, type DepsDaConducao } from "../conducao/conducao_de_etapa.ts";
 

@@ -3,7 +3,7 @@
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { processosAbertos } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { processosAbertos } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { projeto } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {

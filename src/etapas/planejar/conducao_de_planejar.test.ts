@@ -2,10 +2,10 @@
 // sessão interativa nasce e é retomada, a reprovação do gate leva o motivo ao agente e o pi que falha não falha o ticket.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../../fluxo/nucleo/ator.ts";
-import { reabrirTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { comReaberturaDoAuditor, falhaPorServicoReiniciado } from "../../execucao/nucleo/tentativa.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
+import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { comReaberturaDoAuditor, falhaPorServicoReiniciado } from "../../sdlc/nucleo/tentativa.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import {
   aprovarGateDoPlanejamento,
   cenarioDePlanejamento,
@@ -14,13 +14,13 @@ import {
   proporPlanoDoAgente,
   reprovarGateDoPlanejamento,
 } from "../../../apoio-testes/cenario_de_planejamento.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
-import { falharTicketDemanda } from "../../execucao/aplicacao/fechamento_ticket.ts";
+import { falharTicketDemanda } from "../../sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
-import { conferirPromptComFoto } from "../../execucao/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
 
 test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria a sessão", async () => {
   for (const predecessora of ["concluida", "arquivada"]) {

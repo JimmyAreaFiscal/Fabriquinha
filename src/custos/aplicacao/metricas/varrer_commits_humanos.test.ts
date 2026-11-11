@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { gravarCommitDemanda } from "../../../demanda/armazenamento/commits_demanda.ts";
+import { gravarCommitDemanda } from "../../../sdlc/armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { registrarCommitsHumanosDoTicket, varrerCommitsHumanos } from "./varrer_commits_humanos.ts";
 

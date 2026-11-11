@@ -1,15 +1,15 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
 import type { UsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
-import { type AgregadoDemanda, prDaDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 import { prDoEspaco } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../qualidade/nucleo/evidencias/schemas.ts";
 import type {
   ProcessoDoTrabalho,
   TrabalhoGerenciado,
   UsoModeloExecucao,
-} from "../../execucao/nucleo/trabalho_agentico.ts";
+} from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { Uso } from "../../custos/nucleo/uso.ts";
 import { lista, neutro } from "../../qualidade/aplicacao/pull_request/pr.ts";
 import { produtividadeDaRodada } from "../../custos/aplicacao/produtividade_rodada.ts";

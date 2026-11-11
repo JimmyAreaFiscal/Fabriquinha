@@ -2,7 +2,7 @@
 // São só tipos e schemas: quem monta o valor é a aplicação, quem o valida na saída é o teste de rota.
 import { z } from "zod";
 import { EtapaTicket, Instante, Modelo, ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
-import { ProcessoDoTrabalho } from "../../execucao/nucleo/trabalho_agentico.ts";
+import { ProcessoDoTrabalho } from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 
 const Texto = z.string();
 

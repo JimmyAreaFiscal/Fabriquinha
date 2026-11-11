@@ -15,7 +15,7 @@ import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
 import { dirDaExecucaoSimulada, noLog } from "../../../compartilhado/infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../../armazenamento/simulacao.ts";
 import { executar } from "../../../compartilhado/infra/processo.ts";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 interface OpcoesDaSimulacao {
   /** Tempo máximo de cada execução, em minutos (o mesmo da execução autônoma, F4 §3). */

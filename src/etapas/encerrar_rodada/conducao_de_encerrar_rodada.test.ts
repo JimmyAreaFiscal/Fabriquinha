@@ -10,14 +10,14 @@ import {
   BRANCH_DEMANDA,
   BRANCH_RODADA,
 } from "../../../apoio-testes/cenario_de_encerramento_rodada.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
-import { carregarDemanda } from "../../demanda/armazenamento/demandas.ts";
-import { carregarTrabalhosDoTicket } from "../../execucao/armazenamento/trabalho_agentico.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
+import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
+import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
-import { conferirPromptComFoto } from "../../execucao/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeEncerrarRodada } from "./conducao_de_encerrar_rodada.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

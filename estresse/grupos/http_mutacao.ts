@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../src/sandbox/armazenamento/ambientes.ts";
 import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
-import { carregarDemanda } from "../../src/demanda/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../src/sdlc/armazenamento/demandas.ts";
 import { buscarProjeto } from "../../src/projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../src/compartilhado/armazenamento/servico.ts";
 import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";

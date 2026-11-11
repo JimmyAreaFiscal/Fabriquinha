@@ -1,29 +1,32 @@
 // As consultas da página do projeto: as demandas com as rodadas e os tickets, montadas no contrato da API
 // (entrega/contrato) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
 import { prDoEspaco } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";
-import { carregarDemandas, situacaoDasDemandas } from "../../../demanda/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../../demanda/armazenamento/dependencias_demanda.ts";
+import { carregarDemandas, situacaoDasDemandas } from "../../../sdlc/armazenamento/demandas.ts";
+import { predecessorasDasDemandas } from "../../../sdlc/armazenamento/dependencias_demanda.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
-import { sessaoDeCadaTicketDasDemandas, ticketsComPiAtivo } from "../../../execucao/armazenamento/trabalho_agentico.ts";
+import {
+  sessaoDeCadaTicketDasDemandas,
+  ticketsComPiAtivo,
+} from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../repositorio/infra/git/heatmap.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, Heatmap, ListaDoProjeto } from "../../../entrega/contrato/projeto.ts";
-import { sessoesDeDemanda } from "../../../execucao/aplicacao/sessoes/historico_demanda.ts";
+import { sessoesDeDemanda } from "../../../trabalho_agentico/aplicacao/sessoes/historico_demanda.ts";
 import { projetoExistente } from "../cadastro.ts";
-import { resolverModeloEffort } from "../../../execucao/aplicacao/modelo_effort.ts";
-import { bloqueiosDaDemanda } from "../../../demanda/aplicacao/consultas/bloqueios.ts";
+import { resolverModeloEffort } from "../../../trabalho_agentico/aplicacao/modelo_effort.ts";
+import { bloqueiosDaDemanda } from "../../../sdlc/aplicacao/consultas/bloqueios.ts";
 import {
   pendenciasDasDemandas,
   situacaoDoCondutor,
   type SituacaoDaSessao,
-} from "../../../demanda/aplicacao/consultas/pendencias.ts";
+} from "../../../sdlc/aplicacao/consultas/pendencias.ts";
 
 export const ORIENTACAO_PROJETO_INEXISTENTE = "escolha um projeto cadastrado na Configuração";
 

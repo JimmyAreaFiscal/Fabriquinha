@@ -2,21 +2,21 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../../fluxo/nucleo/ator.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
-import { reabrirTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
+import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { abrir, raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { conferirPromptComFoto } from "../../execucao/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
-import { CondutorDeTrabalhos, condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { CondutorDeTrabalhos, condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

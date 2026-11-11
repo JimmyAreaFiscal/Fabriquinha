@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { cenarioDoInicio } from "../../../../apoio-testes/cenario_do_inicio.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { cicloDoDespacho } from "../../../execucao/aplicacao/despacho.ts";
+import { cicloDoDespacho } from "../../../sdlc/aplicacao/despacho/despacho.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
 import type { DadosDoInicio } from "../../contrato/inicio.ts";

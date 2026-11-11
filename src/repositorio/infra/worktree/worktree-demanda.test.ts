@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { branchDemanda, branchRodada } from "../../../demanda/nucleo/demanda.ts";
+import { branchDemanda, branchRodada } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,

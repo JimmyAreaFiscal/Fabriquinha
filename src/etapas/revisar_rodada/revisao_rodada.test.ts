@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { reabrirTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
-import { PREFIXO_TERCEIRA_REPROVACAO } from "../../fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
+import { PREFIXO_TERCEIRA_REPROVACAO } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { carregarProjeto, gravarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import {
@@ -21,7 +21,7 @@ import {
   REF_GLOBAL,
   REF_RODADA,
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { decidirGate } from "../../fluxo/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../../sdlc/aplicacao/gates/decidir_gate.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 

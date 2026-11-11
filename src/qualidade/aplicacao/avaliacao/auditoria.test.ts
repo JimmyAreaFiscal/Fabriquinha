@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, subir } from "./auditoria.ts";
 
 async function esperar(condicao: () => boolean) {

@@ -99,9 +99,8 @@ const EXCECOES: Excecao[] = [];
 
 // `src/<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
 const DOMINIOS = new Set([
-  "fluxo",
-  "demanda",
-  "execucao",
+  "sdlc",
+  "trabalho_agentico",
   "sandbox",
   "repositorio",
   "projeto",
@@ -292,7 +291,7 @@ test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
     return ts
       .preProcessFile(readFileSync(caminho, "utf8"), true, true)
       .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
-      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("execucao/aplicacao/agente/"))
+      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("sdlc/aplicacao/agente/"))
       .map((alvo) => `${arquivo} importa ${alvo}`);
   });
   assert.deepEqual(deAplicacaoFora, []);
@@ -476,7 +475,7 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 });
 
 // Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
-const ARQUIVO_DO_CONDUTOR = "execucao/aplicacao/trabalho/condutor.ts";
+const ARQUIVO_DO_CONDUTOR = "trabalho_agentico/aplicacao/trabalho/condutor.ts";
 const ARQUIVO_DO_HARNESS = "harness/pi/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
@@ -684,52 +683,50 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
 
 // Os domínios de src/ (a primeira pasta; cada `entrega/<sub>` é um, como na matriz e no mapa-alvo) não formam ciclo de
 // import, de valor ou de tipo. Dependência que fecha ciclo hoje é tolerada aqui com o passo da migração SDLC por seams que a
-// remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4 sdlc/, 5 verificacao/ e metricas/, 6 ex-entrega).
+// remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor derivado do
+// catálogo de Etapas, 5 verificacao/ e metricas/, 6 ex-entrega); a partir do 4a só restam 4b, 5 e 6.
 // A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar ciclo, a fitness também falha.
 interface DependenciaToleradaEntreDominios {
   de: string;
   para: string;
-  passo: 1 | 2 | 3 | 4 | 5 | 6;
+  passo: "4b" | 5 | 6;
 }
 
 const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
   // O Projeto guarda a ConfiguracaoAgente de cada etapa, e as consultas do Projeto leem o Trabalho Agêntico, o histórico
   // das sessões e o modelo e o effort resolvidos (D07).
-  { de: "projeto", para: "execucao", passo: 4 },
+  { de: "projeto", para: "trabalho_agentico", passo: "4b" },
   // As consultas do Projeto e o cadastro leem a Demanda, o endereço dos itens e o Ciclo de Vida.
-  { de: "projeto", para: "demanda", passo: 4 },
-  { de: "projeto", para: "fluxo", passo: 4 },
+  { de: "projeto", para: "sdlc", passo: "4b" },
   // O Espaço de Trabalho, a worktree e o commit do Ticket leem a Demanda e o Item de Trabalho que são donos deles.
-  { de: "repositorio", para: "demanda", passo: 4 },
+  { de: "repositorio", para: "sdlc", passo: "4b" },
   // O cadastro, as consultas do Projeto e o commit do Ticket varrem e leem os commits humanos.
   { de: "projeto", para: "custos", passo: 5 },
   { de: "repositorio", para: "custos", passo: 5 },
-  { de: "custos", para: "demanda", passo: 5 },
-  { de: "custos", para: "execucao", passo: 5 },
+  { de: "custos", para: "sdlc", passo: 5 },
+  { de: "custos", para: "trabalho_agentico", passo: 5 },
   { de: "custos", para: "qualidade", passo: 5 },
-  // O agregado e a gestão da Demanda leem e submetem a Evidência; não caiu no passo 3, porque a Evidência é por tipo, não
-  // por Etapa, e fica em qualidade/ com o motor.
-  { de: "demanda", para: "qualidade", passo: 4 },
   // O motor lê o catálogo e as evidências exigidas e despacha às conduções, que usam o motor: o despacho, o gate, a
-  // conclusão do ticket e a sessão de ajustes do lado do motor; a condução, a reserva e as transições do lado das Etapas.
-  { de: "execucao", para: "etapas", passo: 4 },
-  { de: "fluxo", para: "etapas", passo: 4 },
+  // conclusão do ticket e a sessão de ajustes do lado do motor; a montagem do prompt e o catálogo do lado do Trabalho
+  // Agêntico; a condução, a reserva e as transições do lado das Etapas.
+  { de: "sdlc", para: "etapas", passo: "4b" },
+  { de: "trabalho_agentico", para: "etapas", passo: "4b" },
   // As verificações, a submissão e a avaliação de Evidência leem o que cada Etapa declara.
   { de: "qualidade", para: "etapas", passo: 5 },
   // As métricas por Etapa leem a definição da Etapa, que declara as métricas dela.
   { de: "custos", para: "etapas", passo: 5 },
-  // O ciclo derivado: Demanda, Despacho, Tentativa e Ciclo de Vida se leem nas duas direções.
-  { de: "demanda", para: "execucao", passo: 4 },
-  { de: "demanda", para: "fluxo", passo: 4 },
-  { de: "execucao", para: "fluxo", passo: 4 },
-  // A avaliação e a simulação usam o condutor (e o harness dele); as verificações, a Tentativa e o Ator.
-  { de: "qualidade", para: "execucao", passo: 4 },
-  { de: "qualidade", para: "fluxo", passo: 4 },
+  // O Trabalho Agêntico do ticket lê a Demanda, o Ator e a Tentativa e fecha o ticket que falha; o motor lança e consulta
+  // pelo condutor e guarda a ConfiguracaoAgente no Plano.
+  { de: "trabalho_agentico", para: "sdlc", passo: "4b" },
+  // A avaliação e a simulação usam o condutor (e o harness dele); a Evidência e as verificações, a Demanda, a Tentativa e
+  // o Ator; a gestão da Demanda submete a Evidência.
+  { de: "qualidade", para: "trabalho_agentico", passo: "4b" },
+  { de: "qualidade", para: "sdlc", passo: "4b" },
   // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
   { de: "entrega/contrato", para: "projeto", passo: 6 },
   { de: "entrega/contrato", para: "custos", passo: 6 },
-  { de: "entrega/contrato", para: "demanda", passo: 6 },
-  { de: "entrega/contrato", para: "execucao", passo: 6 },
+  { de: "entrega/contrato", para: "sdlc", passo: 6 },
+  { de: "entrega/contrato", para: "trabalho_agentico", passo: 6 },
   { de: "entrega/contrato", para: "qualidade", passo: 6 },
 ];
 
@@ -810,9 +807,9 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 
   assert.deepEqual(acharCiclosEntreDominios(raiz, []), ["ciclo entre módulos: demanda → fluxo → demanda"]);
   const toleradas: DependenciaToleradaEntreDominios[] = [
-    { de: "demanda", para: "fluxo", passo: 4 },
+    { de: "demanda", para: "fluxo", passo: "4b" },
     { de: "entrega/http", para: "demanda", passo: 6 },
-    { de: "execucao", para: "fluxo", passo: 4 },
+    { de: "execucao", para: "fluxo", passo: "4b" },
   ];
   assert.deepEqual(acharCiclosEntreDominios(raiz, toleradas), []);
   assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), ["entrega/http → demanda", "execucao → fluxo"]);
@@ -820,7 +817,7 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 
 // O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
 // em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. primitivos.ts
-// (onde o enum nasce), os ciclos de vida (ciclos.ts), o gate, o despacho e as transições saem no passo 4.
+// (onde o enum nasce), os ciclos de vida (ciclos.ts), o gate, o despacho e as transições saem no passo 4b.
 // Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const PASTA_DAS_ETAPAS = "etapas/";
@@ -828,11 +825,6 @@ const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
   "compartilhado/nucleo/primitivos.ts",
   "custos/aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts",
   "custos/aplicacao/metricas/metrica_de_uso.ts",
-  "demanda/aplicacao/consultas/demanda.ts",
-  "demanda/aplicacao/consultas/inicio.ts",
-  "demanda/nucleo/agregado_demanda.ts",
-  "demanda/nucleo/pendencia.ts",
-  "demanda/nucleo/plano.ts",
   "entrega/cliente-web/render.ts",
   "entrega/cliente-web/rotulos.ts",
   "entrega/cliente-web/telas/demandas.ts",
@@ -840,24 +832,29 @@ const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
   "entrega/cliente-web/telas/metricas.ts",
   "entrega/cliente-web/telas/projeto.ts",
   "entrega/contrato/inicio.ts",
-  "execucao/aplicacao/agente/decidir_revisao.ts",
-  "execucao/aplicacao/despacho.ts",
-  "execucao/aplicacao/execucao_demanda.ts",
-  "execucao/aplicacao/sessoes/sessoes_demanda.ts",
-  "execucao/aplicacao/trabalho/auditor_automatico.ts",
-  "execucao/nucleo/despacho.ts",
-  "execucao/nucleo/tentativa.ts",
-  "fluxo/aplicacao/gates/pr.ts",
-  "fluxo/nucleo/ciclo_de_vida/ciclos.ts",
-  "fluxo/nucleo/gate.ts",
-  "fluxo/nucleo/transicoes/conclusao_ticket.ts",
-  "fluxo/nucleo/transicoes/transicoes_demanda.ts",
-  "fluxo/nucleo/transicoes/transicoes_encerramento.ts",
-  "fluxo/nucleo/transicoes/transicoes_rodada.ts",
   "projeto/aplicacao/consultas/projeto.ts",
   "qualidade/aplicacao/evidencias/verificacoes.ts",
   "qualidade/nucleo/evidencias/evidencia.ts",
   "repositorio/aplicacao/espaco/commit_ticket_demanda.ts",
+  "sdlc/aplicacao/agente/decidir_revisao.ts",
+  "sdlc/aplicacao/consultas/demanda.ts",
+  "sdlc/aplicacao/consultas/inicio.ts",
+  "sdlc/aplicacao/despacho/despacho.ts",
+  "sdlc/aplicacao/gates/pr.ts",
+  "sdlc/nucleo/ciclo_de_vida/ciclos.ts",
+  "sdlc/nucleo/demanda/agregado_demanda.ts",
+  "sdlc/nucleo/demanda/pendencia.ts",
+  "sdlc/nucleo/demanda/plano.ts",
+  "sdlc/nucleo/despacho/despacho.ts",
+  "sdlc/nucleo/gate.ts",
+  "sdlc/nucleo/tentativa.ts",
+  "sdlc/nucleo/transicoes/conclusao_ticket.ts",
+  "sdlc/nucleo/transicoes/transicoes_demanda.ts",
+  "sdlc/nucleo/transicoes/transicoes_encerramento.ts",
+  "sdlc/nucleo/transicoes/transicoes_rodada.ts",
+  "trabalho_agentico/aplicacao/execucao_demanda.ts",
+  "trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts",
+  "trabalho_agentico/aplicacao/trabalho/auditor_automatico.ts",
 ];
 
 // `forEachChild` para no primeiro filho que devolve verdadeiro: basta um nome por arquivo.

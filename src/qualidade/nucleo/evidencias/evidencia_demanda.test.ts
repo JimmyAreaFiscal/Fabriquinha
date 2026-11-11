@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { comEvidencia } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { type Ator, FABRIQUINHA } from "../../../fluxo/nucleo/ator.ts";
+import { type Ator, FABRIQUINHA } from "../../../sdlc/nucleo/ator.ts";
 import { pendentesDeEnvio, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 
 const em = "2026-01-01T00:00:00Z";

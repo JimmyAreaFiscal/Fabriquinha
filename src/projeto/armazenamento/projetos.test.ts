@@ -8,10 +8,10 @@ import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../apli
 import { ErroDeInexistente, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
 import { abrir, escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../demanda/armazenamento/demandas.ts";
-import { registrarDemanda } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { iniciarTentativaDoTicket } from "../../execucao/nucleo/reserva_ticket.ts";
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
+import { criarDemandaNova } from "../../sdlc/armazenamento/demandas.ts";
+import { registrarDemanda } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { iniciarTentativaDoTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
 import {
   apagarProjeto,
   buscarProjeto,

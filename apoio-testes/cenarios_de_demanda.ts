@@ -1,14 +1,14 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../src/demanda/nucleo/agregado_demanda.ts";
-import type { Ator } from "../src/fluxo/nucleo/ator.ts";
-import { CICLO_DA_DEMANDA } from "../src/fluxo/nucleo/ciclo_de_vida/ciclos.ts";
-import { validarPlano } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Ator } from "../src/sdlc/nucleo/ator.ts";
+import { CICLO_DA_DEMANDA } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { validarPlano } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
 import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
-import { criarDemandaNova } from "../src/demanda/armazenamento/demandas.ts";
+import { criarDemandaNova } from "../src/sdlc/armazenamento/demandas.ts";
 import { garantirWorktreeDemanda } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";

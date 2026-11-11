@@ -2,7 +2,7 @@
 // vale aqui, e o token de um processo encerrado, desconhecido ou ausente é 401; o que o token alcança é o ticket do próprio processo.
 import type { IncomingHttpHeaders } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
-import { type EscopoDoAgente, resolverEscopoDoToken } from "../../../execucao/aplicacao/agente/escopo.ts";
+import { type EscopoDoAgente, resolverEscopoDoToken } from "../../../sdlc/aplicacao/agente/escopo.ts";
 import { ErroHttp } from "../erros.ts";
 
 export function autenticarAgente(banco: DatabaseSync, cabecalhos: IncomingHttpHeaders): EscopoDoAgente {

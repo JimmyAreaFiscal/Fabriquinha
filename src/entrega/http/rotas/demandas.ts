@@ -5,7 +5,7 @@ import {
   consultarAnexoDaDemanda,
   consultarBoardDeDemandas,
   consultarDemanda,
-} from "../../../demanda/aplicacao/consultas/demanda.ts";
+} from "../../../sdlc/aplicacao/consultas/demanda.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
 import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";
 

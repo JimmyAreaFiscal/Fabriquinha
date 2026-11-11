@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { espacoDaDemanda, espacoDaRodada, espacoDoTicket, EspacoDeTrabalho } from "./espaco_de_trabalho.ts";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 
 const projeto = { nome: "proj", branch_base: "main" };

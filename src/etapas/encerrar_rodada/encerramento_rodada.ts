@@ -2,26 +2,26 @@
 // agente (documentação) até o gate do PR: relatório de produtividade, ponta da demanda (D04), PR da rodada, `pr_aberto` e
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import { type AgregadoDemanda, comPrDaRodada, type TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
+import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { type AgregadoDemanda, comPrDaRodada, type TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco, ticketAtualDaEtapa } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { conferirPullRequestRodada } from "../../fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { Endereco, ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { conferirPullRequestRodada } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { submeterEvidencia } from "../../qualidade/aplicacao/evidencias/submeter.ts";
 import { LIMITE_DO_CORPO } from "../../qualidade/aplicacao/pull_request/pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
 import { produtividadeDaRodada } from "../../custos/aplicacao/produtividade_rodada.ts";
 import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
-} from "../../execucao/armazenamento/trabalho_agentico.ts";
+} from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../../repositorio/infra/hospedagem/pr.ts";
 import { ConferenciaDoPR } from "../../qualidade/infra/conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
@@ -30,8 +30,8 @@ import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
-import { registrarUsoDaConsulta } from "../../execucao/aplicacao/trabalho/processo_do_ticket.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { registrarUsoDaConsulta } from "../../trabalho_agentico/aplicacao/trabalho/processo_do_ticket.ts";
 
 export interface RefRodada {
   demanda_id: string;

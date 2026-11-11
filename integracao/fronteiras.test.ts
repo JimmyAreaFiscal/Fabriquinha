@@ -6,9 +6,9 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { type Ator } from "../src/fluxo/nucleo/ator.ts";
+import { type Ator } from "../src/sdlc/nucleo/ator.ts";
 import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
 import { buscarProjeto, gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import {

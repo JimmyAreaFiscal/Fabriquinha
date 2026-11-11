@@ -5,7 +5,7 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { type Ator, AUDITOR } from "../../../fluxo/nucleo/ator.ts";
+import { type Ator, AUDITOR } from "../../../sdlc/nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import {
   type Avaliacao,
@@ -20,8 +20,8 @@ import {
   TipoEvidencia,
 } from "./evidencia.ts";
 import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
-import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { validarPlano } from "../../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { validarPlano } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 
 test("todo tipo tem entrada em SCHEMA_DA_EVIDENCIA, inclusive os que n\u00e3o tinham schema", () => {
   for (const tipo of TipoEvidencia.options) {

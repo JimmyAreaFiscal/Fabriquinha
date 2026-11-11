@@ -1,7 +1,7 @@
 // O contrato das rotas da página do projeto na API: as demandas com as rodadas e os tickets, o arquivamento das
 // concluídas e o heatmap. Só tipos e schemas; quem monta cada resposta é a consulta da aplicação.
 import { z } from "zod";
-import { TipoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
+import { TipoDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   EstadoDemanda,
   EstadoRodada,

@@ -1,16 +1,16 @@
 // Condução do revisar_demanda com pi falso e git real temporário (concluir, falhar).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
+import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { abrir, raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
-import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

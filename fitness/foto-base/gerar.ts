@@ -16,14 +16,17 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { AgregadoDemanda, TicketDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/compartilhado/nucleo/primitivos.ts";
 import { relogioDoSistema } from "../../src/compartilhado/nucleo/relogio.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/execucao/nucleo/trabalho_agentico.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { montarPromptDemanda } from "../../src/etapas/prompt/prompt_demanda.ts";
 import { abrir, raizDo } from "../../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
+import {
+  comTrabalhosDoTicket,
+  gravarTokenDoProcesso,
+} from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { servirWeb } from "../../src/entrega/http/servidor.ts";
 import { noLog } from "../../src/compartilhado/infra/registro.ts";
 import { publicarPRDe } from "../../src/repositorio/infra/hospedagem/pr.ts";

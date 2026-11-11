@@ -1,5 +1,5 @@
 // As seções do prompt que só o `encerrar_rodada` lê: os arquivos não previstos e o impacto que a `mensagem_pr` explica.
-import { ticketAtualDaEtapa } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { impactoExigeReversao } from "../../qualidade/nucleo/evidencias/schemas.ts";
 import { arquivosAlteradosDoRevisor, type ContextoDoPrompt, secao } from "../definicao/secoes_do_prompt.ts";
 

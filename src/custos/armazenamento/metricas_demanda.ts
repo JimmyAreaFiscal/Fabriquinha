@@ -1,7 +1,7 @@
 // Leituras de só leitura para as métricas do SDLC por demandas (comparacao-sdlc-implementacao.md §8).
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { Recorte as RecorteDaMetrica } from "../nucleo/metrica.ts";
-import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../demanda/nucleo/plano.ts";
+import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../sdlc/nucleo/demanda/plano.ts";
 import type { LinhaDeUso } from "../nucleo/uso.ts";
 
 export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =>

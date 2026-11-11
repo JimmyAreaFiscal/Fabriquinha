@@ -1,6 +1,6 @@
 // Rotas da página do projeto (F7 §4.2): as demandas do projeto com as rodadas e os tickets, o arquivamento das
 // concluídas e o heatmap do projeto.
-import { arquivarConcluidas } from "../../../demanda/aplicacao/gestao_demandas.ts";
+import { arquivarConcluidas } from "../../../sdlc/aplicacao/gestao_demandas.ts";
 import {
   consultarHeatmapDoProjeto,
   consultarProjeto,

@@ -10,7 +10,7 @@ import { Readable } from "node:stream";
 import { after } from "node:test";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
-import { gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { gravarTokenDoProcesso } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { RotaDoAgente } from "../src/entrega/http/agente/rotas.ts";
 import { servirWeb } from "../src/entrega/http/servidor.ts";
 import { noLog } from "../src/compartilhado/infra/registro.ts";

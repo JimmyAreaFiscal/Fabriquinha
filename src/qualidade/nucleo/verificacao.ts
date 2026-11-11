@@ -1,5 +1,5 @@
 // A regra única que classifica a saída de um comando de Verificação, sem I/O.
-import type { CausaDeInfraestrutura } from "../../execucao/nucleo/tentativa.ts";
+import type { CausaDeInfraestrutura } from "../../sdlc/nucleo/tentativa.ts";
 
 /**
  * Saída 0 passa; estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura. Sem `codigoDeReprovacao`,

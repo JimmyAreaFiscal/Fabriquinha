@@ -7,23 +7,23 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { predecessorasPendentes } from "../src/demanda/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import { AUDITOR } from "../src/sdlc/nucleo/ator.ts";
+import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { predecessorasPendentes } from "../src/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
   encaminharAchado,
   estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "../src/qualidade/aplicacao/avaliacao/avaliacao.ts";
-import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
+import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
 import { metricasDasEtapas } from "../src/custos/aplicacao/metricas/metricas_das_etapas.ts";
 import { achadoDaDemanda } from "../src/qualidade/armazenamento/avaliacoes.ts";
-import { predecessorasDaDemanda } from "../src/demanda/armazenamento/dependencias_demanda.ts";
+import { predecessorasDaDemanda } from "../src/sdlc/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   abrirPortao,
   agente,
@@ -44,7 +44,7 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "./apoio.ts";
-import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
+import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b

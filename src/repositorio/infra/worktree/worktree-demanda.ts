@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../../demanda/nucleo/demanda.ts";
+import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Slug } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { RepositorioDoProjeto } from "../../nucleo/repositorio_do_projeto.ts";
