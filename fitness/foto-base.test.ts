@@ -66,6 +66,10 @@ const MOTIVO_ESTADO_COM_NOME_DA_ETAPA =
 const MOTIVO_GATE_REPROVA = "I-272: o vocabulário do gate é aprovar ou reprovar";
 const MOTIVO_VEREDITO_DO_PARECER =
   "I-277: o parecer fala em veredito (atende ou nao_atende), derivado dos dados pela Fabriquinha";
+const MOTIVO_KILL_POR_PADRAO =
+  "2026-11-08: kill por padrão de nome derrubou o serviço da Fabriquinha; toda etapa encerra processo só pelo PID";
+const SECAO_ENCERRAR_PROCESSOS =
+  "## Encerrar processos\n\nNunca use `pkill`, `killall`, `pgrep -f` nem qualquer kill por padrão de nome: o padrão pega o serviço real da Fabriquinha e derruba todas as demandas.\nPara encerrar um processo que você iniciou, guarde o PID (`$!`) e use `kill <PID>`, ou rode o comando com `timeout`.\n\n";
 const MOTIVO_ETAPA_RENOMEADA = "I-267.R1: a etapa sessao_em_aberto passa a se chamar ajustar_resultado";
 /** O arquivo da foto da base que passa a ter outro nome na foto atual. */
 const ARQUIVOS_RENOMEADOS: Readonly<Record<string, string>> = {
@@ -83,6 +87,12 @@ const PROMPTS_DA_BASE = [
   "revisar_demanda",
 ].map((etapa) => `prompts/${etapa}.txt`);
 const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
+  ...PROMPTS_DA_BASE.map((arquivo) => ({
+    arquivo,
+    de: "\n## Evidências\n",
+    para: `\n${SECAO_ENCERRAR_PROCESSOS}## Evidências\n`,
+    motivo: MOTIVO_KILL_POR_PADRAO,
+  })),
   ...(
     [
       ['"devolucoes":0,"evidencias"', '"evidencias"'],

@@ -77,6 +77,11 @@ Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
 - Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
 - Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
 
+## Encerrar processos
+
+Nunca use `pkill`, `killall`, `pgrep -f` nem qualquer kill por padrão de nome: o padrão pega o serviço real da Fabriquinha e derruba todas as demandas.
+Para encerrar um processo que você iniciou, guarde o PID (`$!`) e use `kill <PID>`, ou rode o comando com `timeout`.
+
 ## Evidências
 
 Você submete (`fabriquinha evidencia schema <tipo>` mostra o formato; `fabriquinha evidencia add <tipo> --dados <arquivo.json> --arquivo <caminho>...` submete):
