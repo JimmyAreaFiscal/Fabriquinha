@@ -168,16 +168,33 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
     (await submeter(c, "comportamento", [viaSaida])).map((a) => a.nome),
     ["real.txt"],
   );
-  // A saída trocada por um link para fora não leva a origem junto: as raízes não são resolvidas pelo nome.
+  // A saída como link para outra pasta, como o `abrigarProcesso` deixa: o que está nessa pasta vale, o resto não.
   rmSync(c.saida, { recursive: true });
-  symlinkSync(c.raiz, c.saida);
-  const viaSaidaTrocada = join(c.saida, "segredo.txt");
-  await assert.rejects(
-    () => submeter(c, "comportamento", [viaSaidaTrocada]),
-    (e) => e instanceof ErroDeRegra && e.message === `${viaSaidaTrocada} está ${foraDaSaida} ${solucao}`,
+  const pastaDoAmbiente = join(c.raiz, "ambientes", "a", "saida");
+  mkdirSync(pastaDoAmbiente, { recursive: true });
+  symlinkSync(pastaDoAmbiente, c.saida);
+  const viaLinkDaSaida = c.arquivo(c.saida, "estresse.log", "tudo certo\n");
+  assert.deepEqual(
+    (await submeter(c, "comportamento", [viaLinkDaSaida])).map((a) => a.nome),
+    ["estresse.log"],
   );
-  // Sem o diretório de saída, a worktree continua valendo.
+  assert.deepEqual(
+    (await submeter(c, "comportamento", [join(pastaDoAmbiente, "estresse.log")])).map((a) => a.nome),
+    ["estresse.log"],
+  );
+  // Fora das duas origens continua recusado, inclusive pela pasta-irmã do link.
+  await assert.rejects(
+    () => submeter(c, "comportamento", [fora]),
+    (e) => e instanceof ErroDeRegra && e.message === `${fora} está ${foraDaSaida} ${solucao}`,
+  );
+  symlinkSync(fora, join(pastaDoAmbiente, "atalho.txt"));
+  const viaAtalho = join(c.saida, "atalho.txt");
+  await assert.rejects(
+    () => submeter(c, "comportamento", [viaAtalho]),
+    (e) => e instanceof ErroDeRegra && e.message.startsWith(`${viaAtalho} é um link simbólico`),
+  );
   rmSync(c.saida);
+  // Sem o diretório de saída, a worktree continua valendo.
   const daWorktree = c.arquivo(c.worktree, "passo.txt", "passo 2");
   assert.equal((await submeter(c, "comportamento", [daWorktree])).length, 1);
   c.banco.close();
