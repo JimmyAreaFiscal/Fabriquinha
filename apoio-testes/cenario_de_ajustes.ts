@@ -13,7 +13,7 @@ import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalh
 import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
 import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import { AmbienteHostLocal } from "../src/sandbox/infra/host_local/ambiente_host_local.ts";

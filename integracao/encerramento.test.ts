@@ -13,7 +13,7 @@ import {
   registrarFalhaEncerramento,
   registrarTentativaEncerramento,
 } from "../src/fluxo/nucleo/transicoes/transicoes_encerramento.ts";
-import { marcaDoPRFinal } from "../src/qualidade/aplicacao/pull_request/encerramento_demanda.ts";
+import { marcaDoPRFinal } from "../src/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
 import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
 import { integrarPR } from "../src/repositorio/infra/hospedagem/pr.ts";

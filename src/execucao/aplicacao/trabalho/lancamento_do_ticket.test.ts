@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
-import { catalogoDaEtapa } from "../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
+import { catalogoDaEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
 import { PACOTE, skillDoTipo } from "../../../harness/pi/pi.ts";

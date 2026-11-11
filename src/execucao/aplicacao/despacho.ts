@@ -15,7 +15,7 @@ import {
   type SituacaoDoDespacho,
 } from "../nucleo/despacho.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
-import { exigirEtapaConduzida } from "../../fluxo/nucleo/etapa.ts";
+import { exigirEtapaConduzida } from "../../etapas/catalogo.ts";
 import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
@@ -25,21 +25,18 @@ import { demandasParaDespacho as lerDemandasParaDespacho, trabalhosVivos } from 
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 import { anotar, noLog } from "../../compartilhado/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../../compartilhado/armazenamento/servico.ts";
-import type { ConducaoDeEtapa, DepsDaConducao } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_etapa.ts";
+import type { ConducaoDeEtapa, DepsDaConducao } from "../../etapas/conducao/conducao_de_etapa.ts";
 import {
   ConducaoDeEncerrarDemanda,
   type OpcoesDoEncerramentoDaDemanda,
-} from "../../fluxo/aplicacao/etapas/encerramento/conducao_de_encerrar_demanda.ts";
-import { ConducaoDeAjustarResultado } from "../../fluxo/aplicacao/etapas/interativas/conducao_de_ajustar_resultado.ts";
-import { ConducaoDeEncerrarRodada } from "../../fluxo/aplicacao/etapas/encerramento/conducao_de_encerrar_rodada.ts";
-import {
-  ConducaoDeImplementar,
-  type OpcoesDaImplementacao,
-} from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts";
-import { ConducaoDePlanejar } from "../../fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
-import { ConducaoDeResolverConflito } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_resolver_conflito.ts";
-import { ConducaoDeRevisarDemanda } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_revisar_demanda.ts";
-import { ConducaoDeRevisarRodada } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_revisar_rodada.ts";
+} from "../../etapas/encerrar_demanda/conducao_de_encerrar_demanda.ts";
+import { ConducaoDeAjustarResultado } from "../../etapas/ajustar_resultado/conducao_de_ajustar_resultado.ts";
+import { ConducaoDeEncerrarRodada } from "../../etapas/encerrar_rodada/conducao_de_encerrar_rodada.ts";
+import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "../../etapas/implementar/conducao_de_implementar.ts";
+import { ConducaoDePlanejar } from "../../etapas/planejar/conducao_de_planejar.ts";
+import { ConducaoDeResolverConflito } from "../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
+import { ConducaoDeRevisarDemanda } from "../../etapas/revisar_demanda/conducao_de_revisar_demanda.ts";
+import { ConducaoDeRevisarRodada } from "../../etapas/revisar_rodada/conducao_de_revisar_rodada.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "../../fluxo/aplicacao/revisao_demanda.ts";

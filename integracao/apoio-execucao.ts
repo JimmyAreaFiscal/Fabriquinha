@@ -10,7 +10,7 @@ import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalh
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
 import { interromperExecucaoDemanda } from "../src/execucao/aplicacao/execucao_demanda.ts";
-import { ConducaoDePlanejar } from "../src/fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
+import { ConducaoDePlanejar } from "../src/etapas/planejar/conducao_de_planejar.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/compartilhado/infra/registro.ts";

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS } from "../../fluxo/nucleo/etapa.ts";
+import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
 import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { LIMITE } from "../nucleo/evidencias/schemas.ts";
 import type { CausaDeInfraestrutura } from "../../execucao/nucleo/tentativa.ts";

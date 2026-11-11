@@ -6,7 +6,7 @@ import { formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
 import { CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { evidenciasPendentes } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
-import { CATALOGO_ETAPAS } from "../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 

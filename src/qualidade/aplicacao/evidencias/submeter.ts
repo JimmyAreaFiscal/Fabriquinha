@@ -9,7 +9,7 @@ import {
   type SubmissaoDeEvidencia,
 } from "../../nucleo/evidencias/evidencia.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_ETAPAS } from "../../nucleo/evidencias/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { CICLO_DA_DEMANDA } from "../../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { validarPlano } from "../../../fluxo/nucleo/transicoes/transicoes_demanda.ts";

@@ -16,8 +16,8 @@ import { carregarProjeto } from "../../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoEspaco } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
-import { ConducaoDeAjustarResultado } from "../etapas/interativas/conducao_de_ajustar_resultado.ts";
-import { guardarMarcoDaSessao, sessaoDaRodada } from "../../../execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import { ConducaoDeAjustarResultado } from "../../../etapas/ajustar_resultado/conducao_de_ajustar_resultado.ts";
+import { guardarMarcoDaSessao, sessaoDaRodada } from "../../../etapas/ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 
 const gate = GATES.gate_pr;

@@ -20,7 +20,7 @@ import type { AgregadoDemanda, TicketDemanda } from "../../src/demanda/nucleo/ag
 import { EtapaTicket } from "../../src/compartilhado/nucleo/primitivos.ts";
 import { relogioDoSistema } from "../../src/compartilhado/nucleo/relogio.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/execucao/nucleo/trabalho_agentico.ts";
-import { montarPromptDemanda } from "../../src/fluxo/aplicacao/prompt_demanda.ts";
+import { montarPromptDemanda } from "../../src/etapas/prompt/prompt_demanda.ts";
 import { abrir, raizDo } from "../../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
@@ -60,13 +60,13 @@ function arquivosMarkdown(pasta: string): string[] {
 
 for (const caminho of [
   "src/qualidade/aplicacao/avaliacao/avaliacao.md",
-  ...arquivosMarkdown("src/fluxo/aplicacao/etapas"),
+  ...arquivosMarkdown("src/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
   const caminhoNaFotoBase = caminho
-    .replace("src/fluxo/aplicacao/etapas/", "src/execucao/etapas/")
+    .replace(/^src\/etapas\/[^/]+\//, "src/execucao/etapas/")
     .replace("src/qualidade/aplicacao/avaliacao/", "src/execucao/");
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }

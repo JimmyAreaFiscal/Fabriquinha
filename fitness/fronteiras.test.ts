@@ -110,9 +110,16 @@ const DOMINIOS = new Set([
   "compartilhado",
 ]);
 
+// `src/etapas/` não tem pasta por camada: a pasta é a Etapa, ou o que é comum a elas. O que a Etapa declara é valor puro,
+// com a regra do núcleo, para o motor ler o catálogo sem trazer condução nem banco: o catálogo, `definicao/` e, em cada
+// Etapa, `definicao.ts` e `secao_do_prompt.ts`. O resto (a condução, a montagem do prompt e os casos de uso), a da aplicação.
+const DOMINIO_DAS_ETAPAS = "etapas";
+const VALOR_PURO_DAS_ETAPAS = /^etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/(definicao|secao_do_prompt)\.ts)$/;
+
 // `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter.
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
+  if (primeiro === DOMINIO_DAS_ETAPAS) return VALOR_PURO_DAS_ETAPAS.test(caminhoRelativoASrc) ? "nucleo" : "aplicacao";
   if (primeiro === "entrega" && segundo) return `entrega/${segundo}`;
   if (primeiro === MODULO_DO_HARNESS)
     return segundo === undefined || segundo.endsWith(".ts") ? MODULO_DO_HARNESS : `${MODULO_DO_HARNESS}/${segundo}`;
@@ -332,6 +339,15 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "harness/pi/harness_pi.ts":
       'import type { Harness } from "../harness.ts";\nimport { b } from "../../infra/ok.ts";\nimport { existsSync } from "node:fs";\n',
     "aplicacao/usa_o_harness.ts": 'import type { Harness } from "../harness/harness.ts";\n',
+    "etapas/catalogo.ts": 'import { D } from "./planejar/definicao.ts";\n',
+    "etapas/definicao/definicao_da_etapa.ts":
+      'import { z } from "zod";\nimport type { N } from "../../nucleo/ok.ts";\n',
+    "etapas/planejar/definicao.ts":
+      'import { evidencia } from "../definicao/definicao_da_etapa.ts";\nimport { secao } from "./secao_do_prompt.ts";\n',
+    "etapas/planejar/secao_do_prompt.ts": 'import { n } from "../../nucleo/ok.ts";\n',
+    "etapas/planejar/conducao_de_planejar.ts":
+      'import { D } from "./definicao.ts";\nimport { a } from "../../armazenamento/ok.ts";\nimport { readFileSync } from "node:fs";\n',
+    "nucleo/le_o_catalogo.ts": 'import { C } from "../etapas/catalogo.ts";\n',
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
@@ -359,6 +375,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "aplicacao/usa_o_pi.ts": 'import { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
     "harness/valor.ts": 'import { b } from "../infra/ok.ts";\nimport { readFileSync } from "node:fs";\n',
     "harness/pi/armazenamento.ts": 'import { a } from "../../armazenamento/ok.ts";\n',
+    "etapas/implementar/definicao.ts":
+      'import { C } from "./conducao_de_implementar.ts";\nimport { readFileSync } from "node:fs";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -369,6 +387,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     acharViolacoes(raiz, []).map(descrever).sort(),
     [
       "aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → entrega/http → aplicacao",
+      // A definição que importa a condução põe o núcleo a depender da aplicação: além do import, fecha ciclo.
+      "aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → entrega/http → entrega/compartilhado → nucleo → aplicacao",
       "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
@@ -392,6 +412,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "entrega/cliente-web/node.ts importa node:fs",
       "entrega/cliente-web/nucleo_valor.ts importa ../../nucleo/ok.ts",
       "entrega/cliente-web/react_puro.ts importa react",
+      "etapas/implementar/definicao.ts importa ./conducao_de_implementar.ts",
+      "etapas/implementar/definicao.ts importa node:fs",
       "infra/armazenamento.ts importa ../armazenamento/ok.ts",
       "nucleo/fs.ts importa node:fs",
     ].sort(),
@@ -682,13 +704,20 @@ const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] 
   // O cadastro, as consultas do Projeto e o commit do Ticket varrem e leem os commits humanos.
   { de: "projeto", para: "custos", passo: 5 },
   { de: "repositorio", para: "custos", passo: 5 },
-  // As métricas por Etapa leem a definição da Etapa.
-  { de: "custos", para: "fluxo", passo: 3 },
   { de: "custos", para: "demanda", passo: 5 },
   { de: "custos", para: "execucao", passo: 5 },
   { de: "custos", para: "qualidade", passo: 5 },
-  // O agregado e a gestão da Demanda leem e submetem a Evidência.
-  { de: "demanda", para: "qualidade", passo: 3 },
+  // O agregado e a gestão da Demanda leem e submetem a Evidência; não caiu no passo 3, porque a Evidência é por tipo, não
+  // por Etapa, e fica em qualidade/ com o motor.
+  { de: "demanda", para: "qualidade", passo: 4 },
+  // O motor lê o catálogo e as evidências exigidas e despacha às conduções, que usam o motor: o despacho, o gate, a
+  // conclusão do ticket e a sessão de ajustes do lado do motor; a condução, a reserva e as transições do lado das Etapas.
+  { de: "execucao", para: "etapas", passo: 4 },
+  { de: "fluxo", para: "etapas", passo: 4 },
+  // As verificações, a submissão e a avaliação de Evidência leem o que cada Etapa declara.
+  { de: "qualidade", para: "etapas", passo: 5 },
+  // As métricas por Etapa leem a definição da Etapa, que declara as métricas dela.
+  { de: "custos", para: "etapas", passo: 5 },
   // O ciclo derivado: Demanda, Despacho, Tentativa e Ciclo de Vida se leem nas duas direções.
   { de: "demanda", para: "execucao", passo: 4 },
   { de: "demanda", para: "fluxo", passo: 4 },
@@ -766,13 +795,13 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
     rmSync(raiz, { recursive: true, force: true });
   });
   const arquivos: Record<string, string> = {
-    "fluxo/nucleo/etapa.ts": 'import { Demanda } from "../../demanda/nucleo/demanda.ts";\n',
-    "demanda/nucleo/demanda.ts": 'import type { Etapa } from "../../fluxo/nucleo/etapa.ts";\n',
+    "fluxo/nucleo/gate.ts": 'import { Demanda } from "../../demanda/nucleo/demanda.ts";\n',
+    "demanda/nucleo/demanda.ts": 'import type { Gate } from "../../fluxo/nucleo/gate.ts";\n',
     "demanda/aplicacao/tela.tsx": 'import { c } from "../../entrega/contrato/x.ts";\n',
     "entrega/contrato/x.ts": 'import { z } from "zod";\n',
     "entrega/http/rota.ts":
       'import { a } from "../../demanda/nucleo/demanda.ts";\nimport { c } from "../contrato/x.ts";\n',
-    "fluxo/nucleo/etapa.test.ts": 'import { r } from "../../entrega/http/rota.ts";\n',
+    "fluxo/nucleo/gate.test.ts": 'import { r } from "../../entrega/http/rota.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -791,7 +820,7 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 
 // O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
 // em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. primitivos.ts
-// (onde o enum nasce) e o catálogo das Etapas (fluxo/nucleo/etapa.ts, ciclos.ts) saem só nos passos 3 e 4.
+// (onde o enum nasce), os ciclos de vida (ciclos.ts), o gate, o despacho e as transições saem no passo 4.
 // Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const PASTA_DAS_ETAPAS = "etapas/";
@@ -814,29 +843,19 @@ const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
   "execucao/aplicacao/agente/decidir_revisao.ts",
   "execucao/aplicacao/despacho.ts",
   "execucao/aplicacao/execucao_demanda.ts",
-  "execucao/aplicacao/sessoes/sessao_ajustes.ts",
   "execucao/aplicacao/sessoes/sessoes_demanda.ts",
   "execucao/aplicacao/trabalho/auditor_automatico.ts",
   "execucao/nucleo/despacho.ts",
   "execucao/nucleo/tentativa.ts",
-  "fluxo/aplicacao/encerramento_rodada.ts",
-  "fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts",
-  "fluxo/aplicacao/etapas/encerramento/conducao_de_encerrar_demanda.ts",
-  "fluxo/aplicacao/etapas/interativas/conducao_de_ajustar_resultado.ts",
-  "fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts",
   "fluxo/aplicacao/gates/pr.ts",
-  "fluxo/aplicacao/prompt_demanda.ts",
   "fluxo/nucleo/ciclo_de_vida/ciclos.ts",
-  "fluxo/nucleo/etapa.ts",
   "fluxo/nucleo/gate.ts",
   "fluxo/nucleo/transicoes/conclusao_ticket.ts",
   "fluxo/nucleo/transicoes/transicoes_demanda.ts",
   "fluxo/nucleo/transicoes/transicoes_encerramento.ts",
   "fluxo/nucleo/transicoes/transicoes_rodada.ts",
   "projeto/aplicacao/consultas/projeto.ts",
-  "qualidade/aplicacao/evidencias/aula.ts",
   "qualidade/aplicacao/evidencias/verificacoes.ts",
-  "qualidade/aplicacao/revisao_rodada.ts",
   "qualidade/nucleo/evidencias/evidencia.ts",
   "repositorio/aplicacao/espaco/commit_ticket_demanda.ts",
 ];

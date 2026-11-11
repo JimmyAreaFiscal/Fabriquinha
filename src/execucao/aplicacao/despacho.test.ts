@@ -25,8 +25,8 @@ import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenament
 import { criarRepositorioDeTeste } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
-import { ConducaoDeImplementar } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts";
-import { ConducaoDeResolverConflito } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_resolver_conflito.ts";
+import { ConducaoDeImplementar } from "../../etapas/implementar/conducao_de_implementar.ts";
+import { ConducaoDeResolverConflito } from "../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
 import { cicloDoDespacho, demandasParaDespacho, type DepsDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 

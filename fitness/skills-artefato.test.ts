@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { TipoEvidencia } from "../src/qualidade/nucleo/evidencias/evidencia.ts";
 import { PlanoProposto } from "../src/demanda/nucleo/plano.ts";
-import { CATALOGO_ETAPAS } from "../src/qualidade/nucleo/evidencias/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS } from "../src/etapas/definicao/evidencia_exigida.ts";
 import { PACOTE, skillDoTipo } from "../src/harness/pi/pi.ts";
 
 const MAX_LINHAS = 100;

@@ -2,7 +2,7 @@
 // `dados` na hora, sem I/O. Recusa citando a evidência, a fitness, o achado ou o cenário que impede a aprovação.
 import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
-import { CATALOGO_ETAPAS, catalogoDaEtapa } from "../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS, catalogoDaEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { evidenciasPendentes, schemaDoTipo } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
 

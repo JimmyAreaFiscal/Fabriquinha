@@ -48,7 +48,8 @@ import { triarPergunta } from "./trabalho/auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
 import { lancamentoDoTicket } from "./trabalho/lancamento_do_ticket.ts";
-import { type ContextoDemanda, montarPromptDemanda } from "../../fluxo/aplicacao/prompt_demanda.ts";
+import type { ContextoDoPrompt } from "../../etapas/definicao/secoes_do_prompt.ts";
+import { montarPromptDemanda } from "../../etapas/prompt/prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes/sessoes_demanda.ts";
 import type { ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
 
@@ -56,7 +57,7 @@ export interface OpcoesExecucaoDemanda {
   limiteMin: number;
   modo?: Exclude<ModoTrabalho, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
-  retomada?: ContextoDemanda["retomada"];
+  retomada?: ContextoDoPrompt["retomada"];
   /** Abre sessão nova mesmo com sessão no ticket: a conversa anterior foi descartada (plano aprovado e reaberto). */
   iniciarEmSessaoNova?: boolean;
   /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
@@ -106,7 +107,7 @@ function perguntasDosTicketsReprovadosDaRodada({
   banco,
   ag,
   ticket,
-}: Conducao): ContextoDemanda["perguntasDasRevisoesAnteriores"] {
+}: Conducao): ContextoDoPrompt["perguntasDasRevisoesAnteriores"] {
   const raiz = raizDo(banco);
   const { sessoes } = carregarTrabalhosDaDemanda(banco, ag.demanda.id);
   const idsDaRodada = new Set(ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id).map((t) => t.ticket_id));
@@ -121,7 +122,7 @@ function perguntasDosTicketsReprovadosDaRodada({
 }
 
 /** O SHA do commit de cada ticket da demanda que tem um (as revisões leem o que a Fabriquinha já verificou nele). */
-function commitsDosTickets({ banco, ag }: Conducao): ContextoDemanda["commitsDosTickets"] {
+function commitsDosTickets({ banco, ag }: Conducao): ContextoDoPrompt["commitsDosTickets"] {
   return new Map(
     ag.tickets.flatMap((t) => {
       const commit = commitDoTicketDemanda(banco, ag.demanda.id, t.ticket_id);

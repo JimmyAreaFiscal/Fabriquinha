@@ -22,7 +22,7 @@ import {
   falhaInterrompidaPeloAuditor,
 } from "../nucleo/tentativa.ts";
 import { anotar, pastasDoProcesso } from "../../compartilhado/infra/registro.ts";
-import { ConducaoDeImplementar } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts";
+import { ConducaoDeImplementar } from "../../etapas/implementar/conducao_de_implementar.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";

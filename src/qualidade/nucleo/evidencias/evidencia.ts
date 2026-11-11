@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AgregadoDemanda, Demanda, TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import type { Ator } from "../../../fluxo/nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
+import type { ItemCatalogoEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import type { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { PlanoProposto } from "../../../demanda/nucleo/plano.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
@@ -359,7 +359,7 @@ export function agregadoDaRodada(ag: AgregadoDemanda, rodada?: number): Agregado
 
 /**
  * Os tipos obrigatórios da Etapa do ticket que ainda não têm Evidência, na ordem do catálogo. O catálogo vem de quem
- * chama porque `evidencia_etapa.ts` já importa este módulo.
+ * chama porque `etapas/definicao/evidencia_exigida.ts` já importa este módulo.
  */
 export function evidenciasPendentes(
   ag: AgregadoDemanda,

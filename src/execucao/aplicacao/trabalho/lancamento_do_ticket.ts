@@ -3,7 +3,7 @@
 import type { TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
-import { CATALOGO_DE_ETAPAS } from "../../../fluxo/nucleo/etapa.ts";
+import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
 import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { LancamentoDoTicket } from "../../../harness/harness.ts";
 

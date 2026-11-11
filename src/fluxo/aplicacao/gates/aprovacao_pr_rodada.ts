@@ -6,7 +6,7 @@ import { FABRIQUINHA } from "../../nucleo/ator.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../nucleo/gate.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { noLog } from "../../../compartilhado/infra/registro.ts";
-import type { RefRodada } from "../encerramento_rodada.ts";
+import type { RefRodada } from "../../../etapas/encerrar_rodada/encerramento_rodada.ts";
 import { decidirGate } from "./decidir_gate.ts";
 
 /**

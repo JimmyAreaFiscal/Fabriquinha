@@ -1,6 +1,6 @@
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { schemaDoTipo, TipoEvidencia } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
-import { CATALOGO_ETAPAS } from "../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import type { EsquemaDeEvidencia } from "../../../qualidade/nucleo/evidencias/schemas.ts";
 
 /** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */

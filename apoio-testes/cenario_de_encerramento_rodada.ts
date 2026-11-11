@@ -8,7 +8,7 @@ import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import type { AgregadoDemanda } from "../src/demanda/nucleo/agregado_demanda.ts";
-import { marcaDoPRRodada } from "../src/qualidade/aplicacao/pull_request/pr_rodada.ts";
+import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 import { gravarCommitDemanda } from "../src/demanda/armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../src/demanda/armazenamento/demandas.ts";

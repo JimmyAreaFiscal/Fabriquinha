@@ -12,7 +12,7 @@ import { test, type TestContext } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import type { DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
-import { ConducaoDePlanejar } from "../src/fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
+import { ConducaoDePlanejar } from "../src/etapas/planejar/conducao_de_planejar.ts";
 import { conjuntoDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
 import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";

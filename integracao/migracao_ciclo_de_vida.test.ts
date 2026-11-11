@@ -8,7 +8,7 @@ import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalh
 import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
 import { iniciarRevisaoIntegral } from "../src/fluxo/aplicacao/revisao_demanda.ts";
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
 import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";

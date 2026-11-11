@@ -19,7 +19,7 @@ import {
   type SubmissaoDeEvidencia,
   TipoEvidencia,
 } from "./evidencia.ts";
-import { CATALOGO_ETAPAS } from "./evidencia_etapa.ts";
+import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { validarPlano } from "../../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
 

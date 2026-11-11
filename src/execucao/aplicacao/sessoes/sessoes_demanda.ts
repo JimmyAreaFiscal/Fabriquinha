@@ -27,7 +27,7 @@ import {
   trabalhosComTicketDaDemanda,
 } from "../../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../execucao_demanda.ts";
-import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
+import { retomarSessaoAjustes } from "../../../etapas/ajustar_resultado/sessao_ajustes.ts";
 import {
   condutor,
   type CondutorDeTrabalhos,

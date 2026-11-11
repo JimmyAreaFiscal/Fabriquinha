@@ -12,7 +12,7 @@ import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { projetoExistente } from "../../../projeto/armazenamento/projetos.ts";
 import { ambienteDoEspaco } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { submeterEvidencia } from "../../../qualidade/aplicacao/evidencias/submeter.ts";
-import { gerarAula, type Trecho } from "../../../qualidade/aplicacao/evidencias/aula.ts";
+import { gerarAula, type Trecho } from "../../../etapas/encerrar_rodada/documentacao_do_pr/aula.ts";
 import type { AnexoEnviado, Origens } from "../../../qualidade/aplicacao/evidencias/submissao.ts";
 import {
   enderecoDoTicketDoAgente,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CATALOGO_DE_ETAPAS } from "../../fluxo/nucleo/etapa.ts";
+import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
 import type { TipoMetrica } from "./metrica.ts";
 import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 

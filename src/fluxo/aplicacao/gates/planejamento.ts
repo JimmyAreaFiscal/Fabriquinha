@@ -15,7 +15,7 @@ import { carregarProjeto } from "../../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoEspaco } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
-import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../etapas/interativas/pi_vivo.ts";
+import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../../../etapas/conducao/pi_vivo.ts";
 import { varrerCommitsHumanos } from "../../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 
 const gate = GATES.gate_planejamento;

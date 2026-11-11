@@ -3,10 +3,10 @@
 import { AUDITOR } from "../../../fluxo/nucleo/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { RefRodada } from "../../../fluxo/aplicacao/encerramento_rodada.ts";
+import type { RefRodada } from "../../../etapas/encerrar_rodada/encerramento_rodada.ts";
 import { decidirGate } from "../../../fluxo/aplicacao/gates/decidir_gate.ts";
 import { arquivar, cancelar, reabrir } from "../../../demanda/aplicacao/gestao_demandas.ts";
-import { concluirSessaoAjustes } from "../../../execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import { concluirSessaoAjustes } from "../../../etapas/ajustar_resultado/sessao_ajustes.ts";
 import {
   DecisaoDoPR,
   DemandaArquivada,
