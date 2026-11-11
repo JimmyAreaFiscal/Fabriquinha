@@ -141,7 +141,7 @@ Não foi refeita nesta rodada.
 - **`fitness/sem-export-morto.test.ts`** (CA-6): não existe; `npm run fitness` não o roda.
 - **CA-8:** `npm run check`, `npm run integracao`, `npm run e2e`, SonarQube e CG-9 (deploy) não foram verificados por este documento (o CG-7 está na seção anterior); valem os resultados que a Fabriquinha coleta.
 
-`fabriquinha/07-interfaces.md` foi restaurado à versão da base (`git diff 7ce3c2f..HEAD -- fabriquinha` é vazio); o PR não deve alegar mudança nele.
+Os oito documentos numerados de 01 a 08 da pasta `fabriquinha` foram removidos (I-289); `CONCEITOS.md` é a especificação.
 
 ## I-267.R1: estado no lugar de fase e status
 

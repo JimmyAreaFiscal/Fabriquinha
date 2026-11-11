@@ -350,7 +350,7 @@
         <mxCell id="TuZLYwPetvcthj7BLmxr-46" edge="1" parent="r_LA35FQatkXShZi-ib0-90" source="TuZLYwPetvcthj7BLmxr-44" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="TuZLYwPetvcthj7BLmxr-42">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="TuZLYwPetvcthj7BLmxr-47" parent="r_LA35FQatkXShZi-ib0-90" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;EncerrarDemanda&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é concluir a demanda e fazer o merge e limpeza. A Fabriquinha executa o código de merge da branch para origin/main e, se não for bem sucedida, abre uma sessão de IA para resolver conflitos até que seja feito o merge.&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) trabalhos encerrados sem limpeza&lt;br&gt;&lt;div&gt;2) Conflitos de merge que impedem prosseguimento mas que não são conflitos em si&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="TuZLYwPetvcthj7BLmxr-47" parent="r_LA35FQatkXShZi-ib0-90" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;EncerrarDemanda&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é concluir a demanda e fazer a limpeza. O merge do PR final para a main é do humano, na plataforma (Ação externa); a Fabriquinha acompanha o PR e, se houver conflito, abre uma execução de Resolver conflito.&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) trabalhos encerrados sem limpeza&lt;br&gt;&lt;div&gt;2) Conflitos de merge que impedem prosseguimento mas que não são conflitos em si&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="267" width="326" x="2530" y="345" as="geometry" />
         </mxCell>
         <mxCell id="TuZLYwPetvcthj7BLmxr-48" edge="1" parent="r_LA35FQatkXShZi-ib0-90" source="TuZLYwPetvcthj7BLmxr-49" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="TuZLYwPetvcthj7BLmxr-55">
@@ -395,7 +395,7 @@
             <mxPoint y="-1" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="TuZLYwPetvcthj7BLmxr-66" parent="r_LA35FQatkXShZi-ib0-90" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;align=left;" value="&lt;p style=&quot;margin-top: 0px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-size: 12px; font-weight: normal; line-height: 100%;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Auditor NÃO participa desse merge. Ele é feito automaticamente, e direto pela Fabriquinha&lt;/font&gt;&lt;/span&gt;&lt;/p&gt;" vertex="1">
+        <mxCell id="TuZLYwPetvcthj7BLmxr-66" parent="r_LA35FQatkXShZi-ib0-90" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;align=left;" value="&lt;p style=&quot;margin-top: 0px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-size: 12px; font-weight: normal; line-height: 100%;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Ação externa: o humano faz o merge do PR final na plataforma. A Fabriquinha só acompanha o PR&lt;/font&gt;&lt;/span&gt;&lt;/p&gt;" vertex="1">
           <mxGeometry height="64" width="143" x="2891" y="164" as="geometry" />
         </mxCell>
         <mxCell id="62LasZwnPSIAEYeRJkou-80" parent="1" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;strokeWidth=5;gradientColor=none;fillStyle=auto;swimlaneLine=1;glass=0;shadow=0;rounded=0;perimeterSpacing=0;startSize=160;labelBackgroundColor=none;" value="&lt;font style=&quot;font-size: 48px;&quot;&gt;SDLC Improvement&lt;/font&gt;" vertex="1">
@@ -562,7 +562,7 @@
         <mxCell id="gw_revisao" parent="1" style="rhombus;html=1;shape=mxgraph.bpmn.gateway2;gwType=exclusive;fillColor=#ffffff;strokeColor=#000000;" value="" vertex="1">
           <mxGeometry height="50" width="50" x="383" y="1298" as="geometry" />
         </mxCell>
-        <mxCell id="encerrar" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Publicar, mergear na base e limpar&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Fabriquinha · fase encerramento da demanda&lt;/font&gt;" vertex="1">
+        <mxCell id="encerrar" parent="1" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Ação externa: merge do PR final na plataforma&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Humano · a Fabriquinha acompanha o PR e limpa depois&lt;/font&gt;" vertex="1">
           <mxGeometry height="64" width="260" x="280" y="1400" as="geometry" />
         </mxCell>
         <mxCell id="fim_concluida" parent="1" style="ellipse;html=1;shape=mxgraph.bpmn.event;outline=end;symbol=terminate;fillColor=#d5e8d4;strokeColor=#82b366;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11;" value="Concluída" vertex="1">
