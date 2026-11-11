@@ -1,9 +1,10 @@
 // O Gate do PR da rodada, dono do `encerrar_rodada`: o Auditor (ou a aprovação automática) decide o PR publicado.
 import type { AgregadoDemanda, Decisao, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { type Ator, exigirAtor, FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { type Ator, exigirAtor, FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { ancoraNaRodada, type EntradaDoGate, Gate } from "../../sdlc/nucleo/gate.ts";
-import { criarTicket, type Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { criarTicket } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { mudarTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { rodadasComEstadoMudado } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { DEFINICAO_DO_ENCERRAR_RODADA } from "./definicao.ts";

@@ -1,7 +1,7 @@
 // A definição do `ajustar_resultado`: a sessão do Auditor com o agente depois do PR reprovado.
 import { type DefinicaoDaEtapa, EXTENSOES_DO_AGENTE } from "../definicao/definicao_da_etapa.ts";
 
-export const DEFINICAO_DO_AJUSTAR_RESULTADO: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_AJUSTAR_RESULTADO = {
   nome: "ajustar_resultado",
   objetivo: "Registrar os tickets corretivos do PR reprovado, sem mudar o código.",
   escopo: "rodada",
@@ -13,4 +13,4 @@ export const DEFINICAO_DO_AJUSTAR_RESULTADO: DefinicaoDaEtapa = {
   instrucao: new URL("ajustar_resultado.md", import.meta.url),
   seguePara: "implementar",
   papel: "ajusta_o_pr_reprovado",
-};
+} as const satisfies DefinicaoDaEtapa;

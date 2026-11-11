@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { iniciarTentativaDoTicket, reservarTicket } from "./reserva_ticket.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";

@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, wr
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
-import { branchDemanda, branchRodada } from "../../../sdlc/nucleo/demanda/demanda.ts";
+import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,

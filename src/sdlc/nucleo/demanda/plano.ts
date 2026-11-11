@@ -3,8 +3,8 @@
 // Só importa `AgregadoDemanda` como tipo: o agregado e a evidência (que citam o plano) já dependem deste módulo.
 import { z } from "zod";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
-import { Ator, FABRIQUINHA } from "../ator.ts";
-import { ConfiguracaoAgente } from "../../../trabalho_agentico/nucleo/configuracao_agente.ts";
+import { Ator, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { ConfiguracaoAgente } from "../../../compartilhado/nucleo/configuracao_agente.ts";
 import {
   branchRodada,
   CaminhoPrevisto,
@@ -13,14 +13,10 @@ import {
   RodadaRef,
   TicketIdentidade,
   TicketRef,
-} from "./demanda.ts";
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
-import {
-  type Endereco,
-  GrafoDeDependencias,
-  proximoIdDeRodada,
-  proximoIdDeTicket,
-} from "../item_de_trabalho/item_de_trabalho.ts";
+import { GrafoDeDependencias, proximoIdDeRodada, proximoIdDeTicket } from "../item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { Id, type Instante, Markdown, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { estadoDaRodadaNaEtapa, PRIMEIRA_ETAPA_DA_RODADA } from "../ciclo_de_vida/ciclos.ts";

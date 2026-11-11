@@ -3,9 +3,9 @@
 // agendador, a Fabriquinha devolve esses tickets a `aberto`, se a política das Tentativas manda; a seleção global os
 // escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../nucleo/ator.ts";
-import { resolverConfiguracaoAgente } from "../../../trabalho_agentico/nucleo/configuracao_agente.ts";
-import { formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
+import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { resolverConfiguracaoAgente } from "../../../compartilhado/nucleo/configuracao_agente.ts";
+import { formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { desdeAReabertura, POLITICA_DE_TENTATIVAS, tentativasDoTicket } from "../../nucleo/tentativa.ts";
 import { retomarTicketFalhoPorInfraestrutura } from "../../nucleo/transicoes/transicoes_demanda.ts";
 import { buscarProjeto } from "../../../projeto/armazenamento/projetos.ts";

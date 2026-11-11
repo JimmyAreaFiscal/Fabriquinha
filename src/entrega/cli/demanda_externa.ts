@@ -6,9 +6,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import type { Ator } from "../../sdlc/nucleo/ator.ts";
+import type { Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../etapas/entender_e_desenhar/definicao.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../sdlc/aplicacao/gestao_demandas.ts";
 import { visaoDaDemanda } from "../../sdlc/aplicacao/consultas/visao_da_demanda.ts";
 import {

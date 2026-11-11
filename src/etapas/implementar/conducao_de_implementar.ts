@@ -5,17 +5,20 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../../sdlc/nucleo/transicoes/conclusao_ticket.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import type { DefinicaoDaEtapa } from "../definicao/definicao_da_etapa.ts";
 import { DEFINICAO_DO_IMPLEMENTAR } from "./definicao.ts";
-import { evidenciasPendentes } from "../../qualidade/nucleo/evidencias/evidencia.ts";
+import { evidenciasPendentes } from "../../sdlc/nucleo/evidencias/evidencia.ts";
 import { CATALOGO_ETAPAS } from "../definicao/evidencia_exigida.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { Projeto } from "../../projeto/nucleo/projeto.ts";
-import { falhaPorServicoReiniciado, rotuloDaCausa } from "../../sdlc/nucleo/tentativa.ts";
+import {
+  falhaPorServicoReiniciado,
+  rotuloDaCausa,
+} from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { concluirImplementacoesRodada } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
@@ -25,17 +28,15 @@ import type { OpcoesSonar } from "../../qualidade/infra/tipos_de_verificacao/son
 import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
 import type { Ambiente } from "../../sandbox/infra/ambiente.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
-import {
-  acharCommitTicketDemanda,
-  commitarTicketDemanda,
-} from "../../repositorio/aplicacao/espaco/commit_ticket_demanda.ts";
-import { submeterEvidencia } from "../../qualidade/aplicacao/evidencias/submeter.ts";
+import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
+import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
 import {
   coletarVerificacoes,
   type Falha,
   type RegistroDaVerificacao,
 } from "../../qualidade/aplicacao/evidencias/verificacoes.ts";
-import { ConducaoAgentica, type DepsDaConducao, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
+import { ConducaoAgentica, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
+import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 
 /** O que os testes injetam: a coleta das verificações e o limite do commit. */
 export interface OpcoesDaImplementacao {

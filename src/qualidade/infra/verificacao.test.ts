@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS } from "../../etapas/catalogo.ts";
-import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
-import type { TipoVerificacao } from "../nucleo/verificacao.ts";
+import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../etapas/catalogo.ts";
+import type { TipoVerificacao } from "../../etapas/definicao/tipos_declaraveis.ts";
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "./verificacao.ts";
 

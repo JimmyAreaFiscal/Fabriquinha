@@ -1,8 +1,7 @@
 // A tela de Métricas e a avaliação: cada Etapa com as Métricas de Sucesso que o catálogo declara para ela.
 import type { DatabaseSync } from "node:sqlite";
-import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
+import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../../etapas/catalogo.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { ValorDaMetrica } from "./calculo_de_metrica.ts";
 import { MetricaDeAlteracoesPosteriores } from "./metrica_de_alteracoes_posteriores.ts";
 import { MetricaDeAprovacoesEReprovacoes } from "./metrica_de_aprovacoes_e_reprovacoes.ts";

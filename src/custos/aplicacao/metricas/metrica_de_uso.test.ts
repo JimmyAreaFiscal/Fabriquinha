@@ -10,7 +10,7 @@ import {
 } from "../../../../apoio-testes/banco_de_metricas.ts";
 import { intervalo } from "../../../compartilhado/nucleo/periodo.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { MetricaDeUso } from "./metrica_de_uso.ts";
 
 const calcularUso = (banco: Parameters<MetricaDeUso["calcular"]>[0], recorte: Recorte) =>

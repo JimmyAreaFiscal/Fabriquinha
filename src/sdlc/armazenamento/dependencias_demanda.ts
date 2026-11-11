@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { type DependenciaDemanda, dependentesNaoConcluidas } from "../nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { encontrado } from "../../compartilhado/nucleo/erros.ts";
-import { EstadoDemanda } from "../../compartilhado/nucleo/primitivos.ts";
+import { EstadoDemanda } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 
 /** Todas as arestas de dependência, na ordem em que foram gravadas. */

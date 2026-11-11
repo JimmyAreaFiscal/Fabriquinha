@@ -6,7 +6,7 @@ import { VerificacaoDeFitness } from "../../infra/tipos_de_verificacao/fitness.t
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/tipos_de_verificacao/sonar.ts";
 import { VerificacaoDeTestes } from "../../infra/tipos_de_verificacao/testes.ts";
 import { montarVerificacoesDaEtapa, type RegistroDaVerificacao } from "../../infra/verificacao.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 
 export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao.ts";
 

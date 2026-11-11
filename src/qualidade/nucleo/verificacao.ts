@@ -1,5 +1,5 @@
 // A regra única que classifica a saída de um comando de Verificação, sem I/O.
-import type { CausaDeInfraestrutura } from "../../sdlc/nucleo/tentativa.ts";
+import type { CausaDeInfraestrutura } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 
 /**
  * Saída 0 passa; estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura. Sem `codigoDeReprovacao`,
@@ -14,8 +14,6 @@ export function classificarSaidaDeComando(
   if (codigoDeReprovacao === undefined || saida.codigo === codigoDeReprovacao) return "reprovacao";
   return "falha_infraestrutura";
 }
-
-export type TipoVerificacao = "testes" | "e2e" | "fitness" | "sonar" | "hooks_do_commit" | "conferencia_do_pr";
 
 /** O que a Verificação deixa para a Evidência: os dados e os logs dos comandos que ela rodou. */
 interface RelatorioDaVerificacao {

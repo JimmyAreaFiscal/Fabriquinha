@@ -4,7 +4,7 @@
 // os grupos de processos que a instância anterior deixou.
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, type Ator } from "../../../sdlc/nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra, existe, mensagem } from "../../../compartilhado/nucleo/erros.ts";
 import type { Id, Modelo, ModoTrabalho } from "../../../compartilhado/nucleo/primitivos.ts";
 import { instanteDepois, type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
@@ -13,9 +13,7 @@ import {
   type FalhaDaTentativa,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
-} from "../../../sdlc/nucleo/tentativa.ts";
-import { recolherGruposDasAvaliacoes } from "../../../qualidade/armazenamento/avaliacoes.ts";
-import { falharPendentes } from "../../../qualidade/armazenamento/simulacao.ts";
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
 import type {
   EventoDoAgente,
@@ -28,7 +26,7 @@ import type { Ambiente, IdentificadorDoProcesso } from "../../../sandbox/infra/a
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoServico, conjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "./auditor_automatico.ts";
-import { type AvisarSessao, recuperarProcessosAbertos } from "./processo_do_ticket.ts";
+import { type AvisarSessao, type FalharTicketSemProcesso, recuperarProcessosAbertos } from "./processo_do_ticket.ts";
 
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
@@ -192,6 +190,13 @@ function sinalizarSemEsperar(
   sinal: NodeJS.Signals,
 ): void {
   ambienteDoProcesso.sinalizar(identificador, sinal).catch(noLog);
+}
+
+/** O que a subida do serviço recupera além dos processos dos tickets, dito por quem é dono de cada coisa. */
+export interface RecuperacaoDaSubida {
+  /** Os grupos de processo do pi que a avaliação e a simulação deixaram abertos, no Ambiente do serviço. */
+  gruposDoServico: readonly number[];
+  falharTicket: FalharTicketSemProcesso;
 }
 
 export class CondutorDeTrabalhos {
@@ -421,16 +426,13 @@ export class CondutorDeTrabalhos {
 
   /**
    * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, pelo
-   * Ambiente que o lançou (o host local ou um container do conjunto), e o de cada avaliação e de cada execução simulada
-   * pendente (que falha); os processos dos tickets se encerram com "serviço reiniciado", decidido aqui, que sabe quem
-   * reiniciou. O container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
+   * Ambiente que o lançou (o host local ou um container do conjunto), e os `gruposDoServico` que os outros donos de pi
+   * (cada avaliação e cada execução simulada pendente, que falha) recolheram; os processos dos tickets se encerram com
+   * "serviço reiniciado", decidido aqui, que sabe quem reiniciou, e o motor falha o ticket deles (`falharTicket`). O
+   * container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
    */
-  recuperarNaSubida(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): void {
+  recuperarNaSubida(banco: DatabaseSync, { gruposDoServico, falharTicket }: RecuperacaoDaSubida): void {
     const doServico = ambienteDoServico();
-    const gruposDoServico = [
-      ...recolherGruposDasAvaliacoes(banco),
-      ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
-    ];
     const processos = [
       ...processosAbertos(banco).flatMap(({ ambiente_id, grupo_processo }) =>
         grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
@@ -443,7 +445,7 @@ export class CondutorDeTrabalhos {
         processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
       if (ambiente) sinalizarSemEsperar(ambiente, processo, "SIGKILL");
     }
-    recuperarProcessosAbertos(banco, this.avisar, this.harness);
+    recuperarProcessosAbertos(banco, this.avisar, this.harness, falharTicket);
   }
 
   /**

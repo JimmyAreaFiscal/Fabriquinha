@@ -15,7 +15,7 @@ import {
   montarTicket,
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import type { Tentativa } from "../src/sdlc/nucleo/tentativa.ts";
 import {

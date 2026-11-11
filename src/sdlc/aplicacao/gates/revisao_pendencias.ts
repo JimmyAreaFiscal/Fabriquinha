@@ -1,10 +1,10 @@
 // Confere a aprovação de uma revisão pela evidência (comparacao-sdlc-implementacao.md §§4, 8): o `veredito` é derivado dos
 // `dados` na hora, sem I/O. Recusa citando a evidência, a fitness, o achado ou o cenário que impede a aprovação.
 import type { AgregadoDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import { formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
+import { formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { CATALOGO_ETAPAS, catalogoDaEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { evidenciasPendentes, schemaDoTipo } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
+import { evidenciasPendentes, schemaDoTipo } from "../../nucleo/evidencias/evidencia.ts";
 
 type Dados = Record<string, unknown>;
 interface Linha {

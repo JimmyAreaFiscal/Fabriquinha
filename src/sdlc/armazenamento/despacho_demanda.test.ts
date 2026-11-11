@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { migrar } from "../../compartilhado/armazenamento/banco.ts";
-import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { demandasParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
 import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
 

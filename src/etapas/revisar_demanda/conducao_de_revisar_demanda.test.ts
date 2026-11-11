@@ -1,7 +1,7 @@
 // Condução do revisar_demanda com pi falso e git real temporário (concluir, falhar).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { abrir, raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";

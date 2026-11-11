@@ -3,13 +3,13 @@
 // e os Auditores levam a demanda até `concluida`. O pi e o `gh` são falsos; o git é real.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/sdlc/nucleo/ator.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { iniciarRevisaoIntegral } from "../src/sdlc/aplicacao/revisao_demanda.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
-import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";

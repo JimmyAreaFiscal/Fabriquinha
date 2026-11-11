@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clonarAgregadoDemanda as structuredClone } from "../../../../apoio-testes/clonar_agregado_demanda.ts";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../ator.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import { CICLO_DA_RODADA } from "../ciclo_de_vida/ciclos.ts";
 import { ErroDeEscopo } from "../../../compartilhado/nucleo/erros.ts";
 import { GATES } from "../../../etapas/gates.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   conferirPullRequestRodada,
   concluirImplementacoesRodada,
@@ -206,13 +206,13 @@ test("conferência: documentação, fatos explícitos, ator, ticket e estado err
 
 test("novo ciclo abre tickets novos e preserva o histórico", () => {
   const ag0 = emRevisao();
-  const ag1 = GATES.gate_revisao_rodada.decidir(ag0, enderecoDaRodada, reprovada(), agente(3), ctx); // implementar 4
+  const ag1 = GATES.gate_revisao_rodada.regra.decidir(ag0, enderecoDaRodada, reprovada(), agente(3), ctx); // implementar 4
   const concluido = AgregadoDemanda.parse({
     ...ag1,
     tickets: ag1.tickets.map((t) => (t.ticket_id === 4 ? { ...t, estado: "concluido" } : t)),
   });
   const ag2 = concluirImplementacoesRodada(concluido, ref, FABRIQUINHA, ctx); // revisar 5
-  const ag3 = GATES.gate_revisao_rodada.decidir(ag2, enderecoDaRodada, { resultado: "aprovado" }, agente(5), ctx); // encerrar 6
+  const ag3 = GATES.gate_revisao_rodada.regra.decidir(ag2, enderecoDaRodada, { resultado: "aprovado" }, agente(5), ctx); // encerrar 6
   const ag4 = conferirPullRequestRodada(
     ag3,
     conferencia({ ticket_id: 6, conflito: true, correcoes: [correcao()] }),
@@ -236,7 +236,7 @@ test("novo ciclo abre tickets novos e preserva o histórico", () => {
   );
   // o revisor antigo não decide mais
   rejeitaSemMudar(ag4, () =>
-    GATES.gate_revisao_rodada.decidir(ag4, enderecoDaRodada, { resultado: "aprovado" }, agente(3), ctx),
+    GATES.gate_revisao_rodada.regra.decidir(ag4, enderecoDaRodada, { resultado: "aprovado" }, agente(3), ctx),
   );
 });
 
@@ -325,9 +325,9 @@ test("CA-9: concluir a sessão com correção nova volta a desenvolvimento e lib
 const FUNCAO_DE_PRODUCAO_DE_CADA_TRANSICAO: Record<string, () => AgregadoDemanda> = {
   "implementar→revisar_rodada": () => concluirImplementacoesRodada(emDesenvolvimento(), ref, FABRIQUINHA, ctx),
   "revisar_rodada→encerrar_rodada": () =>
-    GATES.gate_revisao_rodada.decidir(emRevisao(), enderecoDaRodada, { resultado: "aprovado" }, agente(3), ctx),
+    GATES.gate_revisao_rodada.regra.decidir(emRevisao(), enderecoDaRodada, { resultado: "aprovado" }, agente(3), ctx),
   "revisar_rodada→implementar": () =>
-    GATES.gate_revisao_rodada.decidir(emRevisao(), enderecoDaRodada, reprovada(), agente(3), ctx),
+    GATES.gate_revisao_rodada.regra.decidir(emRevisao(), enderecoDaRodada, reprovada(), agente(3), ctx),
   "encerrar_rodada→gate_pr": () => conferirPullRequestRodada(emEncerramento(), conferencia(), FABRIQUINHA, ctx),
   "encerrar_rodada→implementar": () =>
     conferirPullRequestRodada(
@@ -337,9 +337,15 @@ const FUNCAO_DE_PRODUCAO_DE_CADA_TRANSICAO: Record<string, () => AgregadoDemanda
       ctx,
     ),
   "gate_pr→ajustar_resultado": () =>
-    GATES.gate_pr.decidir(emGate(), enderecoDaRodada, { resultado: "reprovado", motivo: "ajustar" }, AUDITOR, ctx),
+    GATES.gate_pr.regra.decidir(
+      emGate(),
+      enderecoDaRodada,
+      { resultado: "reprovado", motivo: "ajustar" },
+      AUDITOR,
+      ctx,
+    ),
   "gate_pr→concluida": () =>
-    GATES.gate_pr.decidir(emGate(), enderecoDaRodada, { resultado: "aprovado", nota: 4 }, AUDITOR, ctx),
+    GATES.gate_pr.regra.decidir(emGate(), enderecoDaRodada, { resultado: "aprovado", nota: 4 }, AUDITOR, ctx),
   "ajustar_resultado→implementar": () =>
     concluirSessaoRodada(
       registrarCorrecoesSessao(emSessao(), { ...ref, ticket_id: 5, correcoes: [correcao()] }, AUDITOR, ctx),

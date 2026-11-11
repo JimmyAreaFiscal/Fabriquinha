@@ -10,7 +10,7 @@ import {
   gravarTicket,
 } from "../../../../apoio-testes/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { MetricaDeNotaHumana } from "./metrica_de_nota_humana.ts";
 import { MetricaDeUso } from "./metrica_de_uso.ts";
 

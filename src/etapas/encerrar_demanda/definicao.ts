@@ -1,7 +1,7 @@
 // A definição do `encerrar_demanda`: a Fabriquinha integra a demanda e limpa o que sobrou, sem agente nem gate.
 import { type DefinicaoDaEtapa, evidenciaExigida, SEM_CAPACIDADES } from "../definicao/definicao_da_etapa.ts";
 
-export const DEFINICAO_DO_ENCERRAR_DEMANDA: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_ENCERRAR_DEMANDA = {
   nome: "encerrar_demanda",
   objetivo: "Integrar a demanda e limpar o que sobrou, com a árvore de PRs, critérios e custos.",
   escopo: "demanda",
@@ -15,4 +15,4 @@ export const DEFINICAO_DO_ENCERRAR_DEMANDA: DefinicaoDaEtapa = {
   capacidades: SEM_CAPACIDADES,
   instrucao: new URL("encerrar_demanda.md", import.meta.url),
   papel: "integra_a_demanda",
-};
+} as const satisfies DefinicaoDaEtapa;

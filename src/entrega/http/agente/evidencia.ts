@@ -3,9 +3,9 @@
 // que o arquivo é da worktree ou da saída do ticket, e que o do host tem o mesmo SHA-256, é o caso de uso
 // (`adicionarEvidenciaComAnexosEnviados`).
 import { createHash } from "node:crypto";
-import { exigirTicketProprio } from "../../../sdlc/aplicacao/agente/escopo.ts";
+import { exigirTicketProprio } from "../../../etapas/agente/escopo.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { LIMITE } from "../../../qualidade/nucleo/evidencias/schemas.ts";
+import { LIMITE } from "../../../sdlc/nucleo/evidencias/schemas.ts";
 import {
   ParametrosDoAnexoEnviado,
   PedidoEvidenciaAdd,

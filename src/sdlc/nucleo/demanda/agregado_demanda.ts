@@ -1,19 +1,22 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4).
 import { z } from "zod";
-import { Ator, AtorExterno } from "../ator.ts";
-import { CICLO_DA_DEMANDA } from "../ciclo_de_vida/ciclos.ts";
-import { ConfiguracaoAgente } from "../../../trabalho_agentico/nucleo/configuracao_agente.ts";
-import { branchDemanda, branchRodada, CaminhoPrevisto, CriterioId, DemandaId } from "./demanda.ts";
+import { Ator, AtorExterno } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { CICLO_DA_DEMANDA, EstadoDemanda, EstadoRodada } from "../ciclo_de_vida/ciclos.ts";
+import { ConfiguracaoAgente } from "../../../compartilhado/nucleo/configuracao_agente.ts";
+import {
+  branchDemanda,
+  branchRodada,
+  CaminhoPrevisto,
+  CriterioId,
+  DemandaId,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ProgressoEncerramento } from "../transicoes/encerramento_demanda.ts";
 import { PullRequest, prDoEscopo } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { TipoEvidencia } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
+import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
 import { GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
 import { OrigemDaVersao } from "./plano.ts";
 import {
-  EstadoDemanda,
-  EstadoRodada,
   EstadoTicket,
-  EtapaTicket,
   Id,
   Instante,
   Markdown,
@@ -21,8 +24,8 @@ import {
   Slug,
   Titulo,
 } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket, NomeGate, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { Tentativa } from "../tentativa.ts";
-import { etapaDoPapel } from "../../../etapas/catalogo.ts";
 
 export const TicketDemanda = z.object({
   demanda_id: DemandaId,
@@ -42,15 +45,6 @@ export const TicketDemanda = z.object({
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
 });
-
-export const NomeGate = z.enum([
-  "gate_demanda",
-  "gate_planejamento",
-  "gate_pr",
-  "gate_revisao_rodada",
-  "gate_revisao_demanda",
-]);
-export type NomeGate = z.infer<typeof NomeGate>;
 
 /** A Decisão sabe de qual gate é; mora aqui, e não em `gate.ts`, porque o agregado a contém e `gate.ts` o transforma. */
 export const Decisao = z.object({

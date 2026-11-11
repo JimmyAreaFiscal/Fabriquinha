@@ -1,7 +1,8 @@
 // As seções do prompt que só o `encerrar_rodada` lê: os arquivos não previstos e o impacto que a `mensagem_pr` explica.
 import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { impactoExigeReversao } from "../../qualidade/nucleo/evidencias/schemas.ts";
-import { arquivosAlteradosDoRevisor, type ContextoDoPrompt, secao } from "../definicao/secoes_do_prompt.ts";
+import { impactoExigeReversao } from "../../sdlc/nucleo/evidencias/schemas.ts";
+import { arquivosAlteradosDoRevisor, secao } from "../prompt/secoes_do_prompt.ts";
+import { type ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
 
 /**
  * Encerrar rodada: os arquivos alterados fora dos caminhos do plano, que a `mensagem_pr` justifica um a um. Vêm da

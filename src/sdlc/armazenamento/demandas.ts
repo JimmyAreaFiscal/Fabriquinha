@@ -3,18 +3,18 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../nucleo/ator.ts";
+import type { Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { EstadoDemanda } from "../../compartilhado/nucleo/primitivos.ts";
-import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import type { EstadoDemanda } from "../nucleo/ciclo_de_vida/ciclos.ts";
+import type { ResultadoDaTentativa } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { escrever, novoId } from "../../compartilhado/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 import {
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
-} from "../../trabalho_agentico/armazenamento/configuracao_agente.ts";
+} from "../../compartilhado/armazenamento/configuracao_agente.ts";
 
 type Linha = Record<string, SQLInputValue>;
 
@@ -464,3 +464,8 @@ export function carregarEscopoDoProcesso(banco: DatabaseSync, execucao: string):
     }
   );
 }
+
+/** O achado de avaliação que originou a demanda (a avaliação o liga à demanda que ele virou), ou `undefined`. */
+export const achadoDaDemanda = (banco: DatabaseSync, demandaId: string) =>
+  banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(demandaId) as
+    { avaliacao_id: string; achado_id: number; titulo: string } | undefined;

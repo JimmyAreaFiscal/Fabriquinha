@@ -3,13 +3,14 @@
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AUDITOR, type Ator } from "../src/sdlc/nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { RegistroDaVerificacao } from "../src/qualidade/aplicacao/evidencias/verificacoes.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import { interromperExecucaoDemanda } from "../src/trabalho_agentico/aplicacao/execucao_demanda.ts";
+import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
+import { interromperExecucaoDemanda } from "../src/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { ConducaoDePlanejar } from "../src/etapas/planejar/conducao_de_planejar.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
@@ -85,9 +86,12 @@ export const verificacoes = (passou: boolean): RegistroDaVerificacao[] =>
   (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((t) => verificacaoDeTeste(t, passou));
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `passaram()` é lido a cada fechamento). */
-export const despacho = (passaram: () => boolean = () => true): DepsDespacho => ({
-  implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) },
+const implementacaoComVerificacoes = (passaram: () => boolean) => ({
+  coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())),
 });
+
+export const despacho = (passaram: () => boolean = () => true): DepsDespacho =>
+  despachoDasEtapas({ implementacao: implementacaoComVerificacoes(passaram) });
 
 export interface RodadaPlano {
   depende?: number[];
@@ -296,10 +300,11 @@ export async function rodadaEmEncerramento(c: Cenario): Promise<string> {
 }
 
 /** O despacho com a espera do PR encurtada: o `gh` falso responde na hora. */
-export const despachoComEsperaCurta = (): DepsDespacho => ({
-  ...despacho(),
-  verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
-});
+export const despachoComEsperaCurta = (): DepsDespacho =>
+  despachoDasEtapas({
+    implementacao: implementacaoComVerificacoes(() => true),
+    verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
+  });
 
 /** O ticket mais novo da etapa na demanda (sem rodada, como o `revisar_demanda`). */
 const ultimoDaEtapa = (c: Cenario, id: string, etapa: string) =>

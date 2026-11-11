@@ -1,45 +1,33 @@
 // A condução de uma Etapa (CONCEITOS.md §2): o que a Fabriquinha faz do ticket reservado até concluí-lo ou falhá-lo. As
 // etapas agênticas compartilham o ciclo aqui; cada concreta só declara o que difere (preparação, conferência, conclusão).
-import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { encontrado, existe } from "../../compartilhado/nucleo/erros.ts";
 import type { DefinicaoDaEtapa } from "../definicao/definicao_da_etapa.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { reservarTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { retornoAoAgenteDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import {
   type FalhaDaTentativa,
   falhaDoErro,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
-  retornoAoAgenteDoTicket,
-} from "../../sdlc/nucleo/tentativa.ts";
+} from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { devolverTicket, registrarFalhaTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
+import type { ConducaoDoTicket, DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
-import type { anotar } from "../../compartilhado/infra/registro.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
-import {
-  type OpcoesExecucaoDemanda,
-  iniciarExecucaoDemanda,
-} from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
-import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
-import type { CondutorDeTrabalhos } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../../sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
+import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
+import type { ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
 
-export interface DepsDaConducao {
-  banco: DatabaseSync;
-  relogio: Relogio;
-  condutor: CondutorDeTrabalhos;
-  registro: typeof anotar;
-  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
-  limiteMin?: number;
-}
-
-export abstract class ConducaoDeEtapa {
+export abstract class ConducaoDeEtapa implements ConducaoDoTicket {
   protected readonly definicao: DefinicaoDaEtapa;
   protected readonly deps: DepsDaConducao;
 
@@ -84,6 +72,14 @@ export type ResultadoDaConferencia = { tipo: "sucesso" } | { tipo: "reprovacao";
 type ExecucaoIniciada = ReturnType<typeof iniciarExecucaoDemanda>;
 
 export abstract class ConducaoAgentica extends ConducaoDeEtapa {
+  /** A seção do prompt que só esta Etapa lê, além das que o prompt de todo ticket tem. */
+  protected readonly secaoDoPrompt?: SecaoDoPrompt;
+
+  /** O prompt do ticket desta Etapa: o de todo ticket, com a seção que só ela lê. */
+  montarPrompt(contexto: ContextoDoPrompt): string {
+    return montarPromptDemanda(contexto, this.secaoDoPrompt);
+  }
+
   /** Inicia a etapa e espera o fim dela: o agente roda, a conferência roda e o ticket é concluído ou falhado. */
   async conduzir(endereco: Endereco): Promise<void> {
     await (
@@ -123,6 +119,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
       limiteMin: this.deps.limiteMin ?? configuracao(banco).timeoutMin,
       modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
       ...this.retomadaDe(ticket),
+      montarPrompt: (contexto) => this.montarPrompt(contexto),
       espaco,
       fechar: (_banco, _ticket, { falha }) => this.fechar(ticket, falha),
     });

@@ -1,11 +1,12 @@
 // O Gate da revisão da rodada, dono do `revisar_rodada`: o agente revisor aprova a rodada ou a devolve com os corretivos.
 import type { AgregadoDemanda, Decisao, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { ancoraNaRodada, type EntradaReprovada, Gate } from "../../sdlc/nucleo/gate.ts";
-import { criarTicket, type Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { criarTicket } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { correcaoDosTicketsDaRodada, materializar } from "../../sdlc/nucleo/demanda/plano.ts";
-import { falhaQueExigeOAuditor } from "../../sdlc/nucleo/tentativa.ts";
+import { falhaQueExigeOAuditor } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { mudarTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import {
   montarMotivoFalhaDaTerceiraReprovacao,

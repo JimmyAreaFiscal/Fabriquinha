@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/sdlc/nucleo/ator.ts";
-import { formatarTicketRef } from "../src/sdlc/nucleo/demanda/demanda.ts";
+import { AUDITOR, FABRIQUINHA } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { formatarTicketRef } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { relogioFixo } from "../src/compartilhado/nucleo/relogio.ts";
 import { reabrirTicket } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import {

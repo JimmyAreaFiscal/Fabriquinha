@@ -4,21 +4,20 @@ import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, gateQueEsperaGenteNaRodada } from "../../nucleo/ciclo_de_vida/ciclos.ts";
 import { predecessorasPendentes } from "../../nucleo/item_de_trabalho/dependencia_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { Despacho, prontosParaExecutarAgora } from "../../nucleo/despacho/despacho.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
 import { prDoEspaco } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../../../etapas/catalogo.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
-import { achadoDaDemanda } from "../../../qualidade/armazenamento/avaliacoes.ts";
-import { carregarDemandas, listarDemandas } from "../../armazenamento/demandas.ts";
+import { achadoDaDemanda, carregarDemandas, listarDemandas } from "../../armazenamento/demandas.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDasDemandas,
 } from "../../armazenamento/dependencias_demanda.ts";
-import { lerAnexo } from "../../../qualidade/armazenamento/evidencia_demanda.ts";
+import { lerAnexo } from "../../armazenamento/evidencia_demanda.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
 import {
   sessaoDeCadaTicketDaDemanda,
@@ -26,8 +25,8 @@ import {
 } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { BoardDeDemandas, PaginaDaDemanda } from "../../../entrega/contrato/demanda.ts";
 import { usoDaDemanda } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
-import { bloqueiosDaDemanda } from "./bloqueios.ts";
-import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
+import { bloqueiosDaDemanda } from "./pendencias/bloqueios.ts";
+import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias/pendencias.ts";
 import { visaoDaDemanda } from "./visao_da_demanda.ts";
 
 const ref = (demanda_id: string) => ({

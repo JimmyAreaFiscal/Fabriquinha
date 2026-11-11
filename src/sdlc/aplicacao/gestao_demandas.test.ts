@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { AUDITOR, type Ator } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
@@ -14,9 +14,9 @@ import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { decidirGate } from "./gates/decidir_gate.ts";
+import { decidirGate } from "../../etapas/gates.ts";
 import * as gestao from "./gestao_demandas.ts";
 import { registrarDependenciaDemanda } from "./gestao_demandas.ts";
 

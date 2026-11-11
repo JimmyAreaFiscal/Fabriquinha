@@ -6,7 +6,7 @@ import {
   VERIFICACOES_DE_CODIGO,
 } from "../definicao/definicao_da_etapa.ts";
 
-export const DEFINICAO_DO_RESOLVER_CONFLITO: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_RESOLVER_CONFLITO = {
   nome: "resolver_conflito",
   objetivo: "Resolver o conflito de integração da demanda, com as mesmas verificações do Implementar.",
   escopo: "demanda",
@@ -18,4 +18,4 @@ export const DEFINICAO_DO_RESOLVER_CONFLITO: DefinicaoDaEtapa = {
   instrucao: new URL("resolver_conflito.md", import.meta.url),
   papel: "resolve_o_conflito_da_integracao",
   devolveAoAgente: true,
-};
+} as const satisfies DefinicaoDaEtapa;

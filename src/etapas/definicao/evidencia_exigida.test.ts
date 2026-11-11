@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CATALOGO_ETAPAS, catalogoDaEtapa, ItemCatalogoEtapa } from "./evidencia_exigida.ts";
-import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../catalogo.ts";
 
 const [E, A, F] = ["externo", "agente", "fabriquinha"];
 const [TE, TF, TS] = ["todos_comandos_exit_zero", "todas_fitness_passam", "sem_issue_aberta_arquivos_alterados"];

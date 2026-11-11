@@ -172,11 +172,6 @@ export function vincularAchado(banco: DatabaseSync, id: string, achadoId: number
     throw new ErroDeInexistente(`o achado ${String(achadoId)} da avaliação ${id} não existe`, "confira o id do achado");
 }
 
-/** O achado que originou a demanda, ou `undefined`. */
-export const achadoDaDemanda = (banco: DatabaseSync, demandaId: string) =>
-  banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(demandaId) as
-    { avaliacao_id: string; achado_id: number; titulo: string } | undefined;
-
 /** Os ids das sessões da demanda com execução terminada entre `de` e `ate` (AAAA-MM-DD, inclusivas). */
 export const sessoesDaDemandaNoPeriodo = (banco: DatabaseSync, demanda: string, de: string, ate: string): string[] =>
   (

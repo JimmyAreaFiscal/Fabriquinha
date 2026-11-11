@@ -2,10 +2,10 @@
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../src/sdlc/nucleo/ator.ts";
+import type { Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { validarPlano } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { criarDemandaNova } from "../src/sdlc/armazenamento/demandas.ts";

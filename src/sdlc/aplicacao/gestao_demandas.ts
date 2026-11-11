@@ -2,17 +2,17 @@
 // evidência, enviar e arquivar, uma transação por operação. A web e o CLI chamam estas funções; as regras são do domínio.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type Ator } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/demanda/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/ciclo_de_vida/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { registrarDependencia } from "../nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
-import { exigirAutoria } from "../../qualidade/nucleo/evidencias/evidencia.ts";
+import { exigirAutoria } from "../nucleo/evidencias/evidencia.ts";
 import { TIPOS_DA_DEMANDA } from "../../etapas/entender_e_desenhar/definicao.ts";
-import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
-import { CustosRealizados } from "../../qualidade/nucleo/evidencias/schemas.ts";
+import { CustosRealizados } from "../nucleo/evidencias/schemas.ts";
 import {
   type ContextoDemanda,
   editarDemanda,
@@ -29,8 +29,8 @@ import {
 } from "../armazenamento/dependencias_demanda.ts";
 import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
 import { gravarUsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
-import { submeterEvidencia as submeterEvidenciaAvaliada } from "../../qualidade/aplicacao/evidencias/submeter.ts";
-import type { Origens } from "../../qualidade/aplicacao/evidencias/submissao.ts";
+import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencias/submeter.ts";
+import type { Origens } from "./evidencias/submissao.ts";
 import { cancelandoEmCascata } from "./gates/cancelamento_em_cascata.ts";
 
 /** `arquivos` são caminhos: abrir cada um, com a defesa de origem, é de `guardarAnexos`. */

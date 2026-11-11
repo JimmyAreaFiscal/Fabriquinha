@@ -9,13 +9,13 @@ import {
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { POLITICA_DE_TENTATIVAS } from "../../nucleo/tentativa.ts";
 import {
-  POLITICA_DE_TENTATIVAS,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
   type ResultadoDaTentativa,
-} from "../../nucleo/tentativa.ts";
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";

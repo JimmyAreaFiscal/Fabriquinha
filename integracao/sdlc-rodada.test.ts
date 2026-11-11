@@ -6,12 +6,12 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Ator, AUDITOR } from "../src/sdlc/nucleo/ator.ts";
+import { Ator, AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/sdlc/nucleo/gate.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
 import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,

@@ -10,7 +10,7 @@ import {
   REF_GLOBAL,
   REF_RODADA,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { AUDITOR } from "../../../sdlc/nucleo/ator.ts";
+import { AUDITOR } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 

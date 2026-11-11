@@ -8,7 +8,7 @@ import {
   usoDoRecorte,
 } from "../../armazenamento/metricas_demanda.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { type LinhaDeUso, textoDoCusto, Uso } from "../../nucleo/uso.ts";
 import { CalculoDeMetrica } from "./calculo_de_metrica.ts";
 

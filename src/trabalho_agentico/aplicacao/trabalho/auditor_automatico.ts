@@ -5,7 +5,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { registrarUsoDaConsulta, type TicketRef } from "./processo_do_ticket.ts";
 import { condutor } from "./condutor.ts";
-import type { EtapaTicket, Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { oAgenteDecideOGate } from "../../../etapas/catalogo.ts";
 
 export interface PerguntaDoAgente {

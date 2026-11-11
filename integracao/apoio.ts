@@ -9,13 +9,14 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
-import { AUDITOR, type Ator } from "../src/sdlc/nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../src/compartilhado/nucleo/erros.ts";
-import { submeterEvidencia } from "../src/qualidade/aplicacao/evidencias/submeter.ts";
+import { submeterEvidencia } from "../src/sdlc/aplicacao/evidencias/submeter.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
@@ -143,7 +144,7 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 }
 
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
-export async function ciclo(c: Cenario, deps?: DepsDespacho): Promise<void> {
+export async function ciclo(c: Cenario, deps: DepsDespacho = despachoDasEtapas()): Promise<void> {
   await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
 }
 

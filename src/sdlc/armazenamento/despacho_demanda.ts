@@ -2,8 +2,8 @@
 // trabalho vivo. Só lê; a seleção é do Despacho, e a reserva e o início são do serviço de despacho.
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../nucleo/demanda/agregado_demanda.ts";
-import { Endereco } from "../nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { EstadoDemanda } from "../../compartilhado/nucleo/primitivos.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import type { EstadoDemanda } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { carregarDemanda } from "./demandas.ts";
 import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";

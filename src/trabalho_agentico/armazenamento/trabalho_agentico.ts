@@ -3,11 +3,14 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
-import { formatarTicketRef, type TicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { formatarTicketRef, type TicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
+import {
+  colunasDaConfiguracaoAgente,
+  linhaComConfiguracaoAgente,
+} from "../../compartilhado/armazenamento/configuracao_agente.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 
 interface EstadoTrabalhos {

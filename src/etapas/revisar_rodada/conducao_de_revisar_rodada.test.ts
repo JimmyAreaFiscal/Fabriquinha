@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { abrir, raizDo } from "../../compartilhado/armazenamento/banco.ts";

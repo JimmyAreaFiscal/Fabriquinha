@@ -1,30 +1,53 @@
 // Os três ciclos de vida: o de cada Demanda, Rodada e Ticket, e o mapa de estado para Etapa. Os da demanda e da rodada
 // saem do catálogo de Etapas: a ordem do SDLC, o Gate de cada Etapa e para onde ela leva. O motor só põe os estados dele
 // (os terminais, a execução das rodadas e o cancelamento da demanda).
+import { z } from "zod";
 import { CicloDeVida } from "./ciclo_de_vida.ts";
-import type { NomeGate } from "../demanda/agregado_demanda.ts";
-import type { DefinicaoDaEtapa } from "../../../etapas/definicao/definicao_da_etapa.ts";
-import { CATALOGO_DE_ETAPAS, ORDEM_DO_SDLC } from "../../../etapas/catalogo.ts";
-import { existe } from "../../../compartilhado/nucleo/erros.ts";
 import {
-  EstadoDemanda,
-  EstadoRodada,
-  type EstadoTicket,
+  CATALOGO_DE_ETAPAS,
+  type DeclaracoesDasEtapas,
+  type DefinicaoDoCatalogo,
   type EtapaTicket,
-} from "../../../compartilhado/nucleo/primitivos.ts";
+  type NomeGate,
+  ORDEM_DO_SDLC,
+} from "../../../etapas/catalogo.ts";
+import { existe } from "../../../compartilhado/nucleo/erros.ts";
+import type { EstadoTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 
-type EstadoDoCiclo = EstadoDemanda | EstadoRodada;
-type Escopo = DefinicaoDaEtapa["escopo"];
+type Escopo = DefinicaoDoCatalogo["escopo"];
 
 const CONCLUIDA = "concluida";
 const CANCELADA = "cancelada";
 const ARQUIVADA = "arquivada";
 
-const definicaoDoEstado = (estado: string): DefinicaoDaEtapa | undefined =>
+// Os estados de cada escopo no tipo, pela mesma regra que monta as transições abaixo: os do motor que a ordem do SDLC
+// cita, e os de cada Etapa do escopo (o dela e o de espera do Gate, quando há), na ordem e fora dela (`seguePara`).
+type EstadosDaEtapa<Declaracao> = Declaracao extends {
+  nome: infer NomeDaEtapa;
+  gate: { nome: infer NomeDoGate; esperaEmEstadoProprio: true };
+}
+  ? NomeDaEtapa | NomeDoGate
+  : Declaracao extends { nome: infer NomeDaEtapa }
+    ? NomeDaEtapa
+    : never;
+type NaOrdemDoSdlc<E extends Escopo> = (typeof ORDEM_DO_SDLC)[E][number];
+type ForaDaOrdemDoSdlc<E extends Escopo> = Extract<DeclaracoesDasEtapas[EtapaTicket], { escopo: E; seguePara: string }>;
+type EstadosDoEscopo<E extends Escopo> =
+  | Exclude<NaOrdemDoSdlc<E>, EtapaTicket>
+  | EstadosDaEtapa<DeclaracoesDasEtapas[Extract<NaOrdemDoSdlc<E>, EtapaTicket>]>
+  | EstadosDaEtapa<ForaDaOrdemDoSdlc<E>>;
+
+/** Os estados do ciclo da demanda, o que o banco e a API gravam. */
+export type EstadoDemanda = EstadosDoEscopo<"demanda"> | typeof CONCLUIDA | typeof ARQUIVADA | typeof CANCELADA;
+/** Os estados do ciclo da rodada, o que o banco e a API gravam. */
+export type EstadoRodada = EstadosDoEscopo<"rodada"> | typeof CONCLUIDA;
+type EstadoDoCiclo = EstadoDemanda | EstadoRodada;
+
+const definicaoDoEstado = (estado: string): DefinicaoDoCatalogo | undefined =>
   Object.values(CATALOGO_DE_ETAPAS).find((definicao) => definicao.nome === estado);
 
 /** Os estados da Etapa (o dela e o de espera do Gate, quando há) com os destinos de cada um. */
-function transicoesDaEtapa({ nome, gate, devolvePara }: DefinicaoDaEtapa, seguinte: string): [string, string[]][] {
+function transicoesDaEtapa({ nome, gate, devolvePara }: DefinicaoDoCatalogo, seguinte: string): [string, string[]][] {
   const devolucao = devolvePara === undefined ? [] : [devolvePara];
   if (gate?.esperaEmEstadoProprio) {
     return [
@@ -66,17 +89,32 @@ const transicoesComOsTerminaisDaDemanda = (): Record<string, string[]> => ({
 
 const estadosDe = (transicoes: [string, string[]][]): string[] => transicoes.map(([estado]) => estado);
 
-// O cast vale porque `ciclos.test.ts` confere que os estados derivados são exatamente os de `EstadoDemanda`.
+const TRANSICOES_DA_DEMANDA_COM_OS_TERMINAIS = transicoesComOsTerminaisDaDemanda() as Record<
+  EstadoDemanda,
+  EstadoDemanda[]
+>;
+const TRANSICOES_DA_RODADA_COM_A_CONCLUSAO = Object.fromEntries([...TRANSICOES_DA_RODADA, [CONCLUIDA, []]]) as Record<
+  EstadoRodada,
+  EstadoRodada[]
+>;
+
+// Os casts valem porque `ciclos.test.ts` confere os estados derivados, um a um, com o tipo derivado acima.
+export const EstadoDemanda = z.enum(
+  Object.keys(TRANSICOES_DA_DEMANDA_COM_OS_TERMINAIS) as [EstadoDemanda, ...EstadoDemanda[]],
+);
+export const EstadoRodada = z.enum(
+  Object.keys(TRANSICOES_DA_RODADA_COM_A_CONCLUSAO) as [EstadoRodada, ...EstadoRodada[]],
+);
+
 export const CICLO_DA_DEMANDA = new CicloDeVida<EstadoDemanda>({
-  transicoes: transicoesComOsTerminaisDaDemanda() as Record<EstadoDemanda, EstadoDemanda[]>,
+  transicoes: TRANSICOES_DA_DEMANDA_COM_OS_TERMINAIS,
   terminais: [CONCLUIDA, ARQUIVADA, CANCELADA],
   satisfazemDependencia: [CONCLUIDA, ARQUIVADA],
   emAndamento: estadosDe(TRANSICOES_DA_DEMANDA) as EstadoDemanda[],
 });
 
-// O cast vale porque `ciclos.test.ts` confere que os estados derivados são exatamente os de `EstadoRodada`.
 export const CICLO_DA_RODADA = new CicloDeVida<EstadoRodada>({
-  transicoes: Object.fromEntries([...TRANSICOES_DA_RODADA, [CONCLUIDA, []]]) as Record<EstadoRodada, EstadoRodada[]>,
+  transicoes: TRANSICOES_DA_RODADA_COM_A_CONCLUSAO,
   terminais: [CONCLUIDA],
   satisfazemDependencia: [CONCLUIDA],
   emAndamento: estadosDe(TRANSICOES_DA_RODADA) as EstadoRodada[],

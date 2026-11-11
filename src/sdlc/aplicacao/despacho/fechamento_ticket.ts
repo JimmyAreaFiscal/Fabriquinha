@@ -2,7 +2,7 @@
 // fechamento do `implementar` e do `resolver_conflito` (verificar, commitar, concluir ou devolver) é das conduções.
 import type { DatabaseSync } from "node:sqlite";
 import type { TicketDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import type { FalhaDaTentativa } from "../../nucleo/tentativa.ts";
+import type { FalhaDaTentativa } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { registrarFalhaTicket } from "../../nucleo/transicoes/transicoes_demanda.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";

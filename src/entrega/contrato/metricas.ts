@@ -2,8 +2,9 @@
 // São só tipos e schemas: quem monta o valor é a consulta, quem o valida na saída é o teste de rota.
 import { z } from "zod";
 import { Mes } from "../../compartilhado/nucleo/periodo.ts";
-import type { TipoMetrica } from "../../custos/nucleo/metrica.ts";
-import { EtapaTicket, Slug } from "../../compartilhado/nucleo/primitivos.ts";
+import type { TipoMetrica } from "../../etapas/definicao/tipos_declaraveis.ts";
+import { Slug } from "../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../../etapas/catalogo.ts";
 
 /** Sem `projeto`, todos; sem `ate`, o mês corrente; sem `de`, os 11 meses antes de `ate`. */
 export const FiltroDeMetricas = z.object({ projeto: Slug.optional(), de: Mes.optional(), ate: Mes.optional() });

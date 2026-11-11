@@ -2,9 +2,10 @@
 // sessão interativa nasce e é retomada, a reprovação do gate leva o motivo ao agente e o pi que falha não falha o ticket.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
+import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { comReaberturaDoAuditor, falhaPorServicoReiniciado } from "../../sdlc/nucleo/tentativa.ts";
+import { comReaberturaDoAuditor } from "../../sdlc/nucleo/tentativa.ts";
+import { falhaPorServicoReiniciado } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import {
   aprovarGateDoPlanejamento,
@@ -14,7 +15,7 @@ import {
   proporPlanoDoAgente,
   reprovarGateDoPlanejamento,
 } from "../../../apoio-testes/cenario_de_planejamento.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { falharTicketDemanda } from "../../sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";

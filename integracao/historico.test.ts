@@ -7,9 +7,9 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { AUDITOR } from "../src/sdlc/nucleo/ator.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import { predecessorasPendentes } from "../src/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
@@ -20,7 +20,7 @@ import {
 import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
 import { metricasDasEtapas } from "../src/custos/aplicacao/metricas/metricas_das_etapas.ts";
-import { achadoDaDemanda } from "../src/qualidade/armazenamento/avaliacoes.ts";
+import { achadoDaDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../src/sdlc/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";

@@ -2,7 +2,8 @@
 // conceitos, nunca gravada; esta é a única regra que decide o que aguarda o Auditor. Esperar uma Dependência não é Pendência.
 import type { AgregadoDemanda, PullRequestDoEspaco } from "./agregado_demanda.ts";
 import { Despacho, prontosParaExecutarAgora, situacaoDeUmaDemanda } from "../despacho/despacho.ts";
-import { Endereco, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
+import { ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { Instante } from "../../../compartilhado/nucleo/primitivos.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "../tentativa.ts";

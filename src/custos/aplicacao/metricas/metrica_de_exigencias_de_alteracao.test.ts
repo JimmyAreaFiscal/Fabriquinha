@@ -7,7 +7,7 @@ import {
   gravarExecucao,
 } from "../../../../apoio-testes/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { MetricaDeExigenciasDeAlteracao } from "./metrica_de_exigencias_de_alteracao.ts";
 import { MetricaDeUso } from "./metrica_de_uso.ts";
 

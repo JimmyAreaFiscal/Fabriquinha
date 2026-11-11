@@ -6,12 +6,12 @@ import { test } from "node:test";
 import { cenarioDoInicio, em, rodada, ticket } from "../../../../apoio-testes/cenario_do_inicio.ts";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import type { DadosDoInicio } from "../../../entrega/contrato/inicio.ts";
-import type { SessaoDeDemanda } from "../../../trabalho_agentico/aplicacao/sessoes/historico_demanda.ts";
+import type { SessaoDeDemanda } from "../sessoes/historico_demanda.ts";
 import { consultarInicio } from "./inicio.ts";
-import { trabalhoVivoDaSessao } from "./pendencias.ts";
+import { trabalhoVivoDaSessao } from "./pendencias/pendencias.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

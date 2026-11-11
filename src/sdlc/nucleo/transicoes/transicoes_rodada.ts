@@ -1,7 +1,7 @@
 // Ciclo da rodada (comparacao-sdlc-implementacao.md §4): implementações concluídas, revisão e conferência técnica do PR.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAtor, FABRIQUINHA } from "../ator.ts";
+import { type Ator, exigirAtor, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "../demanda/agregado_demanda.ts";
 import {
   CICLO_DA_DEMANDA,
@@ -10,19 +10,14 @@ import {
   estadoDaRodadaNaEtapa,
   etapaSeguinte,
   PRIMEIRA_ETAPA_DA_RODADA,
+  EstadoRodada,
 } from "../ciclo_de_vida/ciclos.ts";
-import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
-import { DemandaId } from "../demanda/demanda.ts";
+import { CATALOGO_DE_ETAPAS, etapaDoPapel, type EtapaTicket } from "../../../etapas/catalogo.ts";
+import { DemandaId } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
 import { correcaoDosTicketsDaRodada, materializar } from "../demanda/plano.ts";
-import {
-  type EtapaTicket,
-  EstadoRodada,
-  Id,
-  type Instante,
-  palavras,
-} from "../../../compartilhado/nucleo/primitivos.ts";
+import { Id, type Instante, palavras } from "../../../compartilhado/nucleo/primitivos.ts";
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };

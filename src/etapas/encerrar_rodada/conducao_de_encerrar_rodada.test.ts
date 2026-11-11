@@ -10,7 +10,7 @@ import {
   BRANCH_DEMANDA,
   BRANCH_RODADA,
 } from "../../../apoio-testes/cenario_de_encerramento_rodada.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";

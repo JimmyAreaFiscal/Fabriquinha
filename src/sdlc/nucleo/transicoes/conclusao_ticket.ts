@@ -1,11 +1,11 @@
 // Conclusão do ticket `implementar` da demanda SDLC (comparacao-sdlc-implementacao.md §4 e D05): em_execucao → concluido.
 import { z } from "zod";
-import { type Ator, exigirAtor } from "../ator.ts";
+import { type Ator, exigirAtor } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
-import { formatarTicketRef } from "../demanda/demanda.ts";
+import { formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { CICLO_DO_TICKET, PRIMEIRA_ETAPA_DA_RODADA } from "../ciclo_de_vida/ciclos.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { evidenciasPendentes } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
+import { evidenciasPendentes } from "../evidencias/evidencia.ts";
 import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";

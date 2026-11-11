@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
-import { type Ator, FABRIQUINHA } from "../ator.ts";
+import { type Ator, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   CorrecaoDoPlano,
   correcaoDasRodadasNovas,

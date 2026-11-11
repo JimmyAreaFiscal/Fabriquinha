@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../src/sdlc/nucleo/ator.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
 import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,

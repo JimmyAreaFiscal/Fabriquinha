@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../apoio-testes/ambiente_falso.ts";
 import { montarAmbienteDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
-import type { DepsDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
 import { gravarProjeto, projetoExistente } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "./apoio-execucao.ts";
@@ -50,9 +50,9 @@ after(() => {
 });
 
 /** O despacho que fecha o ticket com as Verificações de verdade, e não com as injetadas dos outros testes. */
-const despachoComVerificacoesReais: DepsDespacho = {
+const despachoComVerificacoesReais = despachoDasEtapas({
   implementacao: { opcoesSonar: { limiteMs: 60_000, intervaloMs: 1 } },
-};
+});
 
 test("CA-4: git da worktree, Preparação, Verificações e pi de cada ticket da rodada passam pelo Ambiente", async (t) => {
   const ambiente = new AmbienteFalso();

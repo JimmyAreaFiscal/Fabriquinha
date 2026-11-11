@@ -5,10 +5,10 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
+import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo } from "../../compartilhado/nucleo/erros.ts";
 import { GATES } from "../gates.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import {
@@ -28,7 +28,7 @@ import { limitarTempoDoPi } from "../../../apoio-testes/limite_do_pi.ts";
 import { conferirPromptComFoto } from "../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "./sessao_ajustes.ts";
-import { enviarDemanda } from "../../trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts";
+import { enviarDemanda } from "../conducao/mensagem_do_auditor.ts";
 import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeAjustarResultado } from "./conducao_de_ajustar_resultado.ts";
 
@@ -37,7 +37,7 @@ async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: strin
   limitarTempoDoPi(banco, 0.02);
   await guardarMarcoDaSessao(banco, REF, carregarDemanda(banco, DEMANDA));
   const reprovada = comDemanda(banco, DEMANDA, (a) =>
-    GATES.gate_pr.decidir(a, ENDERECO, { resultado: "reprovado", motivo }, AUDITOR, {
+    GATES.gate_pr.regra.decidir(a, ENDERECO, { resultado: "reprovado", motivo }, AUDITOR, {
       agora: "2026-01-01T00:00:00.000Z",
     }),
   );

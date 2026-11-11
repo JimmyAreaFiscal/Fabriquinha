@@ -42,7 +42,7 @@ import {
   lerConversa,
   type Mensagem,
   texto,
-} from "../../../trabalho_agentico/aplicacao/sessoes/sessoes_demanda.ts";
+} from "../../../trabalho_agentico/aplicacao/sessoes/conversa.ts";
 
 interface EscopoDaAvaliacao {
   projeto: string;

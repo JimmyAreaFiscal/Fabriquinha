@@ -4,7 +4,7 @@ import { satisfazDependencia } from "../ciclo_de_vida/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../ciclo_de_vida/ciclos.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
-import type { EstadoDemanda } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../ciclo_de_vida/ciclos.ts";
 
 /** `demanda_id` só pode começar o planejamento depois de `depende_demanda_id` satisfeita. */
 export interface DependenciaDemanda {

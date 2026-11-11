@@ -1,7 +1,7 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
 // falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
-import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -15,17 +15,17 @@ import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc } from "../../../projeto/aplicacao/cadastro.ts";
+import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import {
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,
-} from "../../../trabalho_agentico/aplicacao/execucao_demanda.ts";
+} from "../../../sdlc/aplicacao/execucao/execucao_demanda.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
+import { montarPromptDemanda } from "../../../etapas/prompt/prompt_demanda.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -277,6 +277,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     }),
   );
   const { fim } = iniciarExecucaoDemanda(servico.banco, ref, {
+    montarPrompt: montarPromptDemanda,
     limiteMin: 5,
     modo: "interativo",
     fechar: () => Promise.resolve(),

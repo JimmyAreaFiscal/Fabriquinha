@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clonarAgregadoDemanda } from "../../../apoio-testes/clonar_agregado_demanda.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { AgregadoDemanda, type Decisao, type NomeGate } from "./demanda/agregado_demanda.ts";
-import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
+import { AgregadoDemanda, type Decisao } from "./demanda/agregado_demanda.ts";
+import { type NomeGate } from "../../etapas/catalogo.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
 import { GATES } from "../../etapas/gates.ts";
-import { Endereco } from "./item_de_trabalho/item_de_trabalho.ts";
-import { comTentativaAberta, falhaQueExigeOAuditor, motivoDaFalhaDoTicket } from "./tentativa.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { comTentativaAberta, motivoDaFalhaDoTicket } from "./tentativa.ts";
+import { falhaQueExigeOAuditor } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import {
   enviarDemanda,
   reabrirTicket,
@@ -17,7 +19,7 @@ import {
 } from "./transicoes/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "./transicoes/transicoes_rodada.ts";
 
-type Gate = (typeof GATES)[NomeGate];
+type Gate = (typeof GATES)[NomeGate]["regra"];
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -53,7 +55,7 @@ const demandaEnviada = (): AgregadoDemanda => {
   return enviarDemanda(comDefinicao, autora, { agora: t1 });
 };
 const demandaEmPlanejamento = (): AgregadoDemanda => {
-  const decisaoAprovando = GATES.gate_demanda.decidir(
+  const decisaoAprovando = GATES.gate_demanda.regra.decidir(
     demandaEnviada(),
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -271,7 +273,7 @@ interface CenarioDoGate {
 
 const CENARIOS: CenarioDoGate[] = [
   {
-    gate: GATES.gate_demanda,
+    gate: GATES.gate_demanda.regra,
     endereco: enderecoDaDemanda,
     decisor: AUDITOR,
     atorSemPermissao: agenteDoTrabalho(1),
@@ -281,7 +283,7 @@ const CENARIOS: CenarioDoGate[] = [
     reprovacao: { resultado: "reprovado", motivo: "fora do escopo" },
   },
   {
-    gate: GATES.gate_planejamento,
+    gate: GATES.gate_planejamento.regra,
     endereco: enderecoDaDemanda,
     decisor: AUDITOR,
     atorSemPermissao: agenteDoTrabalho(1),
@@ -291,7 +293,7 @@ const CENARIOS: CenarioDoGate[] = [
     reprovacao: { resultado: "reprovado", motivo: "falta teste" },
   },
   {
-    gate: GATES.gate_pr,
+    gate: GATES.gate_pr.regra,
     endereco: enderecoDaRodada,
     decisor: AUDITOR,
     atorSemPermissao: agenteDoTrabalho(4),
@@ -301,7 +303,7 @@ const CENARIOS: CenarioDoGate[] = [
     reprovacao: { resultado: "reprovado", motivo: "ajustar" },
   },
   {
-    gate: GATES.gate_revisao_rodada,
+    gate: GATES.gate_revisao_rodada.regra,
     endereco: enderecoDaRodada,
     decisor: agenteDoTrabalho(3),
     atorSemPermissao: AUDITOR,
@@ -311,7 +313,7 @@ const CENARIOS: CenarioDoGate[] = [
     reprovacao: { resultado: "reprovado", motivo: "refazer o teste", correcoes: [correcaoDaRodada()] },
   },
   {
-    gate: GATES.gate_revisao_demanda,
+    gate: GATES.gate_revisao_demanda.regra,
     endereco: enderecoDaDemanda,
     decisor: agenteDoTrabalho(3),
     atorSemPermissao: AUDITOR,
@@ -333,7 +335,7 @@ const tentativaDe = (cenario: CenarioDoGate, sobrescrito: Partial<TentativaDeDec
 
 test("cada gate declara o nome, o decisor e a etapa âncora", () => {
   assert.deepEqual(
-    Object.entries(GATES).map(([nome, gate]) => [nome, gate.nome, gate.decisor, gate.etapaAncora]),
+    Object.entries(GATES).map(([nome, { regra }]) => [nome, regra.nome, regra.decisor, regra.etapaAncora]),
     [
       ["gate_demanda", "gate_demanda", "auditor", "entender_e_desenhar"],
       ["gate_planejamento", "gate_planejamento", "auditor", "planejar"],
@@ -520,8 +522,8 @@ for (const [rotulo, nota, aceita] of [
 ] as const) {
   const entrada = { resultado: "aprovado", nota };
   test(`gate_pr: validarEntrada ${aceita ? "aceita" : "rejeita"} aprovar com o Auditor ${rotulo}`, () => {
-    if (aceita) assert.equal(GATES.gate_pr.validarEntrada(entrada, AUDITOR).nota, nota);
-    else assert.throws(() => GATES.gate_pr.validarEntrada(entrada, AUDITOR), ErroDeRegra);
+    if (aceita) assert.equal(GATES.gate_pr.regra.validarEntrada(entrada, AUDITOR).nota, nota);
+    else assert.throws(() => GATES.gate_pr.regra.validarEntrada(entrada, AUDITOR), ErroDeRegra);
   });
   if (!aceita) {
     test(`gate_pr: ensaiar e decidir rejeitam igualmente aprovar com o Auditor ${rotulo}`, () => {
@@ -533,20 +535,23 @@ for (const [rotulo, nota, aceita] of [
 const aprovacaoAutomatica = { resultado: "aprovado", motivo: MOTIVO_APROVACAO_AUTOMATICA_PR };
 
 test("gate_pr: validarEntrada aceita a aprovação da Fabriquinha sem nota", () => {
-  assert.equal(GATES.gate_pr.validarEntrada(aprovacaoAutomatica, FABRIQUINHA).nota, undefined);
+  assert.equal(GATES.gate_pr.regra.validarEntrada(aprovacaoAutomatica, FABRIQUINHA).nota, undefined);
 });
 
 test("gate_pr: validarEntrada rejeita a Fabriquinha aprovar com nota", () => {
-  assert.throws(() => GATES.gate_pr.validarEntrada({ resultado: "aprovado", nota: 4 }, FABRIQUINHA), ErroDeRegra);
+  assert.throws(() => GATES.gate_pr.regra.validarEntrada({ resultado: "aprovado", nota: 4 }, FABRIQUINHA), ErroDeRegra);
 });
 
 test("gate_pr: validarEntrada rejeita a Fabriquinha reprovar", () => {
-  assert.throws(() => GATES.gate_pr.validarEntrada({ resultado: "reprovado", motivo: "x" }, FABRIQUINHA), ErroDeRegra);
+  assert.throws(
+    () => GATES.gate_pr.regra.validarEntrada({ resultado: "reprovado", motivo: "x" }, FABRIQUINHA),
+    ErroDeRegra,
+  );
 });
 
 test("gate_pr: validarEntrada rejeita o Auditor reprovar com nota", () => {
   assert.throws(
-    () => GATES.gate_pr.validarEntrada({ resultado: "reprovado", motivo: "x", nota: 3 }, AUDITOR),
+    () => GATES.gate_pr.regra.validarEntrada({ resultado: "reprovado", motivo: "x", nota: 3 }, AUDITOR),
     ErroDeRegra,
   );
 });
@@ -579,7 +584,7 @@ test("gate_pr: aprovar com nota grava a decisão, conclui o ticket e a rodada", 
   for (const nota of [1, 5]) {
     const agregado = rodadaEmGatePr();
     const agregadoAntes = clonarAgregadoDemanda(agregado);
-    const decidido = GATES.gate_pr.decidir(
+    const decidido = GATES.gate_pr.regra.decidir(
       agregado,
       enderecoDaRodada,
       { resultado: "aprovado", nota },
@@ -607,7 +612,7 @@ test("gate_pr: aprovar com nota grava a decisão, conclui o ticket e a rodada", 
     // repetir depois da conclusão não duplica a decisão
     exigirMesmaRejeicaoNoEnsaioENaDecisao(
       {
-        gate: GATES.gate_pr,
+        gate: GATES.gate_pr.regra,
         agregado: decidido,
         endereco: enderecoDaRodada,
         entrada: { resultado: "aprovado", nota },
@@ -619,7 +624,7 @@ test("gate_pr: aprovar com nota grava a decisão, conclui o ticket e a rodada", 
 });
 
 test("gate_pr: a aprovação automática da Fabriquinha conclui a rodada com o motivo no lugar da nota", () => {
-  const decidido = GATES.gate_pr.decidir(
+  const decidido = GATES.gate_pr.regra.decidir(
     rodadaEmGatePr(),
     enderecoDaRodada,
     aprovacaoAutomatica,
@@ -647,7 +652,7 @@ test("gate_pr: a aprovação automática da Fabriquinha conclui a rodada com o m
 test("gate_pr: reprovar grava a decisão sem nota, conclui o gate e abre a sessão de ajustes", () => {
   const agregado = rodadaEmGatePr();
   const agregadoAntes = clonarAgregadoDemanda(agregado);
-  const decidido = GATES.gate_pr.decidir(
+  const decidido = GATES.gate_pr.regra.decidir(
     agregado,
     enderecoDaRodada,
     { resultado: "reprovado", motivo: " ajustar " },
@@ -685,7 +690,7 @@ test("gate_pr: reprovar grava a decisão sem nota, conclui o gate e abre a sess�
 test("gate_demanda: aprovar grava a decisão, conclui o ticket e abre planejar", () => {
   const agregado = demandaEnviada();
   const agregadoAntes = clonarAgregadoDemanda(agregado);
-  const decidido = GATES.gate_demanda.decidir(
+  const decidido = GATES.gate_demanda.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "aprovado", nota: 5 },
@@ -728,7 +733,7 @@ test("gate_demanda: aprovar com o ticket planejar já aberto não abre outro", (
     estado_alterado_em: t0,
     criado_por: FABRIQUINHA,
   };
-  const decidido = GATES.gate_demanda.decidir(
+  const decidido = GATES.gate_demanda.regra.decidir(
     { ...enviada, tickets: [...enviada.tickets, planejarAberto] },
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -739,7 +744,7 @@ test("gate_demanda: aprovar com o ticket planejar já aberto não abre outro", (
 });
 
 test("gate_demanda: reprovar grava o motivo, cancela a demanda e o ticket, sem novo ticket", () => {
-  const decidido = GATES.gate_demanda.decidir(
+  const decidido = GATES.gate_demanda.regra.decidir(
     demandaEnviada(),
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "fora do escopo" },
@@ -759,7 +764,7 @@ test("gate_demanda: reprovar grava o motivo, cancela a demanda e o ticket, sem n
 test("gate_planejamento: reprovar volta a planejar mantendo o ticket, o plano e as evidências", () => {
   const agregado = demandaComPlanoSubmetido();
   const agregadoAntes = clonarAgregadoDemanda(agregado);
-  const decidido = GATES.gate_planejamento.decidir(
+  const decidido = GATES.gate_planejamento.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "falta teste" },
@@ -790,7 +795,7 @@ test("gate_planejamento: reprovar encerra a Tentativa aberta do planejar como in
   const ticketPlanejar = base.tickets.find((t) => t.etapa === "planejar");
   assert.ok(ticketPlanejar);
   const agregado = { ...base, tentativas: comTentativaAberta(base.tentativas, ticketPlanejar, "exec-planejar", t1) };
-  const decidido = GATES.gate_planejamento.decidir(
+  const decidido = GATES.gate_planejamento.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "falta teste" },
@@ -814,7 +819,7 @@ test("gate_planejamento: reprovar com o planejar falho reabre o ticket com o mot
     { ticket_id: 2, falha: falhaQueExigeOAuditor("serviço reiniciado") },
     contexto,
   );
-  const decidido = GATES.gate_planejamento.decidir(
+  const decidido = GATES.gate_planejamento.regra.decidir(
     falho,
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "tente de novo" },
@@ -836,7 +841,7 @@ test("gate_planejamento: aprovar com o planejar falho é rejeitado até o Audito
   );
   exigirMesmaRejeicaoNoEnsaioENaDecisao(
     {
-      gate: GATES.gate_planejamento,
+      gate: GATES.gate_planejamento.regra,
       agregado: falho,
       endereco: enderecoDaDemanda,
       entrada: { resultado: "aprovado" },
@@ -854,7 +859,7 @@ test("gate_planejamento: sem plano submetido, aprovar e reprovar são rejeitados
   const semPlano = semEvidenciaDePlano(demandaComPlanoSubmetido());
   for (const entrada of [CENARIOS[1]?.aprovacao, CENARIOS[1]?.reprovacao]) {
     exigirMesmaRejeicaoNoEnsaioENaDecisao(
-      { gate: GATES.gate_planejamento, agregado: semPlano, endereco: enderecoDaDemanda, entrada, ator: AUDITOR },
+      { gate: GATES.gate_planejamento.regra, agregado: semPlano, endereco: enderecoDaDemanda, entrada, ator: AUDITOR },
       ErroDeRegra,
       /plano submetido/,
     );
@@ -895,7 +900,7 @@ test("gate_planejamento: aprovar materializa rodadas, tickets renumerados, camin
   });
   const agregado = demandaComPlanoSubmetido(plano);
   const agregadoAntes = clonarAgregadoDemanda(agregado);
-  const decidido = GATES.gate_planejamento.decidir(
+  const decidido = GATES.gate_planejamento.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "aprovado", nota: 4 },
@@ -955,7 +960,7 @@ test("gate_planejamento: aprovar sem nota grava a decisão sem nota e a Tentativ
   const ticketPlanejar = base.tickets.find((t) => t.etapa === "planejar");
   assert.ok(ticketPlanejar);
   const agregado = { ...base, tentativas: comTentativaAberta(base.tentativas, ticketPlanejar, "exec-planejar", t1) };
-  const decidido = GATES.gate_planejamento.decidir(
+  const decidido = GATES.gate_planejamento.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -969,7 +974,7 @@ test("gate_planejamento: aprovar sem nota grava a decisão sem nota e a Tentativ
 
 test("gate_planejamento: o decisao_id é local ao ticket e avança a cada reprovação até a aprovação", () => {
   const decidirNoPlanejamento = (agregado: AgregadoDemanda, entrada: object) =>
-    GATES.gate_planejamento.decidir(agregado, enderecoDaDemanda, entrada, AUDITOR, contexto);
+    GATES.gate_planejamento.regra.decidir(agregado, enderecoDaDemanda, entrada, AUDITOR, contexto);
   const reprovarEResubmeter = (agregado: AgregadoDemanda, motivo: string) =>
     comPlanoSubmetido(
       decidirNoPlanejamento(agregado, { resultado: "reprovado", motivo }),
@@ -1000,7 +1005,7 @@ const reprovacaoDaRevisaoDaRodada = (motivo: string, correcoes: unknown = [corre
   correcoes,
 });
 const decidirRevisaoDaRodada = (agregado: AgregadoDemanda, entrada: object, ator: Ator) =>
-  GATES.gate_revisao_rodada.decidir(agregado, enderecoDaRodada, entrada, ator, contexto);
+  GATES.gate_revisao_rodada.regra.decidir(agregado, enderecoDaRodada, entrada, ator, contexto);
 const rodadaComRevisoresAnteriores = (): AgregadoDemanda =>
   comDecisoes(
     rodadaEm("revisar_rodada", [
@@ -1091,7 +1096,7 @@ test("gate_revisao_rodada: reprovar sem correções, com a lista vazia ou de out
   for (const correcoes of [undefined, [], [{ ...correcaoDaRodada(), rodada_id: 2 }]]) {
     exigirMesmaRejeicaoNoEnsaioENaDecisao(
       {
-        gate: GATES.gate_revisao_rodada,
+        gate: GATES.gate_revisao_rodada.regra,
         agregado: rodadaEmRevisao(),
         endereco: enderecoDaRodada,
         entrada: { resultado: "reprovado", motivo: "refazer", correcoes },
@@ -1198,7 +1203,7 @@ test("gate_revisao_rodada: motivos curtos de mais de três reprovações cabem i
 test("gate_revisao_demanda: aprovar conclui a revisão, abre encerrar_demanda e vai a encerrar_demanda", () => {
   const agregado = demandaEmRevisaoIntegral();
   const agenteRevisor = agenteDoTrabalho(3);
-  const decidido = GATES.gate_revisao_demanda.decidir(
+  const decidido = GATES.gate_revisao_demanda.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -1234,7 +1239,7 @@ test("gate_revisao_demanda: reprovar cria só rodadas novas, preserva as integra
   const agregado = demandaEmRevisaoIntegral();
   const agregadoAntes = clonarAgregadoDemanda(agregado);
   const agenteRevisor = agenteDoTrabalho(3);
-  const decidido = GATES.gate_revisao_demanda.decidir(
+  const decidido = GATES.gate_revisao_demanda.regra.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "falta tratar erro", correcoes: planoCorretivo() },
@@ -1290,7 +1295,7 @@ for (const [rotulo, correcoes] of [
   test(`gate_revisao_demanda: ensaiar e decidir rejeitam igualmente reprovar ${rotulo}`, () => {
     exigirMesmaRejeicaoNoEnsaioENaDecisao(
       {
-        gate: GATES.gate_revisao_demanda,
+        gate: GATES.gate_revisao_demanda.regra,
         agregado: demandaEmRevisaoIntegral(),
         endereco: enderecoDaDemanda,
         entrada: { resultado: "reprovado", motivo: "falta tratar erro", correcoes },
@@ -1309,7 +1314,7 @@ for (const [rotulo, agregado] of [
   test(`gate_revisao_demanda: ensaiar e decidir rejeitam igualmente aprovar com ${rotulo}`, () => {
     exigirMesmaRejeicaoNoEnsaioENaDecisao(
       {
-        gate: GATES.gate_revisao_demanda,
+        gate: GATES.gate_revisao_demanda.regra,
         agregado,
         endereco: enderecoDaDemanda,
         entrada: { resultado: "aprovado" },

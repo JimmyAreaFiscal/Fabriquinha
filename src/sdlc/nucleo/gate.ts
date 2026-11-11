@@ -3,17 +3,15 @@
 // Etapa dona dele, e `etapas/gates.ts` os junta.
 // Funções puras (agregado, endereço, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import type { AgregadoDemanda, Decisao, NomeGate, TicketDemanda } from "./demanda/agregado_demanda.ts";
-import { type Ator, exigirAtor } from "./ator.ts";
+import type { AgregadoDemanda, Decisao, TicketDemanda } from "./demanda/agregado_demanda.ts";
+import type { NomeGate, DefinicaoDoCatalogo } from "../../etapas/catalogo.ts";
+import { type Ator, exigirAtor } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
-import { type Endereco, ticketAtualDaEtapa } from "./item_de_trabalho/item_de_trabalho.ts";
-import {
-  type EstadoDemanda,
-  type EstadoRodada,
-  type EtapaTicket,
-  Motivo,
-} from "../../compartilhado/nucleo/primitivos.ts";
-import type { DefinicaoDaEtapa } from "../../etapas/definicao/definicao_da_etapa.ts";
+import { ticketAtualDaEtapa } from "./item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { Motivo } from "../../compartilhado/nucleo/primitivos.ts";
+import { type EstadoDemanda, type EstadoRodada } from "./ciclo_de_vida/ciclos.ts";
+import { type EtapaTicket } from "../../etapas/catalogo.ts";
 import { type ContextoDemanda, exigirDemandaDaEntrada } from "./transicoes/transicoes_demanda.ts";
 import { rodadaNoEstado, ticketAtivoDaEtapa } from "./transicoes/transicoes_rodada.ts";
 
@@ -85,7 +83,7 @@ export abstract class Gate {
   readonly etapaAncora: EtapaTicket;
 
   /** O nome, o decisor e a âncora são os que a Etapa dona do Gate declara. */
-  constructor({ nome: etapa, gate }: DefinicaoDaEtapa) {
+  constructor({ nome: etapa, gate }: DefinicaoDoCatalogo) {
     const declarado = existe(gate, `a etapa ${etapa} não declara gate`, "declare o gate na definição da etapa");
     this.nome = declarado.nome;
     this.decisor = declarado.decisor;

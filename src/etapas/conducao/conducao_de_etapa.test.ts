@@ -1,7 +1,7 @@
 // A base das conduções: o endereço que ela aceita (os passos da condução determinística são cobertos pela `ConducaoDeEncerrarDemanda`).
 import assert from "node:assert/strict";
 import { type TestContext, test } from "node:test";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../apoio-testes/cenarios_de_demanda.ts";

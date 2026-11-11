@@ -1,10 +1,10 @@
 // Rotas de leitura das demandas (CA-1 a CA-12 e CA-37) contra o servidor web de verdade.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../../qualidade/armazenamento/evidencia_demanda.ts";
+import { gravarAnexos } from "../../../sdlc/armazenamento/evidencia_demanda.ts";
 import { gravarUsoDeclarado } from "../../../custos/armazenamento/uso_declarado.ts";
 import { metricasDasDemandasDoPeriodo } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";

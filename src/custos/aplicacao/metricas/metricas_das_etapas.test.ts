@@ -8,9 +8,8 @@ import {
   gravarTicket,
 } from "../../../../apoio-testes/banco_de_metricas.ts";
 import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
+import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../../etapas/catalogo.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import { metricasDasEtapas } from "./metricas_das_etapas.ts";
 
 const valorDe = (metricas: ReturnType<typeof metricasDasEtapas>, etapa: EtapaTicket, tipo: string) =>

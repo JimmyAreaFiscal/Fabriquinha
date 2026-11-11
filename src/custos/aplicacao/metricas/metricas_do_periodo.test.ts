@@ -8,7 +8,7 @@ import {
   gravarUsoDeclarado,
   linhaDeUsoDeclarado,
 } from "../../../../apoio-testes/banco_de_metricas.ts";
-import type { TipoMetrica } from "../../nucleo/metrica.ts";
+import type { TipoMetrica } from "../../../etapas/definicao/tipos_declaraveis.ts";
 import { type MetricasDaEtapa, metricasDasDemandasDoPeriodo, metricasDosMeses, NIVEIS } from "./metricas_do_periodo.ts";
 
 const [FEV, MAR] = [1, 2];

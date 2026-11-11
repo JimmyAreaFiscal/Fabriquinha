@@ -9,8 +9,8 @@ import {
   prDaDemanda,
   TicketDemanda,
 } from "./agregado_demanda.ts";
-import { AUDITOR, FABRIQUINHA } from "../ator.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const demanda = (m: Record<string, unknown> = {}) => ({

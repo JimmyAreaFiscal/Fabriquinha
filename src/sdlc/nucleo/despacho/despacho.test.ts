@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import {
   Despacho,
@@ -11,7 +11,7 @@ import {
   situacaoDeUmaDemanda,
 } from "./despacho.ts";
 import { GATES } from "../../../etapas/gates.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { concluirSessaoRodada, registrarCorrecoesSessao } from "../transicoes/transicoes_rodada.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
@@ -258,7 +258,7 @@ test("reprovação do PR → sessão sem implementação → correção nova →
     rodadas: [rd(1, "gate_pr"), rd(2)],
     tickets: [tk(2, 1, "concluido"), tk(3, 1, "aberto", "encerrar_rodada"), tk(4, 2)],
   });
-  const sessao = GATES.gate_pr.decidir(
+  const sessao = GATES.gate_pr.regra.decidir(
     gate,
     Endereco.daRodada("I-1", 1),
     { resultado: "reprovado", motivo: "ajustar" },

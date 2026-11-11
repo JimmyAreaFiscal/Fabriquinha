@@ -22,6 +22,7 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositor
 import type { RegistroDaVerificacao } from "../../qualidade/aplicacao/evidencias/verificacoes.ts";
 import { cicloDoDespacho, type DepsDespacho } from "./despacho/despacho.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
+import { despachoDasEtapas } from "../../etapas/conducoes.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -118,13 +119,13 @@ async function cenario() {
 
   const verificacaoQuePassa = (tipo: RegistroDaVerificacao["tipo"]) => verificacaoDeTeste(tipo, true, undefined, []);
   piFalso.roteirizar([{ escreve: { "resolvido.txt": "base incorporada\n" } }]);
-  const deps: DepsDespacho = {
+  const deps: DepsDespacho = despachoDasEtapas({
     implementacao: {
       coletarVerificacoes: () =>
         Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(verificacaoQuePassa)),
     },
     verificacao: { intervaloMs: 1, carenciaMs: 0 },
-  };
+  });
   const config = configuracao(banco);
   return {
     banco,

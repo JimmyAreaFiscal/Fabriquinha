@@ -9,7 +9,7 @@ import {
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
-import { gravarAnexos } from "../../../qualidade/armazenamento/evidencia_demanda.ts";
+import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
 import { visaoDaDemanda } from "./visao_da_demanda.ts";
 
 function cenario() {

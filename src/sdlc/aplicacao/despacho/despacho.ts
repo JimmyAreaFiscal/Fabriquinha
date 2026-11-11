@@ -2,11 +2,11 @@
 // escolhe o trabalho pelo Despacho (o agente não escolhe), reserva e cria a execução na mesma transação e entrega
 // ao serviço da etapa. pi, git e testes ficam fora da transação: rodam em segundo plano, depois dela.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../nucleo/ator.ts";
+import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { TicketDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, etapaDoEstado } from "../../nucleo/ciclo_de_vida/ciclos.ts";
+import { CICLO_DA_DEMANDA, etapaDoEstado, EstadoDemanda } from "../../nucleo/ciclo_de_vida/ciclos.ts";
 import { predecessorasPendentes } from "../../nucleo/item_de_trabalho/dependencia_demanda.ts";
-import { formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
+import { formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import {
   Despacho,
   type DemandaParaDespacho,
@@ -16,8 +16,7 @@ import {
 } from "../../nucleo/despacho/despacho.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { CATALOGO_DE_ETAPAS, type EtapaConduzida, exigirEtapaConduzida } from "../../../etapas/catalogo.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EstadoDemanda } from "../../../compartilhado/nucleo/primitivos.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { reservarTicket } from "../../nucleo/despacho/reserva_ticket.ts";
 import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
@@ -28,17 +27,29 @@ import {
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../../../compartilhado/armazenamento/servico.ts";
-import type { ConducaoDeEtapa, DepsDaConducao } from "../../../etapas/conducao/conducao_de_etapa.ts";
-import { montarConducoesDasEtapas, type OpcoesDasConducoes } from "../../../etapas/conducoes.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "../revisao_demanda.ts";
-import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor, type CondutorDeTrabalhos } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
-/** @testes tipo que o teste usa para montar a entrada */
-export interface DepsDespacho extends OpcoesDasConducoes {
-  /** Substitui conduções nos testes que não sobem pi nem git. */
-  conducoesSubstitutas?: (deps: DepsDaConducao) => Partial<Record<EtapaConduzida, ConducaoDeEtapa>>;
+/** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
+export interface DepsDaConducao {
+  banco: DatabaseSync;
+  relogio: Relogio;
+  condutor: CondutorDeTrabalhos;
+  registro: typeof anotar;
+  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
+  limiteMin?: number;
+}
+
+/** O que a Etapa faz com o ticket que o despacho reservou para ela, até concluí-lo ou falhá-lo. */
+export interface ConducaoDoTicket {
+  conduzir(ticket: Endereco): Promise<void>;
+}
+
+/** O despacho não conhece as Etapas: quem o chama (a composição, cada teste) entrega as conduções delas. */
+export interface DepsDespacho {
+  montarConducoes(deps: DepsDaConducao): Readonly<Record<EtapaConduzida, ConducaoDoTicket>>;
 }
 
 const ehDaEtapaExterna = (estado: EstadoDemanda): boolean => {
@@ -95,12 +106,8 @@ function iniciarEtapa(
   relogio: Relogio,
 ): Promise<unknown> {
   exigirEtapaConduzida(t.etapa);
-  const depsDaConducao = depsDaConducaoDe(banco, c, relogio);
-  const CONDUCAO_DA_ETAPA: Record<EtapaConduzida, ConducaoDeEtapa> = {
-    ...montarConducoesDasEtapas(depsDaConducao, deps),
-    ...deps.conducoesSubstitutas?.(depsDaConducao),
-  };
-  return CONDUCAO_DA_ETAPA[t.etapa].conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));
+  const conducaoDaEtapa = deps.montarConducoes(depsDaConducaoDe(banco, c, relogio))[t.etapa];
+  return conducaoDaEtapa.conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */
@@ -124,7 +131,7 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
 export function cicloDoDespacho(
   banco: DatabaseSync,
   c: Configuracao,
-  deps: DepsDespacho = {},
+  deps: DepsDespacho,
   relogio: Relogio = relogioDoSistema,
 ): Promise<void>[] {
   const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco, relogio);
@@ -153,7 +160,7 @@ export function executarAgora(
   banco: DatabaseSync,
   ref: { demanda_id: string; ticket_id: number },
   c: Configuracao,
-  deps: DepsDespacho = {},
+  deps: DepsDespacho,
   relogio: Relogio = relogioDoSistema,
 ): MotivoDeRecusa | Promise<void> {
   return escrever(banco, () => {

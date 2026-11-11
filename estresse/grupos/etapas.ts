@@ -17,16 +17,17 @@ import { basename, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { prDaDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { AUDITOR, type Ator } from "../../src/sdlc/nucleo/ator.ts";
-import { Endereco } from "../../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { AUDITOR, type Ator } from "../../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { registrarCorrecoesSessao } from "../../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/qualidade/aplicacao/evidencias/verificacoes.ts";
-import { type DepsDespacho, cicloDoDespacho } from "../../src/sdlc/aplicacao/despacho/despacho.ts";
-import { interromperExecucaoDemanda } from "../../src/trabalho_agentico/aplicacao/execucao_demanda.ts";
-import { decidirGate } from "../../src/sdlc/aplicacao/gates/decidir_gate.ts";
+import { cicloDoDespacho } from "../../src/sdlc/aplicacao/despacho/despacho.ts";
+import { despachoDasEtapas } from "../../src/etapas/conducoes.ts";
+import { interromperExecucaoDemanda } from "../../src/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { decidirGate } from "../../src/etapas/gates.ts";
 import * as gestao from "../../src/sdlc/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
@@ -213,10 +214,10 @@ const verificacoes = (): RegistroDaVerificacao[] =>
   (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => verificacaoDeTeste(tipo, true));
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
-const deps: DepsDespacho = {
+const deps = despachoDasEtapas({
   implementacao: { coletarVerificacoes: () => Promise.resolve(verificacoes()) },
   verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
-};
+});
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {

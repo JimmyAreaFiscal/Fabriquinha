@@ -14,12 +14,16 @@ import type { AgregadoDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
-import { FABRIQUINHA } from "../../nucleo/ator.ts";
+import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { reservarTicket } from "../../nucleo/despacho/reserva_ticket.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../gestao_demandas.ts";
-import { falhaPorServicoReiniciado, type ResultadoDaTentativa, type Tentativa } from "../../nucleo/tentativa.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type Tentativa } from "../../nucleo/tentativa.ts";
+import {
+  falhaPorServicoReiniciado,
+  type ResultadoDaTentativa,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
 import {
   carregarTrabalhosDoTicket,
@@ -32,6 +36,7 @@ import { ConducaoDeImplementar } from "../../../etapas/implementar/conducao_de_i
 import { ConducaoDeResolverConflito } from "../../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
 import { cicloDoDespacho, demandasParaDespacho, type DepsDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
+import { despachoDasEtapas } from "../../../etapas/conducoes.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -195,16 +200,17 @@ const conduzirFalso: ConduzirFalso = (banco, endereco) => {
   return Promise.resolve();
 };
 /** Despacho cujo `implementar` e `resolver_conflito` rodam `conduzir` no lugar da condução de verdade. */
-const comConducaoFalsa = (conduzir: ConduzirFalso): DepsDespacho => ({
-  conducoesSubstitutas: (d) => ({
-    implementar: new (class extends ConducaoDeImplementar {
-      override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
-    })(d),
-    resolver_conflito: new (class extends ConducaoDeResolverConflito {
-      override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
-    })(d),
-  }),
-});
+const comConducaoFalsa = (conduzir: ConduzirFalso): DepsDespacho =>
+  despachoDasEtapas({
+    conducoesSubstitutas: (d) => ({
+      implementar: new (class extends ConducaoDeImplementar {
+        override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
+      })(d),
+      resolver_conflito: new (class extends ConducaoDeResolverConflito {
+        override conduzir = (endereco: Endereco) => conduzir(this.deps.banco, endereco);
+      })(d),
+    }),
+  });
 const deps = comConducaoFalsa(conduzirFalso);
 const silenciar = (t: TestContext) => t.mock.method(console, "error", () => undefined);
 
@@ -309,7 +315,7 @@ test("demandasParaDespacho lê planejamento, execução, revisão e encerramento
 test("CA-7: repositório inexistente não deixa o ticket em execução e o motivo vai ao log", async () => {
   const { c, banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config));
+  await Promise.all(cicloDoDespacho(banco, config, despachoDasEtapas()));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["falhou", 0]);
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
 });
@@ -317,7 +323,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 3, { rodadas: ["concluida"], tickets: [{ etapa: "implementar", rodada: 1, estado: "concluido" }] });
-  const fins = cicloDoDespacho(banco, config);
+  const fins = cicloDoDespacho(banco, config, despachoDasEtapas());
   const ag = carregarDemanda(banco, "I-3");
   assert.equal(ag.demanda.estado, "revisar_demanda");
   assert.deepEqual(
@@ -339,7 +345,7 @@ test("a revisão integral reprovada pelo domínio vai ao log e a demanda segue e
 test("o planejar sem predecessoras pendentes é reservado e iniciado pelo ciclo", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 6, { estado: "planejar", tickets: [{ etapa: "planejar" }] });
-  const fins = cicloDoDespacho(banco, config);
+  const fins = cicloDoDespacho(banco, config, despachoDasEtapas());
   assert.deepEqual([estadoDoTicket(banco, 6, 1), aberta(banco, 6, 1)], ["em_execucao", 1]);
   await Promise.all(fins);
 });
@@ -347,7 +353,7 @@ test("o planejar sem predecessoras pendentes é reservado e iniciado pelo ciclo"
 test("o revisar_rodada despachado reserva o ticket e a falha de preparação o leva a falhou", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 4, { rodadas: ["revisar_rodada"], tickets: [{ etapa: "revisar_rodada", rodada: 1 }] });
-  const fins = cicloDoDespacho(banco, config);
+  const fins = cicloDoDespacho(banco, config, despachoDasEtapas());
   assert.equal(estadoDoTicket(banco, 4, 1), "em_execucao");
   await Promise.all(fins);
   assert.equal(estadoDoTicket(banco, 4, 1), "falhou");
@@ -444,13 +450,13 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   const { banco, config } = await cenario(3, true);
   demanda(banco, 2, { rodadas: ["encerrar_rodada"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
-  await Promise.all(cicloDoDespacho(banco, config));
+  await Promise.all(cicloDoDespacho(banco, config, despachoDasEtapas()));
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
 
   const outro = await cenario(3, true);
   demanda(outro.banco, 2, { rodadas: ["encerrar_rodada"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
   piFalso.roteirizar([{}]);
-  await Promise.all(cicloDoDespacho(outro.banco, outro.config));
+  await Promise.all(cicloDoDespacho(outro.banco, outro.config, despachoDasEtapas()));
   assert.equal(estadoDoTicket(outro.banco, 2, 1), "falhou"); // conclusão reprovada: não fica preso em execução
 });
 
@@ -459,7 +465,7 @@ const encerrar = (estado = "aberto"): TicketSpec => ({ etapa: "encerrar_demanda"
 test("CA-1 e CA-12: o ciclo reserva o encerrar_demanda sem abrir agente; a falha do encerramento falha o ticket", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
-  const fins = cicloDoDespacho(banco, config);
+  const fins = cicloDoDespacho(banco, config, despachoDasEtapas());
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
   await Promise.all(fins);
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
@@ -471,7 +477,7 @@ test("a recusa do encerramento que não falhou o ticket não o deixa preso em ex
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
   banco.exec("DELETE FROM linguagem_projeto;"); // sem a configuração do SDLC
-  await Promise.all(cicloDoDespacho(banco, config));
+  await Promise.all(cicloDoDespacho(banco, config, despachoDasEtapas()));
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
 });
 
@@ -479,7 +485,8 @@ test("CA-3 e CA-4: executar agora no encerrar_demanda reserva sem agente; com o 
   const { banco, config } = await cenario(1);
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
   demanda(banco, 3, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
-  const agora = (n: number) => executarAgora(banco, { demanda_id: `I-${String(n)}`, ticket_id: 1 }, config);
+  const agora = (n: number) =>
+    executarAgora(banco, { demanda_id: `I-${String(n)}`, ticket_id: 1 }, config, despachoDasEtapas());
   const fim = agora(2);
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
   assert.deepEqual(agora(3), { tipo: "limite_de_paralelismo", em_uso: 1, limite: 1 });
@@ -524,7 +531,7 @@ for (const [caso, ticket] of [
     const { c, banco, config } = await cenario(3, true);
     demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), ...ticket }] });
     piFalso.roteirizar([{}]);
-    await Promise.all(cicloDoDespacho(banco, config));
+    await Promise.all(cicloDoDespacho(banco, config, despachoDasEtapas()));
     conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, `despacho_${caso}`);
   });
 }
@@ -537,7 +544,7 @@ test("o despacho repassa o timeoutMin recebido às conduções", async () => {
     cicloDoDespacho(
       banco,
       { ...config, timeoutMin: 0.5 },
-      {
+      despachoDasEtapas({
         conducoesSubstitutas: (d) => ({
           implementar: new (class extends ConducaoDeImplementar {
             override conduzir = () => {
@@ -546,7 +553,7 @@ test("o despacho repassa o timeoutMin recebido às conduções", async () => {
             };
           })(d),
         }),
-      },
+      }),
     ),
   );
   assert.deepEqual(limites, [0.5]);

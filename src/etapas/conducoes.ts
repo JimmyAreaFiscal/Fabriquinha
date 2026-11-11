@@ -1,7 +1,9 @@
 // As conduções das Etapas que a Fabriquinha conduz, uma por pasta: o despacho entrega o ticket reservado à da Etapa dele.
-// Fica fora do catálogo, que é valor puro, para o motor ler as definições sem trazer pi, git nem banco.
+// Fica fora do catálogo, que é valor puro, para o motor ler as definições sem trazer pi, git nem banco; quem chama o
+// despacho (a composição, cada teste) lhe entrega estas conduções (`despachoDasEtapas`).
 import type { EtapaConduzida } from "./catalogo.ts";
-import type { ConducaoDeEtapa, DepsDaConducao } from "./conducao/conducao_de_etapa.ts";
+import type { ConducaoDeEtapa } from "./conducao/conducao_de_etapa.ts";
+import type { DepsDaConducao, DepsDespacho } from "../sdlc/aplicacao/despacho/despacho.ts";
 import { ConducaoDeAjustarResultado } from "./ajustar_resultado/conducao_de_ajustar_resultado.ts";
 import {
   ConducaoDeEncerrarDemanda,
@@ -15,16 +17,18 @@ import { ConducaoDeRevisarDemanda } from "./revisar_demanda/conducao_de_revisar_
 import { ConducaoDeRevisarRodada } from "./revisar_rodada/conducao_de_revisar_rodada.ts";
 
 /** O que as conduções recebem além das dependências comuns; injetável nos testes. */
-export interface OpcoesDasConducoes {
+interface OpcoesDasConducoes {
   /** Coleta das verificações e limite do commit do `implementar` e do `resolver_conflito`. */
   implementacao?: OpcoesDaImplementacao;
   /** Espera da verificação do PR no `encerrar_demanda`. */
   verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
+  /** Substitui conduções nos testes que não sobem pi nem git. */
+  conducoesSubstitutas?: (deps: DepsDaConducao) => Partial<Record<EtapaConduzida, ConducaoDeEtapa>>;
 }
 
 export const montarConducoesDasEtapas = (
   deps: DepsDaConducao,
-  { implementacao, verificacao }: OpcoesDasConducoes,
+  { implementacao, verificacao, conducoesSubstitutas }: OpcoesDasConducoes = {},
 ): Record<EtapaConduzida, ConducaoDeEtapa> => ({
   planejar: new ConducaoDePlanejar(deps),
   implementar: new ConducaoDeImplementar(deps, implementacao),
@@ -34,4 +38,10 @@ export const montarConducoesDasEtapas = (
   encerrar_rodada: new ConducaoDeEncerrarRodada(deps),
   encerrar_demanda: new ConducaoDeEncerrarDemanda(deps, { verificacao }),
   ajustar_resultado: new ConducaoDeAjustarResultado(deps),
+  ...conducoesSubstitutas?.(deps),
+});
+
+/** O despacho com as conduções das Etapas: o que a composição entrega a cada ciclo do agendador e "Executar agora". */
+export const despachoDasEtapas = (opcoes: OpcoesDasConducoes = {}): DepsDespacho => ({
+  montarConducoes: (deps) => montarConducoesDasEtapas(deps, opcoes),
 });

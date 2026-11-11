@@ -1,16 +1,20 @@
 // A condução do `encerrar_rodada`: o pi escreve a documentação do PR; depois dele a Fabriquinha grava a produtividade,
 // incorpora a ponta da demanda, publica o PR da rodada e o confere. O ticket fica em execução, âncora do gate do PR.
 import { existe } from "../../compartilhado/nucleo/erros.ts";
+import { secaoDoPromptDoEncerrarRodada } from "./secao_do_prompt.ts";
 import { DEFINICAO_DO_ENCERRAR_RODADA } from "./definicao.ts";
-import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { falhaDoErro } from "../../sdlc/nucleo/tentativa.ts";
+import type { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { falhaDoErro } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
-import { aprovarPRRodadaSeAutomatico } from "../../sdlc/aplicacao/gates/aprovacao_pr_rodada.ts";
+import { aprovarPRRodadaSeAutomatico } from "./gate_do_pr/aprovacao_pr_rodada.ts";
 import { conferirEncerramentoRodada, type RefRodada } from "./encerramento_rodada.ts";
-import { ConducaoAgentica, type DepsDaConducao, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
+import { ConducaoAgentica, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
+import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 
 export class ConducaoDeEncerrarRodada extends ConducaoAgentica {
+  protected override readonly secaoDoPrompt = secaoDoPromptDoEncerrarRodada;
+
   constructor(deps: DepsDaConducao) {
     super(DEFINICAO_DO_ENCERRAR_RODADA, deps);
   }

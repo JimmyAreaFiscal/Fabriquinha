@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../ator.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 
 const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda, satisfazDependencia } from "./cancelamento_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { EstadoDemanda } from "../../../compartilhado/nucleo/primitivos.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import type { EstadoDemanda } from "./ciclos.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../tentativa.ts";
 
 const t0 = "2026-01-01T00:00:00Z";

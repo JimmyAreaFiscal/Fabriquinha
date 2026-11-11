@@ -1,9 +1,10 @@
 // O Gate da demanda, dono do `entender_e_desenhar`: o Auditor aprova a demanda enviada ou a cancela.
 import type { AgregadoDemanda, Decisao, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { ancoraNaDemanda, Gate } from "../../sdlc/nucleo/gate.ts";
-import { criarTicket, type Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { criarTicket } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { exigirSemFalha, mudarTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { DEFINICAO_DO_ENTENDER_E_DESENHAR } from "./definicao.ts";
 

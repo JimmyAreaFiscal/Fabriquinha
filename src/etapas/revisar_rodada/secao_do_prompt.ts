@@ -3,11 +3,11 @@
 import {
   arquivosAlteradosDoRevisor,
   type ArquivosAlterados,
-  type ContextoDoPrompt,
   linhaDoAnexo,
   secao,
   secaoVerificacoesJaFeitas,
-} from "../definicao/secoes_do_prompt.ts";
+} from "../prompt/secoes_do_prompt.ts";
+import { type ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
 
 type LinhaFitness = Record<"nome" | "descricao" | "comando" | "log", string> & {
   codigoSaida: number | null;

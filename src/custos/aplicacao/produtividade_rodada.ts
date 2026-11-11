@@ -8,7 +8,7 @@ import {
   type TrabalhoGerenciado,
   type UsoModeloExecucao,
 } from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { formatarTicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 
 interface ConsumoRodada {
   execucoes: number;

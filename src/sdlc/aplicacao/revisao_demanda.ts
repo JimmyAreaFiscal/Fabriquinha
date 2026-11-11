@@ -1,6 +1,6 @@
 // Revisão integral da demanda (comparacao-sdlc-implementacao.md §§3, 4, 8): inicia a revisão quando as rodadas concluem.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/demanda/agregado_demanda.ts";
 import { iniciarRevisaoDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";

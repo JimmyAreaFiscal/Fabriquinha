@@ -1,8 +1,7 @@
 // A definição do `encerrar_rodada`: o agente documenta o PR, e a Fabriquinha o publica e confere para o gate do PR.
 import { type DefinicaoDaEtapa, evidenciaExigida, EXTENSOES_DO_AGENTE } from "../definicao/definicao_da_etapa.ts";
-import { secaoDoPromptDoEncerrarRodada } from "./secao_do_prompt.ts";
 
-export const DEFINICAO_DO_ENCERRAR_RODADA: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_ENCERRAR_RODADA = {
   nome: "encerrar_rodada",
   objetivo: "Fechar a rodada: mensagem e aula do código, produtividade e PR aberto e conferido.",
   escopo: "rodada",
@@ -21,8 +20,7 @@ export const DEFINICAO_DO_ENCERRAR_RODADA: DefinicaoDaEtapa = {
     extensoes: EXTENSOES_DO_AGENTE,
   },
   instrucao: new URL("encerrar_rodada.md", import.meta.url),
-  secaoDoPrompt: secaoDoPromptDoEncerrarRodada,
   gate: { nome: "gate_pr", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "ajustar_resultado" },
   devolvePara: "implementar",
   papel: "publica_o_pr_da_rodada",
-};
+} as const satisfies DefinicaoDaEtapa;

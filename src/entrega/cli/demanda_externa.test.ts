@@ -11,7 +11,7 @@ import { after, test } from "node:test";
 import { caminhoArquivo, lerLinhas } from "../../../apoio-testes/acesso_ao_banco.ts";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { mensagem } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { executarFabriquinha } from "../../composicao/cli.ts";
 import { ErroDeUso } from "./comando.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";

@@ -22,7 +22,7 @@ import {
 } from "../../../apoio-testes/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { CondutorDeTrabalhos } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { commitarTicketDemanda } from "../../repositorio/aplicacao/espaco/commit_ticket_demanda.ts";
+import { commitarTicketDemanda } from "./commit_do_ticket.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
 
 const conduzir = (

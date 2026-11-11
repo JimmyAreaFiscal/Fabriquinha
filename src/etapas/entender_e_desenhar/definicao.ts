@@ -14,7 +14,7 @@ const OPCIONAIS_DEMANDA = [
 export const TIPOS_DA_DEMANDA = [...OBRIGATORIAS_DEMANDA, ...OPCIONAIS_DEMANDA] as const;
 export type TipoDaDemanda = (typeof TIPOS_DA_DEMANDA)[number];
 
-export const DEFINICAO_DO_ENTENDER_E_DESENHAR: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_ENTENDER_E_DESENHAR = {
   nome: "entender_e_desenhar",
   objetivo: "Entender a necessidade e desenhar a solução, com critérios de aceite, até a demanda ser aprovada.",
   escopo: "demanda",
@@ -31,4 +31,4 @@ export const DEFINICAO_DO_ENTENDER_E_DESENHAR: DefinicaoDaEtapa = {
   metricas: ["uso", "aprovacoes_e_reprovacoes"],
   capacidades: SEM_CAPACIDADES,
   gate: { nome: "gate_demanda", decisor: "auditor", esperaEmEstadoProprio: true, reprovadoVaiPara: "cancelada" },
-};
+} as const satisfies DefinicaoDaEtapa;

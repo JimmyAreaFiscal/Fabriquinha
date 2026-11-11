@@ -1,10 +1,11 @@
 // O Despacho (CONCEITOS.md §9): a regra única do que roda agora. Seleciona os prontos, ordena, respeita o limite de
 // paralelismo e diz, para cada item parado, por que não foi despachado. Pura: a aplicação monta a situação e reserva.
 import { z } from "zod";
-import { type AgregadoDemanda, NomeGate, type TicketDemanda } from "../demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, type TicketDemanda } from "../demanda/agregado_demanda.ts";
+import { NomeGate, CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { etapaDoEstado, gateQueEsperaGenteNaRodada } from "../ciclo_de_vida/ciclos.ts";
-import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
-import { Endereco, estaOcupado, GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
+import { estaOcupado, GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { Motivo, motivo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { motivoDaFalhaDoTicket, tentativasDoTicket } from "../tentativa.ts";
 import { podeTentarEncerramento } from "../transicoes/transicoes_encerramento.ts";

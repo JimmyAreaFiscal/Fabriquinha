@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { EtapaTicket } from "../catalogo.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../sdlc/nucleo/tentativa.ts";
-import { montarPromptDemanda } from "./prompt_demanda.ts";
+import { promptDaEtapa } from "../../../apoio-testes/prompt_da_etapa.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const NOVAS = EtapaTicket.options.filter((e) => e !== "entender_e_desenhar");
@@ -62,8 +62,8 @@ const reaberto = (instrucao: string) =>
 const montar = (
   etapa: string,
   campos: Partial<TicketDemanda> = {},
-  retomada?: Parameters<typeof montarPromptDemanda>[0]["retomada"],
-) => montarPromptDemanda({ ...base, ticket: ticket(etapa, campos), retomada });
+  retomada?: Parameters<typeof promptDaEtapa>[0]["retomada"],
+) => promptDaEtapa({ ...base, ticket: ticket(etapa, campos), retomada });
 
 test("as oito etapas montam com contexto da demanda, da rodada, do ticket e o modo próprio (CA-1)", () => {
   for (const etapa of NOVAS) {
@@ -170,7 +170,7 @@ test("I-280 CA-5: planejar explica os três níveis de arquivos previstos, a inc
 
 test("CA-3, CA-4: critério que nenhuma rodada cita aparece na revisão da demanda e não na da rodada", () => {
   const soCA1 = { ...ag, criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-1" }] };
-  const prompt = (etapa: string) => montarPromptDemanda({ ...base, ag: soCA1, ticket: ticket(etapa) });
+  const prompt = (etapa: string) => promptDaEtapa({ ...base, ag: soCA1, ticket: ticket(etapa) });
   const demanda = prompt("revisar_demanda");
   assert.match(demanda, /## Critérios de aceite da demanda\n[\s\S]*\*\*CA-2\*\*/);
   const citados = prompt("revisar_rodada").split("Critérios citados:")[1] ?? "";
@@ -245,7 +245,7 @@ test("sem critérios, citações, título, descrição, dependências nem caminh
     arquivos_previstos_demanda: [],
     versoes_plano: [],
   };
-  const p = montarPromptDemanda({
+  const p = promptDaEtapa({
     ...base,
     ag: vazio,
     ticket: ticket("implementar", { titulo: undefined, descricao: undefined }),
@@ -333,7 +333,7 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
     anexo("outro.log", "matriz_fitness", 8),
   ];
   const montarCom = (agregado: AgregadoDemanda, etapa: string, rodada_id = 2) =>
-    montarPromptDemanda({ ...base, ag: agregado, anexos, ticket: ticket(etapa, { rodada_id }) });
+    promptDaEtapa({ ...base, ag: agregado, anexos, ticket: ticket(etapa, { rodada_id }) });
 
   const planejar = montarCom(comEvidencias, "planejar");
   for (const trecho of [
@@ -408,7 +408,7 @@ test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivo
     [4, [{ pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" }]],
   ]);
   const revisaoSeguinte = (campos: Partial<TicketDemanda>) =>
-    montarPromptDemanda({
+    promptDaEtapa({
       ...base,
       ag: comHistorico,
       perguntasDasRevisoesAnteriores: perguntas,
@@ -425,7 +425,7 @@ test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivo
   assert.ok(!secao.includes("T6 (revisar_rodada), reprovado: o teste de X quebrou Y\n  - Corretivos"));
 
   assert.match(montar("revisar_rodada"), /## Revisões anteriores da rodada\n\n.*\n\n\(nenhuma\)/s);
-  const semPerguntas = montarPromptDemanda({
+  const semPerguntas = promptDaEtapa({
     ...base,
     ag: comHistorico,
     ticket: ticket("revisar_rodada", { ticket_id: 8 }),
@@ -486,7 +486,7 @@ test("as revisões recebem o que a Fabriquinha já verificou no último commit d
     [6, "c".repeat(40)],
   ]);
   const montarCom = (etapa: string) =>
-    montarPromptDemanda({
+    promptDaEtapa({
       ...base,
       ag: comCommits,
       ticket: ticket(etapa),

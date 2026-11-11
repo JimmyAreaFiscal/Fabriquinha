@@ -19,7 +19,7 @@ import {
   garantirWorktreeRodada,
 } from "../../../repositorio/infra/worktree/worktree-demanda.ts";
 import type { MotivoDeRecusa } from "../../../sdlc/nucleo/despacho/despacho.ts";
-import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import {
   DecisaoDoPR,

@@ -2,7 +2,10 @@
 // dos processos que uma instância anterior do serviço deixou abertos. Quem mata o pi é o `CondutorDeTrabalhos`.
 import type { DatabaseSync } from "node:sqlite";
 import { existe, mensagem } from "../../../compartilhado/nucleo/erros.ts";
-import { falhaPorServicoReiniciado, type FalhaDaTentativa } from "../../../sdlc/nucleo/tentativa.ts";
+import {
+  falhaPorServicoReiniciado,
+  type FalhaDaTentativa,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import {
   acumularUso,
   encerrarProcesso,
@@ -21,7 +24,6 @@ import {
 } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
 import type { Harness } from "../../../harness/harness.ts";
-import { falharTicketDemanda } from "../../../sdlc/aplicacao/despacho/fechamento_ticket.ts";
 
 export type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 
@@ -34,6 +36,14 @@ interface ProcessoEncerravel {
 
 /** Avisa quem assina a sessão que o estado dela pode ter mudado (`CondutorDeTrabalhos.avisar`). */
 export type AvisarSessao = (sessao: string, log: string) => void;
+
+/** Falha o ticket que ficou sem processo, sem tocar etapa nem gate: é do motor do SDLC, que quem chama entrega. */
+export type FalharTicketSemProcesso = (
+  banco: DatabaseSync,
+  ref: TicketRef,
+  falha: FalhaDaTentativa,
+  relogio: Relogio,
+) => void;
 
 /** A linha de Uso como o banco a guarda, na execução; custo desconhecido fica sem a chave, nunca zero. */
 const usoDaExecucao = (execucao_id: string, l: LinhaDeUso): UsoModeloExecucao => ({
@@ -101,6 +111,7 @@ export function encerrarProcessoOrfao(
   falha: FalhaDaTentativa,
   avisar: AvisarSessao,
   harness: LeitorDeUso,
+  falharTicket: FalharTicketSemProcesso,
   relogio: Relogio = relogioDoSistema,
 ): void {
   const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
@@ -116,7 +127,7 @@ export function encerrarProcessoOrfao(
   );
   const { log } = pastasDoProcesso(raizDo(banco), id);
   encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log, harness, relogio);
-  falharTicketDemanda(banco, ref, falha, relogio);
+  falharTicket(banco, ref, falha, relogio);
   avisar(sessao.id, log);
 }
 
@@ -125,15 +136,17 @@ export function recuperarProcessosAbertos(
   banco: DatabaseSync,
   avisar: AvisarSessao,
   harness: LeitorDeUso,
+  falharTicket: FalharTicketSemProcesso,
   relogio: Relogio = relogioDoSistema,
 ): void {
   for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
-    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar, harness, relogio);
+    const ref = { demanda_id, ticket_id };
+    encerrarProcessoOrfao(banco, ref, id, falhaPorServicoReiniciado, avisar, harness, falharTicket, relogio);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
   const presos = ticketsEmExecucaoSemProcesso(banco);
   for (const { demanda_id, ticket_id } of presos) {
-    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado, relogio);
+    falharTicket(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado, relogio);
   }
 }

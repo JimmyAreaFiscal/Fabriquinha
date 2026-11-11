@@ -3,10 +3,15 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CATALOGO_DE_ETAPAS, etapaDoPapel, exigirEtapaConduzida, oAgenteDecideOGate } from "./catalogo.ts";
+import {
+  CATALOGO_DE_ETAPAS,
+  etapaDoPapel,
+  exigirEtapaConduzida,
+  oAgenteDecideOGate,
+  EtapaTicket,
+  NomeGate,
+} from "./catalogo.ts";
 import { catalogoDaEtapa } from "./definicao/evidencia_exigida.ts";
-import { EtapaTicket } from "../compartilhado/nucleo/primitivos.ts";
-import { NomeGate } from "../sdlc/nucleo/demanda/agregado_demanda.ts";
 
 // A tabela Etapa × Executor × Escopo do CONCEITOS.md §2: Não Gerenciado = externo, Fabriquinha = fabriquinha,
 // Gerenciado = agente_autonomo, Gerenciado (interativo) = agente_interativo.
@@ -24,7 +29,18 @@ const TABELA_DO_CONCEITOS = {
 
 test("o catálogo tem as 9 etapas e o executor e o escopo de cada uma batem com o CONCEITOS.md §2", () => {
   assert.deepEqual(Object.keys(CATALOGO_DE_ETAPAS).sort(), Object.keys(TABELA_DO_CONCEITOS).sort());
-  // O enum fica em compartilhado/nucleo/primitivos.ts, que o catálogo importa: as chaves do catálogo o repetem, na ordem.
+  // O enum sai das chaves do catálogo, na ordem; os nomes vão ao banco e ao contrato, então ficam congelados aqui.
+  assert.deepEqual(EtapaTicket.options, [
+    "entender_e_desenhar",
+    "planejar",
+    "implementar",
+    "revisar_rodada",
+    "encerrar_rodada",
+    "ajustar_resultado",
+    "revisar_demanda",
+    "encerrar_demanda",
+    "resolver_conflito",
+  ]);
   assert.deepEqual(Object.keys(CATALOGO_DE_ETAPAS), EtapaTicket.options);
   assert.deepEqual(
     Object.fromEntries(Object.values(CATALOGO_DE_ETAPAS).map((d) => [d.nome, [d.executor, d.escopo]])),
@@ -79,7 +95,15 @@ test("cada papel do motor é de uma Etapa só, e as revisões são as Etapas cuj
   );
 });
 
-test("o enum NomeGate do agregado repete os Gates que as Etapas declaram, um por Etapa", () => {
+test("o enum NomeGate tem os Gates que as Etapas declaram, um por Etapa, com os nomes de sempre", () => {
   const gates = Object.values(CATALOGO_DE_ETAPAS).flatMap((d) => (d.gate ? [d.gate.nome] : []));
-  assert.deepEqual([...gates].sort(), [...NomeGate.options].sort());
+  assert.deepEqual(NomeGate.options, gates);
+  // Os nomes vão às Decisões gravadas e ao contrato, então ficam congelados aqui.
+  assert.deepEqual([...NomeGate.options].sort(), [
+    "gate_demanda",
+    "gate_planejamento",
+    "gate_pr",
+    "gate_revisao_demanda",
+    "gate_revisao_rodada",
+  ]);
 });

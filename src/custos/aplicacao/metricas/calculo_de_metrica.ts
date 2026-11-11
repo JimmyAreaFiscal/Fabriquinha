@@ -2,9 +2,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { demandaExiste } from "../../armazenamento/metricas_demanda.ts";
 import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
-import type { DefinicaoDaMetrica, Recorte, TipoMetrica } from "../../nucleo/metrica.ts";
-import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../../etapas/catalogo.ts";
+import type { DefinicaoDaMetrica, Recorte } from "../../nucleo/metrica.ts";
+import type { TipoMetrica } from "../../../etapas/definicao/tipos_declaraveis.ts";
 
 /** O valor de uma Métrica numa Etapa, com a definição que a tela mostra. */
 export interface ValorDaMetrica {

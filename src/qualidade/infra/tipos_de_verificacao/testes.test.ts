@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ComandoRodado } from "../../nucleo/evidencias/schemas.ts";
+import { ComandoRodado } from "../../../sdlc/nucleo/evidencias/schemas.ts";
 import { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";

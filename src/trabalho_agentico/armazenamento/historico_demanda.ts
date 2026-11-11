@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../etapas/catalogo.ts";
 
 interface FiltroTrabalhosDoHistorico {
   projeto?: string;

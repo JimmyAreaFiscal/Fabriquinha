@@ -11,9 +11,11 @@ import {
   gateQueEsperaGenteNaRodada,
   PRIMEIRA_ETAPA_DA_DEMANDA,
   PRIMEIRA_ETAPA_DA_RODADA,
+  EstadoDemanda,
+  EstadoRodada,
 } from "./ciclos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../../compartilhado/nucleo/primitivos.ts";
 
+// `satisfies Record<Estado…>`: o tipo derivado do catálogo tem exatamente estes estados, nem um a mais nem um a menos.
 const TRANSICOES_DA_DEMANDA = {
   entender_e_desenhar: ["gate_demanda", "cancelada"],
   gate_demanda: ["planejar", "cancelada"],
@@ -25,7 +27,7 @@ const TRANSICOES_DA_DEMANDA = {
   concluida: ["arquivada"],
   arquivada: [],
   cancelada: [],
-};
+} satisfies Record<EstadoDemanda, readonly EstadoDemanda[]>;
 
 const TRANSICOES_DA_RODADA = {
   implementar: ["revisar_rodada"],
@@ -34,7 +36,7 @@ const TRANSICOES_DA_RODADA = {
   gate_pr: ["ajustar_resultado", "concluida"],
   ajustar_resultado: ["implementar"],
   concluida: [],
-};
+} satisfies Record<EstadoRodada, readonly EstadoRodada[]>;
 
 const ETAPA_DO_ESTADO = {
   entender_e_desenhar: "entender_e_desenhar",
@@ -65,6 +67,7 @@ const classificacao = <Estado extends string>(ciclo: CicloDeVida<Estado>, estado
 });
 
 test("o ciclo da demanda tem os estados, as transições e a classificação de sempre", () => {
+  assert.deepEqual(EstadoDemanda.options, Object.keys(TRANSICOES_DA_DEMANDA));
   assert.deepEqual(Object.keys(CICLO_DA_DEMANDA.transicoes), EstadoDemanda.options);
   assert.deepEqual(comDestinosOrdenados(CICLO_DA_DEMANDA.transicoes), comDestinosOrdenados(TRANSICOES_DA_DEMANDA));
   assert.deepEqual(classificacao(CICLO_DA_DEMANDA, EstadoDemanda.options), {
@@ -83,6 +86,7 @@ test("o ciclo da demanda tem os estados, as transições e a classificação de 
 });
 
 test("o ciclo da rodada tem os estados, as transições e a classificação de sempre", () => {
+  assert.deepEqual(EstadoRodada.options, Object.keys(TRANSICOES_DA_RODADA));
   assert.deepEqual(Object.keys(CICLO_DA_RODADA.transicoes), EstadoRodada.options);
   assert.deepEqual(comDestinosOrdenados(CICLO_DA_RODADA.transicoes), comDestinosOrdenados(TRANSICOES_DA_RODADA));
   assert.deepEqual(classificacao(CICLO_DA_RODADA, EstadoRodada.options), {

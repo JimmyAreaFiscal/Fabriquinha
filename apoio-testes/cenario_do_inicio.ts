@@ -1,6 +1,6 @@
 // O cenário do Início: uma demanda em cada lugar do board, num banco com o projeto `loja`, usado pelos testes da consulta e da rota.
 import type { DatabaseSync } from "node:sqlite";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "./cenarios_de_demanda.ts";
 
 export const em = (minuto: number) => `2026-01-01T00:${String(minuto).padStart(2, "0")}:00.000Z`;

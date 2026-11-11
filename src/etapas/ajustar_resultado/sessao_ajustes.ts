@@ -5,9 +5,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../../sdlc/nucleo/ator.ts";
+import type { Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
@@ -19,10 +19,7 @@ import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { descartarAlteracoes, exigirGitNoAmbiente } from "../../repositorio/infra/worktree/worktree.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
-import {
-  type OpcoesExecucaoDemanda,
-  iniciarExecucaoDemanda,
-} from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
+import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../../sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { encerrarPiVivo } from "../conducao/pi_vivo.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";

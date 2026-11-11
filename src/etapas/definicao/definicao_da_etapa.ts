@@ -1,23 +1,22 @@
 // O que cada Etapa do SDLC declara (CONCEITOS.md §2), sem I/O: o motor lê a definição pelo catálogo, sem trazer a
-// condução. Aqui ficam o tipo e os blocos que mais de uma definição reusa.
-import type { ItemCatalogoEtapa } from "./evidencia_exigida.ts";
-import type { NomeGate } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { TipoMetrica } from "../../custos/nucleo/metrica.ts";
-import type { EstadoDemanda, EstadoRodada, EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
-import type { TipoVerificacao } from "../../qualidade/nucleo/verificacao.ts";
-import type { ContextoDoPrompt } from "./secoes_do_prompt.ts";
-
-/** Um estado do Ciclo de Vida da demanda ou da rodada, aonde uma Etapa leva. */
-type EstadoDoCiclo = EstadoDemanda | EstadoRodada;
+// condução. Aqui ficam o tipo e os blocos que mais de uma definição reusa. O tipo não cita o nome de Etapa, Gate nem
+// estado: cada definição o declara como literal (`as const`), e o catálogo deriva deles `EtapaTicket` e `NomeGate`.
+import type {
+  ProdutorDaEvidencia,
+  RegraAprovacaoEtapa,
+  TipoEvidencia,
+  TipoMetrica,
+  TipoVerificacao,
+} from "./tipos_declaraveis.ts";
 
 /** O Gate que decide depois do trabalho da Etapa; a mecânica é do motor, os efeitos ficam no `gate.ts` da Etapa. */
-interface GateDaEtapa {
-  nome: NomeGate;
+interface GateDaEtapa<NomeDoGate extends string> {
+  nome: NomeDoGate;
   decisor: "auditor" | "agente";
   /** O Gate espera a decisão num estado do ciclo só dele, com o nome do Gate; sem isso, decide no estado da Etapa. */
   esperaEmEstadoProprio: boolean;
-  /** O estado a que o ciclo vai quando o Gate reprova. */
-  reprovadoVaiPara: EstadoDoCiclo;
+  /** O estado do ciclo (de uma Etapa, de um Gate ou do motor) a que o ciclo vai quando o Gate reprova. */
+  reprovadoVaiPara: string;
 }
 
 /**
@@ -31,42 +30,49 @@ export type PapelDaEtapa =
   | "integra_a_demanda"
   | "resolve_o_conflito_da_integracao";
 
-export interface DefinicaoDaEtapa {
-  nome: EtapaTicket;
+/** Uma evidência exigida pela Etapa; a de `entender_e_desenhar` é da demanda, as das outras são do ticket. */
+export interface EvidenciaExigida<NomeDaEtapa extends string = string> {
+  etapa: NomeDaEtapa;
+  tipo: TipoEvidencia;
+  produtor: ProdutorDaEvidencia;
+  obrigatoria: boolean;
+  regraAprovacao: RegraAprovacaoEtapa | null;
+  dono: "demanda" | "ticket";
+}
+
+/** A definição de uma Etapa; o catálogo a lê com o nome da Etapa e o do Gate tipados pelo que as Etapas declaram. */
+export interface DefinicaoDaEtapa<NomeDaEtapa extends string = string, NomeDoGate extends string = string> {
+  nome: NomeDaEtapa;
   objetivo: string;
   escopo: "demanda" | "rodada";
   executor: "agente_autonomo" | "agente_interativo" | "externo" | "fabriquinha";
-  evidencias: ItemCatalogoEtapa[];
-  verificacoes: TipoVerificacao[];
-  metricas: TipoMetrica[];
-  capacidades: { skills: string[]; extensoes: string[] };
+  evidencias: readonly EvidenciaExigida<NomeDaEtapa>[];
+  verificacoes: readonly TipoVerificacao[];
+  metricas: readonly TipoMetrica[];
+  capacidades: { skills: readonly string[]; extensoes: readonly string[] };
   /** O modo de trabalhar da Etapa: o `.md` na pasta dela, lido ao montar o prompt. */
   instrucao?: URL;
-  /** As seções do prompt que só a Etapa lê, com dados que já existem quando o agente dela é lançado. */
-  secaoDoPrompt?: (contexto: ContextoDoPrompt) => string;
-  gate?: GateDaEtapa;
+  gate?: GateDaEtapa<NomeDoGate>;
   /**
    * Fora da ordem do SDLC (`ORDEM_DO_SDLC` do catálogo): o estado a que a Etapa leva ao terminar. A Etapa na ordem ou
    * com `seguePara` é estado do ciclo do escopo dela; sem nenhum dos dois, roda dentro do estado de outra.
    */
-  seguePara?: EstadoDoCiclo;
+  seguePara?: string;
   /** O estado a que a Etapa devolve o ciclo sem decisão de Gate, quando a conferência dela acha problema. */
-  devolvePara?: EstadoDoCiclo;
+  devolvePara?: string;
   papel?: PapelDaEtapa;
   /** A Fabriquinha verifica o código depois do agente e, reprovado, devolve o ticket a ele (D05). */
   devolveAoAgente?: true;
 }
 
-type RegraDeAprovacao = ItemCatalogoEtapa["regraAprovacao"];
-
 /** Uma evidência exigida pela Etapa; a de `entender_e_desenhar` é da demanda, as das outras são do ticket. */
-export const evidenciaExigida = (
-  etapa: EtapaTicket,
-  tipo: ItemCatalogoEtapa["tipo"],
-  produtor: ItemCatalogoEtapa["produtor"],
+export const evidenciaExigida = <NomeDaEtapa extends string>(
+  etapa: NomeDaEtapa,
+  tipo: TipoEvidencia,
+  produtor: ProdutorDaEvidencia,
   obrigatoria = true,
-  regraAprovacao: RegraDeAprovacao = null,
-): ItemCatalogoEtapa => ({
+  regraAprovacao: RegraAprovacaoEtapa | null = null,
+): EvidenciaExigida<NomeDaEtapa> => ({
   etapa,
   tipo,
   produtor,
@@ -76,12 +82,14 @@ export const evidenciaExigida = (
 });
 
 /** As evidências das verificações de código, que a Fabriquinha produz no `implementar` e no `resolver_conflito`. */
-export const evidenciasDeVerificacao = (etapa: EtapaTicket): ItemCatalogoEtapa[] => [
+export const evidenciasDeVerificacao = <NomeDaEtapa extends string>(
+  etapa: NomeDaEtapa,
+): EvidenciaExigida<NomeDaEtapa>[] => [
   evidenciaExigida(etapa, "execucao_testes", "fabriquinha", true, "todos_comandos_exit_zero"),
   evidenciaExigida(etapa, "matriz_fitness", "fabriquinha", true, "todas_fitness_passam"),
   evidenciaExigida(etapa, "relatorio_sonar", "fabriquinha", true, "sem_issue_aberta_arquivos_alterados"),
 ];
 
-export const VERIFICACOES_DE_CODIGO: TipoVerificacao[] = ["testes", "fitness", "sonar", "hooks_do_commit"];
-export const EXTENSOES_DO_AGENTE = ["guarda.ts", "pergunta.ts"];
+export const VERIFICACOES_DE_CODIGO: readonly TipoVerificacao[] = ["testes", "fitness", "sonar", "hooks_do_commit"];
+export const EXTENSOES_DO_AGENTE: readonly string[] = ["guarda.ts", "pergunta.ts"];
 export const SEM_CAPACIDADES = { skills: [], extensoes: [] };

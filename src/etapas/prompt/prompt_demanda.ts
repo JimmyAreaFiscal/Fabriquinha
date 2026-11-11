@@ -1,12 +1,13 @@
 // Prompt do ticket da demanda (comparacao-sdlc-implementacao.md §§6, 8 e 11, D09): Markdown montado do agregado da
-// demanda, com o modo de trabalhar e as seções que a definição da Etapa declara. Tickets e rodadas aparecem só pelo
-// endereço público.
+// demanda, com o modo de trabalhar e a seção que só a Etapa lê, que a condução dela traz. Tickets e rodadas aparecem só
+// pelo endereço público.
 import { readFileSync } from "node:fs";
 import { CATALOGO_DE_ETAPAS } from "../catalogo.ts";
 import { catalogoDaEtapa } from "../definicao/evidencia_exigida.ts";
-import { type ContextoDoPrompt, secao } from "../definicao/secoes_do_prompt.ts";
-import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
-import { skillsDaEtapaDemanda } from "../../trabalho_agentico/aplicacao/trabalho/lancamento_do_ticket.ts";
+import { secao, type SecaoDoPrompt } from "./secoes_do_prompt.ts";
+import { type ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
+import type { EtapaTicket } from "../catalogo.ts";
+import { skillsDaEtapaDemanda } from "../../sdlc/aplicacao/execucao/lancamento_do_ticket.ts";
 
 type Criterio = Record<"id" | "dado" | "quando" | "entao", string>;
 const linhaCriterio = (c: Criterio): string => `- **${c.id}**: dado ${c.dado}, quando ${c.quando}, então ${c.entao}.`;
@@ -35,7 +36,7 @@ function modoDeTrabalhar(etapa: EtapaTicket, enderecos: Record<"demanda" | "roda
   return texto.replace(/\{(demanda|rodada|ticket)\}/g, (_, nome: keyof typeof enderecos) => enderecos[nome]);
 }
 
-export function montarPromptDemanda(c: ContextoDoPrompt): string {
+export function montarPromptDemanda(c: ContextoDoPrompt, secaoDaEtapa?: SecaoDoPrompt): string {
   const { ag, ticket, retomada } = c;
   const { demanda } = ag;
   const endDemanda = demanda.id;
@@ -61,7 +62,6 @@ export function montarPromptDemanda(c: ContextoDoPrompt): string {
   const daFabriquinha = catalogo.filter((i) => i.produtor === "fabriquinha");
   const item = (i: (typeof catalogo)[number]) => `- \`${i.tipo}\`${i.obrigatoria ? "" : " (opcional)"}`;
   const skills = skillsDaEtapaDemanda(ticket.etapa);
-  const { secaoDoPrompt } = CATALOGO_DE_ETAPAS[ticket.etapa];
 
   const partes = [
     "# Contexto\n",
@@ -92,7 +92,7 @@ export function montarPromptDemanda(c: ContextoDoPrompt): string {
         `Caminhos:\n\n${caminhos.join("\n") || "(nenhum)"}`,
       ].join("\n\n"),
     ),
-    ...(secaoDoPrompt ? [secaoDoPrompt(c)] : []),
+    ...(secaoDaEtapa ? [secaoDaEtapa(c)] : []),
     ...(retomada ? [secao(retomada.titulo, retomada.texto)] : []),
     modo.trim() + "\n",
     SECAO_LEITURA_ECONOMICA,

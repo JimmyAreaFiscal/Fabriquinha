@@ -3,11 +3,15 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
-import { branchDemanda, branchRodada, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import {
+  branchDemanda,
+  branchRodada,
+  formatarTicketRef,
+} from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { encontrado, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { escrever, raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { carregarDemanda } from "../../sdlc/armazenamento/demandas.ts";
@@ -17,7 +21,7 @@ import { VerificacaoDeFitness } from "../../qualidade/infra/tipos_de_verificacao
 import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
-import { submeterEvidencia } from "../../qualidade/aplicacao/evidencias/submeter.ts";
+import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
 
 /**
  * `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui).

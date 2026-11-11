@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach } from "node:test";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
-import { Endereco } from "../src/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 import { gravarCommitDemanda } from "../src/sdlc/armazenamento/commits_demanda.ts";

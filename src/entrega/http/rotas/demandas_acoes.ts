@@ -1,10 +1,10 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
-import { AUDITOR } from "../../../sdlc/nucleo/ator.ts";
+import { AUDITOR } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { RefRodada } from "../../../etapas/encerrar_rodada/encerramento_rodada.ts";
-import { decidirGate } from "../../../sdlc/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../../../etapas/gates.ts";
 import { arquivar, cancelar, reabrir } from "../../../sdlc/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../../etapas/ajustar_resultado/sessao_ajustes.ts";
 import {

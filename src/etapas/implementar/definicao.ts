@@ -6,7 +6,7 @@ import {
   VERIFICACOES_DE_CODIGO,
 } from "../definicao/definicao_da_etapa.ts";
 
-export const DEFINICAO_DO_IMPLEMENTAR: DefinicaoDaEtapa = {
+export const DEFINICAO_DO_IMPLEMENTAR = {
   nome: "implementar",
   objetivo: "Implementar o ticket, com testes, até as verificações passarem.",
   escopo: "rodada",
@@ -17,4 +17,4 @@ export const DEFINICAO_DO_IMPLEMENTAR: DefinicaoDaEtapa = {
   capacidades: { skills: [], extensoes: EXTENSOES_DO_AGENTE },
   instrucao: new URL("implementar.md", import.meta.url),
   devolveAoAgente: true,
-};
+} as const satisfies DefinicaoDaEtapa;

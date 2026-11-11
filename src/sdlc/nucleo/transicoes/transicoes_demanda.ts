@@ -2,7 +2,13 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "../demanda/agregado_demanda.ts";
-import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "../ator.ts";
+import {
+  AUDITOR,
+  type Ator,
+  AtorExterno,
+  exigirAtor,
+  FABRIQUINHA,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
@@ -12,10 +18,14 @@ import {
   PRIMEIRA_ETAPA_DA_RODADA,
 } from "../ciclo_de_vida/ciclos.ts";
 import { CATALOGO_DE_ETAPAS, etapaDoPapel } from "../../../etapas/catalogo.ts";
-import { branchDemanda, DemandaId, formatarTicketRef } from "../demanda/demanda.ts";
+import {
+  branchDemanda,
+  DemandaId,
+  formatarTicketRef,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
-import { exigirAutoria } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
-import { pendentesDeEnvio } from "../../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
+import { exigirAutoria } from "../evidencias/evidencia.ts";
+import { pendentesDeEnvio } from "../evidencias/evidencia_demanda.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
 import { lerPlanoGravado, materializar, PlanoProposto } from "../demanda/plano.ts";
 import { Id, type Instante, Markdown, Modelo, Slug, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
@@ -23,11 +33,13 @@ import {
   comReaberturaDoAuditor,
   comTentativaEncerrada,
   desdeAReabertura,
-  FalhaDaTentativa,
   POLITICA_DE_TENTATIVAS,
-  type ResultadoDaTentativa,
   tentativasDoTicket,
 } from "../tentativa.ts";
+import {
+  FalhaDaTentativa,
+  type ResultadoDaTentativa,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { branchDemanda, branchRodada } from "../../../sdlc/nucleo/demanda/demanda.ts";
+import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "./limpeza_demanda.ts";
 import { criarRepositorioDeTeste, rodarGit as git } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeRodada, garantirWorktreeDemanda, garantirWorktreeRodada } from "./worktree-demanda.ts";

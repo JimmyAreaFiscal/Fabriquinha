@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { ErroDeInexistente } from "../../compartilhado/nucleo/erros.ts";
 import {
   abrirAvaliacao,
-  achadoDaDemanda,
   apagarAvaliacao,
   criarAvaliacao,
   demandasComSessaoNoPeriodo,
@@ -14,6 +13,7 @@ import {
   regravarUso,
   vincularAchado,
 } from "./avaliacoes.ts";
+import { achadoDaDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { migrar } from "../../compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
 

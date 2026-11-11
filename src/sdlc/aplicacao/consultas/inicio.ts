@@ -5,19 +5,20 @@ import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
 import { CICLO_DO_TICKET, estadoDaRodadaNaEtapa, PRIMEIRA_ETAPA_DA_RODADA } from "../../nucleo/ciclo_de_vida/ciclos.ts";
 import { etapaDoPapel } from "../../../etapas/catalogo.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
 import { mesDoInstante, type Relogio } from "../../../compartilhado/nucleo/relogio.ts";
-import type { EstadoDemanda, ModoTrabalho } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { ModoTrabalho } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../../nucleo/ciclo_de_vida/ciclos.ts";
 import { listarDemandas } from "../../armazenamento/demandas.ts";
 import { predecessorasDasDemandas } from "../../armazenamento/dependencias_demanda.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
 import { ticketsComPiAtivo } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../../entrega/contrato/inicio.ts";
-import { sessoesDeDemanda } from "../../../trabalho_agentico/aplicacao/sessoes/historico_demanda.ts";
+import { sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
 import { metricasDosMeses } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
-import { bloqueiosDaDemanda } from "./bloqueios.ts";
-import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
+import { bloqueiosDaDemanda } from "./pendencias/bloqueios.ts";
+import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias/pendencias.ts";
 
 type TicketDoCartao = NonNullable<CartaoDoBoard["ticket"]>;
 

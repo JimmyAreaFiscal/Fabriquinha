@@ -16,7 +16,7 @@ import type { MetricaDeUso } from "../src/custos/aplicacao/metricas/metrica_de_u
 import type { ValorDe } from "../src/custos/aplicacao/metricas/calculo_de_metrica.ts";
 import { metricasDosMeses, usoDaDemanda } from "../src/custos/aplicacao/metricas/metricas_do_periodo.ts";
 import { mesDoInstante } from "../src/compartilhado/nucleo/relogio.ts";
-import type { EtapaTicket } from "../src/compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../src/etapas/catalogo.ts";
 import {
   abrirPortao,
   agente,

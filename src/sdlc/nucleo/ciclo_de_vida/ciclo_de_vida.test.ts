@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CicloDeVida } from "./ciclo_de_vida.ts";
-import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET, etapaDoEstado } from "./ciclos.ts";
+import {
+  CICLO_DA_DEMANDA,
+  CICLO_DA_RODADA,
+  CICLO_DO_TICKET,
+  etapaDoEstado,
+  EstadoDemanda,
+  EstadoRodada,
+} from "./ciclos.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EstadoTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 
 const agora = "2026-01-02T00:00:00Z";
 const ciclo = new CicloDeVida<"a" | "b" | "c">({

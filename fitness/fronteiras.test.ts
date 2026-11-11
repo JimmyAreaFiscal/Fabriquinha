@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
-import { EtapaTicket } from "../src/compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../src/etapas/catalogo.ts";
 
 const MODULO_CLIENTE_WEB = "entrega/cliente-web";
 const MODULO_DO_HARNESS = "harness";
@@ -110,12 +110,11 @@ const DOMINIOS = new Set([
 ]);
 
 // `src/etapas/` não tem pasta por camada: a pasta é a Etapa, ou o que é comum a elas. O que a Etapa declara é valor puro,
-// com a regra do núcleo, para o motor ler o catálogo sem trazer condução nem banco: o catálogo, os gates, `definicao/` e,
-// em cada Etapa, `definicao.ts`, `secao_do_prompt.ts` e os efeitos do Gate dela (`gate.ts`, agregado → agregado). O resto
-// (a condução e o registro delas, a montagem do prompt e os casos de uso), a da aplicação.
+// com a regra do núcleo, para o motor ler o catálogo sem trazer condução nem banco: o catálogo, `definicao/` e, em cada
+// Etapa, `definicao.ts` e a regra do Gate dela (`gate.ts`, agregado → agregado). O resto (a condução e os registros das
+// conduções e dos Gates, a montagem do prompt, a decisão dos Gates e os casos de uso), a da aplicação.
 const DOMINIO_DAS_ETAPAS = "etapas";
-const VALOR_PURO_DAS_ETAPAS =
-  /^etapas\/(catalogo\.ts|gates\.ts|definicao\/.+|[^/]+\/(definicao|secao_do_prompt|gate)\.ts)$/;
+const VALOR_PURO_DAS_ETAPAS = /^etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/(definicao|gate)\.ts)$/;
 
 // `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter.
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
@@ -285,7 +284,7 @@ test("a lista de exceções está vazia: entrega/http não importa armazenamento
 });
 
 // A matriz libera `aplicacao` inteira a entrega/http; a API do agente só alcança os casos de uso do agente.
-test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
+test("entrega/http/agente só importa de aplicacao o etapas/agente", () => {
   const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("entrega/http/agente/"));
   assert.ok(daApiDoAgente.length > 0);
   const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
@@ -293,7 +292,7 @@ test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
     return ts
       .preProcessFile(readFileSync(caminho, "utf8"), true, true)
       .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
-      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("sdlc/aplicacao/agente/"))
+      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("etapas/agente/"))
       .map((alvo) => `${arquivo} importa ${alvo}`);
   });
   assert.deepEqual(deAplicacaoFora, []);
@@ -343,9 +342,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "etapas/catalogo.ts": 'import { D } from "./planejar/definicao.ts";\n',
     "etapas/definicao/definicao_da_etapa.ts":
       'import { z } from "zod";\nimport type { N } from "../../nucleo/ok.ts";\n',
-    "etapas/planejar/definicao.ts":
-      'import { evidencia } from "../definicao/definicao_da_etapa.ts";\nimport { secao } from "./secao_do_prompt.ts";\n',
-    "etapas/planejar/secao_do_prompt.ts": 'import { n } from "../../nucleo/ok.ts";\n',
+    "etapas/planejar/definicao.ts": 'import { evidencia } from "../definicao/definicao_da_etapa.ts";\n',
+    "etapas/planejar/gate.ts": 'import { n } from "../../nucleo/ok.ts";\nimport { D } from "./definicao.ts";\n',
     "etapas/planejar/conducao_de_planejar.ts":
       'import { D } from "./definicao.ts";\nimport { a } from "../../armazenamento/ok.ts";\nimport { readFileSync } from "node:fs";\n',
     "nucleo/le_o_catalogo.ts": 'import { C } from "../etapas/catalogo.ts";\n',
@@ -378,6 +376,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "harness/pi/armazenamento.ts": 'import { a } from "../../armazenamento/ok.ts";\n',
     "etapas/implementar/definicao.ts":
       'import { C } from "./conducao_de_implementar.ts";\nimport { readFileSync } from "node:fs";\n',
+    // A seção do prompt é da condução, que lê o contexto do motor: a definição que a traz deixa de ser valor puro.
+    "etapas/revisar_rodada/definicao.ts": 'import { s } from "./secao_do_prompt.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -415,6 +415,7 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "entrega/cliente-web/react_puro.ts importa react",
       "etapas/implementar/definicao.ts importa ./conducao_de_implementar.ts",
       "etapas/implementar/definicao.ts importa node:fs",
+      "etapas/revisar_rodada/definicao.ts importa ./secao_do_prompt.ts",
       "infra/armazenamento.ts importa ../armazenamento/ok.ts",
       "nucleo/fs.ts importa node:fs",
     ].sort(),
@@ -617,7 +618,7 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
 });
 
 // Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada.
-const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "qualidade/aplicacao/evidencias/submeter.ts";
+const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "sdlc/aplicacao/evidencias/submeter.ts";
 const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
 const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
 
@@ -687,53 +688,37 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
 // import, de valor ou de tipo. Dependência que fecha ciclo hoje é tolerada aqui com o passo da migração SDLC por seams que a
 // remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor derivado do
 // catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 ex-entrega); a
-// partir do 4b só restam 4c, 5 e 6.
+// partir do 4c só restam 5 e 6. A ordem que o 4c deixou, de cima para baixo: etapas → qualidade → sdlc →
+// trabalho_agentico → harness, sandbox, repositorio, projeto → etapas/definicao → compartilhado.
 // A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar ciclo, a fitness também falha.
 interface DependenciaToleradaEntreDominios {
   de: string;
   para: string;
-  passo: "4c" | 5 | 6;
+  passo: 5 | 6;
 }
 
 const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
-  // O Projeto guarda a ConfiguracaoAgente de cada etapa, e as consultas do Projeto leem o Trabalho Agêntico, o histórico
-  // das sessões e o modelo e o effort resolvidos (D07).
-  { de: "projeto", para: "trabalho_agentico", passo: "4c" },
-  // As consultas do Projeto e o cadastro leem a Demanda, o endereço dos itens e o Ciclo de Vida.
-  { de: "projeto", para: "sdlc", passo: "4c" },
-  // O Espaço de Trabalho, a worktree e o commit do Ticket leem a Demanda e o Item de Trabalho que são donos deles.
-  { de: "repositorio", para: "sdlc", passo: "4c" },
-  // O cadastro, as consultas do Projeto e o commit do Ticket varrem e leem os commits humanos.
+  // O cadastro varre e lê os commits humanos; as métricas leem a Demanda, os commits e o Plano dela, o Trabalho Agêntico
+  // e o Uso dele, e o projeto de cada avaliação.
   { de: "projeto", para: "custos", passo: 5 },
-  { de: "repositorio", para: "custos", passo: 5 },
   { de: "custos", para: "sdlc", passo: 5 },
   { de: "custos", para: "trabalho_agentico", passo: 5 },
   { de: "custos", para: "qualidade", passo: 5 },
-  // O motor deriva do catálogo os ciclos, o despacho e as regras de cada papel, decide pelos gates das Etapas e despacha
-  // às conduções delas, que usam o motor: o catálogo, os gates e as conduções do lado do motor; a montagem do prompt e o
-  // catálogo do lado do Trabalho Agêntico; a condução, os efeitos dos gates, a reserva e as transições do lado das Etapas.
-  { de: "sdlc", para: "etapas", passo: "4c" },
-  { de: "trabalho_agentico", para: "etapas", passo: "4c" },
-  // As verificações, a submissão e a avaliação de Evidência leem o que cada Etapa declara.
-  { de: "qualidade", para: "etapas", passo: 5 },
-  // As métricas por Etapa leem a definição da Etapa, que declara as métricas dela.
-  { de: "custos", para: "etapas", passo: 5 },
-  // O Trabalho Agêntico do ticket lê a Demanda, o Ator e a Tentativa e fecha o ticket que falha; o motor lança e consulta
-  // pelo condutor e guarda a ConfiguracaoAgente no Plano.
-  { de: "trabalho_agentico", para: "sdlc", passo: "4c" },
-  // A avaliação e a simulação usam o condutor (e o harness dele); a Evidência e as verificações, a Demanda, a Tentativa e
-  // o Ator; a gestão da Demanda submete a Evidência.
-  { de: "qualidade", para: "trabalho_agentico", passo: "4c" },
-  { de: "qualidade", para: "sdlc", passo: "4c" },
   // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
   { de: "entrega/contrato", para: "projeto", passo: 6 },
-  { de: "entrega/contrato", para: "custos", passo: 6 },
   { de: "entrega/contrato", para: "sdlc", passo: 6 },
   { de: "entrega/contrato", para: "trabalho_agentico", passo: 6 },
   { de: "entrega/contrato", para: "qualidade", passo: 6 },
 ];
 
+// O que as Etapas declaram (o catálogo, `definicao/` e o `definicao.ts` de cada uma) conta como um domínio à parte, embaixo
+// do motor: todo o serviço lê os nomes das Etapas e o que cada uma declara, e a declaração só depende de `compartilhado`.
+// O resto de `etapas/` (as conduções, os Gates, o prompt, a API do agente) é o domínio `etapas`, em cima do motor.
+const DECLARACOES_DAS_ETAPAS = /^etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/definicao\.ts)$/;
+const DOMINIO_DAS_DECLARACOES_DAS_ETAPAS = "etapas/definicao";
+
 function dominioDoArquivo(caminhoRelativoASrc: string): string {
+  if (DECLARACOES_DAS_ETAPAS.test(caminhoRelativoASrc)) return DOMINIO_DAS_DECLARACOES_DAS_ETAPAS;
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
   return primeiro === "entrega" && segundo ? `entrega/${segundo}` : (primeiro ?? "");
 }
@@ -810,25 +795,63 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 
   assert.deepEqual(acharCiclosEntreDominios(raiz, []), ["ciclo entre módulos: demanda → fluxo → demanda"]);
   const toleradas: DependenciaToleradaEntreDominios[] = [
-    { de: "demanda", para: "fluxo", passo: "4c" },
+    { de: "demanda", para: "fluxo", passo: 5 },
     { de: "entrega/http", para: "demanda", passo: 6 },
-    { de: "execucao", para: "fluxo", passo: "4c" },
+    { de: "execucao", para: "fluxo", passo: 5 },
   ];
   assert.deepEqual(acharCiclosEntreDominios(raiz, toleradas), []);
   assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), ["entrega/http → demanda", "execucao → fluxo"]);
 });
 
+test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de etapas/ fica em cima dele", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-declaracoes-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    // O motor lê o catálogo, a definição comum e a de cada Etapa; a condução usa o motor.
+    "sdlc/nucleo/ciclos.ts":
+      'import { C } from "../../etapas/catalogo.ts";\nimport type { D } from "../../etapas/definicao/definicao_da_etapa.ts";\n',
+    "sdlc/aplicacao/despacho.ts": 'import { P } from "../../etapas/planejar/definicao.ts";\n',
+    "etapas/catalogo.ts":
+      'import { P } from "./planejar/definicao.ts";\nimport { e } from "../compartilhado/nucleo/erros.ts";\n',
+    "etapas/planejar/conducao_de_planejar.ts": 'import { c } from "../../sdlc/nucleo/ciclos.ts";\n',
+    "compartilhado/nucleo/erros.ts": "export const e = 1;\n",
+    // A definição que lê o motor, e o motor que lê a condução, fecham ciclo.
+    "etapas/planejar/definicao.ts": 'import type { A } from "../../sdlc/nucleo/agregado.ts";\n',
+    "sdlc/nucleo/agregado.ts": 'import { C } from "../../etapas/catalogo.ts";\n',
+    "sdlc/aplicacao/conduz.ts": 'import { C } from "../../etapas/planejar/conducao_de_planejar.ts";\n',
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharCiclosEntreDominios(raiz, []).sort(), [
+    "ciclo entre módulos: etapas/definicao → sdlc → etapas/definicao",
+    "ciclo entre módulos: sdlc → etapas → sdlc",
+  ]);
+  rmSync(join(raiz, "etapas/planejar/definicao.ts"));
+  rmSync(join(raiz, "sdlc/aplicacao/conduz.ts"));
+  writeFileSync(
+    join(raiz, "etapas/planejar/definicao.ts"),
+    'import { e } from "../../compartilhado/nucleo/erros.ts";\n',
+  );
+  assert.deepEqual(acharCiclosEntreDominios(raiz, []), []);
+});
+
 // O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
 // em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. O motor
-// (sdlc/, trabalho_agentico/, projeto/, repositorio/, qualidade/) já pergunta ao catálogo desde o passo 4b. Fica
-// primitivos.ts, onde nascem os enums de Etapa e de estado: derivá-los do catálogo poria compartilhado a depender de etapas
-// (ciclo de domínios e TDZ, pois o catálogo importa primitivos.ts); `etapas/catalogo.test.ts` e `ciclos.test.ts` conferem
-// que os enums batem com o catálogo e com os ciclos derivados. Saem custos/ no passo 5 e entrega/ no passo 6.
+// (sdlc/, trabalho_agentico/, projeto/, repositorio/, qualidade/) já pergunta ao catálogo desde o passo 4b, e desde o 4c
+// os enums de Etapa, de Gate e de estado saem do catálogo (`etapas/catalogo.ts` e `sdlc/nucleo/ciclo_de_vida/ciclos.ts`).
+// Saem custos/ no passo 5 e entrega/ no passo 6.
+// shortcut: o SQL em template não entra na conta (`ts.isStringLiteralLike` não vê o literal dentro de `'...'` no SQL);
+// `trabalho_agentico/armazenamento/trabalho_agentico.ts` e `custos/armazenamento/metricas_demanda.ts` ainda citam Etapas
+// no SQL.
 // Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const PASTA_DAS_ETAPAS = "etapas/";
 const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
-  "compartilhado/nucleo/primitivos.ts",
   "custos/aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts",
   "custos/aplicacao/metricas/metrica_de_uso.ts",
   "entrega/cliente-web/render.ts",

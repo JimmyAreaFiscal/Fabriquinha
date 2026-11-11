@@ -2,8 +2,8 @@
 // sabe de quem é o trabalho. Quem grava a ação de um agente (decisão, evidência, ticket corretivo) chama esta conferência.
 import type { DatabaseSync } from "node:sqlite";
 import type { z } from "zod";
-import type { Ator } from "../../../sdlc/nucleo/ator.ts";
-import { formatarTicketRef, type TicketRef } from "../../../sdlc/nucleo/demanda/demanda.ts";
+import type { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { formatarTicketRef, type TicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { ticketDoProcesso } from "../../armazenamento/trabalho_agentico.ts";
 

@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
-import { type AnexoDaDemanda, anexosDaDemanda } from "../../../qualidade/armazenamento/evidencia_demanda.ts";
+import { type AnexoDaDemanda, anexosDaDemanda } from "../../armazenamento/evidencia_demanda.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
 
 interface VisaoDaDemanda {

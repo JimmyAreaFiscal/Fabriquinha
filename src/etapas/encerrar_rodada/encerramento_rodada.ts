@@ -2,13 +2,14 @@
 // agente (documentação) até o gate do PR: relatório de produtividade, ponta da demanda (D04), PR da rodada, `pr_aberto` e
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { type AgregadoDemanda, comPrDaRodada, type TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco, ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { conferirPullRequestRodada } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { submeterEvidencia } from "../../qualidade/aplicacao/evidencias/submeter.ts";
+import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
 import { LIMITE_DO_CORPO } from "../../qualidade/aplicacao/pull_request/pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
 import { produtividadeDaRodada } from "../../custos/aplicacao/produtividade_rodada.ts";

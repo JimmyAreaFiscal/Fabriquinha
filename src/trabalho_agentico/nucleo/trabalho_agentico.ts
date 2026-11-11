@@ -1,16 +1,13 @@
 // Trabalho Agêntico, processo do trabalho e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre
 // arrays: quem chama persiste o resultado. `ProcessoDoTrabalho` registra uma execução do pi dentro do trabalho.
 import { z } from "zod";
-import { ConfiguracaoAgente } from "./configuracao_agente.ts";
-import { TicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { ConfiguracaoAgente } from "../../compartilhado/nucleo/configuracao_agente.ts";
+import { TicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Id, Instante, ModoTrabalho, Slug } from "../../compartilhado/nucleo/primitivos.ts";
+import { Id, Instante, ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();
-
-/** O trabalho de uma ferramenta de fora da Fabriquinha: a ferramenta e a sessão dela. */
-export const TrabalhoNaoGerenciado = z.object({ ferramenta: Slug, sessao: z.string().min(1) });
 
 export const TrabalhoGerenciado = TicketRef.extend({
   id: IdTexto,

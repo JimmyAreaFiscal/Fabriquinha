@@ -1,7 +1,7 @@
 // Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada, conflito, falhas, integração e conclusão.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
-import { type Ator, exigirAtor, FABRIQUINHA } from "../ator.ts";
+import { type Ator, exigirAtor, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
   AgregadoDemanda,
   prDaDemanda,
@@ -10,11 +10,14 @@ import {
 } from "../demanda/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, estadoDaDemandaNaEtapa } from "../ciclo_de_vida/ciclos.ts";
 import { etapaDoPapel } from "../../../etapas/catalogo.ts";
-import { branchDemanda, DemandaId } from "../demanda/demanda.ts";
+import { branchDemanda, DemandaId } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
 import { Motivo } from "../../../compartilhado/nucleo/primitivos.ts";
-import { CausaDeInfraestrutura, falhaQueExigeOAuditor } from "../tentativa.ts";
+import {
+  CausaDeInfraestrutura,
+  falhaQueExigeOAuditor,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { type ContextoDemanda, exigirDemandaDaEntrada, mudarTicket } from "./transicoes_demanda.ts";
 
 const Texto = z.string().trim().min(1);

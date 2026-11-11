@@ -2,9 +2,8 @@
 // É a única regra da pasta: o ticket com rodada usa o Espaço da rodada, o outro, o da demanda.
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { branchDemanda, branchRodada, DemandaId } from "../../sdlc/nucleo/demanda/demanda.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { branchDemanda, branchRodada, DemandaId } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { Slug } from "../../compartilhado/nucleo/primitivos.ts";
 import type { RepositorioDoProjeto } from "./repositorio_do_projeto.ts";
 
@@ -66,9 +65,12 @@ export const prDoEscopo = <T extends { rodada_id?: number }>(
   rodada_id: number | undefined,
 ): T | undefined => pull_requests?.find((pr) => pr.rodada_id === rodada_id);
 
+/** O PR como a demanda o guarda: o da rodada, ou o final, sem `rodada_id`. */
+type PullRequestDaDemanda = PullRequest & { rodada_id?: number };
+
 /** A leitura única do PR do Espaço: o da rodada ou, sem rodada, o final da demanda. */
 export function prDoEspaco(
-  ag: Partial<Pick<AgregadoDemanda, "pull_requests">>,
+  ag: { pull_requests?: readonly PullRequestDaDemanda[] | undefined },
   rodada_id: number | undefined,
 ): PullRequest | undefined {
   const achado = prDoEscopo(ag.pull_requests, rodada_id);
@@ -77,8 +79,8 @@ export function prDoEspaco(
 
 /** A única regra da pasta do ticket; os casos de uso a chamam em vez de escolher entre a demanda e a rodada. */
 export function espacoDoTicket(
-  ag: Pick<AgregadoDemanda, "demanda"> & Partial<Pick<AgregadoDemanda, "pull_requests">>,
-  ticket: Pick<TicketDemanda, "rodada_id">,
+  ag: { demanda: { id: string }; pull_requests?: readonly PullRequestDaDemanda[] | undefined },
+  ticket: { rodada_id?: number | undefined },
   projeto: Pick<RepositorioDoProjeto, "nome" | "branch_base">,
   raiz: string,
 ): EspacoDeTrabalho {

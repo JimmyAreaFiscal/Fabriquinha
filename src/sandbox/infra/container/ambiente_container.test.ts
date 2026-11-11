@@ -77,6 +77,19 @@ const grupoEstaVivo = (grupo: number): boolean => {
   }
 };
 
+/**
+ * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
+ * init recolhê-lo. Espera até 2 s antes de dizer que ele sobreviveu.
+ */
+async function grupoMorre(grupo: number): Promise<boolean> {
+  const limite = Date.now() + 2000;
+  while (grupoEstaVivo(grupo)) {
+    if (Date.now() > limite) return false;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return true;
+}
+
 async function esperarOArquivoDePid(grupo: number): Promise<number> {
   const arquivo = join(dirDoDockerFalso, "pids", containerId, String(grupo));
   while (!existsSync(arquivo) || readFileSync(arquivo, "utf8").trim() === "")
@@ -223,7 +236,7 @@ test("executar: no limite o grupo inteiro morre dentro do container e o código 
   const [novo] = arquivosDePid().filter((arquivo) => !antes.has(arquivo));
   assert.ok(novo);
   const grupo = Number(readFileSync(join(dirDoDockerFalso, "pids", containerId, novo), "utf8"));
-  assert.equal(grupoEstaVivo(grupo), false);
+  assert.equal(await grupoMorre(grupo), true);
 });
 
 test("executar: dentro do limite, o relógio não dispara", async () => {
@@ -293,7 +306,7 @@ test("sinalizar: o sinal chega ao grupo inteiro do processo, dentro do container
   assert.equal(grupoEstaVivo(grupo), true);
   await ambiente.sinalizar(processo.identificador, "SIGKILL");
   assert.equal(await processo.saiu, 137);
-  assert.equal(grupoEstaVivo(grupo), false);
+  assert.equal(await grupoMorre(grupo), true);
   const exec = docker
     .registro()
     .find(([comandoDoDocker, , , , roteiro]) => comandoDoDocker === "exec" && String(roteiro).includes("kill -KILL"));
@@ -307,7 +320,7 @@ test("sinalizar: o SIGTERM também alcança o grupo pelo docker exec e o program
   const grupo = await esperarOArquivoDePid(processo.identificador.grupo_processo);
   await ambiente.sinalizar(processo.identificador, "SIGTERM");
   assert.equal(await processo.saiu, 143);
-  assert.equal(grupoEstaVivo(grupo), false);
+  assert.equal(await grupoMorre(grupo), true);
   assert.ok(
     docker
       .registro()

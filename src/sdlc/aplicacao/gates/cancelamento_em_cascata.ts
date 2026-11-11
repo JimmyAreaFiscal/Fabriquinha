@@ -1,14 +1,14 @@
 // Cancelamento em cascata (D08): a demanda que termina `cancelada` leva as dependentes não terminadas junto.
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../../nucleo/ator.ts";
+import type { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { cancelarDemanda } from "../../nucleo/ciclo_de_vida/cancelamento_demanda.ts";
 import type { ContextoDemanda } from "../../nucleo/transicoes/transicoes_demanda.ts";
 import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
 import { processosAbertos } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { interromperExecucaoDemanda } from "../../../trabalho_agentico/aplicacao/execucao_demanda.ts";
+import { interromperExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 
 /**
  * Aplica `transicao` à demanda e, se ela terminou `cancelada`, cancela as dependentes não terminadas na mesma transação

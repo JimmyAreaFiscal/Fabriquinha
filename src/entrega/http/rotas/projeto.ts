@@ -5,7 +5,7 @@ import {
   consultarHeatmapDoProjeto,
   consultarProjeto,
   ORIENTACAO_PROJETO_INEXISTENTE,
-} from "../../../projeto/aplicacao/consultas/projeto.ts";
+} from "../../../sdlc/aplicacao/consultas/projeto.ts";
 import { DemandasArquivadas, FiltroDoProjeto, Heatmap, ListaDoProjeto } from "../../contrato/projeto.ts";
 import type { Rota } from "../rotas.ts";
 

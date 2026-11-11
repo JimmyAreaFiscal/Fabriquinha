@@ -17,10 +17,10 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../../src/etapas/catalogo.ts";
 import { relogioDoSistema } from "../../src/compartilhado/nucleo/relogio.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { montarPromptDemanda } from "../../src/etapas/prompt/prompt_demanda.ts";
+import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { abrir, raizDo } from "../../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import {
@@ -113,15 +113,15 @@ for (const etapa of EtapaTicket.options.filter((e) => e !== "entender_e_desenhar
     descricao: "Detalhe.",
     etapa,
   } as TicketDemanda;
-  const prompt = montarPromptDemanda({
+  const contexto = {
     ag: agregadoDoPrompt,
     ticket,
     projeto: { nome: "loja", branch_base: "main" },
     worktree: "/w",
     saida: "/s",
     anexos: [],
-  });
-  gravarFoto(join("prompts", etapa), prompt);
+  };
+  gravarFoto(join("prompts", etapa), promptDaEtapa(contexto));
 }
 
 // 3. O CLI do agente da demanda: a aula do código (HTML e recusas) e a leitura da demanda. É o cliente empacotado

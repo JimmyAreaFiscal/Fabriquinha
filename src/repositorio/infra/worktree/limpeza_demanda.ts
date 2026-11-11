@@ -1,8 +1,7 @@
 // Limpeza da demanda por posse (comparacao-sdlc-implementacao.md §5, CA-10 a CA-12): só worktrees e branches que a
 // Fabriquinha criou para a demanda e as rodadas; a base e qualquer branch alheia nunca entram.
 import { existsSync } from "node:fs";
-import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { branchDemanda, branchRodada } from "../../../sdlc/nucleo/demanda/demanda.ts";
+import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
 import type { RepositorioDoProjeto } from "../../nucleo/repositorio_do_projeto.ts";
 import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
@@ -47,12 +46,18 @@ export async function pendenciasDoEspaco(
   ];
 }
 
+/** A demanda que se limpa, com as rodadas dela: cada uma tem a sua worktree e a sua branch. */
+interface DemandaComRodadas {
+  demanda: { id: string };
+  rodadas: readonly { rodada_id: number }[];
+}
+
 /** O que a demanda ainda deixa: `worktree:<caminho>`, `branch_local:<nome>` e `branch_remota:<nome>`. */
 export async function pendenciasDeLimpeza(
   ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoLimpeza,
-  ag: Pick<AgregadoDemanda, "demanda" | "rodadas">,
+  ag: DemandaComRodadas,
 ): Promise<string[]> {
   const id = ag.demanda.id;
   const pendentes = [

@@ -2,9 +2,10 @@
 // etapa do projeto passam entre o formato do formulário e o cadastro.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { ConfiguracaoAgente } from "../../trabalho_agentico/nucleo/configuracao_agente.ts";
+import type { ConfiguracaoAgente } from "../../compartilhado/nucleo/configuracao_agente.ts";
 import { mensagem } from "../../compartilhado/nucleo/erros.ts";
-import { EtapaTicket, type Modelo } from "../../compartilhado/nucleo/primitivos.ts";
+import { type Modelo } from "../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket } from "../../etapas/catalogo.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { Configuracao, configuracao, salvarConfiguracao } from "../../compartilhado/armazenamento/servico.ts";
 

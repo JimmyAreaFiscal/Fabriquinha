@@ -2,9 +2,9 @@
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
 import type { UsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../sdlc/nucleo/demanda/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { prDoEspaco } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../qualidade/nucleo/evidencias/schemas.ts";
+import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../sdlc/nucleo/evidencias/schemas.ts";
 import type {
   ProcessoDoTrabalho,
   TrabalhoGerenciado,

@@ -2,19 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { comEvidencia, comPlanoSubmetido } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { clonarAgregadoDemanda as structuredClone } from "../../../../apoio-testes/clonar_agregado_demanda.ts";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../ator.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
 import { GATES } from "../../../etapas/gates.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   comTentativaAberta,
   desdeAReabertura,
-  falhaQueExigeOAuditor,
-  falhaPorServicoReiniciado,
   motivoDaFalhaDoTicket,
   POLITICA_DE_TENTATIVAS,
   tentativasDoTicket,
 } from "../tentativa.ts";
+import {
+  falhaQueExigeOAuditor,
+  falhaPorServicoReiniciado,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Despacho, situacaoDeUmaDemanda } from "../despacho/despacho.ts";
 import {
@@ -152,7 +154,7 @@ const emPlanejamento = (): AgregadoDemanda => {
     (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );
-  const decisaoAprovando = GATES.gate_demanda.decidir(
+  const decisaoAprovando = GATES.gate_demanda.regra.decidir(
     enviarDemanda(definida, autora, { agora: t1 }),
     Endereco.daDemanda("I-1"),
     { resultado: "aprovado" },
@@ -168,7 +170,9 @@ const emPlanejamento = (): AgregadoDemanda => {
 };
 const submetido = () => comPlanoSubmetido(emPlanejamento(), planoV(), agente, t2);
 const aprovarPlanejamento = (ag: AgregadoDemanda) =>
-  GATES.gate_planejamento.decidir(ag, Endereco.daDemanda("I-1"), { resultado: "aprovado" }, AUDITOR, { agora: t2 });
+  GATES.gate_planejamento.regra.decidir(ag, Endereco.daDemanda("I-1"), { resultado: "aprovado" }, AUDITOR, {
+    agora: t2,
+  });
 
 test("CA-2: ticket de implementação sem rodada é reprovado na submissão, sem mutação", () => {
   const ag = emPlanejamento();
@@ -437,7 +441,7 @@ test("CA-12: rejeita por estado de rodada, pendência, ator, estado e entrada, s
 test("CA-13: percurso completo das rodadas corretivas e só então a revisão integral se repete", () => {
   const demandaId = Endereco.daDemanda(D);
   const original = emRevisaoD();
-  const rep = GATES.gate_revisao_demanda.decidir(
+  const rep = GATES.gate_revisao_demanda.regra.decidir(
     original,
     demandaId,
     { resultado: "reprovado", motivo: "falta tratar erro", correcoes: corretivo() },
@@ -455,7 +459,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   const emRevisao = concluirImplementacoesRodada(impl, r, FABRIQUINHA, c2);
   rejeitarSemMudar(emRevisao, () => iniciarRevisaoDemanda(emRevisao, { demanda_id: D }, FABRIQUINHA, c2));
   const ag5: Ator = { tipo: "agente", trabalho_id: "2" };
-  const encerrando = GATES.gate_revisao_rodada.decidir(
+  const encerrando = GATES.gate_revisao_rodada.regra.decidir(
     emRevisao,
     Endereco.daRodada(D, 2),
     { resultado: "aprovado" },
@@ -468,7 +472,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
     FABRIQUINHA,
     c2,
   );
-  const integrada = GATES.gate_pr.decidir(
+  const integrada = GATES.gate_pr.regra.decidir(
     conferida,
     Endereco.daRodada(D, 2),
     { resultado: "aprovado", nota: 4 },
@@ -482,7 +486,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   const segunda = iniciarRevisaoDemanda(integrada, { demanda_id: D }, FABRIQUINHA, c2);
   assert.equal(segunda.demanda.estado, "revisar_demanda");
   const ag7: Ator = { tipo: "agente", trabalho_id: "3" };
-  const fim = GATES.gate_revisao_demanda.decidir(segunda, demandaId, { resultado: "aprovado" }, ag7, c2);
+  const fim = GATES.gate_revisao_demanda.regra.decidir(segunda, demandaId, { resultado: "aprovado" }, ag7, c2);
   assert.equal(fim.demanda.estado, "encerrar_demanda");
   assert.equal(fim.tickets.at(-1)?.etapa, "encerrar_demanda");
   assert.deepEqual(

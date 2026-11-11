@@ -10,9 +10,10 @@ import {
   usoNoPeriodo,
 } from "../../armazenamento/metricas_demanda.ts";
 import { usoDeclaradoNoPeriodo } from "../../armazenamento/uso_declarado.ts";
-import type { Recorte, TipoMetrica } from "../../nucleo/metrica.ts";
+import type { Recorte } from "../../nucleo/metrica.ts";
+import type { TipoMetrica } from "../../../etapas/definicao/tipos_declaraveis.ts";
 import { intervalo, Periodo } from "../../../compartilhado/nucleo/periodo.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { type LinhaDeUso, textoDoCustoDe, Uso } from "../../nucleo/uso.ts";
 import type { ValorDaMetrica, ValorDe } from "./calculo_de_metrica.ts";
 import type { MetricaDeConformidade } from "./metrica_de_conformidade.ts";

@@ -11,7 +11,7 @@ import { abrir, escrever } from "../../compartilhado/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../sdlc/armazenamento/demandas.ts";
 import { registrarDemanda } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { iniciarTentativaDoTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
   apagarProjeto,
   buscarProjeto,

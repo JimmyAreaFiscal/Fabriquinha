@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
-import { FABRIQUINHA } from "../ator.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   type AcaoEsperada,
   motivoDaRevisaoParada,

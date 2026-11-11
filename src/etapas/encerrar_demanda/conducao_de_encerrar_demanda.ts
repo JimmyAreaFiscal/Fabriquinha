@@ -2,13 +2,17 @@
 // branch da demanda para a base do projeto (D02), conflito (D06), check final, espera do merge humano na plataforma
 // (a integração final depende do humano), integração confirmada com SHA, limpeza por posse e evidências. Cada efeito
 // externo é seguido da transição do domínio, que decide se ele se repete (progresso recuperável).
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { existe } from "../../compartilhado/nucleo/erros.ts";
 import { DEFINICAO_DO_ENCERRAR_DEMANDA } from "./definicao.ts";
 import { espacoDaDemanda } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
-import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../../sdlc/nucleo/tentativa.ts";
+import type { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import {
+  type FalhaDaTentativa,
+  falhaDoErro,
+  falhaQueExigeOAuditor,
+} from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { registrarFalhaTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import {
   concluirEncerramento,
@@ -32,15 +36,11 @@ import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts"
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "./encerramento_demanda.ts";
-import { submeterEvidencia } from "../../qualidade/aplicacao/evidencias/submeter.ts";
+import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
 import { publicarPRFinal } from "./publicacao_do_pr_final.ts";
 import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
-import {
-  ConducaoDeterministica,
-  type DepsDaConducao,
-  type PassoDaEtapa,
-  type ResultadoDoPasso,
-} from "../conducao/conducao_de_etapa.ts";
+import { ConducaoDeterministica, type PassoDaEtapa, type ResultadoDoPasso } from "../conducao/conducao_de_etapa.ts";
+import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 
 export interface OpcoesDoEncerramentoDaDemanda {
   /** Espera da verificação do PR (limite, intervalo e carência); o padrão é o de produção. */

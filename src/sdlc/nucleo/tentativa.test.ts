@@ -1,32 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "./ator.ts";
-import { ErroDeReprovacao, ErroDeRegra, ErroExterno } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "./item_de_trabalho/item_de_trabalho.ts";
-import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import type { EtapaTicket } from "../../etapas/catalogo.ts";
 import {
-  type CausaDeInfraestrutura,
   comReaberturaDoAuditor,
   comTentativaAberta,
   comTentativaEncerrada,
   desdeAReabertura,
-  falhaDoErro,
-  falhaInterrompidaPeloAuditor,
-  falhaPorServicoReiniciado,
-  falhaQueExigeOAuditor,
   montarRetornoAoAgente,
   motivoDaFalhaDoTicket,
   PoliticaDeTentativas,
   POLITICA_DE_TENTATIVAS,
-  resultadoDoErro,
   retornoAoAgenteDoTicket,
-  rotuloDaCausa,
-  type ResultadoDaTentativa,
   Tentativa as TentativaSchema,
   type Tentativa,
   tentativaAnteriorEmMemoria,
   tentativasDoTicket,
 } from "./tentativa.ts";
+import {
+  type CausaDeInfraestrutura,
+  type ResultadoDaTentativa,
+} from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 
 const ticket = Endereco.doTicket("I-1", 3);
 const MINUTO = 60_000;
@@ -142,41 +137,6 @@ test("o modelo reserva é o do outro provedor, no mesmo nível, e não existe se
   assert.deepEqual(reserva("openai-codex", "gpt-6.1-sol"), { provedor: "claude-bridge", nome: "claude-opus-5-5" });
   assert.equal(reserva("outro", "qualquer"), undefined);
   assert.equal(POLITICA_DE_TENTATIVAS.modeloReserva(undefined), undefined);
-});
-
-test("o rótulo da causa: o reinício tem o seu; as demais falhas de ambiente, o mesmo", () => {
-  assert.equal(rotuloDaCausa("servico_reiniciado"), "serviço reiniciado");
-  for (const causa of [
-    "tempo_limite",
-    "cota",
-    "modelo_sem_resposta",
-    "comando_ausente",
-    "servico_externo_inacessivel",
-  ] as const) {
-    assert.equal(rotuloDaCausa(causa), "falha de infraestrutura");
-  }
-  assert.equal(falhaPorServicoReiniciado.motivo, "serviço reiniciado");
-  assert.deepEqual(falhaInterrompidaPeloAuditor, {
-    tipo: "interrompida",
-    por: AUDITOR,
-    motivo: "interrompida pelo Auditor",
-  });
-});
-
-test("o erro vira resultado num ponto só: reprovação, infraestrutura ou falha que pede o Auditor", () => {
-  const reprovado = new ErroDeReprovacao("o commit foi rejeitado", "corrija");
-  assert.deepEqual(resultadoDoErro(reprovado), { tipo: "reprovacao", motivo: reprovado.message });
-  const externo = new ErroExterno("o gh não respondeu", "confira o gh");
-  assert.deepEqual(falhaDoErro(externo), {
-    tipo: "falha_infraestrutura",
-    causa: "servico_externo_inacessivel",
-    motivo: `falha de infraestrutura: ${externo.message}`,
-  });
-  assert.deepEqual(resultadoDoErro(externo), falhaDoErro(externo));
-  const regra = new ErroDeRegra("regra", "orientação");
-  assert.deepEqual(falhaDoErro(regra), falhaQueExigeOAuditor(regra.message));
-  assert.deepEqual(falhaDoErro("texto solto"), { tipo: "interrompida", por: FABRIQUINHA, motivo: "texto solto" });
-  assert.equal(falhaQueExigeOAuditor("x".repeat(3000)).motivo.length, 2000);
 });
 
 test("a Tentativa aberta guarda o processo e uma execução retomada na mesma Tentativa não abre outra", () => {

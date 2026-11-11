@@ -1,5 +1,6 @@
 // As seções do prompt que só o `planejar` lê.
-import { type ContextoDoPrompt, linhaDoAnexo, secao } from "../definicao/secoes_do_prompt.ts";
+import { linhaDoAnexo, secao } from "../prompt/secoes_do_prompt.ts";
+import { type ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
 
 interface DesenhoSolucao {
   resumo: string;

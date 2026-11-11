@@ -2,13 +2,9 @@
 // concluídas e o heatmap. Só tipos e schemas; quem monta cada resposta é a consulta da aplicação.
 import { z } from "zod";
 import { TipoDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import {
-  EstadoDemanda,
-  EstadoRodada,
-  EstadoTicket,
-  EtapaTicket,
-  Instante,
-} from "../../compartilhado/nucleo/primitivos.ts";
+import { EstadoTicket, Instante } from "../../compartilhado/nucleo/primitivos.ts";
+import { EstadoDemanda, EstadoRodada } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { EtapaTicket } from "../../etapas/catalogo.ts";
 import { PendenciaDoInicio } from "./demanda.ts";
 
 /** `GET /api/projetos/:nome/demandas?…`: as em andamento sempre; os demais estados só quando pedidos. */

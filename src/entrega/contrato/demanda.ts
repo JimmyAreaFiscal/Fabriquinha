@@ -8,13 +8,9 @@ import {
   TicketDemanda,
   TipoDemanda,
 } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import {
-  EstadoDemanda,
-  EstadoRodada,
-  EtapaTicket,
-  EstadoTicket,
-  Instante,
-} from "../../compartilhado/nucleo/primitivos.ts";
+import { EstadoTicket, Instante } from "../../compartilhado/nucleo/primitivos.ts";
+import { EstadoDemanda, EstadoRodada } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { EtapaTicket } from "../../etapas/catalogo.ts";
 import type { AcaoEsperada, TipoPendencia } from "../../sdlc/nucleo/demanda/pendencia.ts";
 
 const TIPOS_DE_PENDENCIA = [

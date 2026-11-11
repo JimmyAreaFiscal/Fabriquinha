@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { decisoesDoRecorte, rodadasDasTentativasReprovadasDoRecorte } from "../../armazenamento/metricas_demanda.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { CalculoDeMetrica } from "./calculo_de_metrica.ts";
 
 /** A revisão que conta a Decisão reprovada de cada Gate, pela Etapa do ticket em que ele decide; o Gate da demanda fica em `aprovacoes_e_reprovacoes`. */

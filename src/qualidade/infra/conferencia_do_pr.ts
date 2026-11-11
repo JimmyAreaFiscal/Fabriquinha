@@ -2,7 +2,7 @@
 // limite é falha de infraestrutura. Não gera Evidência.
 import { ErroExterno } from "../../compartilhado/nucleo/erros.ts";
 import type { Projeto } from "../../projeto/nucleo/projeto.ts";
-import { falhaDoErro } from "../../sdlc/nucleo/tentativa.ts";
+import { falhaDoErro } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import type { ResultadoDaVerificacao } from "../nucleo/verificacao.ts";
 import { type OpcoesVerificacao, type ProblemasDoPR, verificarPR } from "../../repositorio/infra/hospedagem/pr.ts";
 import { Verificacao } from "./verificacao.ts";

@@ -1,9 +1,9 @@
 // O Gate do planejamento, dono do `planejar`: o Auditor aprova o Plano proposto ou o devolve ao agente.
 import type { AgregadoDemanda, Decisao, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { AUDITOR } from "../../sdlc/nucleo/ator.ts";
+import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { ancoraNaDemanda, type EntradaReprovada, Gate } from "../../sdlc/nucleo/gate.ts";
-import type { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import type { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   exigirSemFalha,
   materializarPlano,

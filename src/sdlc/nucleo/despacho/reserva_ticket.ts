@@ -1,12 +1,12 @@
 // Reserva do ticket da demanda SDLC (comparacao-sdlc-implementacao.md §4.1): aberto → em_execucao, só se o Despacho o seleciona.
 import { z } from "zod";
-import { type Ator, exigirAtor } from "../ator.ts";
+import { type Ator, exigirAtor } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../demanda/agregado_demanda.ts";
-import { formatarTicketRef } from "../demanda/demanda.ts";
+import { formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
 import { Despacho, motivoDeRecusaDoItem, type ResultadoDoDespacho, situacaoDeUmaDemanda } from "./despacho.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { comTentativaAberta } from "../tentativa.ts";
 import {

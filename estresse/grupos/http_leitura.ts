@@ -9,7 +9,7 @@ import { guardarBytes } from "../../src/compartilhado/armazenamento/arquivos.ts"
 import { criarAvaliacao } from "../../src/qualidade/armazenamento/avaliacoes.ts";
 import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/sdlc/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../src/qualidade/armazenamento/evidencia_demanda.ts";
+import { gravarAnexos } from "../../src/sdlc/armazenamento/evidencia_demanda.ts";
 import { registrarProjeto } from "../../src/projeto/aplicacao/cadastro.ts";
 import { comTrabalhosDoTicket } from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";

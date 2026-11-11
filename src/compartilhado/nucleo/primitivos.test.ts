@@ -1,18 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { z } from "zod";
-import {
-  EtapaTicket,
-  EstadoDemanda,
-  EstadoRodada,
-  EstadoTicket,
-  Id,
-  Instante,
-  Markdown,
-  Motivo,
-  Slug,
-  Titulo,
-} from "./primitivos.ts";
+import { EstadoTicket, Id, Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { EstadoDemanda, EstadoRodada } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { EtapaTicket } from "../../etapas/catalogo.ts";
 
 const aceita = (schema: z.ZodType, ...valores: unknown[]) => {
   for (const v of valores) assert.ok(schema.safeParse(v).success, `deveria aceitar ${JSON.stringify(v)}`);

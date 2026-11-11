@@ -4,7 +4,7 @@ import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_dema
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
 import { exigirGitNoAmbiente } from "../../../repositorio/infra/worktree/worktree.ts";
-import { daUltimaConcluida } from "../../../qualidade/nucleo/evidencias/schemas.ts";
+import { daUltimaConcluida } from "../../../sdlc/nucleo/evidencias/schemas.ts";
 
 export interface Trecho {
   arquivo: string;

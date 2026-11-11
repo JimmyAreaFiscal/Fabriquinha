@@ -7,7 +7,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../../compartilhado/nucleo/erros.ts";
-import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
+import { relogioFixo, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { metricasDasEtapas } from "../../../custos/aplicacao/metricas/metricas_das_etapas.ts";
 import {
   abortarAvaliacao,
@@ -18,6 +18,7 @@ import {
   iniciarAvaliacao,
 } from "./avaliacao.ts";
 import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { recuperacaoDaSubida } from "../../../composicao/servico.ts";
 
 const { raiz: raizTemporaria, banco, fechar } = abrirBancoTemporario();
 after(fechar);
@@ -270,6 +271,6 @@ test("uso sem custo informado fica com custo desconhecido", async () => {
 test("recuperarNaSubida também mata o pi das avaliações do reinício", () => {
   banco.exec(`INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
     VALUES ('antiga', 'loja', '2026-10-01', '2026-10-02', '', ${T}, 999999999)`);
-  condutor.recuperarNaSubida(banco);
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
   assert.equal(banco.prepare("SELECT grupo_processo FROM avaliacao WHERE id = 'antiga'").get()?.grupo_processo, null);
 });

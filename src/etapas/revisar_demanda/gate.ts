@@ -1,10 +1,11 @@
 // O Gate da revisão da demanda, dono do `revisar_demanda`: o agente revisor aprova a demanda inteira ou abre rodadas corretivas.
 import type { AgregadoDemanda, Decisao, TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { ancoraNaDemanda, type EntradaReprovada, Gate } from "../../sdlc/nucleo/gate.ts";
-import { criarTicket, type Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { criarTicket } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { type Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { correcaoDasRodadasNovas, materializar } from "../../sdlc/nucleo/demanda/plano.ts";
 import { exigirSemPendencias, mudarTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { DEFINICAO_DO_REVISAR_DEMANDA } from "./definicao.ts";

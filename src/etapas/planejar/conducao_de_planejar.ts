@@ -4,18 +4,22 @@ import type { TicketDemanda } from "../../sdlc/nucleo/demanda/agregado_demanda.t
 import { CICLO_DA_DEMANDA } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { predecessorasPendentes } from "../../sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
+import { secaoDoPromptDoPlanejar } from "./secao_do_prompt.ts";
 import { DEFINICAO_DO_PLANEJAR } from "./definicao.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { reservarTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../sdlc/nucleo/tentativa.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../sdlc/armazenamento/dependencias_demanda.ts";
 import { carregarTrabalhosDoTicket } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { OpcoesExecucaoDemanda } from "../../trabalho_agentico/aplicacao/execucao_demanda.ts";
-import { ConducaoInterativa, type DepsDaConducao } from "../conducao/conducao_de_etapa.ts";
+import type { OpcoesExecucaoDemanda } from "../../sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { ConducaoInterativa } from "../conducao/conducao_de_etapa.ts";
+import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 
 export class ConducaoDePlanejar extends ConducaoInterativa {
+  protected override readonly secaoDoPrompt = secaoDoPromptDoPlanejar;
+
   constructor(deps: DepsDaConducao) {
     super(DEFINICAO_DO_PLANEJAR, deps);
   }

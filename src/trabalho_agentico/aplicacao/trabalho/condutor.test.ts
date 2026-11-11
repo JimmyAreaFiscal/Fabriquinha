@@ -21,10 +21,13 @@ import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { executar } from "../../../compartilhado/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../../sdlc/nucleo/tentativa.ts";
+import {
+  falhaPorServicoReiniciado,
+  falhaQueExigeOAuditor,
+} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import type { Harness } from "../../../harness/harness.ts";
 import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
-import type { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import {
   atividadeDo,
   condutor,
@@ -33,6 +36,7 @@ import {
   type PedidoDeProcesso,
 } from "./condutor.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
+import { recuperacaoDaSubida } from "../../../composicao/servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
@@ -528,7 +532,7 @@ test("recuperarNaSubida mata numa chamada só os grupos órfãos do ticket, da a
       INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid)
         VALUES (1, 1, 1, 'em_andamento', NULL, ${String(daSimulacao.pgid)})`);
 
-    condutor.recuperarNaSubida(banco);
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
 
     for (const grupo of [daTicket, daAvaliacao, daSimulacao]) assert.deepEqual(await grupo.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -546,7 +550,7 @@ test("recuperarNaSubida mata numa chamada só os grupos órfãos do ticket, da a
 test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chegou a lançar o pi", () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    condutor.recuperarNaSubida(banco);
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
       INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('sem-pi', 'd', '2026-01-01', '2026-01-02', '', 't');
       INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
@@ -554,7 +558,7 @@ test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chego
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    condutor.recuperarNaSubida(banco);
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -606,7 +610,7 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
         }),
     );
 
-    condutor.recuperarNaSubida(banco);
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
 
     await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
     const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
@@ -641,7 +645,7 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
               dir_do_harness_do_auditor: dirDoPiDoAuditor(),
             }),
         );
-      condutor.recuperarNaSubida(banco);
+      condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
       assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
     } finally {
       montarConjuntoDoServico(() => undefined);

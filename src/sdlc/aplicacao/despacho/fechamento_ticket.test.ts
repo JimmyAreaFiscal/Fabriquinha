@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
+import { falhaQueExigeOAuditor } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { cenarioDeImplementacao, ref, ticket } from "../../../../apoio-testes/cenario_de_implementacao.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 

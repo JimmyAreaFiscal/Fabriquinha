@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../../sdlc/nucleo/ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
@@ -21,7 +21,7 @@ import {
   REF_GLOBAL,
   REF_RODADA,
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { decidirGate } from "../../sdlc/aplicacao/gates/decidir_gate.ts";
+import { decidirGate } from "../gates.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 
