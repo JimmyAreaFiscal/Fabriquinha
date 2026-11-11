@@ -46,4 +46,5 @@ Corte o trabalho para que cada PR fique em torno de 10 arquivos e não passe de 
 
 Se o pi na OpenAI estourar contexto ou cota, pare e me avise para eu trocar para a Anthropic. Retome a mesma sessão. Não recomece a demanda.
 
-Preserve demandas, branches e PRs já em andamento. Não reescreva o histórico para o modelo novo.
+Preserve demandas, branches e PRs já em andamento.
+Não reescreva o histórico para o modelo novo.
