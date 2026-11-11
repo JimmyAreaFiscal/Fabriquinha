@@ -9,7 +9,7 @@ import type { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_
 import { PlanoProposto } from "../../../demanda/nucleo/plano.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import { Motivo, Slug, unicoPor } from "../../../compartilhado/nucleo/primitivos.ts";
-import { Hospedagem } from "../../../ambiente/nucleo/projeto.ts";
+import { Hospedagem } from "../../../projeto/nucleo/projeto.ts";
 import {
   AnaliseSeguranca,
   ArvorePRsCriteriosCustos,

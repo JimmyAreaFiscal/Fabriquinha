@@ -10,7 +10,7 @@ import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { gravarCommitDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
-import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
@@ -18,10 +18,10 @@ import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
 import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import { verificacaoDeTeste } from "../../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../ambiente/infra/worktree/worktree-demanda.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "../../qualidade/aplicacao/evidencias/verificacoes.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../../execucao/aplicacao/despacho.ts";
-import { AmbienteHostLocal } from "../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

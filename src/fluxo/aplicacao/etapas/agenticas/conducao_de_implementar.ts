@@ -8,26 +8,26 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../../../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../../demanda/nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../../../nucleo/transicoes/conclusao_ticket.ts";
-import { espacoDoTicket } from "../../../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { espacoDoTicket } from "../../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { type DefinicaoDaEtapa, CATALOGO_DE_ETAPAS } from "../../../nucleo/etapa.ts";
 import { evidenciasPendentes } from "../../../../qualidade/nucleo/evidencias/evidencia.ts";
 import { CATALOGO_ETAPAS } from "../../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
 import { Endereco } from "../../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { Projeto } from "../../../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
 import { falhaPorServicoReiniciado, rotuloDaCausa } from "../../../../execucao/nucleo/tentativa.ts";
 import { concluirImplementacoesRodada } from "../../../nucleo/transicoes/transicoes_rodada.ts";
 import { raizDo } from "../../../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
-import { carregarProjeto } from "../../../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { HooksDoCommit } from "../../../../qualidade/infra/hooks_do_commit.ts";
 import type { OpcoesSonar } from "../../../../qualidade/infra/tipos_de_verificacao/sonar.ts";
 import { montarVerificacoesDaEtapa } from "../../../../qualidade/infra/verificacao.ts";
-import type { Ambiente } from "../../../../ambiente/infra/ambiente.ts";
-import { ambienteDoEspaco } from "../../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
+import type { Ambiente } from "../../../../sandbox/infra/ambiente.ts";
+import { ambienteDoEspaco } from "../../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import {
   acharCommitTicketDemanda,
   commitarTicketDemanda,
-} from "../../../../ambiente/aplicacao/espaco/commit_ticket_demanda.ts";
+} from "../../../../repositorio/aplicacao/espaco/commit_ticket_demanda.ts";
 import { submeterEvidencia } from "../../../../qualidade/aplicacao/evidencias/submeter.ts";
 import {
   coletarVerificacoes,

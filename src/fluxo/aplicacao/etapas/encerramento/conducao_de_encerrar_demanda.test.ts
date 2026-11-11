@@ -19,11 +19,11 @@ import {
 } from "../../../nucleo/transicoes/transicoes_encerramento.ts";
 import { gravarCommitDemanda } from "../../../../demanda/armazenamento/commits_demanda.ts";
 import { cursorDaBase } from "../../../../custos/armazenamento/commits_humanos.ts";
-import { registrarProjeto } from "../../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
-import { pendenciasDeLimpeza } from "../../../../ambiente/infra/worktree/limpeza_demanda.ts";
+import { pendenciasDeLimpeza } from "../../../../repositorio/infra/worktree/limpeza_demanda.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo,
@@ -32,13 +32,13 @@ import {
 import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
-} from "../../../../ambiente/infra/worktree/worktree-demanda.ts";
+} from "../../../../repositorio/infra/worktree/worktree-demanda.ts";
 import { Endereco } from "../../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { anotar } from "../../../../compartilhado/infra/registro.ts";
 import { relogioFixo } from "../../../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../../../execucao/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

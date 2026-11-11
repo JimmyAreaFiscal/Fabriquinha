@@ -5,7 +5,7 @@ import { CICLO_DA_DEMANDA } from "../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
 import { ConfiguracaoAgente } from "../../execucao/nucleo/configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoPrevisto, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "../../fluxo/nucleo/transicoes/encerramento_demanda.ts";
-import { PullRequest, prDoEscopo } from "../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { PullRequest, prDoEscopo } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { TipoEvidencia } from "../../qualidade/nucleo/evidencias/evidencia.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho/item_de_trabalho.ts";
 import { OrigemDaVersao } from "./plano.ts";

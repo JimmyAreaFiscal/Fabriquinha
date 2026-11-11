@@ -13,7 +13,7 @@ import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_traba
 import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../../nucleo/trabalho_agentico.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";

@@ -19,7 +19,7 @@ import {
 } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
 import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

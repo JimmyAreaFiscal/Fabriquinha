@@ -11,8 +11,8 @@ import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalh
 import { interromperExecucaoDemanda } from "../src/execucao/aplicacao/execucao_demanda.ts";
 import { cicloDoDespacho, executarAgora } from "../src/execucao/aplicacao/despacho.ts";
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { gravarProjeto, projetoExistente } from "../src/ambiente/armazenamento/projetos.ts";
-import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { gravarProjeto, projetoExistente } from "../src/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";

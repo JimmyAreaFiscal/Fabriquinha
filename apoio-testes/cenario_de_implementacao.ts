@@ -13,10 +13,10 @@ import {
   type CondutorDeTrabalhos,
 } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/compartilhado/infra/registro.ts";
-import { registrarProjeto } from "../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
-import { AmbienteHostLocal } from "../src/ambiente/infra/ambiente_host_local.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+import { AmbienteHostLocal } from "../src/sandbox/infra/host_local/ambiente_host_local.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";

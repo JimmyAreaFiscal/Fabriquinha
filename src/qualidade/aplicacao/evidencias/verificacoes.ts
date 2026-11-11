@@ -1,7 +1,7 @@
 // Coleta das verificações de um ticket da demanda (execucao_testes, matriz_fitness, relatorio_sonar), sem banco: devolve
 // o resultado para quem chama gravar as evidências e decidir. Não grava, não conclui, não devolve, não falha, não commita.
-import type { Ambiente } from "../../../ambiente/infra/ambiente.ts";
-import type { Projeto } from "../../../ambiente/nucleo/projeto.ts";
+import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
+import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import { VerificacaoDeFitness } from "../../infra/tipos_de_verificacao/fitness.ts";
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/tipos_de_verificacao/sonar.ts";
 import { VerificacaoDeTestes } from "../../infra/tipos_de_verificacao/testes.ts";

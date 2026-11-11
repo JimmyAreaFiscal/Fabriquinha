@@ -1,6 +1,6 @@
 // O E2E de uma linguagem do projeto: build e execução, na pasta dela. Só o `codigo_falha` reprova; outra saída é infraestrutura.
 import { join } from "node:path";
-import type { Projeto } from "../../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import {
   aprovacao,
   classificarComando,

@@ -9,7 +9,7 @@ import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { LIMITE } from "../nucleo/evidencias/schemas.ts";
 import type { CausaDeInfraestrutura } from "../../execucao/nucleo/tentativa.ts";
 import { classificarSaidaDeComando, type ResultadoDaVerificacao, type TipoVerificacao } from "../nucleo/verificacao.ts";
-import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../../ambiente/infra/ambiente.ts";
+import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../../sandbox/infra/ambiente.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
 export type Falha =

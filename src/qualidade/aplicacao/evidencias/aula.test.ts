@@ -12,8 +12,8 @@ import {
   type TicketDemanda,
 } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { ComandoNoAmbiente } from "../../../ambiente/infra/ambiente.ts";
-import { AmbienteHostLocal } from "../../../ambiente/infra/ambiente_host_local.ts";
+import type { ComandoNoAmbiente } from "../../../sandbox/infra/ambiente.ts";
+import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { faixas, gerarAula, linhasMudadas, type Trecho } from "./aula.ts";
 
 /** O host local registrando cada comando que recebe, para provar que o git passou pelo Ambiente. */

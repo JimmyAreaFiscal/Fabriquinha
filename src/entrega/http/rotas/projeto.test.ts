@@ -11,7 +11,7 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import type { MetricasDoMes } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";

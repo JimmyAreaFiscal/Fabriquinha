@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../../execucao/nucleo/despacho.ts";
 import { commitDoTicketDemanda } from "../../../../demanda/armazenamento/commits_demanda.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,
@@ -22,7 +22,7 @@ import {
 } from "../../../../../apoio-testes/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { CondutorDeTrabalhos } from "../../../../execucao/aplicacao/trabalho/condutor.ts";
-import { commitarTicketDemanda } from "../../../../ambiente/aplicacao/espaco/commit_ticket_demanda.ts";
+import { commitarTicketDemanda } from "../../../../repositorio/aplicacao/espaco/commit_ticket_demanda.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
 
 const conduzir = (

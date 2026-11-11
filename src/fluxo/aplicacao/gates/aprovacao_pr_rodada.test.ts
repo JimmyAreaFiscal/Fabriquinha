@@ -12,15 +12,18 @@ import { AUDITOR, type Ator } from "../../nucleo/ator.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../nucleo/gate.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../../../compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../ambiente/infra/worktree/worktree-demanda.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../repositorio/infra/worktree/worktree-demanda.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "./decidir_gate.ts";
-import { AmbienteHostLocal } from "../../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

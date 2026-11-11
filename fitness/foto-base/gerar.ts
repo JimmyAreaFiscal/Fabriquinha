@@ -26,7 +26,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
 import { servirWeb } from "../../src/entrega/http/servidor.ts";
 import { noLog } from "../../src/compartilhado/infra/registro.ts";
-import { publicarPRDe } from "../../src/ambiente/infra/repositorio/pr.ts";
+import { publicarPRDe } from "../../src/repositorio/infra/hospedagem/pr.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
 

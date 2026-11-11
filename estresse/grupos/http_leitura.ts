@@ -10,9 +10,9 @@ import { criarAvaliacao } from "../../src/qualidade/armazenamento/avaliacoes.ts"
 import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/demanda/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/qualidade/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../src/projeto/aplicacao/cadastro.ts";
 import { comTrabalhosDoTicket } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
-import { exigirGit } from "../../src/ambiente/infra/worktree/worktree.ts";
+import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 

@@ -2,7 +2,8 @@
 import { z } from "zod";
 import { ConfiguracaoAgente } from "../../execucao/nucleo/configuracao_agente.ts";
 import { EtapaTicket, Modelo } from "../../compartilhado/nucleo/primitivos.ts";
-import { ComandosDePreparacao, ConfiguracaoDoAmbiente, Hospedagem, Projeto } from "../../ambiente/nucleo/projeto.ts";
+import { ComandosDePreparacao, Hospedagem, Projeto } from "../../projeto/nucleo/projeto.ts";
+import { ConfiguracaoDoAmbiente } from "../../sandbox/nucleo/configuracao_do_ambiente.ts";
 
 /** `GET` e `POST /api/configuracao`: a configuração do F4 §3 e a próxima busca do agendador, só ligado. */
 export const EstadoDaConfiguracao = z.strictObject({

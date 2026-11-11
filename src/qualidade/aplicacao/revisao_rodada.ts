@@ -6,17 +6,17 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
 import { branchDemanda, branchRodada, formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { espacoDoTicket } from "../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { escrever, raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarProjeto } from "../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { carregarDemanda } from "../../demanda/armazenamento/demandas.ts";
-import { arquivosDe } from "../../ambiente/infra/repositorio/commit.ts";
-import { exigirGit } from "../../ambiente/infra/worktree/worktree.ts";
+import { arquivosDe } from "../../repositorio/infra/git/commit.ts";
+import { exigirGit } from "../../repositorio/infra/worktree/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/tipos_de_verificacao/fitness.ts";
 import { montarVerificacoesDaEtapa } from "../infra/verificacao.ts";
-import { ambienteDoEspaco } from "../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { cicloDoEspaco } from "../../ambiente/aplicacao/espaco/ciclo_do_espaco.ts";
+import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
+import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { submeterEvidencia } from "./evidencias/submeter.ts";
 
 /**

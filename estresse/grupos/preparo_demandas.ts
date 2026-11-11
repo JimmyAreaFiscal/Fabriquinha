@@ -13,14 +13,17 @@ import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
 import { comDemanda } from "../../src/demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { importarAchados } from "../../src/qualidade/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../src/projeto/aplicacao/cadastro.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/qualidade/armazenamento/simulacao.ts";
 import { comTrabalhosDoTicket } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/ambiente/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../../src/ambiente/infra/worktree/worktree.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../src/repositorio/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../src/sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

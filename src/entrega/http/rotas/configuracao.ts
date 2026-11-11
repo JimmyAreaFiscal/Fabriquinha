@@ -4,18 +4,15 @@ import {
   cadastrarProjetoDoFormulario,
   editarProjetoDoFormulario,
   removerProjeto,
-} from "../../../ambiente/aplicacao/projeto/cadastro.ts";
-import {
-  conferirESalvarConfiguracao,
-  validarESalvarConfiguracaoDoAmbiente,
-} from "../../../ambiente/aplicacao/projeto/configuracao_do_ambiente.ts";
-import { eliminarAmbienteDoConjunto } from "../../../ambiente/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
+} from "../../../projeto/aplicacao/cadastro.ts";
+import { conferirESalvarConfiguracao } from "../../../projeto/aplicacao/configuracao_do_agente.ts";
+import { eliminarAmbienteDoConjunto } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
-} from "../../../ambiente/aplicacao/consultas/configuracao.ts";
+} from "../../../projeto/aplicacao/consultas/configuracao.ts";
 import {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -29,6 +26,7 @@ import {
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 /** O harness do serviço confere o modelo novo ou trocado (F4 §9). */
 const conferirModeloNoHarness = (modelo: Modelo): Promise<void> => condutor.harness.conferirModelo(modelo);

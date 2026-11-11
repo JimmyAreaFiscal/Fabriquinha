@@ -16,8 +16,8 @@ import { cicloDoDespacho, type DepsDespacho } from "../src/execucao/aplicacao/de
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
-import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { carregarDemanda } from "../src/demanda/armazenamento/demandas.ts";
 import { gravarUsoDeclarado } from "../src/custos/armazenamento/uso_declarado.ts";
 import { type Configuracao, configuracao } from "../src/compartilhado/armazenamento/servico.ts";

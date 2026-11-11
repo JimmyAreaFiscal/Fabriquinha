@@ -8,7 +8,7 @@ import { schemaDoTipo } from "../../../qualidade/nucleo/evidencias/evidencia.ts"
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { visaoDaDemanda } from "../../../demanda/aplicacao/consultas/visao_da_demanda.ts";
-import { projetoExistente } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { projetoExistente } from "../../../projeto/aplicacao/cadastro.ts";
 import {
   escopoDoProcessoAberto,
   exigirDemandaPropria,

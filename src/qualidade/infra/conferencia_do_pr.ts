@@ -1,10 +1,10 @@
 // A conferência do PR na hospedagem (F5 §5.1, passo 4): conflito ou check falho reprova; a hospedagem que não decide no
 // limite é falha de infraestrutura. Não gera Evidência.
 import { ErroExterno } from "../../compartilhado/nucleo/erros.ts";
-import type { Projeto } from "../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { falhaDoErro } from "../../execucao/nucleo/tentativa.ts";
 import type { ResultadoDaVerificacao } from "../nucleo/verificacao.ts";
-import { type OpcoesVerificacao, type ProblemasDoPR, verificarPR } from "../../ambiente/infra/repositorio/pr.ts";
+import { type OpcoesVerificacao, type ProblemasDoPR, verificarPR } from "../../repositorio/infra/hospedagem/pr.ts";
 import { Verificacao } from "./verificacao.ts";
 
 /** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `verificarPR`. */

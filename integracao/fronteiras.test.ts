@@ -9,8 +9,8 @@ import { ZodError } from "zod";
 import { type Ator } from "../src/fluxo/nucleo/ator.ts";
 import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
 import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { buscarProjeto, gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
-import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { buscarProjeto, gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import {
   AUTOR,
   base,

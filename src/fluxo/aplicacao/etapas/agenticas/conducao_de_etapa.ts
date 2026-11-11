@@ -5,7 +5,7 @@ import { FABRIQUINHA } from "../../../nucleo/ator.ts";
 import type { TicketDemanda } from "../../../../demanda/nucleo/agregado_demanda.ts";
 import { encontrado, existe } from "../../../../compartilhado/nucleo/erros.ts";
 import type { DefinicaoDaEtapa } from "../../../nucleo/etapa.ts";
-import { espacoDoTicket } from "../../../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { espacoDoTicket } from "../../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { Endereco } from "../../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { reservarTicket } from "../../../../execucao/nucleo/reserva_ticket.ts";
 import {
@@ -18,11 +18,11 @@ import {
 import { devolverTicket, registrarFalhaTicket } from "../../../nucleo/transicoes/transicoes_demanda.ts";
 import { raizDo } from "../../../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
-import { carregarProjeto } from "../../../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../../../compartilhado/armazenamento/servico.ts";
 import type { anotar } from "../../../../compartilhado/infra/registro.ts";
-import { ambienteDoEspaco } from "../../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { cicloDoEspaco } from "../../../../ambiente/aplicacao/espaco/ciclo_do_espaco.ts";
+import { ambienteDoEspaco } from "../../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
+import { cicloDoEspaco } from "../../../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../../../../execucao/aplicacao/execucao_demanda.ts";
 import type { Relogio } from "../../../../compartilhado/nucleo/relogio.ts";
 import type { CondutorDeTrabalhos } from "../../../../execucao/aplicacao/trabalho/condutor.ts";

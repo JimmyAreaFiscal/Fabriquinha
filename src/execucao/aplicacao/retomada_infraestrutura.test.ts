@@ -17,7 +17,7 @@ import {
   type ResultadoDaTentativa,
 } from "../nucleo/tentativa.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 

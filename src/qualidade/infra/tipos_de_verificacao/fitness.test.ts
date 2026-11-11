@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ComandoRodado } from "../../nucleo/evidencias/schemas.ts";
-import { Projeto } from "../../../ambiente/nucleo/projeto.ts";
-import { AmbienteHostLocal } from "../../../ambiente/infra/ambiente_host_local.ts";
+import { Projeto } from "../../../projeto/nucleo/projeto.ts";
+import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { VerificacaoDeFitness } from "./fitness.ts";
 
 const ambiente = new AmbienteHostLocal();

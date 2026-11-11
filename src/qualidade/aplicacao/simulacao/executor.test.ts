@@ -15,8 +15,8 @@ import { SEM_LINK } from "../../nucleo/simulacao.ts";
 import { PACOTE } from "../../../harness/pi/pi.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../../compartilhado/infra/registro.ts";
-import { buscarProjeto } from "../../../ambiente/armazenamento/projetos.ts";
-import { editarProjeto, registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { buscarProjeto } from "../../../projeto/armazenamento/projetos.ts";
+import { editarProjeto, registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../../armazenamento/simulacao.ts";
 import { conferirLink, executarTarefa, executarTarefaComConfiguracao } from "./executor.ts";
 

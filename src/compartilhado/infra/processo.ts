@@ -4,7 +4,9 @@ import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { LIMITE_COMANDO_MS } from "../../ambiente/infra/ambiente.ts";
+
+/** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
+export const LIMITE_COMANDO_MS = 30 * 60_000;
 
 /**
  * `sinal` para o grupo de processos `pgid` inteiro. Grupo que já acabou é ignorado: quem ainda segura o stdout saiu

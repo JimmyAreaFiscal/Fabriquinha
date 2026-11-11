@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
-import type { Projeto } from "../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { resolverModeloEffort } from "./modelo_effort.ts";
 
 const modeloDoTicket = { provedor: "anthropic", nome: "opus" };

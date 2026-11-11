@@ -8,7 +8,7 @@ import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo } from "./evidencia_demanda.ts";
-import { removerProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { removerProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { comEvidencia } from "../../../apoio-testes/cenarios_de_demanda.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

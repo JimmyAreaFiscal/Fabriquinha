@@ -9,12 +9,12 @@ import { once } from "node:events";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../apoio-testes/ambiente_falso.ts";
-import { montarAmbienteDoServico } from "../src/ambiente/aplicacao/espaco/ambiente_do_servico.ts";
+import { montarAmbienteDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
 import type { DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
-import { gravarProjeto, projetoExistente } from "../src/ambiente/armazenamento/projetos.ts";
-import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { gravarProjeto, projetoExistente } from "../src/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "./apoio-execucao.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import { base, ciclo, criarCenario, demanda } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
 

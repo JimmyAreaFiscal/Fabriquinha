@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

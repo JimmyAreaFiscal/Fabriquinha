@@ -20,7 +20,7 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencias/evidencia.ts";
-import type { Ambiente } from "../../../ambiente/infra/ambiente.ts";
+import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
 import { type AnexoEnviado, guardarAnexos, guardarAnexosEnviados } from "./submissao.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

@@ -16,8 +16,11 @@ import {
 import { marcaDoPRFinal } from "../src/qualidade/aplicacao/pull_request/encerramento_demanda.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
 import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { integrarPR } from "../src/ambiente/infra/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { integrarPR } from "../src/repositorio/infra/hospedagem/pr.ts";
+import {
+  caminhoDaWorktreeDemanda,
+  caminhoDaWorktreeRodada,
+} from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

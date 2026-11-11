@@ -24,9 +24,9 @@ import type {
   ProcessoDoAgente,
   RespostaDaConsulta,
 } from "../../../harness/harness.ts";
-import type { Ambiente, IdentificadorDoProcesso } from "../../../ambiente/infra/ambiente.ts";
+import type { Ambiente, IdentificadorDoProcesso } from "../../../sandbox/infra/ambiente.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
-import { ambienteDoServico, conjuntoDoServico } from "../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
+import { ambienteDoServico, conjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "./auditor_automatico.ts";
 import { type AvisarSessao, recuperarProcessosAbertos } from "./processo_do_ticket.ts";
 
@@ -731,10 +731,10 @@ export class CondutorDeTrabalhos {
           fim();
           return;
         }
-        // Sem código, o pi do host morreu por sinal: o cgroup do serviço ou um kill externo, que a Fabriquinha trata como
-        // reinício. No container o processo sai com 128+sinal, e o reinício é decidido pela `recuperarNaSubida`.
+        // Sem código, o pi do Ambiente cujos processos morrem com o serviço morreu por sinal: o cgroup do serviço ou um kill
+        // externo, que a Fabriquinha trata como reinício. Nos outros o reinício é decidido pela `recuperarNaSubida`.
         fim(
-          codigo === null && ambienteDoPi.tipo === "host_local"
+          codigo === null && ambienteDoPi.processosMorremComOServico
             ? falhaPorServicoReiniciado
             : falhaQueExigeOAuditor(
                 `o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`,

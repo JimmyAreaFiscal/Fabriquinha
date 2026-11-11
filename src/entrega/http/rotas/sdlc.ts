@@ -1,9 +1,9 @@
 // Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto`, ao lado do cadastro do projeto
 // (`/api/projetos/:nome`).
 import { z } from "zod";
-import { ProjetoConfigurado } from "../../../ambiente/nucleo/projeto.ts";
-import { gravarConfiguracaoSdlc, projetoExistente } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
-import { consultarConfiguracaoSdlc } from "../../../ambiente/aplicacao/consultas/sdlc.ts";
+import { ProjetoConfigurado } from "../../../projeto/nucleo/projeto.ts";
+import { gravarConfiguracaoSdlc, projetoExistente } from "../../../projeto/aplicacao/cadastro.ts";
+import { consultarConfiguracaoSdlc } from "../../../projeto/aplicacao/consultas/sdlc.ts";
 import { ConfiguracaoSdlcDoProjeto } from "../../contrato/sdlc.ts";
 import type { Rota } from "../rotas.ts";
 

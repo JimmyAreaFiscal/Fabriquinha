@@ -6,8 +6,8 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { executar } from "../../../compartilhado/infra/processo.ts";
-import type { Ambiente } from "../../../ambiente/infra/ambiente.ts";
-import { exigirGitNoAmbiente } from "../../../ambiente/infra/worktree/worktree.ts";
+import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
+import { exigirGitNoAmbiente } from "../../../repositorio/infra/worktree/worktree.ts";
 import {
   aprovacao,
   type ContextoDaVerificacao,

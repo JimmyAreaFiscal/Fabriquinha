@@ -2,7 +2,7 @@
 // formato do CLI do agente. Só tipos e schemas; o endpoint e o cliente empacotado compartilham este arquivo.
 import { z } from "zod";
 import { TipoEvidencia } from "../../qualidade/nucleo/evidencias/evidencia.ts";
-import { Projeto } from "../../ambiente/nucleo/projeto.ts";
+import { Projeto } from "../../projeto/nucleo/projeto.ts";
 
 const EnderecoDoTicket = z.string().min(1);
 const Veredito = z.enum(["atende", "nao_atende"]);

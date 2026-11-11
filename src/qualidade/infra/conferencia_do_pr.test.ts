@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
-import type { Hospedagem } from "../../ambiente/nucleo/projeto.ts";
-import type { OpcoesVerificacao } from "../../ambiente/infra/repositorio/pr.ts";
+import type { Hospedagem } from "../../projeto/nucleo/projeto.ts";
+import type { OpcoesVerificacao } from "../../repositorio/infra/hospedagem/pr.ts";
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-conferencia-pr-")));

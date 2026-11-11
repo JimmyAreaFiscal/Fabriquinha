@@ -1,11 +1,12 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
-import type { ConfiguracaoDoAmbiente, Hospedagem, Projeto } from "../../../ambiente/nucleo/projeto.ts";
+import type { Hospedagem, Projeto } from "../../../projeto/nucleo/projeto.ts";
 import type { Effort, EtapaTicket, Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
 import type { UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { escapar, hora, nomeDoModelo } from "../render.ts";
 import { ACAO_DA_ETAPA } from "../rotulos.ts";
+import type { ConfiguracaoDoAmbiente } from "../../../sandbox/nucleo/configuracao_do_ambiente.ts";
 
 /** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
 type ConfiguracoesPorEtapa = Pick<ProjetoCadastrado, "configuracoes">;

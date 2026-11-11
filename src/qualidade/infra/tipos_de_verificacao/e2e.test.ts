@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { AmbienteHostLocal } from "../../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { VerificacaoE2E } from "./e2e.ts";
 
 const ambiente = new AmbienteHostLocal();

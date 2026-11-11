@@ -13,7 +13,7 @@ import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import type { DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
 import { ConducaoDePlanejar } from "../src/fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
-import { conjuntoDoServico } from "../src/ambiente/aplicacao/espaco/ambiente_do_servico.ts";
+import { conjuntoDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
 import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
 import { enviarDemanda, lerConversa } from "../src/execucao/aplicacao/sessoes/sessoes_demanda.ts";
@@ -24,8 +24,8 @@ import { anotar, pastasDoProcesso } from "../src/compartilhado/infra/registro.ts
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../src/ambiente/infra/worktree/worktree.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../src/repositorio/infra/worktree/worktree.ts";
 import { iniciarServico } from "../src/composicao/servico.ts";
 import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
 import { gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
@@ -573,7 +573,11 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    assert.ok(!origens.some((origem) => /\/\.(pi|claude|codex)/.test(origem ?? "")));
+    // Pelo caminho das pastas copiadas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
+    const copiadas = [dirDoPiDoAuditor(), join(c.raiz, ".claude"), join(c.raiz, ".codex")];
+    assert.ok(
+      !origens.some((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
+    );
     assert.equal(binds?.length, 9);
   },
 );
@@ -678,8 +682,7 @@ test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_
     alocado_para: string;
   }[];
   assert.ok(alocados.length > 0);
-  for (const { alocado_para } of alocados)
-    await conjuntoDoServico()?.liberar({ dono: Endereco.ler(alocado_para), branch: "b", base: "b", pasta: "/p" });
+  for (const { alocado_para } of alocados) await conjuntoDoServico()?.liberar({ dono: alocado_para });
 
   const segunda = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
 

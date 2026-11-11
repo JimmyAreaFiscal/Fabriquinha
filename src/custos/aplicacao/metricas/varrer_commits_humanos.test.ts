@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { gravarCommitDemanda } from "../../../demanda/armazenamento/commits_demanda.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { registrarCommitsHumanosDoTicket, varrerCommitsHumanos } from "./varrer_commits_humanos.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

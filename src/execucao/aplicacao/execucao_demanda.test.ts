@@ -25,7 +25,7 @@ import { anotar, pastasDoProcesso } from "../../compartilhado/infra/registro.ts"
 import { ConducaoDeImplementar } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "./trabalho/condutor.ts";
-import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { gravarCommitDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
@@ -36,10 +36,10 @@ import {
   processoVivoDoToken,
 } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda } from "../../ambiente/infra/worktree/worktree-demanda.ts";
+import { garantirWorktreeDemanda } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { AmbienteHostLocal } from "../../ambiente/infra/ambiente_host_local.ts";
-import { montarAmbienteDoServico } from "../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
+import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
+import { montarAmbienteDoServico } from "../../sandbox/aplicacao/ambiente_do_servico.ts";
 
 const ambiente = new AmbienteHostLocal();
 

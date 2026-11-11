@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync, realpathSync } from "node:fs";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ambiente } from "../../../ambiente/infra/ambiente.ts";
+import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { guardarArquivos } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos } from "../../nucleo/evidencias/schemas.ts";

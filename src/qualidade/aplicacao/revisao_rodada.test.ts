@@ -9,11 +9,11 @@ import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho
 import { reabrirTicket } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../../execucao/nucleo/tentativa.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../../fluxo/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarProjeto, gravarProjeto } from "../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto, gravarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
-import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
@@ -23,7 +23,7 @@ import {
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { decidirGate } from "../../fluxo/aplicacao/gates/decidir_gate.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
-import { AmbienteHostLocal } from "../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

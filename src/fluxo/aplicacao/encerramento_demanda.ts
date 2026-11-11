@@ -3,10 +3,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, prDaDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import type { Projeto } from "../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
-import { publicarPRDe } from "../../ambiente/infra/repositorio/pr.ts";
-import { exigirGit } from "../../ambiente/infra/worktree/worktree.ts";
+import { publicarPRDe } from "../../repositorio/infra/hospedagem/pr.ts";
+import { exigirGit } from "../../repositorio/infra/worktree/worktree.ts";
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,

@@ -12,16 +12,16 @@ import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
-import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../ambiente/armazenamento/ambientes.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../sandbox/armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../compartilhado/nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../compartilhado/armazenamento/migracoes/migracoes.ts";
-import { registrarProjeto } from "../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../projeto/aplicacao/cadastro.ts";
 import { Configuracao, salvarConfiguracao } from "../compartilhado/armazenamento/servico.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../ambiente/aplicacao/projeto/configuracao_do_ambiente.ts";
 import { criarUsuarioSimulado } from "../qualidade/armazenamento/simulacao.ts";
 import { condutor } from "../execucao/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 /** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */

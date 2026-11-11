@@ -15,20 +15,20 @@ import { produtividadeDaRodada } from "../../custos/aplicacao/produtividade_roda
 import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
-import { carregarProjeto } from "../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
 } from "../../execucao/armazenamento/trabalho_agentico.ts";
-import { publicarPRDe } from "../../ambiente/infra/repositorio/pr.ts";
+import { publicarPRDe } from "../../repositorio/infra/hospedagem/pr.ts";
 import { ConferenciaDoPR } from "../../qualidade/infra/conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
-import { exigirGit } from "../../ambiente/infra/worktree/worktree.ts";
-import { espacoDoTicket } from "../../ambiente/nucleo/espaco_de_trabalho.ts";
-import { ambienteDoEspaco } from "../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { cicloDoEspaco } from "../../ambiente/aplicacao/espaco/ciclo_do_espaco.ts";
+import { exigirGit } from "../../repositorio/infra/worktree/worktree.ts";
+import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
+import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
+import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../execucao/aplicacao/trabalho/condutor.ts";
 import { registrarUsoDaConsulta } from "../../execucao/aplicacao/trabalho/processo_do_ticket.ts";

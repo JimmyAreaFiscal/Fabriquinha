@@ -15,7 +15,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
 import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { AmbienteHostLocal } from "../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 import type { executar } from "../../compartilhado/infra/processo.ts";
 import { HarnessPi, divisorJsonl } from "./harness_pi.ts";
 import { PACOTE } from "./pi.ts";
@@ -146,14 +146,15 @@ test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais
     PI_CODING_AGENT_DIR: "/home/host/.pi/agent",
     ANTHROPIC_API_KEY: "chave",
   };
+  const AMBIENTE_ISOLADO = { isolaAsVariaveisDoServico: true };
   const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
   Object.assign(process.env, herdadas);
   try {
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket", "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket", AMBIENTE_ISOLADO), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
     });
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", "auditoria", "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", "auditoria", AMBIENTE_ISOLADO), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_ROOT: "/r",
       FABRIQUINHA_AUDITORIA: "1",

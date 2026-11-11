@@ -27,7 +27,7 @@ import {
   demandaParaDependencia,
   gravarDependenciaDemanda,
 } from "../armazenamento/dependencias_demanda.ts";
-import { projetoExistente } from "../../ambiente/armazenamento/projetos.ts";
+import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
 import { gravarUsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "../../qualidade/aplicacao/evidencias/submeter.ts";
 import type { Origens } from "../../qualidade/aplicacao/evidencias/submissao.ts";

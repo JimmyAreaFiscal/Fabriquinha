@@ -1,7 +1,7 @@
 // O Harness (F4 §6.1): a ferramenta que roda o agente de código num Ambiente, hoje o pi (`harness/pi/`). O resto do
 // serviço só conhece esta interface; a única instância concreta nasce na composição e chega pelo `CondutorDeTrabalhos`.
 // Só tipos: o adapter é quem tem valor.
-import type { Ambiente, IdentificadorDoProcesso } from "../ambiente/infra/ambiente.ts";
+import type { Ambiente, IdentificadorDoProcesso } from "../sandbox/infra/ambiente.ts";
 import type { Effort, Modelo, ModoTrabalho } from "../compartilhado/nucleo/primitivos.ts";
 import type { LinhaDeUso } from "../custos/nucleo/uso.ts";
 

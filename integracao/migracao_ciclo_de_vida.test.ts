@@ -13,7 +13,7 @@ import type { EstadoDemanda } from "../src/compartilhado/nucleo/primitivos.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
-import { integrarPR } from "../src/ambiente/infra/repositorio/pr.ts";
+import { integrarPR } from "../src/repositorio/infra/hospedagem/pr.ts";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
   agregadoNoEstado,

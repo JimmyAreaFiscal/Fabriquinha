@@ -16,14 +16,14 @@ import { HarnessPi } from "../harness/pi/harness_pi.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../harness/pi/pi.ts";
 import { noLog } from "../compartilhado/infra/registro.ts";
 import { projetosAVarrer } from "../custos/armazenamento/commits_humanos.ts";
-import { configuracao, configuracaoDoAmbiente } from "../compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../compartilhado/armazenamento/servico.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
 import { cicloDoDespacho, executarAgora } from "../execucao/aplicacao/despacho.ts";
 import { condutor } from "../execucao/aplicacao/trabalho/condutor.ts";
-import { montarAmbienteDoServico, montarConjuntoDoServico } from "../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { AmbienteHostLocal } from "../ambiente/infra/ambiente_host_local.ts";
-import { GeradorDeAmbientes } from "../ambiente/infra/container/gerador_de_ambientes.ts";
-import { ConjuntoDeAmbientes } from "../ambiente/aplicacao/conjunto_de_ambientes/conjunto.ts";
+import { montarAmbienteDoServico, montarConjuntoDoServico } from "../sandbox/aplicacao/ambiente_do_servico.ts";
+import { AmbienteHostLocal } from "../sandbox/infra/host_local/ambiente_host_local.ts";
+import { conjuntoDoTipoConfigurado } from "../sandbox/aplicacao/configuracao_do_ambiente.ts";
+import type { ConjuntoDeAmbientes } from "../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
 
 /** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
 export const harnessDoServico = new HarnessPi();
@@ -96,18 +96,14 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   const { port: porta } = web.address() as AddressInfo;
   condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
-  /** O conjunto de Ambientes em container: só existe com `tipo = container`, e com `host_local` o docker nunca é chamado. */
-  let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
-  const conjuntoDoBanco = (banco: DatabaseSync): ConjuntoDeAmbientes | undefined => {
-    if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
-    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio, {
-      raiz,
-      porta_da_api: porta,
-      home_do_usuario: homedir(),
-      pacote_do_harness: PACOTE,
-      dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-    }));
-  };
+  /** O conjunto de Ambientes do tipo configurado; com `host_local` não há conjunto. */
+  const conjuntoDoBanco = conjuntoDoTipoConfigurado(relogio, {
+    raiz,
+    porta_da_api: porta,
+    home_do_usuario: homedir(),
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+  });
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
@@ -132,12 +128,13 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     throw error_;
   }
   const banco = aberto;
+  const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
 
-  const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
-  // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.
-  await conjuntoSeContainer()?.reconciliarNaSubida().catch(noLogDoServico);
+  // O conjunto fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica
+  // para a próxima subida.
+  await conjuntoConfigurado()?.reconciliarNaSubida().catch(noLogDoServico);
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
@@ -161,7 +158,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     batida = Date.parse(relogio.agora());
     try {
       const c = configuracao(banco);
-      const conjunto = conjuntoSeContainer();
+      const conjunto = conjuntoConfigurado();
       if (conjunto && !eliminacaoDeOciosos)
         eliminacaoDeOciosos = conjunto
           .eliminarOciosos(relogio.agora())

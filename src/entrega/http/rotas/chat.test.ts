@@ -15,10 +15,10 @@ import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { gravarConfiguracaoSdlc } from "../../../projeto/aplicacao/cadastro.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../execucao/aplicacao/execucao_demanda.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../../execucao/armazenamento/trabalho_agentico.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));

@@ -3,7 +3,7 @@
 import type { UsoDeclarado } from "../../../custos/armazenamento/uso_declarado.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
-import { prDoEspaco } from "../../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { prDoEspaco } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../nucleo/evidencias/schemas.ts";
 import type {
   ProcessoDoTrabalho,

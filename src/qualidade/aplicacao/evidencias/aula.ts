@@ -2,8 +2,8 @@
 // alterado pela demanda e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
 import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { Ambiente } from "../../../ambiente/infra/ambiente.ts";
-import { exigirGitNoAmbiente } from "../../../ambiente/infra/worktree/worktree.ts";
+import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
+import { exigirGitNoAmbiente } from "../../../repositorio/infra/worktree/worktree.ts";
 import { daUltimaConcluida } from "../../nucleo/evidencias/schemas.ts";
 
 export interface Trecho {

@@ -1,5 +1,5 @@
 // Um comando por fitness function do projeto, com cwd na worktree.
-import type { Projeto } from "../../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import {
   aprovacao,
   classificarComando,

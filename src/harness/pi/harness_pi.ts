@@ -7,8 +7,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 import type { LinhaDeUso } from "../../custos/nucleo/uso.ts";
-import { ambienteSemCredenciais, type Ambiente } from "../../ambiente/infra/ambiente.ts";
-import { chavesDeProvedorDoLlm } from "../../ambiente/infra/container/ambiente_container.ts";
+import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../sandbox/infra/ambiente.ts";
 import { executar } from "../../compartilhado/infra/processo.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
@@ -174,16 +173,17 @@ export class HarnessPi implements Harness {
    * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
    * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. A auditoria (`<raiz>/avaliacoes/<sessão>`), que não é de
    * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
-   * No Ambiente `container` o env começa vazio, sem `process.env`: só as chaves de provedor do LLM e as variáveis da
-   * Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio AmbienteContainer.
+   * No Ambiente que isola as variáveis do serviço o env começa vazio, sem `process.env`: só as chaves de provedor do
+   * LLM e as variáveis da Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio
+   * Ambiente.
    */
   variaveisDeAmbiente(
     raiz: string,
     dir: string,
     agente: "ticket" | "auditoria",
-    tipoDoAmbiente: Ambiente["tipo"] = "host_local",
+    ambiente?: Pick<Ambiente, "isolaAsVariaveisDoServico">,
   ): NodeJS.ProcessEnv {
-    if (tipoDoAmbiente === "container") {
+    if (ambiente?.isolaAsVariaveisDoServico) {
       return {
         ...chavesDeProvedorDoLlm(process.env),
         ...(agente === "auditoria"
@@ -206,13 +206,16 @@ export class HarnessPi implements Harness {
   }
 
   /**
-   * As variáveis do `lancamento` no Ambiente `tipoDoAmbiente`. A auditoria roda sempre no Ambiente do serviço, com as do
+   * As variáveis do `lancamento` no `ambiente`. A auditoria roda sempre no Ambiente do serviço, com as do
    * host; a simulação (F8 §5) recebe o produto em `FABRIQUINHA_LINK` e a pasta do relatório em `FABRIQUINHA_SAIDA`.
    */
-  variaveisDoLancamento(lancamento: Lancamento, tipoDoAmbiente: Ambiente["tipo"]): NodeJS.ProcessEnv {
+  variaveisDoLancamento(
+    lancamento: Lancamento,
+    ambiente: Pick<Ambiente, "isolaAsVariaveisDoServico">,
+  ): NodeJS.ProcessEnv {
     switch (lancamento.tipo) {
       case "ticket":
-        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "ticket", tipoDoAmbiente);
+        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "ticket", ambiente);
       case "auditoria":
         return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "auditoria");
       case "simulacao":
@@ -237,7 +240,7 @@ export class HarnessPi implements Harness {
     const args = this.argumentosDoLancamento(lancamento);
     const simulacao = lancamento.tipo === "simulacao";
     if (!simulacao) anotar(log, `pi ${args.join(" ")}`);
-    const env = { ...this.variaveisDoLancamento(lancamento, ambiente.tipo), ...variaveisDoServico };
+    const env = { ...this.variaveisDoLancamento(lancamento, ambiente), ...variaveisDoServico };
     return this.lancarProcesso(ambiente, args, { cwd, env, log, fecharStdin: simulacao }, aoEvento);
   }
 

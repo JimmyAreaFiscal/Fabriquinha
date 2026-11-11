@@ -6,7 +6,7 @@ import { FABRIQUINHA } from "../../../nucleo/ator.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../../../demanda/nucleo/agregado_demanda.ts";
 import { existe } from "../../../../compartilhado/nucleo/erros.ts";
 import { CATALOGO_DE_ETAPAS } from "../../../nucleo/etapa.ts";
-import { espacoDaDemanda } from "../../../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { espacoDaDemanda } from "../../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import type { Endereco } from "../../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../../../../execucao/nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../../../nucleo/transicoes/transicoes_demanda.ts";
@@ -20,17 +20,17 @@ import {
 } from "../../../nucleo/transicoes/transicoes_encerramento.ts";
 import { raizDo } from "../../../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
-import type { Projeto } from "../../../../ambiente/nucleo/projeto.ts";
-import { carregarProjeto } from "../../../../ambiente/armazenamento/projetos.ts";
+import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
+import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { carregarTrabalhosDaDemanda } from "../../../../execucao/armazenamento/trabalho_agentico.ts";
 import { lerUsoDeclarado } from "../../../../custos/armazenamento/uso_declarado.ts";
 import { logDaOperacao } from "../../../../compartilhado/infra/registro.ts";
-import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../../../ambiente/infra/worktree/limpeza_demanda.ts";
-import { lerPR, type OpcoesVerificacao } from "../../../../ambiente/infra/repositorio/pr.ts";
+import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../../../repositorio/infra/worktree/limpeza_demanda.ts";
+import { lerPR, type OpcoesVerificacao } from "../../../../repositorio/infra/hospedagem/pr.ts";
 import { ConferenciaDoPR } from "../../../../qualidade/infra/conferencia_do_pr.ts";
 import { montarVerificacoesDaEtapa } from "../../../../qualidade/infra/verificacao.ts";
-import { ambienteDoEspaco } from "../../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { cicloDoEspaco } from "../../../../ambiente/aplicacao/espaco/ciclo_do_espaco.ts";
+import { ambienteDoEspaco } from "../../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
+import { cicloDoEspaco } from "../../../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import {
   montarArvorePRs,
   montarDemonstracaoLimpeza,

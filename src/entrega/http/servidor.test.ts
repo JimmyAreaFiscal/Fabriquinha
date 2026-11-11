@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { iniciarServico, type Servico } from "../../composicao/servico.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
-import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { criarUsuarioSimulado, usuariosSimulados } from "../../qualidade/armazenamento/simulacao.ts";
 import ts from "typescript";
 import { SemCorpoEmJson } from "./rotas.ts";

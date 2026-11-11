@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { tarefas, usuariosSimulados } from "../../armazenamento/simulacao.ts";
 import {
   anexarArquivoAoUsuarioSimulado,

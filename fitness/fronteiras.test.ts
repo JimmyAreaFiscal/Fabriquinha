@@ -98,7 +98,17 @@ interface Excecao extends Achado {
 const EXCECOES: Excecao[] = [];
 
 // `src/<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
-const DOMINIOS = new Set(["fluxo", "demanda", "execucao", "ambiente", "qualidade", "custos", "compartilhado"]);
+const DOMINIOS = new Set([
+  "fluxo",
+  "demanda",
+  "execucao",
+  "sandbox",
+  "repositorio",
+  "projeto",
+  "qualidade",
+  "custos",
+  "compartilhado",
+]);
 
 // `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter.
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
@@ -498,26 +508,22 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
 });
 
 // O processo do Espaço passa pelo `Ambiente`: `node:child_process` só nestes arquivos, e `infra/processo.ts` só nestes chamadores do core.
-// O Ambiente em si; repositorio/ e worktree/, vizinhos dele no domínio ambiente, seguem a regra comum.
-const INICIOS_DO_AMBIENTE = [
-  "ambiente/infra/ambiente.ts",
-  "ambiente/infra/ambiente_host_local.ts",
-  "ambiente/infra/container/",
-];
+// O Ambiente em si: a interface e os adapters, a infra do sandbox; o git e a hospedagem (repositorio/) seguem a regra comum.
+const INICIOS_DO_AMBIENTE = ["sandbox/infra/"];
 const ARQUIVO_DO_PROCESSO = "compartilhado/infra/processo.ts";
 const ARQUIVOS_COM_CHILD_PROCESS = new Set([ARQUIVO_DO_PROCESSO, ARQUIVO_DO_HARNESS]);
 // Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
 const CHAMADORES_DIRETOS_DO_PROCESSO = [
-  "ambiente/infra/repositorio/cadastro.ts",
-  "ambiente/infra/repositorio/heatmap.ts",
-  "ambiente/infra/repositorio/pr.ts",
-  "ambiente/infra/worktree/limpeza_demanda.ts",
-  "ambiente/infra/worktree/worktree.ts",
   "composicao/cli.ts",
   "custos/infra/commits_humanos.ts",
   "harness/pi/harness_pi.ts",
   "qualidade/aplicacao/simulacao/executor.ts",
   "qualidade/infra/tipos_de_verificacao/sonar.ts",
+  "repositorio/infra/git/cadastro.ts",
+  "repositorio/infra/git/heatmap.ts",
+  "repositorio/infra/hospedagem/pr.ts",
+  "repositorio/infra/worktree/limpeza_demanda.ts",
+  "repositorio/infra/worktree/worktree.ts",
 ];
 
 const ehChildProcess = (alvo: string): boolean => /^(node:)?child_process$/.test(alvo);
@@ -569,11 +575,11 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_DO_PROCESSO]: 'import { spawn } from "node:child_process";\n',
-    "ambiente/infra/ambiente_host_local.ts":
-      'import { spawn } from "child_process";\nimport { executar } from "../../compartilhado/infra/processo.ts";\n',
-    "ambiente/infra/repositorio/pr.ts": 'import { executar } from "../../../compartilhado/infra/processo.ts";\n',
-    "ambiente/infra/repositorio/commit.ts": 'import { exigirGitNoAmbiente } from "../worktree/worktree.ts";\n',
-    "ambiente/aplicacao/espaco_ruim.ts":
+    "sandbox/infra/host_local/ambiente_host_local.ts":
+      'import { spawn } from "child_process";\nimport { executar } from "../../../compartilhado/infra/processo.ts";\n',
+    "repositorio/infra/hospedagem/pr.ts": 'import { executar } from "../../../compartilhado/infra/processo.ts";\n',
+    "repositorio/infra/git/commit.ts": 'import { exigirGitNoAmbiente } from "../worktree/worktree.ts";\n',
+    "repositorio/aplicacao/espaco_ruim.ts":
       'import { spawn } from "node:child_process";\nimport { git } from "../../compartilhado/infra/processo.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
@@ -581,9 +587,9 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["ambiente/infra/repositorio/pr.ts"]).sort(), [
-    "ambiente/aplicacao/espaco_ruim.ts importa infra/processo.ts",
-    "ambiente/aplicacao/espaco_ruim.ts importa node:child_process",
+  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["repositorio/infra/hospedagem/pr.ts"]).sort(), [
+    "repositorio/aplicacao/espaco_ruim.ts importa infra/processo.ts",
+    "repositorio/aplicacao/espaco_ruim.ts importa node:child_process",
   ]);
 });
 
@@ -665,16 +671,17 @@ interface DependenciaToleradaEntreDominios {
 }
 
 const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
-  // servico.ts lê a ConfiguracaoDoAmbiente; processo.ts, o LIMITE_COMANDO_MS do Ambiente.
-  { de: "compartilhado", para: "ambiente", passo: 2 },
   // O Projeto guarda a ConfiguracaoAgente de cada etapa, e as consultas do Projeto leem o Trabalho Agêntico, o histórico
   // das sessões e o modelo e o effort resolvidos (D07).
-  { de: "ambiente", para: "execucao", passo: 4 },
-  // O Espaço de Trabalho, a worktree e as consultas do Projeto leem a Demanda e o seu fluxo.
-  { de: "ambiente", para: "demanda", passo: 2 },
-  { de: "ambiente", para: "fluxo", passo: 2 },
-  // O cadastro e o commit do Ticket varrem os commits humanos.
-  { de: "ambiente", para: "custos", passo: 5 },
+  { de: "projeto", para: "execucao", passo: 4 },
+  // As consultas do Projeto e o cadastro leem a Demanda, o endereço dos itens e o Ciclo de Vida.
+  { de: "projeto", para: "demanda", passo: 4 },
+  { de: "projeto", para: "fluxo", passo: 4 },
+  // O Espaço de Trabalho, a worktree e o commit do Ticket leem a Demanda e o Item de Trabalho que são donos deles.
+  { de: "repositorio", para: "demanda", passo: 4 },
+  // O cadastro, as consultas do Projeto e o commit do Ticket varrem e leem os commits humanos.
+  { de: "projeto", para: "custos", passo: 5 },
+  { de: "repositorio", para: "custos", passo: 5 },
   // As métricas por Etapa leem a definição da Etapa.
   { de: "custos", para: "fluxo", passo: 3 },
   { de: "custos", para: "demanda", passo: 5 },
@@ -690,7 +697,7 @@ const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] 
   { de: "qualidade", para: "execucao", passo: 4 },
   { de: "qualidade", para: "fluxo", passo: 4 },
   // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
-  { de: "entrega/contrato", para: "ambiente", passo: 6 },
+  { de: "entrega/contrato", para: "projeto", passo: 6 },
   { de: "entrega/contrato", para: "custos", passo: 6 },
   { de: "entrega/contrato", para: "demanda", passo: 6 },
   { de: "entrega/contrato", para: "execucao", passo: 6 },
@@ -789,8 +796,6 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const PASTA_DAS_ETAPAS = "etapas/";
 const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
-  "ambiente/aplicacao/consultas/projeto.ts",
-  "ambiente/aplicacao/espaco/commit_ticket_demanda.ts",
   "compartilhado/nucleo/primitivos.ts",
   "custos/aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts",
   "custos/aplicacao/metricas/metrica_de_uso.ts",
@@ -828,10 +833,12 @@ const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
   "fluxo/nucleo/transicoes/transicoes_demanda.ts",
   "fluxo/nucleo/transicoes/transicoes_encerramento.ts",
   "fluxo/nucleo/transicoes/transicoes_rodada.ts",
+  "projeto/aplicacao/consultas/projeto.ts",
   "qualidade/aplicacao/evidencias/aula.ts",
   "qualidade/aplicacao/evidencias/verificacoes.ts",
   "qualidade/aplicacao/revisao_rodada.ts",
   "qualidade/nucleo/evidencias/evidencia.ts",
+  "repositorio/aplicacao/espaco/commit_ticket_demanda.ts",
 ];
 
 // `forEachChild` para no primeiro filho que devolve verdadeiro: basta um nome por arquivo.

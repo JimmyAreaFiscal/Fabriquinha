@@ -7,7 +7,7 @@ import { predecessorasPendentes } from "../../nucleo/item_de_trabalho/dependenci
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { Despacho, prontosParaExecutarAgora } from "../../../execucao/nucleo/despacho.ts";
 import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
-import { prDoEspaco } from "../../../ambiente/nucleo/espaco_de_trabalho.ts";
+import { prDoEspaco } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";

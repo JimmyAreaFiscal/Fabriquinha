@@ -1,6 +1,6 @@
 // O Markdown dos PRs (F3 §4.6) e o limite da hospedagem (F3 §4.7): texto do agente e do Auditor neutralizado, listas,
 // tabelas e números no formato pt-BR, montados só pela Fabriquinha.
-import type { Projeto } from "../../../ambiente/nucleo/projeto.ts";
+import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import markdownit from "markdown-it";
 
 /** F3 §4.7: tamanho máximo do corpo em cada hospedagem, em caracteres. */

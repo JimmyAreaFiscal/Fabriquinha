@@ -9,7 +9,7 @@ import { reabrirTicket } from "../../../nucleo/transicoes/transicoes_demanda.ts"
 import { abrir, raizDo } from "../../../../compartilhado/armazenamento/banco.ts";
 import { servir } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../../../../ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../../../../repositorio/infra/worktree/worktree-demanda.ts";
 import { anotar } from "../../../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { conferirPromptComFoto } from "../../../../execucao/aplicacao/fotos_retorno/conferir_foto.ts";

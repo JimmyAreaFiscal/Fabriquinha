@@ -10,7 +10,7 @@ import type { AgregadoDemanda } from "../src/demanda/nucleo/agregado_demanda.ts"
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { ConducaoDePlanejar } from "../src/fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
 import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { registrarProjeto } from "../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../src/demanda/armazenamento/demandas.ts";

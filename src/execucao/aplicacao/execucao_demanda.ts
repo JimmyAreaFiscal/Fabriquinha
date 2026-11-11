@@ -8,8 +8,8 @@ import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
-import { type EspacoDeTrabalho, espacoDoTicket } from "../../ambiente/nucleo/espaco_de_trabalho.ts";
-import type { Projeto } from "../../ambiente/nucleo/projeto.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
+import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../../compartilhado/nucleo/erros.ts";
 import { iniciarTentativaDoTicket } from "../nucleo/reserva_ticket.ts";
@@ -29,7 +29,7 @@ import {
 } from "../nucleo/trabalho_agentico.ts";
 import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarProjeto } from "../../ambiente/armazenamento/projetos.ts";
+import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../../demanda/armazenamento/commits_demanda.ts";
@@ -41,8 +41,8 @@ import {
   comTrabalhosDoTicket,
   gravarAmbienteDoProcesso,
 } from "../armazenamento/trabalho_agentico.ts";
-import { ambienteDoEspaco } from "../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { cicloDoEspaco } from "../../ambiente/aplicacao/espaco/ciclo_do_espaco.ts";
+import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
+import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./trabalho/auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";

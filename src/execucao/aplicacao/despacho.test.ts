@@ -12,7 +12,7 @@ import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts"
 import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
-import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
+import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
@@ -23,12 +23,12 @@ import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho
 import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda } from "../../ambiente/infra/worktree/worktree-demanda.ts";
+import { garantirWorktreeDemanda } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { ConducaoDeImplementar } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "../../fluxo/aplicacao/etapas/agenticas/conducao_de_resolver_conflito.ts";
 import { cicloDoDespacho, demandasParaDespacho, type DepsDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
-import { AmbienteHostLocal } from "../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

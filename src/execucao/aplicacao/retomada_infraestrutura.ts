@@ -8,7 +8,7 @@ import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
 import { desdeAReabertura, POLITICA_DE_TENTATIVAS, tentativasDoTicket } from "../nucleo/tentativa.ts";
 import { retomarTicketFalhoPorInfraestrutura } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { buscarProjeto } from "../../ambiente/armazenamento/projetos.ts";
+import { buscarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { noLog } from "../../compartilhado/infra/registro.ts";

@@ -14,7 +14,7 @@ import {
 import { relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { guardarBytes } from "../../compartilhado/armazenamento/arquivos.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { projetoExistente } from "../../ambiente/armazenamento/projetos.ts";
+import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
 
 export interface Anexo {
   nome: string;

@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
-import type { ArquivoCommit, Commit } from "../../ambiente/nucleo/commits.ts";
+import type { ArquivoCommit, Commit } from "../../repositorio/nucleo/commits.ts";
 
 const donoDe = (banco: DatabaseSync, sha: string) =>
   banco.prepare("SELECT demanda_id, ticket_id FROM commit_ticket_demanda WHERE sha = ?").get(sha);

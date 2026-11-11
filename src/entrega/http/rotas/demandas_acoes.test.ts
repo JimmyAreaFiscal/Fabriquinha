@@ -9,12 +9,15 @@ import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import { registrarCorrecoesSessao } from "../../../fluxo/nucleo/transicoes/transicoes_rodada.ts";
-import { gravarConfiguracaoSdlc } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { gravarConfiguracaoSdlc } from "../../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../ambiente/infra/worktree/worktree-demanda.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../repositorio/infra/worktree/worktree-demanda.ts";
 import type { MotivoDeRecusa } from "../../../execucao/nucleo/despacho.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
@@ -26,7 +29,7 @@ import {
   TicketReaberto,
 } from "../../contrato/demanda.ts";
 import { MotivoDeRecusaEmJson } from "../../contrato/despacho.ts";
-import { AmbienteHostLocal } from "../../../ambiente/infra/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

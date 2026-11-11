@@ -11,7 +11,7 @@ import {
   type LinhasPorDemanda,
 } from "../../../demanda/armazenamento/commits_demanda.ts";
 import { type CommitHumano, cursorDaBase, gravarVarredura } from "../../armazenamento/commits_humanos.ts";
-import { buscarProjeto, projetoExistente } from "../../../ambiente/armazenamento/projetos.ts";
+import { buscarProjeto, projetoExistente } from "../../../projeto/armazenamento/projetos.ts";
 import { noLog } from "../../../compartilhado/infra/registro.ts";
 import {
   buscarBaseRemota,
@@ -19,7 +19,7 @@ import {
   cursorSaiuDaHistoria,
   linhasReescritasPorCommitDeOrigem,
 } from "../../infra/commits_humanos.ts";
-import { naFilaDoProjeto } from "../../../ambiente/infra/worktree/worktree.ts";
+import { naFilaDoProjeto } from "../../../repositorio/infra/worktree/worktree.ts";
 
 /**
  * As linhas por commit de origem viram linhas por ticket das demandas, agrupadas pela demanda de origem; commit fora da

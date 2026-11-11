@@ -19,7 +19,7 @@ import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

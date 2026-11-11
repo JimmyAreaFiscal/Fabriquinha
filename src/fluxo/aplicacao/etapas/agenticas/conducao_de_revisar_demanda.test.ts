@@ -6,7 +6,7 @@ import { motivoDaFalhaDoTicket } from "../../../../execucao/nucleo/tentativa.ts"
 import { abrir, raizDo } from "../../../../compartilhado/armazenamento/banco.ts";
 import { servir } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { carregarDemanda, comDemanda } from "../../../../demanda/armazenamento/demandas.ts";
-import { caminhoDaWorktreeDemanda } from "../../../../ambiente/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeDemanda } from "../../../../repositorio/infra/worktree/worktree-demanda.ts";
 import { anotar } from "../../../../compartilhado/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../compartilhado/nucleo/relogio.ts";
