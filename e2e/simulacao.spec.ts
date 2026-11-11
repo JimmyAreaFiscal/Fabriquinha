@@ -55,7 +55,10 @@ test("CA-1 e CA-2: o link do produto é salvo e relido; um link inválido dá er
   await expect(campo).toHaveValue("");
 
   await campo.fill("https://demo.exemplo.com");
-  await pagina.getByRole("button", { name: "Salvar projeto" }).click();
+  await Promise.all([
+    pagina.waitForResponse((r) => r.url().endsWith("/api/projetos/fabriquinha") && r.request().method() === "POST"),
+    pagina.getByRole("button", { name: "Salvar projeto" }).click(),
+  ]);
   await pagina.goto(url);
   await expect(campo).toHaveValue("https://demo.exemplo.com");
 
