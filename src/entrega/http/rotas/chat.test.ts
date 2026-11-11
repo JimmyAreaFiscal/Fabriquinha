@@ -51,7 +51,7 @@ before(async () => {
   git(repo, "commit", "-q", "-m", "início");
   git(repo, "push", "-q", "origin", "main");
   delete process.env.SONAR_HOST_URL;
-  servico = await iniciarServico(raiz);
+  servico = await iniciarServico(raiz, join(base, "pacote-bin"));
   registrarProjeto(servico.banco, {
     nome: "loja",
     raiz_git: repo,

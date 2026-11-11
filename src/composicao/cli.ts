@@ -1,8 +1,10 @@
 // Monta o que o CLI não pode abrir sozinho (o banco da raiz, o serviço, o navegador) e roda `principal` com isso.
+import { join } from "node:path";
 import { abrir as abrirBanco, raizPadrao } from "../compartilhado/armazenamento/banco.ts";
 import { type DepsDoCli } from "../entrega/cli/comando.ts";
 import { principal } from "../entrega/cli/cli.ts";
 import { relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
+import { PACOTE } from "../execucao/infra/pi.ts";
 import { lancarSolto } from "../compartilhado/infra/processo.ts";
 import { iniciarServico } from "./servico.ts";
 
@@ -29,7 +31,7 @@ export function executarFabriquinha(args: readonly string[], processo: ProcessoD
         banco.close();
       }
     },
-    iniciarServico: () => iniciarServico(raiz),
+    iniciarServico: () => iniciarServico(raiz, join(PACOTE, "bin")),
     abrirNoNavegador: (url) => lancarSolto(comandoDoNavegador(process.platform), [url], processo.env),
   });
 }

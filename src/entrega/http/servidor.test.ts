@@ -28,7 +28,7 @@ before(async () => {
   await once(livre, "close");
   origem = `127.0.0.1:${process.env.FABRIQUINHA_PORTA}`;
   raiz = mkdtempSync(join(base, "raiz-"));
-  servico = await iniciarServico(raiz);
+  servico = await iniciarServico(raiz, join(base, "pacote-bin"));
 });
 after(async () => {
   await servico.parar();
@@ -87,7 +87,7 @@ test("web.url: link de entrada com token de 32 bytes, só para o dono, trocado a
 
   const antes = token();
   await servico.parar();
-  servico = await iniciarServico(raiz);
+  servico = await iniciarServico(raiz, join(base, "pacote-bin"));
   assert.notEqual(token(), antes);
   assert.equal(
     (await pedir("/api/sessoes?escopo=ativas", { headers: { cookie: `fabriquinha=${antes}` } })).status,
@@ -394,7 +394,7 @@ test("parar não espera conexão aberta: um pedido pela metade (como o SSE) é c
   const fechou = new Promise((fechada) => conexao.on("error", () => undefined).once("close", fechada));
   await servico.parar();
   await fechou;
-  servico = await iniciarServico(raiz);
+  servico = await iniciarServico(raiz, join(base, "pacote-bin"));
 });
 
 const PASTA_DAS_ROTAS = join(import.meta.dirname, "rotas");

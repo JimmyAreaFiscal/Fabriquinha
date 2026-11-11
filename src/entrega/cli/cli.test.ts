@@ -143,6 +143,21 @@ test("CA-2: com FABRIQUINHA_EXECUCAO, nenhum comando é alcançável, nem os do 
   assert.doesNotMatch(ajuda, /fabriquinha (projeto|ticket|revisao|evidencia) /);
 });
 
+test("CA-5: com FABRIQUINHA_TOKEN, o comando do agente é recusado com a orientação de reiniciar o serviço, sem a ajuda", async () => {
+  const { raiz, banco } = novoBancoTemporario();
+  banco.close();
+  const orientacao = "o CLI do agente (pacote-pi/bin/fabriquinha) não foi gerado: reinicie o serviço da Fabriquinha";
+  for (const execucao of [undefined, "1"]) {
+    const env = { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_TOKEN: "t", FABRIQUINHA_EXECUCAO: execucao };
+    falha(await cli(env, ["evidencia", "add", "I-1.T1", "mensagem_pr", "--dados", "m.json"]), orientacao);
+  }
+});
+
+test("CA-6: sem FABRIQUINHA_TOKEN, o comando do agente segue como comando desconhecido, com a ajuda e código 2", async () => {
+  const args = ["evidencia", "add", "I-1.T1", "mensagem_pr", "--dados", "m.json"];
+  desconhecido(await cli({}, args), args);
+});
+
 test("argumento que falta é uso inválido, com a ajuda do grupo", async () => {
   usoInvalido(await cli({}, ["demanda", "ver"]), /^falta /, "demanda");
 });

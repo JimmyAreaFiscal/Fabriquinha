@@ -80,6 +80,12 @@ function rodarComando(args: readonly string[], deps: DepsDoCli): Promise<unknown
   const comando = deps.env.FABRIQUINHA_EXECUCAO
     ? undefined
     : (achar(COMANDOS_DEMANDA_EXTERNA) ?? achar(COMANDOS_DO_SERVICO));
+  // Com o token do agente, o PATH chegou ao `fabriquinha` do core em vez do pacote: a ajuda do CLI externo só confunde.
+  if (!comando && deps.env.FABRIQUINHA_TOKEN) {
+    throw new ErroDeRegra(
+      "o CLI do agente (pacote-pi/bin/fabriquinha) não foi gerado: reinicie o serviço da Fabriquinha",
+    );
+  }
   if (!comando) throw new ErroDeUso(args.length === 0 ? "falta o comando" : `comando desconhecido: ${args.join(" ")}`);
   return comando.executar(entradaDe(comando, args.slice(palavrasDe(comando).length)), deps);
 }
