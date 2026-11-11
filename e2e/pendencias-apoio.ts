@@ -1,8 +1,8 @@
 // Apoio dos e2e das Pendências (CONCEITOS.md §11): um Projeto com uma Pendência de cada tipo, com o agendador desligado
 // (o padrão), e a lista esperada na ordem de `desde`. Início, board, Projeto e chat leem este mesmo cenário.
-import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
-import type { TipoPendencia } from "../src/nucleo/pendencia.ts";
-import { abrir } from "../src/armazenamento/banco.ts";
+import type { AgregadoDemanda } from "../src/demanda/nucleo/agregado_demanda.ts";
+import type { TipoPendencia } from "../src/demanda/nucleo/pendencia.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { projeto } from "./apoio.ts";
 

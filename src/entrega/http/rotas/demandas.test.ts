@@ -1,12 +1,12 @@
 // Rotas de leitura das demandas (CA-1 a CA-12 e CA-37) contra o servidor web de verdade.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
-import { guardarBytes } from "../../../armazenamento/arquivos.ts";
-import { comDemanda } from "../../../armazenamento/demandas.ts";
-import { gravarAnexos } from "../../../armazenamento/evidencia_demanda.ts";
-import { gravarUsoDeclarado } from "../../../armazenamento/uso_declarado.ts";
-import { metricasDasDemandasDoPeriodo } from "../../../aplicacao/metricas/metricas_do_periodo.ts";
+import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
+import { comDemanda } from "../../../demanda/armazenamento/demandas.ts";
+import { gravarAnexos } from "../../../qualidade/armazenamento/evidencia_demanda.ts";
+import { gravarUsoDeclarado } from "../../../custos/armazenamento/uso_declarado.ts";
+import { metricasDasDemandasDoPeriodo } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
 

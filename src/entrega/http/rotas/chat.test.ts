@@ -1,7 +1,7 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
 // falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
-import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
+import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -11,14 +11,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../aplicacao/execucao_demanda.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../../armazenamento/trabalho_agentico.ts";
-import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
+import { gravarConfiguracaoSdlc } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../execucao/aplicacao/execucao_demanda.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../../execucao/armazenamento/trabalho_agentico.ts";
+import { registrarProjeto } from "../../../ambiente/aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));

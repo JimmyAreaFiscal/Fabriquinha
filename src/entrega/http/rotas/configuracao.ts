@@ -4,19 +4,19 @@ import {
   cadastrarProjetoDoFormulario,
   editarProjetoDoFormulario,
   removerProjeto,
-} from "../../../aplicacao/projeto/cadastro.ts";
+} from "../../../ambiente/aplicacao/projeto/cadastro.ts";
 import {
   conferirESalvarConfiguracao,
   validarESalvarConfiguracaoDoAmbiente,
-} from "../../../aplicacao/configuracao/configuracao_do_ambiente.ts";
-import { eliminarAmbienteDoConjunto } from "../../../aplicacao/ambiente/conjunto_da_configuracao.ts";
+} from "../../../ambiente/aplicacao/projeto/configuracao_do_ambiente.ts";
+import { eliminarAmbienteDoConjunto } from "../../../ambiente/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
   consultarModelosDoPi,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
-} from "../../../aplicacao/consultas/configuracao.ts";
+} from "../../../ambiente/aplicacao/consultas/configuracao.ts";
 import {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,

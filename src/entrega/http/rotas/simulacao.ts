@@ -6,8 +6,8 @@ import {
   removerAnexoDoUsuarioSimulado,
   validarECriarTarefa,
   validarECriarUsuarioSimulado,
-} from "../../../aplicacao/simulacao/cadastro_da_simulacao.ts";
-import { iniciarExecucaoDaTarefa } from "../../../aplicacao/executor.ts";
+} from "../../../qualidade/aplicacao/simulacao/cadastro_da_simulacao.ts";
+import { iniciarExecucaoDaTarefa } from "../../../qualidade/aplicacao/simulacao/executor.ts";
 import { Anexo, Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { ErroHttp } from "../erros.ts";
 import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../rotas.ts";

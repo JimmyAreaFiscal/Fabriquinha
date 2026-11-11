@@ -9,8 +9,8 @@ import type {
   IdentificadorDoProcesso,
   ProcessoNoAmbiente,
   SaidaDoComando,
-} from "../src/infra/ambiente/ambiente.ts";
-import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts";
+} from "../src/ambiente/infra/ambiente.ts";
+import { AmbienteHostLocal } from "../src/ambiente/infra/ambiente_host_local.ts";
 
 export interface ComandoRegistrado {
   via: "executar" | "lancar";

@@ -2,24 +2,24 @@
 // entre agendador e "executar agora", implementação sem submissão e falha, timeout e reinício. O cenário é montado pelos
 // serviços e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web. As verificações
 // (testes, fitness e Sonar) são o único ponto injetado: o Sonar não existe aqui.
-import type { MotivoDeRecusa } from "../src/nucleo/despacho.ts";
-import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import type { MotivoDeRecusa } from "../src/execucao/nucleo/despacho.ts";
+import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/nucleo/tentativa.ts";
-import { AUDITOR } from "../src/nucleo/ator.ts";
-import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
-import { cicloDoDespacho, executarAgora } from "../src/aplicacao/despacho.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
-import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
-import { comDemanda } from "../src/armazenamento/demandas.ts";
-import { configuracao } from "../src/armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
+import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/execucao/nucleo/tentativa.ts";
+import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { reabrirTicket } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/execucao/nucleo/trabalho_agentico.ts";
+import { cicloDoDespacho, executarAgora } from "../src/execucao/aplicacao/despacho.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
+import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
+import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

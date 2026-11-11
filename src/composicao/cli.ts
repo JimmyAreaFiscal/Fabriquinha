@@ -1,9 +1,9 @@
 // Monta o que o CLI não pode abrir sozinho (o banco da raiz, o serviço, o navegador) e roda `principal` com isso.
-import { abrir as abrirBanco, raizPadrao } from "../armazenamento/banco.ts";
+import { abrir as abrirBanco, raizPadrao } from "../compartilhado/armazenamento/banco.ts";
 import { type DepsDoCli } from "../entrega/cli/comando.ts";
 import { principal } from "../entrega/cli/cli.ts";
-import { relogioDoSistema } from "../nucleo/relogio.ts";
-import { lancarSolto } from "../infra/processo.ts";
+import { relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
+import { lancarSolto } from "../compartilhado/infra/processo.ts";
 import { iniciarServico } from "./servico.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */

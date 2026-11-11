@@ -4,15 +4,15 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
-import { guardarBytes } from "../../src/armazenamento/arquivos.ts";
-import { criarAvaliacao } from "../../src/armazenamento/avaliacoes.ts";
-import { abrir } from "../../src/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../src/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
-import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
-import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
+import type { AgregadoDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
+import { guardarBytes } from "../../src/compartilhado/armazenamento/arquivos.ts";
+import { criarAvaliacao } from "../../src/qualidade/armazenamento/avaliacoes.ts";
+import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../src/demanda/armazenamento/demandas.ts";
+import { gravarAnexos } from "../../src/qualidade/armazenamento/evidencia_demanda.ts";
+import { registrarProjeto } from "../../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { comTrabalhosDoTicket } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
+import { exigirGit } from "../../src/ambiente/infra/worktree/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 

@@ -1,6 +1,6 @@
 // Remover projeto (F7 §4.4, Configuração): confirmar apaga o projeto e tudo dele de todas as telas, cancelar não
 // apaga nada, o outro projeto fica intacto e a execução em andamento recusa a remoção.
-import { abrir } from "../src/armazenamento/banco.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { expect, test } from "./apoio.ts";
 
 /** O agora do navegador, fixo em outubro de 2026; os dados semeados são do mês corrente. */

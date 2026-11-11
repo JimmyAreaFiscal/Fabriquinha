@@ -6,21 +6,21 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
-import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
-import { criarAvaliacao } from "../../src/armazenamento/avaliacoes.ts";
-import { abrir } from "../../src/armazenamento/banco.ts";
-import { comDemanda } from "../../src/armazenamento/demandas.ts";
+import type { AgregadoDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
+import { registrarCorrecoesSessao } from "../../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { criarAvaliacao } from "../../src/qualidade/armazenamento/avaliacoes.ts";
+import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
+import { comDemanda } from "../../src/demanda/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { importarAchados } from "../../src/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
-import { criarTarefa, criarUsuarioSimulado } from "../../src/armazenamento/simulacao.ts";
-import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra/repositorio/worktree-demanda.ts";
-import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
+import { importarAchados } from "../../src/qualidade/armazenamento/avaliacoes.ts";
+import { registrarProjeto } from "../../src/ambiente/aplicacao/projeto/cadastro.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../../src/qualidade/armazenamento/simulacao.ts";
+import { comTrabalhosDoTicket } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/ambiente/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../../src/ambiente/infra/worktree/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/infra/ambiente/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../src/ambiente/infra/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

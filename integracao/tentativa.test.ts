@@ -15,10 +15,10 @@ import {
   montarTicket,
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
-import type { Tentativa } from "../src/nucleo/tentativa.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../src/armazenamento/trabalho_agentico.ts";
+import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/execucao/nucleo/trabalho_agentico.ts";
+import type { Tentativa } from "../src/execucao/nucleo/tentativa.ts";
+import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
 import type { PaginaDaDemanda } from "../src/entrega/contrato/demanda.ts";
 import { pagina } from "../src/entrega/cliente-web/telas/demandas.ts";
 

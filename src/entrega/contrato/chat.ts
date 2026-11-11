@@ -1,9 +1,9 @@
 // O contrato da API do chat da sessão de ticket da demanda: a entrada de cada rota e o corpo da resposta JSON.
 // São só tipos e schemas: quem monta o valor é a aplicação, quem o valida na saída é o teste de rota.
 import { z } from "zod";
-import { Modelo } from "../../nucleo/configuracao_agente.ts";
-import { EtapaTicket, Instante } from "../../nucleo/primitivos.ts";
-import { ModoTrabalho, ProcessoDoTrabalho } from "../../nucleo/trabalho_agentico.ts";
+import { Modelo } from "../../execucao/nucleo/configuracao_agente.ts";
+import { EtapaTicket, Instante } from "../../compartilhado/nucleo/primitivos.ts";
+import { ModoTrabalho, ProcessoDoTrabalho } from "../../execucao/nucleo/trabalho_agentico.ts";
 
 const Texto = z.string();
 

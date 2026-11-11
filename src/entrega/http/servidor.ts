@@ -8,7 +8,7 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import type { Relogio } from "../../nucleo/relogio.ts";
+import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
 import { casar } from "../compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
 import { rotasDeEvidenciaAdd } from "./agente/evidencia.ts";

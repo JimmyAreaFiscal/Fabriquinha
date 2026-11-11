@@ -3,9 +3,12 @@
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
-import { produtividadeDaRodada } from "../src/aplicacao/evidencias/produtividade_rodada.ts";
-import { carregarTrabalhosDaDemanda, carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
+import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
+import { produtividadeDaRodada } from "../src/custos/aplicacao/produtividade_rodada.ts";
+import {
+  carregarTrabalhosDaDemanda,
+  carregarTrabalhosDoTicket,
+} from "../src/execucao/armazenamento/trabalho_agentico.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import {
   abrirPortao,

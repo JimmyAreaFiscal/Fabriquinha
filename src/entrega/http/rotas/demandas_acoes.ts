@@ -1,12 +1,12 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
-import { AUDITOR } from "../../../nucleo/ator.ts";
-import { ErroDeRegra } from "../../../nucleo/erros.ts";
-import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
-import type { RefRodada } from "../../../aplicacao/encerramento_rodada.ts";
-import { decidirGate } from "../../../aplicacao/gates/decidir_gate.ts";
-import { arquivar, cancelar, reabrir } from "../../../aplicacao/gestao_demandas.ts";
-import { concluirSessaoAjustes } from "../../../aplicacao/sessao_ajustes.ts";
+import { AUDITOR } from "../../../fluxo/nucleo/ator.ts";
+import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import type { RefRodada } from "../../../fluxo/aplicacao/encerramento_rodada.ts";
+import { decidirGate } from "../../../fluxo/aplicacao/gates/decidir_gate.ts";
+import { arquivar, cancelar, reabrir } from "../../../demanda/aplicacao/gestao_demandas.ts";
+import { concluirSessaoAjustes } from "../../../execucao/aplicacao/sessoes/sessao_ajustes.ts";
 import {
   DecisaoDoPR,
   DemandaArquivada,

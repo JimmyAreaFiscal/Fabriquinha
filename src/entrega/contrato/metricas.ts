@@ -1,9 +1,9 @@
 // O contrato da API das Métricas: o filtro de período e o corpo das duas visões (por mês e por demanda).
 // São só tipos e schemas: quem monta o valor é a consulta, quem o valida na saída é o teste de rota.
 import { z } from "zod";
-import { Mes } from "../../nucleo/periodo.ts";
-import type { TipoMetrica } from "../../nucleo/metrica.ts";
-import { EtapaTicket, Slug } from "../../nucleo/primitivos.ts";
+import { Mes } from "../../compartilhado/nucleo/periodo.ts";
+import type { TipoMetrica } from "../../custos/nucleo/metrica.ts";
+import { EtapaTicket, Slug } from "../../compartilhado/nucleo/primitivos.ts";
 
 /** Sem `projeto`, todos; sem `ate`, o mês corrente; sem `de`, os 11 meses antes de `ate`. */
 export const FiltroDeMetricas = z.object({ projeto: Slug.optional(), de: Mes.optional(), ate: Mes.optional() });

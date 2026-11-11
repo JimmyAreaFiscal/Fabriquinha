@@ -5,12 +5,12 @@ import { readFileSync, realpathSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
-import { ErroDeRegra } from "../../nucleo/erros.ts";
-import type { Ator } from "../../nucleo/ator.ts";
-import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
-import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
-import { visaoDaDemanda } from "../../aplicacao/consultas/visao_da_demanda.ts";
+import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
+import type { Ator } from "../../fluxo/nucleo/ator.ts";
+import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
+import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { declararUso, editar, enviar, registrar, submeterEvidencia } from "../../demanda/aplicacao/gestao_demandas.ts";
+import { visaoDaDemanda } from "../../demanda/aplicacao/consultas/visao_da_demanda.ts";
 import {
   type Comando,
   type DepsDoCli,

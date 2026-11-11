@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ProcessoDoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
+import type { ProcessoDoTrabalho } from "../../../execucao/nucleo/trabalho_agentico.ts";
 import type { DadosDoChatDemanda } from "../../contrato/chat.ts";
 import type { SessaoDeDemanda } from "../../contrato/historico.ts";
 import type { Entrada } from "./chat.ts";

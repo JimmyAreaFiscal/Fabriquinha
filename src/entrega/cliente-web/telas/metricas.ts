@@ -2,9 +2,9 @@
 // meses anteriores do período, com uma seção por Etapa e as Métricas de Sucesso dela), a frase do mês do Início e os
 // cards do mês do Projeto. O DOM e a rede ficam em metricas-montar.ts. A comparação com a média é feita aqui, sobre a
 // lista de meses lida das tabelas da demanda.
-import type { EstadoDemanda, EtapaTicket } from "../../../nucleo/primitivos.ts";
-import type { TipoMetrica } from "../../../nucleo/metrica.ts";
-import type { LinhaDeUso } from "../../../nucleo/uso.ts";
+import type { EstadoDemanda, EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { TipoMetrica } from "../../../custos/nucleo/metrica.ts";
+import type { LinhaDeUso } from "../../../custos/nucleo/uso.ts";
 import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../contrato/metricas.ts";
 import {
   caminhoDaDemanda,

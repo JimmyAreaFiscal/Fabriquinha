@@ -1,6 +1,6 @@
 // Configuração SDLC do projeto (comparacao-sdlc §7.1) como funções puras: o `Estado` do formulário em texto, a
 // conversão de ida e volta com o contrato `Projeto` e o HTML dos grupos. O DOM e a rede ficam em sdlc-montar.ts.
-import type { Projeto } from "../../../nucleo/projeto.ts";
+import type { Projeto } from "../../../ambiente/nucleo/projeto.ts";
 import { escapar } from "../render.ts";
 import { type Erros, errosDoZod, idDe, marca } from "./configuracao.ts";
 

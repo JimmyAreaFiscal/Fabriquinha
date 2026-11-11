@@ -4,9 +4,9 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
-import { abrir } from "../src/armazenamento/banco.ts";
-import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
-import { Projeto } from "../src/nucleo/projeto.ts";
+import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
+import { buscarProjeto, gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
+import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
 /** A linha de `configuracao_etapa_projeto` da etapa `planejar` e a mesma etapa como o cadastro do projeto a entrega. */

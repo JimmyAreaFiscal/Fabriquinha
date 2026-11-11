@@ -6,17 +6,20 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Ator, AUDITOR } from "../src/nucleo/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/nucleo/gate.ts";
-import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
-import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
-import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
-import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
-import { cicloDoDespacho } from "../src/aplicacao/despacho.ts";
-import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/trabalho/condutor.ts";
-import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
-import { comDemanda } from "../src/armazenamento/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
+import { Ator, AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/fluxo/nucleo/gate.ts";
+import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
+import { marcaDoPRRodada } from "../src/qualidade/aplicacao/pull_request/pr_rodada.ts";
+import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
+import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
+import {
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+  type RespostaAutomatica,
+} from "../src/execucao/aplicacao/trabalho/condutor.ts";
+import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
+import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

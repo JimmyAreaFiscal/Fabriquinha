@@ -85,9 +85,14 @@ interface Excecao extends Achado {
 // Cada exceção cita a demanda (04 a 26) que a remove. Vazia: a 20 limpou entrega/http e nada mais ficou pendente.
 const EXCECOES: Excecao[] = [];
 
+// `src/<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
+const DOMINIOS = new Set(["fluxo", "demanda", "execucao", "ambiente", "qualidade", "custos", "compartilhado"]);
+
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
-  return primeiro === "entrega" && segundo ? `entrega/${segundo}` : (primeiro ?? "");
+  if (primeiro === "entrega" && segundo) return `entrega/${segundo}`;
+  if (primeiro !== undefined && DOMINIOS.has(primeiro)) return segundo ?? "";
+  return primeiro ?? "";
 }
 
 function listarArquivosDeProducao(src: string): string[] {
@@ -255,7 +260,7 @@ test("entrega/http/agente só importa de aplicacao o aplicacao/agente", () => {
     return ts
       .preProcessFile(readFileSync(caminho, "utf8"), true, true)
       .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
-      .filter((alvo) => alvo.startsWith("aplicacao/") && !alvo.startsWith("aplicacao/agente/"))
+      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("execucao/aplicacao/agente/"))
       .map((alvo) => `${arquivo} importa ${alvo}`);
   });
   assert.deepEqual(deAplicacaoFora, []);
@@ -357,7 +362,7 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
 
 // O relógio é do `composicao` (que o injeta) e de `nucleo/relogio.ts`: `new Date(` em qualquer outro .ts de src/ (cliente web
 // e compartilhado inclusive) lê a hora ou faz conta de calendário fora dele. Os *.test.ts (já fora da lista) e *_cenario.ts ficam de fora.
-const ARQUIVO_DO_RELOGIO = "nucleo/relogio.ts";
+const ARQUIVO_DO_RELOGIO = "compartilhado/nucleo/relogio.ts";
 
 function acharNewDateForaDoRelogio(src: string): string[] {
   return listarArquivosDeProducao(src)
@@ -411,8 +416,8 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 });
 
 // Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
-const ARQUIVO_DO_CONDUTOR = "aplicacao/trabalho/condutor.ts";
-const ARQUIVO_DO_HARNESS = "infra/agente/harness_pi.ts";
+const ARQUIVO_DO_CONDUTOR = "execucao/aplicacao/trabalho/condutor.ts";
+const ARQUIVO_DO_HARNESS = "execucao/infra/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
 // shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
@@ -465,21 +470,27 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
 });
 
 // O processo do Espaço passa pelo `Ambiente`: `node:child_process` só nestes arquivos, e `infra/processo.ts` só nestes chamadores do core.
-const PREFIXO_DO_AMBIENTE = "infra/ambiente/";
-const ARQUIVOS_COM_CHILD_PROCESS = new Set(["infra/processo.ts", ARQUIVO_DO_HARNESS]);
+// O Ambiente em si; repositorio/ e worktree/, vizinhos dele no domínio ambiente, seguem a regra comum.
+const INICIOS_DO_AMBIENTE = [
+  "ambiente/infra/ambiente.ts",
+  "ambiente/infra/ambiente_host_local.ts",
+  "ambiente/infra/container/",
+];
+const ARQUIVO_DO_PROCESSO = "compartilhado/infra/processo.ts";
+const ARQUIVOS_COM_CHILD_PROCESS = new Set([ARQUIVO_DO_PROCESSO, ARQUIVO_DO_HARNESS]);
 // Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
 const CHAMADORES_DIRETOS_DO_PROCESSO = [
-  "aplicacao/auditor_automatico.ts",
-  "aplicacao/executor.ts",
+  "ambiente/infra/repositorio/cadastro.ts",
+  "ambiente/infra/repositorio/heatmap.ts",
+  "ambiente/infra/repositorio/pr.ts",
+  "ambiente/infra/worktree/limpeza_demanda.ts",
+  "ambiente/infra/worktree/worktree.ts",
   "composicao/cli.ts",
-  "infra/agente/harness_pi.ts",
-  "infra/repositorio/cadastro.ts",
-  "infra/repositorio/commits_humanos.ts",
-  "infra/repositorio/heatmap.ts",
-  "infra/repositorio/limpeza_demanda.ts",
-  "infra/repositorio/pr.ts",
-  "infra/repositorio/worktree.ts",
-  "infra/verificacao/sonar.ts",
+  "custos/infra/commits_humanos.ts",
+  "execucao/aplicacao/trabalho/auditor_automatico.ts",
+  "execucao/infra/harness_pi.ts",
+  "qualidade/aplicacao/simulacao/executor.ts",
+  "qualidade/infra/tipos_de_verificacao/sonar.ts",
 ];
 
 const ehChildProcess = (alvo: string): boolean => /^(node:)?child_process$/.test(alvo);
@@ -501,7 +512,7 @@ function acharImportadoresDe(src: string, ehAlvo: (alvo: string) => boolean): st
 }
 
 function acharViolacoesDoProcesso(src: string, chamadoresDiretos: readonly string[]): string[] {
-  const doAmbiente = (arquivo: string) => arquivo.startsWith(PREFIXO_DO_AMBIENTE);
+  const doAmbiente = (arquivo: string) => INICIOS_DO_AMBIENTE.some((inicio) => arquivo.startsWith(inicio));
   return [
     ...acharImportadoresDe(src, ehChildProcess)
       .filter((arquivo) => !doAmbiente(arquivo) && !ARQUIVOS_COM_CHILD_PROCESS.has(arquivo))
@@ -530,27 +541,27 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
     rmSync(raiz, { recursive: true, force: true });
   });
   const arquivos: Record<string, string> = {
-    "infra/processo.ts": 'import { spawn } from "node:child_process";\n',
-    "infra/ambiente/ambiente_host_local.ts":
-      'import { spawn } from "child_process";\nimport { executar } from "../processo.ts";\n',
-    "infra/repositorio/pr.ts": 'import { executar } from "../processo.ts";\n',
-    "infra/repositorio/commit.ts": 'import { exigirGitNoAmbiente } from "./worktree.ts";\n',
-    "aplicacao/espaco_ruim.ts":
-      'import { spawn } from "node:child_process";\nimport { git } from "../infra/processo.ts";\n',
+    [ARQUIVO_DO_PROCESSO]: 'import { spawn } from "node:child_process";\n',
+    "ambiente/infra/ambiente_host_local.ts":
+      'import { spawn } from "child_process";\nimport { executar } from "../../compartilhado/infra/processo.ts";\n',
+    "ambiente/infra/repositorio/pr.ts": 'import { executar } from "../../../compartilhado/infra/processo.ts";\n',
+    "ambiente/infra/repositorio/commit.ts": 'import { exigirGitNoAmbiente } from "../worktree/worktree.ts";\n',
+    "ambiente/aplicacao/espaco_ruim.ts":
+      'import { spawn } from "node:child_process";\nimport { git } from "../../compartilhado/infra/processo.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["infra/repositorio/pr.ts"]).sort(), [
-    "aplicacao/espaco_ruim.ts importa infra/processo.ts",
-    "aplicacao/espaco_ruim.ts importa node:child_process",
+  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["ambiente/infra/repositorio/pr.ts"]).sort(), [
+    "ambiente/aplicacao/espaco_ruim.ts importa infra/processo.ts",
+    "ambiente/aplicacao/espaco_ruim.ts importa node:child_process",
   ]);
 });
 
 // Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada.
-const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "aplicacao/evidencia/submeter.ts";
+const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "qualidade/aplicacao/evidencias/submeter.ts";
 const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
 const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
 
@@ -560,7 +571,7 @@ function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
     .filter(
       (arquivo) =>
         arquivo !== ARQUIVO_QUE_SUBMETE_EVIDENCIA &&
-        !arquivo.startsWith("armazenamento/") &&
+        moduloDoArquivo(arquivo) !== "armazenamento" &&
         !arquivo.endsWith("_cenario.ts"),
     )
     .flatMap((arquivo) => {
