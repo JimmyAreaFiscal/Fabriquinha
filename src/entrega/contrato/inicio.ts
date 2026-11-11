@@ -1,8 +1,13 @@
 // O contrato da API do Início (comparacao-sdlc §9.1, "Board com demanda"): o mês corrente, o que aguarda o Auditor, as
 // sessões que rodam e o board das demandas em andamento. Só tipos e schemas; quem monta o valor é a consulta da aplicação.
 import { z } from "zod";
-import { EstadoDemanda, EstadoRodada, EstadoTicket, EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
-import { ModoTrabalho } from "../../execucao/nucleo/trabalho_agentico.ts";
+import {
+  EstadoDemanda,
+  EstadoRodada,
+  EstadoTicket,
+  EtapaTicket,
+  ModoTrabalho,
+} from "../../compartilhado/nucleo/primitivos.ts";
 import { PendenciaDoInicio, PiAtivo } from "./demanda.ts";
 import { SessaoDeDemanda } from "./historico.ts";
 import { MetricasDoMes } from "./metricas.ts";

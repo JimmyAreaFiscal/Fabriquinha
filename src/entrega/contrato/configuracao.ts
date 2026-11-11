@@ -1,7 +1,7 @@
 // O contrato das rotas da Configuração (F7 §4.2): o que cada resposta e cada formulário carregam. Só tipos e schemas.
 import { z } from "zod";
-import { ConfiguracaoAgente, Modelo } from "../../execucao/nucleo/configuracao_agente.ts";
-import { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
+import { ConfiguracaoAgente } from "../../execucao/nucleo/configuracao_agente.ts";
+import { EtapaTicket, Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 import { ComandosDePreparacao, ConfiguracaoDoAmbiente, Hospedagem, Projeto } from "../../ambiente/nucleo/projeto.ts";
 
 /** `GET` e `POST /api/configuracao`: a configuração do F4 §3 e a próxima busca do agendador, só ligado. */

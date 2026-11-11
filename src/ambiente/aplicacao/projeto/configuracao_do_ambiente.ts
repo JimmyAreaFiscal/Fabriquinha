@@ -2,9 +2,9 @@
 // auditoria no pi; o modelo e o effort de cada etapa do projeto passam entre o formato do formulário e o cadastro.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { ConfiguracaoAgente, Modelo } from "../../../execucao/nucleo/configuracao_agente.ts";
+import type { ConfiguracaoAgente } from "../../../execucao/nucleo/configuracao_agente.ts";
 import { mensagem } from "../../../compartilhado/nucleo/erros.ts";
-import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket, type Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { ConfiguracaoDoAmbiente, type Projeto } from "../../nucleo/projeto.ts";
 import {
   Configuracao,
@@ -12,7 +12,9 @@ import {
   salvarConfiguracao,
   salvarConfiguracaoDoAmbiente,
 } from "../../../compartilhado/armazenamento/servico.ts";
-import { HarnessPi } from "../../../execucao/infra/harness_pi.ts";
+
+/** A conferência do par provedor/modelo pelo harness (F4 §9), que a composição entrega: recusa o que ele não conhece. */
+export type ConferirModeloNoHarness = (modelo: Modelo) => Promise<void>;
 
 /** Valida a `entrada` e grava a configuração do Ambiente inteira; campo ausente volta ao padrão. */
 export function validarESalvarConfiguracaoDoAmbiente(banco: DatabaseSync, entrada: unknown): ConfiguracaoDoAmbiente {
@@ -49,11 +51,15 @@ export const etapasComModeloOuEffort = (configuracoes: ConfiguracoesDasEtapas) =
  * F4 §9: o modelo de auditoria novo ou trocado precisa existir no pi; o rejeitado vira erro do campo. O igual ao
  * gravado não chama o pi. Valida a `entrada` e grava a configuração inteira só depois da conferência.
  */
-export async function conferirESalvarConfiguracao(banco: DatabaseSync, entrada: unknown): Promise<Configuracao> {
+export async function conferirESalvarConfiguracao(
+  banco: DatabaseSync,
+  entrada: unknown,
+  conferirModeloNoHarness: ConferirModeloNoHarness,
+): Promise<Configuracao> {
   const nova = Configuracao.parse(entrada);
   const modelo = nova.modeloAuditoria;
   if (modelo && parDoModelo(modelo) !== parDoModelo(configuracao(banco).modeloAuditoria)) {
-    await new HarnessPi().conferirModelo(modelo).catch((error_: unknown) => {
+    await conferirModeloNoHarness(modelo).catch((error_: unknown) => {
       throw new z.ZodError([{ code: "custom", path: ["modeloAuditoria"], message: mensagem(error_), input: modelo }]);
     });
   }

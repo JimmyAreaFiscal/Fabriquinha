@@ -16,6 +16,7 @@ import { relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/rel
 import { pastasDoAmbiente } from "../../infra/container/pastas_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
+import { PACOTE } from "../../../harness/pi/pi.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
 // O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
@@ -39,7 +40,13 @@ const projetoComImagem = (imagem_do_ambiente?: string) =>
 const projeto = projetoComImagem("alpine");
 const espacoA = espacoDaDemanda(projeto, "I-1", base);
 const espacoB = espacoDaRodada(projeto, "I-1", 2, base);
-const SERVICO = { raiz: base, porta_da_api: 4999, home_do_usuario: base };
+const SERVICO = {
+  raiz: base,
+  porta_da_api: 4999,
+  home_do_usuario: base,
+  pacote_do_harness: PACOTE,
+  dir_do_harness_do_auditor: dirDoPiDoAuditorDoTeste,
+};
 const LIMITES = { tipo: "container", memoria_maxima_mb: 768, cpus: 1.5, ociosidade_para_eliminar_min: 30 };
 
 let cenarios = 0;

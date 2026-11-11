@@ -1,4 +1,4 @@
-// Auditor automático: o prompt da triagem, a leitura da decisão e a chamada ao pi, com o `executar` trocado.
+// Auditor automático: o prompt da triagem, a leitura da decisão e a chamada ao pi, com o `executar` do harness trocado.
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -8,7 +8,15 @@ import { migrar } from "../../../compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../../../compartilhado/armazenamento/migracoes/migracoes.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import type { executar } from "../../../compartilhado/infra/processo.ts";
+import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
+import { condutor } from "./condutor.ts";
+
+/** A triagem com o pi da consulta trocado por `rodar`, no harness do condutor do serviço. */
+const triarCom = (rodar: typeof executar, ...argumentos: Parameters<typeof triarPergunta>) => {
+  condutor.montarHarness(new HarnessPi(rodar));
+  return triarPergunta(...argumentos);
+};
 
 const contexto = { ticket: "I-7.T3", etapa: "implementar", demanda: "Cadastro" };
 const comOpcoes = { pergunta: "Corrijo a issue S6328?", detalhes: "no a.ts:7", opcoes: ["Sim", "Não"] };
@@ -120,7 +128,7 @@ test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código dife
   const decisao = '{"decisao":"responder","resposta":"Sim","justificativa":"Sonar se corrige"}';
 
   const modelo = { provedor: "claude-bridge", nome: "claude-sonnet-5-5" };
-  assert.deepEqual(await triarPergunta(modelo, contexto, comOpcoes, pi(decisao)), {
+  assert.deepEqual(await triarCom(pi(decisao), modelo, contexto, comOpcoes), {
     resposta: "Sim",
     justificativa: "Sonar se corrige",
   });
@@ -136,10 +144,10 @@ test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código dife
     "--model",
     "claude-bridge/claude-sonnet-5-5",
   ]);
-  assert.equal(await triarPergunta(undefined, contexto, comOpcoes, pi(decisao, 1)), undefined);
+  assert.equal(await triarCom(pi(decisao, 1), undefined, contexto, comOpcoes), undefined);
   assert.ok(!chamadas[1]?.includes("--model"));
   const quebra = (() => Promise.reject(new Error("spawn pi ENOENT"))) as unknown as typeof executar;
-  assert.equal(await triarPergunta(modelo, contexto, comOpcoes, quebra), undefined);
+  assert.equal(await triarCom(quebra, modelo, contexto, comOpcoes), undefined);
 });
 
 test("o Uso da consulta é somado à execução do ticket que perguntou, e a consulta sem resposta não grava nada", async () => {
@@ -175,11 +183,11 @@ test("o Uso da consulta é somado à execução do ticket que perguntou, e a con
     };
   const execucaoQuePerguntou = { banco, ticket, execucao: "e1" };
 
-  assert.equal(await triarPergunta(undefined, contexto, comOpcoes, pi(1), execucaoQuePerguntou), undefined);
+  assert.equal(await triarCom(pi(1), undefined, contexto, comOpcoes, execucaoQuePerguntou), undefined);
   assert.deepEqual(carregarTrabalhosDoTicket(banco, ticket).usos, []);
 
-  await triarPergunta(undefined, contexto, comOpcoes, pi(0), execucaoQuePerguntou);
-  await triarPergunta(undefined, contexto, comOpcoes, pi(0), execucaoQuePerguntou);
+  await triarCom(pi(0), undefined, contexto, comOpcoes, execucaoQuePerguntou);
+  await triarCom(pi(0), undefined, contexto, comOpcoes, execucaoQuePerguntou);
   assert.deepEqual(carregarTrabalhosDoTicket(banco, ticket).usos, [
     {
       execucao_id: "e1",

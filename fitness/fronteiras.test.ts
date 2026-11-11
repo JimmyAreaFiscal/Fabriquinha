@@ -10,6 +10,8 @@ import ts from "typescript";
 import { EtapaTicket } from "../src/compartilhado/nucleo/primitivos.ts";
 
 const MODULO_CLIENTE_WEB = "entrega/cliente-web";
+const MODULO_DO_HARNESS = "harness";
+const MODULO_DO_ADAPTER_PI = "harness/pi";
 
 // Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
 const QUALQUER_EXTERNO = () => true;
@@ -36,7 +38,14 @@ const MATRIZ: Record<string, RegraDoModulo> = {
   armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
   aplicacao: {
-    modulosPermitidos: ["nucleo", "armazenamento", "infra", "entrega/contrato"],
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", "entrega/contrato", MODULO_DO_HARNESS],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  // A interface do Harness: só tipos, que o adapter implementa e o condutor usa.
+  [MODULO_DO_HARNESS]: { modulosPermitidos: [], modulosSoComoTipo: ["nucleo", "infra"], externoPermitido: () => false },
+  // O adapter pi é infra do harness; só a composição o importa (o resto do serviço pede o harness ao condutor).
+  [MODULO_DO_ADAPTER_PI]: {
+    modulosPermitidos: ["nucleo", "infra", MODULO_DO_HARNESS],
     externoPermitido: QUALQUER_EXTERNO,
   },
   // Puro: importável pelo servidor e pelo navegador.
@@ -68,6 +77,8 @@ const MATRIZ: Record<string, RegraDoModulo> = {
       "entrega/compartilhado",
       "entrega/contrato",
       MODULO_CLIENTE_WEB,
+      MODULO_DO_HARNESS,
+      MODULO_DO_ADAPTER_PI,
     ],
     externoPermitido: QUALQUER_EXTERNO,
   },
@@ -89,9 +100,12 @@ const EXCECOES: Excecao[] = [];
 // `src/<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
 const DOMINIOS = new Set(["fluxo", "demanda", "execucao", "ambiente", "qualidade", "custos", "compartilhado"]);
 
+// `src/harness/<arquivo>` é a interface; `src/harness/<adapter>/…`, um módulo por adapter.
 function moduloDoArquivo(caminhoRelativoASrc: string): string {
   const [primeiro, segundo] = caminhoRelativoASrc.split("/");
   if (primeiro === "entrega" && segundo) return `entrega/${segundo}`;
+  if (primeiro === MODULO_DO_HARNESS)
+    return segundo === undefined || segundo.endsWith(".ts") ? MODULO_DO_HARNESS : `${MODULO_DO_HARNESS}/${segundo}`;
   if (primeiro !== undefined && DOMINIOS.has(primeiro)) return segundo ?? "";
   return primeiro ?? "";
 }
@@ -301,7 +315,13 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
     "entrega/cliente-web/pacotes.ts":
       'import markdownit from "markdown-it/browser";\nimport { createRoot } from "react-dom/client";\nimport { useThread } from "@assistant-ui/react";\n',
-    "composicao/ok.ts": 'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\n',
+    "composicao/ok.ts":
+      'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\nimport { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
+    "harness/harness.ts":
+      'import type { N } from "../nucleo/ok.ts";\nimport type { Ambiente } from "../infra/ok.ts";\nexport interface Harness { n: N }\n',
+    "harness/pi/harness_pi.ts":
+      'import type { Harness } from "../harness.ts";\nimport { b } from "../../infra/ok.ts";\nimport { existsSync } from "node:fs";\n',
+    "aplicacao/usa_o_harness.ts": 'import type { Harness } from "../harness/harness.ts";\n',
     // Proibidos
     "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
     "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
@@ -326,6 +346,9 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
     "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
     "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
+    "aplicacao/usa_o_pi.ts": 'import { HarnessPi } from "../harness/pi/harness_pi.ts";\n',
+    "harness/valor.ts": 'import { b } from "../infra/ok.ts";\nimport { readFileSync } from "node:fs";\n',
+    "harness/pi/armazenamento.ts": 'import { a } from "../../armazenamento/ok.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
@@ -339,6 +362,10 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
       "aplicacao/sql.ts importa SQL .exec(",
       "aplicacao/sql.ts importa SQL .prepare(",
+      "aplicacao/usa_o_pi.ts importa ../harness/pi/harness_pi.ts",
+      "harness/pi/armazenamento.ts importa ../../armazenamento/ok.ts",
+      "harness/valor.ts importa ../infra/ok.ts",
+      "harness/valor.ts importa node:fs",
       "entrega/cli-agente/aplicacao.ts importa ../../aplicacao/ok.ts",
       "entrega/cli-agente/armazenamento.ts importa ../../armazenamento/ok.ts",
       "entrega/cli-agente/nucleo.ts importa ../../nucleo/ok.ts",
@@ -418,7 +445,7 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 
 // Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
 const ARQUIVO_DO_CONDUTOR = "execucao/aplicacao/trabalho/condutor.ts";
-const ARQUIVO_DO_HARNESS = "execucao/infra/harness_pi.ts";
+const ARQUIVO_DO_HARNESS = "harness/pi/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
 // shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
@@ -488,8 +515,7 @@ const CHAMADORES_DIRETOS_DO_PROCESSO = [
   "ambiente/infra/worktree/worktree.ts",
   "composicao/cli.ts",
   "custos/infra/commits_humanos.ts",
-  "execucao/aplicacao/trabalho/auditor_automatico.ts",
-  "execucao/infra/harness_pi.ts",
+  "harness/pi/harness_pi.ts",
   "qualidade/aplicacao/simulacao/executor.ts",
   "qualidade/infra/tipos_de_verificacao/sonar.ts",
 ];
@@ -639,12 +665,11 @@ interface DependenciaToleradaEntreDominios {
 }
 
 const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
-  // servico.ts lê o `Modelo` do agente.
-  { de: "compartilhado", para: "execucao", passo: 1 },
   // servico.ts lê a ConfiguracaoDoAmbiente; processo.ts, o LIMITE_COMANDO_MS do Ambiente.
   { de: "compartilhado", para: "ambiente", passo: 2 },
-  // O Conjunto de Ambientes, o cadastro e a configuração do Projeto usam o pi, o HarnessPi e a configuração do agente.
-  { de: "ambiente", para: "execucao", passo: 1 },
+  // O Projeto guarda a ConfiguracaoAgente de cada etapa, e as consultas do Projeto leem o Trabalho Agêntico, o histórico
+  // das sessões e o modelo e o effort resolvidos (D07).
+  { de: "ambiente", para: "execucao", passo: 4 },
   // O Espaço de Trabalho, a worktree e as consultas do Projeto leem a Demanda e o seu fluxo.
   { de: "ambiente", para: "demanda", passo: 2 },
   { de: "ambiente", para: "fluxo", passo: 2 },
@@ -661,7 +686,7 @@ const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] 
   { de: "demanda", para: "execucao", passo: 4 },
   { de: "demanda", para: "fluxo", passo: 4 },
   { de: "execucao", para: "fluxo", passo: 4 },
-  // A avaliação e a simulação usam o HarnessPi e o condutor; as verificações, a Tentativa e o Ator.
+  // A avaliação e a simulação usam o condutor (e o harness dele); as verificações, a Tentativa e o Ator.
   { de: "qualidade", para: "execucao", passo: 4 },
   { de: "qualidade", para: "fluxo", passo: 4 },
   // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.

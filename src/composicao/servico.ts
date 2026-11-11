@@ -11,7 +11,9 @@ import { ErroDeRegra, mensagem } from "../compartilhado/nucleo/erros.ts";
 import { relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
 import { varrerCommitsHumanos } from "../custos/aplicacao/metricas/varrer_commits_humanos.ts";
 import { abrir } from "../compartilhado/armazenamento/banco.ts";
-import { garantirPacoteDoAgente } from "../execucao/infra/pacote_do_agente.ts";
+import { garantirPacoteDoAgente } from "../harness/pi/pacote_do_agente.ts";
+import { HarnessPi } from "../harness/pi/harness_pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../harness/pi/pi.ts";
 import { noLog } from "../compartilhado/infra/registro.ts";
 import { projetosAVarrer } from "../custos/armazenamento/commits_humanos.ts";
 import { configuracao, configuracaoDoAmbiente } from "../compartilhado/armazenamento/servico.ts";
@@ -22,6 +24,9 @@ import { montarAmbienteDoServico, montarConjuntoDoServico } from "../ambiente/ap
 import { AmbienteHostLocal } from "../ambiente/infra/ambiente_host_local.ts";
 import { GeradorDeAmbientes } from "../ambiente/infra/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../ambiente/aplicacao/conjunto_de_ambientes/conjunto.ts";
+
+/** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
+export const harnessDoServico = new HarnessPi();
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -57,6 +62,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
   montarAmbienteDoServico(new AmbienteHostLocal());
+  condutor.montarHarness(harnessDoServico);
   const relogio = relogioDoSistema;
   const noLogDoServico = (erro: unknown): void => {
     noLog(erro, relogio);
@@ -98,6 +104,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       raiz,
       porta_da_api: porta,
       home_do_usuario: homedir(),
+      pacote_do_harness: PACOTE,
+      dir_do_harness_do_auditor: dirDoPiDoAuditor(),
     }));
   };
   let aberto: DatabaseSync | undefined;

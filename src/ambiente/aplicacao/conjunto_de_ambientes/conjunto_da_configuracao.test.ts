@@ -16,6 +16,7 @@ import { montarConjuntoDoServico } from "../espaco/ambiente_do_servico.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { eliminarAmbienteDoConjunto, listarAmbientesDoConjunto } from "./conjunto_da_configuracao.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-configuracao-"));
 after(() => {
@@ -44,6 +45,8 @@ async function conjuntoComUmAlocado() {
     raiz: base,
     porta_da_api: 4999,
     home_do_usuario: base,
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
   });
   const ambiente = await conjunto.alocar(espaco, projeto);
   return { docker, banco, conjunto, ambiente };

@@ -1,12 +1,9 @@
-// O que o pi tem de comum a todos os modos (F4 §6.1): o pacote P1, a forma de um evento, o nome das skills de artefato
-// e a confiança herdada. O resto vive no `HarnessPi`.
+// O que o pi tem de comum a todos os modos (F4 §6.1): o pacote P1, o nome das skills de artefato, a pasta do pi do
+// Auditor e a confiança herdada. O resto vive no `HarnessPi`.
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-/** Um evento ou resposta do pi: um objeto JSON por linha do stdout. */
-export type EventoPi = Record<string, unknown> & { type?: unknown };
 
 /** A raiz do pacote P1 `pi-fabriquinha`, versionado junto com a Fabriquinha (F4 §6.1). */
 export const PACOTE = fileURLToPath(new URL("../../../pacote-pi", import.meta.url));

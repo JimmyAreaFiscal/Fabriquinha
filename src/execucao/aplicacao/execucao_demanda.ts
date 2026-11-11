@@ -6,7 +6,6 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
-import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../ambiente/nucleo/espaco_de_trabalho.ts";
@@ -48,11 +47,10 @@ import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./trabalho/auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
-import { HarnessPi } from "../infra/harness_pi.ts";
-import { confianca } from "../infra/pi.ts";
-import { argumentosPiDemanda } from "./trabalho/pi_demanda.ts";
+import { argumentosDoAgenteDoTicket } from "./trabalho/argumentos_do_ticket.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "../../fluxo/aplicacao/prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes/sessoes_demanda.ts";
+import type { ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
 
 export interface OpcoesExecucaoDemanda {
   limiteMin: number;
@@ -167,10 +165,10 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         })),
       });
     writeFileSync(join(dir, "prompt.md"), prompt);
-    const args = argumentosPiDemanda({
+    const args = argumentosDoAgenteDoTicket({
       raiz,
-      sessaoPi: sessao.id,
-      confianca: confianca(projeto.raiz_git),
+      sessao: sessao.id,
+      confianca: condutor.harness.confiancaNoRepositorio(projeto.raiz_git),
       modo: sessao.modo,
       ticket: c.ticket,
       etapasDoProjeto: projeto.etapas,
@@ -179,11 +177,11 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     if (condutor.emParada()) throw new Error("o serviço está parando");
     anotar(log, `pi ${args.join(" ")}`);
     falha = await condutor.iniciar({
-      execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
+      execucao: { id: execucao.id, sessao: sessao.id, modo: sessao.modo },
       args,
       cwd: worktree,
       ambiente,
-      env: new HarnessPi().ambiente(raiz, dir, execucao.id, ambiente.tipo),
+      env: condutor.harness.variaveisDeAmbiente(raiz, dir, execucao.id, ambiente.tipo),
       banco: c.banco,
       log,
       prompt,
@@ -193,7 +191,6 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
           execucao.configuracao_agente?.modelo,
           { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
           pergunta,
-          undefined,
           { banco: c.banco, ticket: c.ref, execucao: execucao.id },
         ),
       aoLancar: (pgid, ambienteId) => {
@@ -208,7 +205,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   if (condutor.foiInterrompido(execucao.id)) falha = falhaInterrompidaPeloAuditor;
   else if (condutor.emParada()) falha = falhaPorServicoReiniciado;
   condutor.deixarDeAcompanhar(execucao.id);
-  encerrarProcessoDoTicket(c, falha !== undefined, log, c.relogio);
+  encerrarProcessoDoTicket(c, falha !== undefined, log, condutor.harness, c.relogio);
   try {
     await opcoes.fechar?.(c.banco, c.ref, { falha });
   } catch (error_) {
@@ -315,5 +312,13 @@ export function interromperExecucaoDemanda(
     // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
     ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
   }
-  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar, relogio);
+  encerrarProcessoOrfao(
+    banco,
+    ref,
+    execucao.id,
+    falhaInterrompidaPeloAuditor,
+    condutor.avisar,
+    condutor.harness,
+    relogio,
+  );
 }

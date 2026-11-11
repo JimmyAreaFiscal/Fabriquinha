@@ -19,11 +19,11 @@ import {
   tarefaComExecucaoSimuladaPendente,
   ticketEmAndamentoDoProjeto,
 } from "../../armazenamento/projetos.ts";
-import { HarnessPi } from "../../../execucao/infra/harness_pi.ts";
 import { dirDaExecucaoSimulada, noLog } from "../../../compartilhado/infra/registro.ts";
 import { conferirProjeto } from "../../infra/repositorio/cadastro.ts";
 import { removerWorktrees } from "../../infra/worktree/worktree.ts";
 import {
+  type ConferirModeloNoHarness,
   type ConfiguracoesDasEtapas,
   configuracoesDasEtapas,
   etapasComModeloOuEffort,
@@ -110,7 +110,12 @@ type ProjetoDoFormulario = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "
  * F4 §9: o modelo novo ou trocado precisa existir no pi; o rejeitado vira erro do campo (ZodError). O igual ao gravado
  * não chama o pi: o que ele deixou de listar continua salvando sem mexer.
  */
-async function conferirModelosAlterados(banco: DatabaseSync, nome: string, configuracoes: ConfiguracoesDasEtapas) {
+async function conferirModelosAlterados(
+  banco: DatabaseSync,
+  nome: string,
+  configuracoes: ConfiguracoesDasEtapas,
+  conferirModeloNoHarness: ConferirModeloNoHarness,
+) {
   const gravadas = configuracoesDasEtapas(buscarProjeto(banco, nome)?.etapas ?? []);
   const alterados = EtapaTicket.options.flatMap((etapa) => {
     const modelo = configuracoes[etapa]?.modelo;
@@ -119,7 +124,7 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
   const rejeitados = (
     await Promise.all(
       alterados.map(({ etapa, modelo }) =>
-        new HarnessPi().conferirModelo(modelo).then(
+        conferirModeloNoHarness(modelo).then(
           () => [],
           (error_: unknown) => [
             {
@@ -140,12 +145,17 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
  * C19 pelo formulário: confere o repositório (F5 §2; a falha é externa, ErroExterno, e nada é gravado) e os modelos, e
  * grava o cadastro e as etapas numa transação só.
  */
-async function conferirEGravar(banco: DatabaseSync, formulario: ProjetoDoFormulario, gravar: typeof registrarProjeto) {
+async function conferirEGravar(
+  banco: DatabaseSync,
+  formulario: ProjetoDoFormulario,
+  gravar: typeof registrarProjeto,
+  conferirModeloNoHarness: ConferirModeloNoHarness,
+) {
   const { configuracoes, preparacao, ...cadastro } = formulario;
   const { hospedagem } = await conferirProjeto(cadastro).catch((error_: unknown) => {
     throw new ErroExterno(mensagem(error_));
   });
-  await conferirModelosAlterados(banco, formulario.nome, configuracoes);
+  await conferirModelosAlterados(banco, formulario.nome, configuracoes, conferirModeloNoHarness);
   return escrever(banco, () => {
     // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
     const salvo = gravar(banco, {
@@ -163,15 +173,22 @@ async function conferirEGravar(banco: DatabaseSync, formulario: ProjetoDoFormula
  * O cadastro e só ele fixa o cursor inicial da base (F6 §4.4); a edição não varre. A varredura que falha só vai para o
  * log: o agendador a refaz no dia seguinte.
  */
-export async function cadastrarProjetoDoFormulario(banco: DatabaseSync, formulario: ProjetoDoFormulario) {
-  const salvo = await conferirEGravar(banco, formulario, registrarProjeto);
+export async function cadastrarProjetoDoFormulario(
+  banco: DatabaseSync,
+  formulario: ProjetoDoFormulario,
+  conferirModeloNoHarness: ConferirModeloNoHarness,
+) {
+  const salvo = await conferirEGravar(banco, formulario, registrarProjeto, conferirModeloNoHarness);
   await varrerCommitsHumanos(banco, salvo.nome).catch(noLog);
   return salvo;
 }
 
 /** Edita o projeto que já existe com as mesmas conferências do cadastro, sem varrer a base. */
-export const editarProjetoDoFormulario = (banco: DatabaseSync, formulario: ProjetoDoFormulario) =>
-  conferirEGravar(banco, formulario, editarProjeto);
+export const editarProjetoDoFormulario = (
+  banco: DatabaseSync,
+  formulario: ProjetoDoFormulario,
+  conferirModeloNoHarness: ConferirModeloNoHarness,
+) => conferirEGravar(banco, formulario, editarProjeto, conferirModeloNoHarness);
 
 /** Recusa a remoção enquanto o projeto tem execução, de ticket ou simulada, em andamento. */
 function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string): void {

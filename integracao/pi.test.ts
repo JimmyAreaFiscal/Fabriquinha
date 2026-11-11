@@ -7,9 +7,9 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { HarnessPi } from "../src/execucao/infra/harness_pi.ts";
-import { PACOTE } from "../src/execucao/infra/pi.ts";
-import { skillsDaEtapaDemanda } from "../src/execucao/aplicacao/trabalho/pi_demanda.ts";
+import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
+import { PACOTE } from "../src/harness/pi/pi.ts";
+import { skillsDaEtapaDemanda } from "../src/execucao/aplicacao/trabalho/argumentos_do_ticket.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 
 const harness = new HarnessPi();
@@ -35,7 +35,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     const prompt = join(dir, `prompt-${etapa}.md`);
     const args = harness.argumentos({
       raiz: dir,
-      sessaoPi: `fumaca-${etapa}`,
+      sessao: `fumaca-${etapa}`,
       skills: skillsDaEtapaDemanda(etapa),
       modelo: undefined,
       confianca: undefined,
@@ -45,7 +45,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     // importou e inicializou (`<caminho> factory`), na ordem de carga.
     const pi = spawnSync(harness.binarioPi(), [...args, "-e", sonda], {
       cwd: dir,
-      env: { ...harness.ambiente(dir, dir, 1), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+      env: { ...harness.variaveisDeAmbiente(dir, dir, 1), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
       input: "",
       encoding: "utf8",
       timeout: 30_000,

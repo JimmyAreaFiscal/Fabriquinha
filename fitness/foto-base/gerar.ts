@@ -27,6 +27,8 @@ import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/
 import { servirWeb } from "../../src/entrega/http/servidor.ts";
 import { noLog } from "../../src/compartilhado/infra/registro.ts";
 import { publicarPRDe } from "../../src/ambiente/infra/repositorio/pr.ts";
+// O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
+import "../../apoio-testes/harness_do_teste.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");

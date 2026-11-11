@@ -13,6 +13,12 @@ export interface LinhaDeUso {
   chamadas: number;
 }
 
+/** Desfaz `LinhaDeUso.modelo` nas colunas `modelo_provedor` e `modelo_nome` do banco. */
+export function colunasDoModelo(modelo: string): { modelo_provedor: string; modelo_nome: string } {
+  const barra = modelo.indexOf("/");
+  return { modelo_provedor: modelo.slice(0, barra), modelo_nome: modelo.slice(barra + 1) };
+}
+
 /** Soma dois custos: o desconhecido some diante do conhecido (o total vira piso, avisado por `trabalhosSemCusto`). */
 function somarCustoDaLinha(a: number | null, b: number | null): number | null {
   return a === null || b === null ? (a ?? b) : a + b;

@@ -5,7 +5,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, Ator } from "../../../fluxo/nucleo/ator.ts";
-import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../../../fluxo/nucleo/ciclo_de_vida/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
@@ -13,14 +12,12 @@ import { predecessorasPendentes } from "../../../demanda/nucleo/item_de_trabalho
 import { encontrado, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { type Pendencia, pendenciasDaDemanda, type TrabalhoVivo } from "../../../demanda/nucleo/pendencia.ts";
-import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import type { EtapaTicket, Instante } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket, Instante, Modelo, ModoTrabalho } from "../../../compartilhado/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../../nucleo/trabalho_agentico.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
-import { HarnessPi } from "../../infra/harness_pi.ts";
 import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../demanda/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
@@ -39,7 +36,7 @@ import {
   type RespostaAutomatica,
   type Situacao,
 } from "../trabalho/condutor.ts";
-import type { EventoPi } from "../../infra/pi.ts";
+import type { EventoDoAgente } from "../../../harness/harness.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
 type Estado = "rodando" | "aguardando_humano" | "terminada";
@@ -49,7 +46,7 @@ type ModoEnvio = "prompt" | "steer" | "follow_up";
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
 export function lerConversa(raiz: string, sessao: string): unknown[] {
-  const arquivo = new HarnessPi().arquivoDaSessao(raiz, sessao);
+  const arquivo = condutor.harness.arquivoDaSessao(raiz, sessao);
   if (!arquivo) return [];
   return readFileSync(arquivo, "utf8")
     .split("\n")
@@ -204,7 +201,7 @@ export interface ChatDemanda {
   cabecalho: CabecalhoDemanda;
   conversa: EntradaDemanda[];
   /** Os eventos ao vivo; `{ type: "estado", ...cabecalho }` traz o cabeçalho novo. Devolve a função que cancela. */
-  assinar(ouvinte: (evento: EventoPi) => void): () => void;
+  assinar(ouvinte: (evento: EventoDoAgente) => void): () => void;
 }
 
 /** @testes tipo que o teste usa para montar a entrada */

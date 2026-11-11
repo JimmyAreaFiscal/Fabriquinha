@@ -12,7 +12,7 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { instalarPiFalso, type PiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { SEM_LINK } from "../../nucleo/simulacao.ts";
-import { PACOTE } from "../../../execucao/infra/pi.ts";
+import { PACOTE } from "../../../harness/pi/pi.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../../compartilhado/infra/registro.ts";
 import { buscarProjeto } from "../../../ambiente/armazenamento/projetos.ts";

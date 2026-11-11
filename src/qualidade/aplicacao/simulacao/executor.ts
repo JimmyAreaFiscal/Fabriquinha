@@ -9,7 +9,6 @@ import { ErroDeRegra, mensagem } from "../../../compartilhado/nucleo/erros.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
 import type { Relogio } from "../../../compartilhado/nucleo/relogio.ts";
 import { LINK_FORA_DO_AR, RelatorioSimulacao } from "../../nucleo/simulacao.ts";
-import { PACOTE } from "../../../execucao/infra/pi.ts";
 import { caminhoArquivo } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
@@ -26,7 +25,6 @@ interface OpcoesDaSimulacao {
   relogio: Relogio;
 }
 
-const FERRAMENTAS = "ver_tela,clicar,digitar,tecla,rolar,relatar";
 const SEM_RELATORIO = "o agente não entregou o relatório";
 
 /** O produto responde? Qualquer resposta HTTP basta, até 500: a página quebrada é achado do relatório. */
@@ -105,19 +103,12 @@ async function executarUma(
   const identificador = `simulacao-${String(id)}`;
   // Sem falha, o pi saiu sozinho; a única falha possível é o limite de tempo do condutor.
   const falhaPorTempoLimite = await condutor.iniciar({
-    execucao: { id: identificador, sessaoPi: identificador, modo: "autonomo" },
-    args: [
-      "--mode",
-      "json",
-      "--session-dir",
-      join(dir, "sessao"),
-      "--tools",
-      FERRAMENTAS,
-      "-e",
-      join(PACOTE, "extensions", "navegador.ts"),
-      ...anexos.map((arquivo) => `@${arquivo}`),
-      promptDaPersona(usuario, texto, link, anexos.length > 0),
-    ],
+    execucao: { id: identificador, sessao: identificador, modo: "autonomo" },
+    args: condutor.harness.argumentosDaSimulacao({
+      dirDaSessao: join(dir, "sessao"),
+      anexos,
+      prompt: promptDaPersona(usuario, texto, link, anexos.length > 0),
+    }),
     cwd: dir,
     env: {
       ...ambienteSemCredenciais(process.env, join(dir, "vazio")),

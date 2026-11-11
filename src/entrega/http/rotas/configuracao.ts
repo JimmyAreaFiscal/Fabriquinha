@@ -13,7 +13,6 @@ import { eliminarAmbienteDoConjunto } from "../../../ambiente/aplicacao/conjunto
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
-  consultarModelosDoPi,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
 } from "../../../ambiente/aplicacao/consultas/configuracao.ts";
@@ -27,7 +26,12 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
+import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
+
+/** O harness do serviço confere o modelo novo ou trocado (F4 §9). */
+const conferirModeloNoHarness = (modelo: Modelo): Promise<void> => condutor.harness.conferirModelo(modelo);
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
@@ -40,7 +44,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     metodo: "POST",
     caminho: "/api/configuracao",
     tratar: async ({ banco, agendador, corpo }) => {
-      await conferirESalvarConfiguracao(banco, corpo);
+      await conferirESalvarConfiguracao(banco, corpo, conferirModeloNoHarness);
       return consultarEstadoDaConfiguracao(banco, () => agendador.proximaBusca());
     },
     resposta: EstadoDaConfiguracao,
@@ -78,18 +82,23 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     tratar: ({ banco, params }) => consultarProjetoCadastrado(banco, String(params.nome)),
     resposta: ProjetoCadastrado,
   },
-  { metodo: "GET", caminho: "/api/modelos", tratar: () => consultarModelosDoPi(), resposta: ModelosDoPi },
+  { metodo: "GET", caminho: "/api/modelos", tratar: () => condutor.harness.listarModelos(), resposta: ModelosDoPi },
   {
     metodo: "POST",
     caminho: "/api/projetos",
-    tratar: ({ banco, corpo }) => cadastrarProjetoDoFormulario(banco, FormularioDoProjeto.parse(corpo)),
+    tratar: ({ banco, corpo }) =>
+      cadastrarProjetoDoFormulario(banco, FormularioDoProjeto.parse(corpo), conferirModeloNoHarness),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params, corpo }) =>
-      editarProjetoDoFormulario(banco, { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) }),
+      editarProjetoDoFormulario(
+        banco,
+        { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) },
+        conferirModeloNoHarness,
+      ),
     resposta: ProjetoCadastrado,
   },
   {

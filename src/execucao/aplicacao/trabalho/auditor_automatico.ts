@@ -3,10 +3,9 @@
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import { executar } from "../../../compartilhado/infra/processo.ts";
 import { registrarUsoDaConsulta, type TicketRef } from "./processo_do_ticket.ts";
 import { condutor } from "./condutor.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 
 export interface PerguntaDoAgente {
   pergunta: string;
@@ -147,10 +146,9 @@ export async function triarPergunta(
   modelo: Modelo | undefined,
   contexto: ContextoDaPergunta,
   p: PerguntaDoAgente,
-  rodar: typeof executar = executar,
   quemPerguntou?: ExecucaoQuePerguntou,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
-  const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
+  const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS);
   if (resposta === undefined) return undefined;
   if (quemPerguntou) {
     registrarUsoDaConsulta(quemPerguntou.banco, quemPerguntou.ticket, quemPerguntou.execucao, resposta.uso);

@@ -4,14 +4,13 @@ import { z } from "zod";
 import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "../ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../ciclo_de_vida/ciclos.ts";
-import { Modelo } from "../../../execucao/nucleo/configuracao_agente.ts";
 import { branchDemanda, DemandaId, formatarTicketRef } from "../../../demanda/nucleo/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
 import { exigirAutoria } from "../../../qualidade/nucleo/evidencias/evidencia.ts";
 import { pendentesDeEnvio } from "../../../qualidade/nucleo/evidencias/evidencia_demanda.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { lerPlanoGravado, materializar, PlanoProposto } from "../../../demanda/nucleo/plano.ts";
-import { Id, type Instante, Markdown, Slug, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
+import { Id, type Instante, Markdown, Modelo, Slug, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
 import {
   comReaberturaDoAuditor,
   comTentativaEncerrada,

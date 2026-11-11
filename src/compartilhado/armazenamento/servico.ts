@@ -1,8 +1,8 @@
 // Configuração do serviço (F4 §3, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { Modelo } from "../../execucao/nucleo/configuracao_agente.ts";
 import { ConfiguracaoDoAmbiente } from "../../ambiente/nucleo/projeto.ts";
+import { Modelo } from "../nucleo/primitivos.ts";
 
 export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),

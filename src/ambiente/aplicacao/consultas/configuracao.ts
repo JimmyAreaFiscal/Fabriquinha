@@ -1,9 +1,7 @@
 // As consultas da tela de Configuração (F7 §4.2): cada uma monta o contrato da resposta, lendo num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import type { Modelo } from "../../../execucao/nucleo/configuracao_agente.ts";
 import { configuracao, configuracaoDoAmbiente } from "../../../compartilhado/armazenamento/servico.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
-import { HarnessPi } from "../../../execucao/infra/harness_pi.ts";
 import type {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -33,6 +31,3 @@ export const consultarProjetosCadastrados = (banco: DatabaseSync): ProjetoCadast
 /** O projeto `nome`, com o modelo e o effort de cada etapa; `ErroDeInexistente` se não está cadastrado. */
 export const consultarProjetoCadastrado = (banco: DatabaseSync, nome: string): ProjetoCadastrado =>
   projetoComConfiguracoesDasEtapas(projetoExistente(banco, nome));
-
-/** Todos os pares provedor/modelo que o pi conhece (F4 §9), para os seletores. */
-export const consultarModelosDoPi = (): Promise<Modelo[]> => new HarnessPi().listarModelos();

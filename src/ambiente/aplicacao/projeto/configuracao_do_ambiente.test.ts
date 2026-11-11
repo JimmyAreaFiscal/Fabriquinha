@@ -14,6 +14,11 @@ import {
   parDoModelo,
   validarESalvarConfiguracaoDoAmbiente,
 } from "./configuracao_do_ambiente.ts";
+import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+
+/** O pi falso do teste responde a conferência, como o harness do serviço. */
+const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const PADRAO = { tipo: "host_local", memoria_maxima_mb: 2048, cpus: 2, ociosidade_para_eliminar_min: 60 };
@@ -48,15 +53,19 @@ test("conferirESalvarConfiguracao grava o modelo de auditoria que o pi lista, re
   const { banco } = abrirBancoTemporario();
   const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
   const nova = { ...configuracao(banco), intervaloMin: 7, modeloAuditoria: opus };
-  assert.deepEqual(await conferirESalvarConfiguracao(banco, nova), nova);
+  assert.deepEqual(await conferirESalvarConfiguracao(banco, nova, conferirModeloNoPi), nova);
   assert.deepEqual(configuracao(banco), nova);
 
   await assert.rejects(
-    conferirESalvarConfiguracao(banco, {
-      ...nova,
-      intervaloMin: 9,
-      modeloAuditoria: { provedor: "inexistente", nome: "xyz" },
-    }),
+    conferirESalvarConfiguracao(
+      banco,
+      {
+        ...nova,
+        intervaloMin: 9,
+        modeloAuditoria: { provedor: "inexistente", nome: "xyz" },
+      },
+      conferirModeloNoPi,
+    ),
     (erro: unknown) =>
       erro instanceof ZodError &&
       erro.issues[0]?.path.join(".") === "modeloAuditoria" &&
@@ -66,8 +75,14 @@ test("conferirESalvarConfiguracao grava o modelo de auditoria que o pi lista, re
 
   // Igual ao gravado: o pi nem é chamado (aqui, quebrado); sem modelo, volta ao padrão.
   piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
-  assert.equal((await conferirESalvarConfiguracao(banco, { ...nova, intervaloMin: 8 })).intervaloMin, 8);
-  assert.equal((await conferirESalvarConfiguracao(banco, { ...nova, modeloAuditoria: null })).modeloAuditoria, null);
+  assert.equal(
+    (await conferirESalvarConfiguracao(banco, { ...nova, intervaloMin: 8 }, conferirModeloNoPi)).intervaloMin,
+    8,
+  );
+  assert.equal(
+    (await conferirESalvarConfiguracao(banco, { ...nova, modeloAuditoria: null }, conferirModeloNoPi)).modeloAuditoria,
+    null,
+  );
   banco.close();
 });
 

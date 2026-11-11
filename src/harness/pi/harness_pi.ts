@@ -5,44 +5,29 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import type { Modelo } from "../nucleo/configuracao_agente.ts";
-import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
-import type { Effort } from "../../compartilhado/nucleo/primitivos.ts";
+import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 import type { LinhaDeUso } from "../../custos/nucleo/uso.ts";
-import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../../ambiente/infra/ambiente.ts";
+import { ambienteSemCredenciais, type Ambiente } from "../../ambiente/infra/ambiente.ts";
 import { chavesDeProvedorDoLlm } from "../../ambiente/infra/container/ambiente_container.ts";
 import { executar } from "../../compartilhado/infra/processo.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
-import { PACOTE, type EventoPi } from "./pi.ts";
+import type {
+  EventoDoAgente,
+  Harness,
+  LancamentoDaSimulacao,
+  LancamentoDeAuditoria,
+  LancamentoDoTicket,
+  ProcessoDoAgente,
+  RespostaDaConsulta,
+} from "../harness.ts";
+import { confianca, PACOTE } from "./pi.ts";
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
 
-/** O que a consulta devolve: o stdout do pi e o Uso que ela gastou. */
-export interface RespostaDaConsulta {
-  saida: string;
-  uso: LinhaDeUso[];
-}
-
-export interface Lancamento {
-  raiz: string;
-  sessaoPi: string;
-  /** As skills de artefato da etapa (P1 §5.1). */
-  skills: string[];
-  modelo: Modelo | undefined;
-  effort?: Effort;
-  confianca: boolean | undefined;
-  modo: ModoTrabalho;
-}
-
-/** A auditoria do Histórico: sem skills, effort nem confiança herdada; o `modelo` é o da Configuração, ou o padrão do pi. */
-interface LancamentoDeAuditoria {
-  raiz: string;
-  sessaoPi: string;
-  modelo?: Modelo | null;
-  extensoes?: string[];
-}
+/** As ferramentas da extensão `navegador`, as únicas da execução simulada. */
+const FERRAMENTAS_DA_SIMULACAO = "ver_tela,clicar,digitar,tecla,rolar,relatar";
 
 /**
  * Divide o stdout em registros JSONL só em `\n`, tirando um `\r` final (F4 §6.1.2). O `readline` do Node não serve:
@@ -67,27 +52,13 @@ export function divisorJsonl(): (parte: string) => string[] {
  * O objeto JSON da linha, ou `undefined` se ela não é JSON ou não é objeto (`null`, número): um neto que herda o
  * stdout pode escrever qualquer coisa nele, e o ouvinte do `data` não pode lançar.
  */
-function objetoJson(linha: string): EventoPi | undefined {
+function objetoJson(linha: string): EventoDoAgente | undefined {
   try {
     const valor: unknown = JSON.parse(linha);
-    return typeof valor === "object" && valor !== null ? (valor as EventoPi) : undefined;
+    return typeof valor === "object" && valor !== null ? (valor as EventoDoAgente) : undefined;
   } catch {
     return undefined;
   }
-}
-
-/** Como a consulta roda o pi: `executar` do host; os testes trocam. */
-export type RodarComando = typeof executar;
-
-interface ProcessoPi {
-  /** O grupo de processos do pi no Ambiente (F4 §7). */
-  readonly identificador: IdentificadorDoProcesso;
-  /** Um comando RPC, como uma linha JSON no stdin. */
-  enviar(comando: object): void;
-  /** Resolve com o código de saída quando o pi termina e o stdout fecha, inclusive se ele nem chegou a rodar. */
-  readonly saiu: Promise<number | null>;
-  /** SIGTERM no grupo, até 10 s para o pi fechar, e SIGKILL no grupo, para não sobrar o que o agente abriu. */
-  parar(): Promise<void>;
 }
 
 /** O Uso de todos os arquivos do diretório de sessão (o pi só grava os `.jsonl` dela), sem janela: a consulta é um Trabalho só. */
@@ -99,7 +70,16 @@ function usoDaSessaoEm(dir: string): LinhaDeUso[] {
 const arquivosDaSessaoEm = (dir: string, sessaoPi: string): string[] =>
   existsSync(dir) ? readdirSync(dir).filter((nome) => nome.endsWith(`_${sessaoPi}.jsonl`)) : [];
 
-export class HarnessPi {
+/** Como a consulta roda o pi: `executar` do host; os testes trocam. */
+type RodarComando = typeof executar;
+
+export class HarnessPi implements Harness {
+  readonly #rodarComando: RodarComando;
+
+  constructor(rodarComando: RodarComando = executar) {
+    this.#rodarComando = rodarComando;
+  }
+
   /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
   binarioPi(): string {
     return process.env.FABRIQUINHA_PI || "pi";
@@ -113,14 +93,14 @@ export class HarnessPi {
    * A auditoria do Histórico (`LancamentoDeAuditoria`) tira essas mesmas ferramentas e só a guarda, que deixa o
    * `subagent` chamar apenas o `scout`, vai com ela.
    */
-  argumentos(l: Lancamento | LancamentoDeAuditoria): string[] {
+  argumentos(l: LancamentoDoTicket | LancamentoDeAuditoria): string[] {
     const comum = [
       "--mode",
       "rpc",
       "--session-dir",
-      this.pastaDaSessao(l.raiz, l.sessaoPi),
+      this.pastaDaSessao(l.raiz, l.sessao),
       "--session-id",
-      l.sessaoPi,
+      l.sessao,
       ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.nome] : []),
     ];
     const guarda = ["-e", join(PACOTE, "extensions", "guarda.ts")];
@@ -146,6 +126,32 @@ export class HarnessPi {
     ];
   }
 
+  /** F8 §5: o pi em `--mode json`, só com as ferramentas do `navegador`, os anexos como `@arquivo` e o prompt por último. */
+  argumentosDaSimulacao({ dirDaSessao, anexos, prompt }: LancamentoDaSimulacao): string[] {
+    return [
+      "--mode",
+      "json",
+      "--session-dir",
+      dirDaSessao,
+      "--tools",
+      FERRAMENTAS_DA_SIMULACAO,
+      "-e",
+      join(PACOTE, "extensions", "navegador.ts"),
+      ...anexos.map((arquivo) => `@${arquivo}`),
+      prompt,
+    ];
+  }
+
+  /** As skills que existem em `pacote-pi/skills`: o pi ignora em silêncio um `--skill` que não existe. */
+  skillsDisponiveis(skills: readonly string[]): string[] {
+    return skills.filter((skill) => existsSync(join(PACOTE, "skills", skill)));
+  }
+
+  /** F4 §6.1.1: a decisão de confiança do `trust.json` do pi do Auditor. */
+  confiancaNoRepositorio(repositorio: string): boolean | undefined {
+    return confianca(repositorio);
+  }
+
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
    * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket (`execucao`) fala com a API pelo cliente
@@ -155,7 +161,7 @@ export class HarnessPi {
    * No Ambiente `container` o env começa vazio, sem `process.env`: só as chaves de provedor do LLM e as variáveis da
    * Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio AmbienteContainer.
    */
-  ambiente(
+  variaveisDeAmbiente(
     raiz: string,
     dir: string,
     execucao?: number | string,
@@ -192,8 +198,8 @@ export class HarnessPi {
     ambiente: Ambiente,
     args: readonly string[],
     { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
-    aoEvento: (evento: EventoPi) => void,
-  ): ProcessoPi {
+    aoEvento: (evento: EventoDoAgente) => void,
+  ): ProcessoDoAgente {
     const processo = ambiente.lancar({
       programa: this.binarioPi(),
       argumentos: [...args],
@@ -244,7 +250,6 @@ export class HarnessPi {
     prompt: string,
     modelo: Modelo | undefined,
     limiteMs: number,
-    rodar: RodarComando = executar,
   ): Promise<RespostaDaConsulta | undefined> {
     const dirDaSessao = mkdtempSync(join(tmpdir(), "fabriquinha-consulta-"));
     const args = [
@@ -262,7 +267,7 @@ export class HarnessPi {
     let resposta: RespostaDaConsulta | undefined;
     try {
       const env = ambienteSemCredenciais(process.env, join(tmpdir(), "fabriquinha-vazio"));
-      const r = await rodar(this.binarioPi(), args, { env, limiteMs });
+      const r = await this.#rodarComando(this.binarioPi(), args, { env, limiteMs });
       if (r.codigo === 0) resposta = { saida: r.saida, uso: usoDaSessaoEm(dirDaSessao) };
     } catch {
       resposta = undefined;
@@ -329,5 +334,11 @@ export class HarnessPi {
       );
     }
     return achados[0];
+  }
+
+  /** F6 §3: o Uso do JSONL da sessão na janela `[inicio, fim]`. */
+  lerUsoDaSessao(raiz: string, sessao: string, inicio: number, fim: number): LinhaDeUso[] {
+    const arquivo = this.arquivoDaSessao(raiz, sessao);
+    return arquivo ? lerUsoDoPi(readFileSync(arquivo, "utf8"), inicio, fim) : [];
   }
 }

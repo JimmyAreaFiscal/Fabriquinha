@@ -100,12 +100,6 @@ function parcelas(e: Entrada, m: Mensagem | undefined, ultimo: Modelo): Parcela[
 /** O nome do modelo como `provedor/modelo`, a chave de `LinhaDeUso.modelo`. */
 const nomeDoModelo = ({ provedor, modelo }: Modelo): string => `${provedor}/${modelo}`;
 
-/** Desfaz `LinhaDeUso.modelo` nas colunas `modelo_provedor` e `modelo_nome` do banco. */
-export function colunasDoModelo(modelo: string): { modelo_provedor: string; modelo_nome: string } {
-  const barra = modelo.indexOf("/");
-  return { modelo_provedor: modelo.slice(0, barra), modelo_nome: modelo.slice(barra + 1) };
-}
-
 /**
  * Soma por provedor + modelo as entradas que o `/session` do pi soma (`getSessionStats`) mais o uso dos subagentes,
  * só as de `timestamp` dentro de `[inicio, fim]` (F6 §3.1, §3.2). O uso sem modelo próprio fica com o último

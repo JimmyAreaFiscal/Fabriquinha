@@ -39,7 +39,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
   // O pacote vem do próprio repositório, ao lado de `src/`.
   assert.equal(existsSync(join(PACOTE, "extensions", "guarda.ts")), true);
   assert.equal(existsSync(join(PACOTE, "extensions", "pergunta.ts")), true);
-  const comum = { raiz: "/r", sessaoPi: "s-1", modo: "autonomo" as const };
+  const comum = { raiz: "/r", sessao: "s-1", modo: "autonomo" as const };
   assert.deepEqual(
     harness.argumentos({
       ...comum,
@@ -115,7 +115,7 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
   process.env.SYSTEM_ACCESSTOKEN = "segredo";
   process.env.SONAR_TOKEN = "segredo";
   try {
-    const env = harness.ambiente("/r", "/r/execucoes/E-7", 7);
+    const env = harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", 7);
     assert.equal(env.GH_TOKEN, undefined);
     assert.equal(env.SYSTEM_ACCESSTOKEN, undefined);
     assert.equal(env.SONAR_TOKEN, undefined);
@@ -149,11 +149,11 @@ test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais
   const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
   Object.assign(process.env, herdadas);
   try {
-    assert.deepEqual(harness.ambiente("/r", "/r/execucoes/E-7", 7, "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", 7, "container"), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
     });
-    assert.deepEqual(harness.ambiente("/r", "/r/avaliacoes/s", undefined, "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", undefined, "container"), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_ROOT: "/r",
       FABRIQUINHA_AUDITORIA: "1",
@@ -168,7 +168,7 @@ test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais
 
 test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guarda, e o ambiente sem FABRIQUINHA_EXECUCAO", () => {
   const sessao = "11111111-1111-4111-8111-111111111111";
-  const args = harness.argumentos({ raiz: "/r", sessaoPi: sessao });
+  const args = harness.argumentos({ raiz: "/r", sessao });
   assert.deepEqual(args, [
     "--mode",
     "rpc",
@@ -182,17 +182,17 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
     "edit,write,bash,powershell",
   ]);
   // Com o modelo da Configuração, `--provider` e `--model` vêm logo depois de `--session-id`; `null` é sem modelo.
-  assert.deepEqual(harness.argumentos({ raiz: "/r", sessaoPi: sessao, modelo: null }), args);
+  assert.deepEqual(harness.argumentos({ raiz: "/r", sessao, modelo: null }), args);
   const com = harness.argumentos({
     raiz: "/r",
-    sessaoPi: sessao,
+    sessao,
     modelo: { provedor: "llamacpp", nome: "qwen3-coder-30b" },
   });
   assert.deepEqual(com.slice(4, 9), ["--session-id", sessao, "--provider", "llamacpp", "--model"]);
   assert.deepEqual(com.slice(9, 11), ["qwen3-coder-30b", "-e"]);
   assert.equal(com.length, args.length + 4);
   // Extensões extras entram depois da guarda, antes de `--exclude-tools`.
-  const extra = harness.argumentos({ raiz: "/r", sessaoPi: sessao, modelo: null, extensoes: ["achado.ts"] });
+  const extra = harness.argumentos({ raiz: "/r", sessao, modelo: null, extensoes: ["achado.ts"] });
   assert.deepEqual(extra.slice(6, 10), [
     "-e",
     `${PACOTE}/extensions/guarda.ts`,
@@ -203,7 +203,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {
-    const env = harness.ambiente("/r", `/r/avaliacoes/${sessao}`);
+    const env = harness.variaveisDeAmbiente("/r", `/r/avaliacoes/${sessao}`);
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
     assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.GH_TOKEN, undefined);
@@ -315,7 +315,7 @@ test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem creden
       return Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
     };
   try {
-    assert.deepEqual(await harness.perguntar("pergunta", { provedor: "p", nome: "m" }, 1000, pi(0)), {
+    assert.deepEqual(await new HarnessPi(pi(0)).perguntar("pergunta", { provedor: "p", nome: "m" }, 1000), {
       saida: "resposta",
       uso: [
         {
@@ -345,10 +345,10 @@ test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem creden
     assert.ok(!existsSync(dirDaSessao), "o diretório temporário da sessão é apagado");
     for (const nome of credenciais) assert.equal(chamadas[0].env[nome], undefined, nome);
     assert.equal(chamadas[0].env.PATH, process.env.PATH);
-    assert.equal(await harness.perguntar("pergunta", undefined, 1000, pi(1)), undefined);
+    assert.equal(await new HarnessPi(pi(1)).perguntar("pergunta", undefined, 1000), undefined);
     assert.ok(!chamadas[1]?.args.includes("--model"));
     const quebra = (() => Promise.reject(new Error("spawn pi ENOENT"))) as unknown as typeof executar;
-    assert.equal(await harness.perguntar("pergunta", undefined, 1000, quebra), undefined);
+    assert.equal(await new HarnessPi(quebra).perguntar("pergunta", undefined, 1000), undefined);
   } finally {
     for (const nome of credenciais) Reflect.deleteProperty(process.env, nome);
   }
@@ -387,4 +387,50 @@ test("a sessão que já nasceu solta em sessoes/ (antes da pasta própria) conti
   writeFileSync(join(raiz, "sessoes", "2026-10-11T00-00-00-000Z_s-8.jsonl"), "");
   assert.equal(harness.pastaDaSessao(raiz, "s-8"), join(raiz, "sessoes"));
   assert.equal(harness.pastaDaSessao(raiz, "s-9"), join(raiz, "sessoes", "s-9"));
+});
+
+test("skillsDisponiveis: só as que existem no pacote, na ordem pedida (CA-12)", () => {
+  assert.deepEqual(harness.skillsDisponiveis(["artefato-plano", "artefato-inexistente", "artefato-mensagem-pr"]), [
+    "artefato-plano",
+    "artefato-mensagem-pr",
+  ]);
+});
+
+test("lerUsoDaSessao: o Uso do JSONL da sessão na janela, e nenhum sem o arquivo", () => {
+  const raiz = join(base, "uso-da-sessao");
+  assert.deepEqual(harness.lerUsoDaSessao(raiz, "s-1", 0, Infinity), []);
+  mkdirSync(join(raiz, "sessoes", "s-1"), { recursive: true });
+  const mensagem = (timestamp: string) =>
+    JSON.stringify({
+      type: "message",
+      timestamp,
+      message: {
+        role: "assistant",
+        provider: "p",
+        model: "m",
+        usage: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, cost: { total: 0.5 } },
+      },
+    });
+  writeFileSync(
+    join(raiz, "sessoes", "s-1", "2026-10-11T00-00-00-000Z_s-1.jsonl"),
+    [mensagem("2026-10-11T00:00:00.000Z"), mensagem("2026-10-12T00:00:00.000Z")].join("\n"),
+  );
+  assert.deepEqual(
+    harness.lerUsoDaSessao(raiz, "s-1", Date.parse("2026-10-11T12:00:00.000Z"), Infinity).map((l) => l.chamadas),
+    [1],
+  );
+});
+
+test("confiancaNoRepositorio: a decisão do trust.json do pi do Auditor", () => {
+  const agente = join(base, "agente-da-confianca");
+  mkdirSync(agente);
+  writeFileSync(join(agente, "trust.json"), JSON.stringify({ [base]: true }));
+  const anterior = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agente;
+  try {
+    assert.equal(harness.confiancaNoRepositorio(base), true);
+  } finally {
+    if (anterior === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = anterior;
+  }
 });

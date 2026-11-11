@@ -1,6 +1,5 @@
 // O que o banco guarda de cada processo de um ticket: o fim com a falha e o uso na mesma transação, e a recuperação
 // dos processos que uma instância anterior do serviço deixou abertos. Quem mata o pi é o `CondutorDeTrabalhos`.
-import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { existe, mensagem } from "../../../compartilhado/nucleo/erros.ts";
 import { falhaPorServicoReiniciado, type FalhaDaTentativa } from "../../nucleo/tentativa.ts";
@@ -12,8 +11,7 @@ import {
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
-import type { LinhaDeUso } from "../../../custos/nucleo/uso.ts";
-import { colunasDoModelo, lerUsoDoPi } from "../../infra/leitor_de_uso_pi.ts";
+import { colunasDoModelo, type LinhaDeUso } from "../../../custos/nucleo/uso.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import {
   carregarTrabalhosDoTicket,
@@ -21,8 +19,8 @@ import {
   processosAbertos,
   ticketsEmExecucaoSemProcesso,
 } from "../../armazenamento/trabalho_agentico.ts";
-import { HarnessPi } from "../../infra/harness_pi.ts";
 import { anotar, pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
+import type { Harness } from "../../../harness/harness.ts";
 import { falharTicketDemanda } from "../fechamento_ticket.ts";
 
 export type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
@@ -48,14 +46,15 @@ const usoDaExecucao = (execucao_id: string, l: LinhaDeUso): UsoModeloExecucao =>
   ...(l.custo !== null && { custo: l.custo }),
 });
 
+/** Quem lê o Uso da sessão do agente: o harness do condutor. */
+type LeitorDeUso = Pick<Harness, "lerUsoDaSessao">;
+
 /** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
-function coletarUso(c: ProcessoEncerravel, fim: string, log: string): UsoModeloExecucao[] {
+function coletarUso(c: ProcessoEncerravel, fim: string, log: string, harness: LeitorDeUso): UsoModeloExecucao[] {
   try {
-    const arquivo = new HarnessPi().arquivoDaSessao(raizDo(c.banco), c.sessao.id);
-    const linhas = arquivo
-      ? lerUsoDoPi(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim))
-      : [];
-    return linhas.map((l) => usoDaExecucao(c.execucao.id, l));
+    return harness
+      .lerUsoDaSessao(raizDo(c.banco), c.sessao.id, Date.parse(c.execucao.inicio), Date.parse(fim))
+      .map((l) => usoDaExecucao(c.execucao.id, l));
   } catch (error_) {
     // Métrica nunca impede o encerramento.
     anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
@@ -68,10 +67,11 @@ export function encerrarProcessoDoTicket(
   c: ProcessoEncerravel,
   falhou: boolean,
   log: string,
+  harness: LeitorDeUso,
   relogio: Relogio = relogioDoSistema,
 ): void {
   const fim = relogio.agora();
-  const usos = coletarUso(c, fim, log);
+  const usos = coletarUso(c, fim, log, harness);
   comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
     execucoes: encerrarProcesso(estado.execucoes, c.execucao.id, fim, falhou),
@@ -100,6 +100,7 @@ export function encerrarProcessoOrfao(
   id: string,
   falha: FalhaDaTentativa,
   avisar: AvisarSessao,
+  harness: LeitorDeUso,
   relogio: Relogio = relogioDoSistema,
 ): void {
   const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
@@ -114,7 +115,7 @@ export function encerrarProcessoOrfao(
     "confira o banco",
   );
   const { log } = pastasDoProcesso(raizDo(banco), id);
-  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log, relogio);
+  encerrarProcessoDoTicket({ banco, ref, sessao, execucao }, true, log, harness, relogio);
   falharTicketDemanda(banco, ref, falha, relogio);
   avisar(sessao.id, log);
 }
@@ -123,10 +124,11 @@ export function encerrarProcessoOrfao(
 export function recuperarProcessosAbertos(
   banco: DatabaseSync,
   avisar: AvisarSessao,
+  harness: LeitorDeUso,
   relogio: Relogio = relogioDoSistema,
 ): void {
   for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
-    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar, relogio);
+    encerrarProcessoOrfao(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado, avisar, harness, relogio);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.

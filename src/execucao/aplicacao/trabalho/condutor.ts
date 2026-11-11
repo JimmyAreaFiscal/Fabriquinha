@@ -5,10 +5,8 @@
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, type Ator } from "../../../fluxo/nucleo/ator.ts";
-import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import { ErroDeRegra, existe, mensagem } from "../../../compartilhado/nucleo/erros.ts";
-import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { Id, Modelo, ModoTrabalho } from "../../../compartilhado/nucleo/primitivos.ts";
 import { instanteDepois, type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import {
   type CausaDeInfraestrutura,
@@ -19,8 +17,7 @@ import {
 import { recolherGruposDasAvaliacoes } from "../../../qualidade/armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../../qualidade/armazenamento/simulacao.ts";
 import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
-import { HarnessPi, type RespostaDaConsulta, type RodarComando } from "../../infra/harness_pi.ts";
-import type { EventoPi } from "../../infra/pi.ts";
+import type { EventoDoAgente, Harness, RespostaDaConsulta } from "../../../harness/harness.ts";
 import type { Ambiente, IdentificadorDoProcesso } from "../../../ambiente/infra/ambiente.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoServico, conjuntoDoServico } from "../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
@@ -70,7 +67,7 @@ export interface RespostaAutomatica extends RespostaDoAuditorAutomatico {
 export const PREFIXO_DA_RESPOSTA_AUTOMATICA = "resposta automática ";
 
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
-export type Dialogo = EventoPi & { em: string; expiraEm?: string };
+export type Dialogo = EventoDoAgente & { em: string; expiraEm?: string };
 
 /** O que o estado da sessão (F4 §5.2) lê de um processo vivo. */
 export interface Situacao {
@@ -93,16 +90,16 @@ interface Mensagem {
 }
 
 interface Viva extends Omit<Situacao, "dialogos"> {
-  sessaoPi: string;
+  sessao: string;
   pendentes: Map<string, Dialogo>;
   /** Os eventos da mensagem que o pi está escrevendo, do `message_start` em diante: ela só vai ao JSONL no fim. */
-  eventosDaMensagemEmEscrita: EventoPi[];
+  eventosDaMensagemEmEscrita: EventoDoAgente[];
   /**
    * Os `message_end` que o JSONL pode ainda não ter. O pi 0.84.4 emite o `message_end` antes de gravar a mensagem e,
    * numa sessão sem resposta do agente, só grava quando a primeira chega: qualquer evento depois do `message_end` de
    * uma mensagem do agente prova que tudo até ela está no arquivo. O chat ignora o que o retrato já tem.
    */
-  naoGravadas: EventoPi[];
+  naoGravadas: EventoDoAgente[];
   /** O Auditor mandou `abort`. */
   abortada: boolean;
   responder(id: string, resposta: object): void;
@@ -118,7 +115,7 @@ const linha = (texto: string): string => (texto.length > 100 ? `${texto.slice(0,
  * ou o caminho, ou a primeira linha do texto que ele acabou de escrever. Os demais eventos não mudam a atividade.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function atividadeDo(evento: EventoPi): string | undefined {
+export function atividadeDo(evento: EventoDoAgente): string | undefined {
   if (evento.type === "tool_execution_start") {
     const args = (evento.args ?? {}) as Record<string, unknown>;
     const alvo = [args.command, args.path].find((x) => typeof x === "string");
@@ -138,7 +135,10 @@ export function atividadeDo(evento: EventoPi): string | undefined {
 }
 
 /** O que o chat precisa saber do select aberto pela `perguntar` (a de `title` igual a `args.question`); `undefined` nos demais. */
-function daPergunta(evento: EventoPi, emExecucao: Iterable<Record<string, unknown>>): Partial<Dialogo> | undefined {
+function daPergunta(
+  evento: EventoDoAgente,
+  emExecucao: Iterable<Record<string, unknown>>,
+): Partial<Dialogo> | undefined {
   const args = [...emExecucao].find((a) => a.question === evento.title);
   if (!args) return undefined;
   const opcoes = (args.options ?? []) as { description?: string }[];
@@ -153,7 +153,7 @@ function daPergunta(evento: EventoPi, emExecucao: Iterable<Record<string, unknow
 /** @testes tipo que o teste usa para montar a entrada */
 export interface PedidoDeProcesso {
   /** O processo de um ticket, ou da avaliação (`id` é a sessão), que roda como consulta e fica fora do agregado. */
-  execucao: { id: Id | string; sessaoPi: string; modo: ModoTrabalho };
+  execucao: { id: Id | string; sessao: string; modo: ModoTrabalho };
   args: string[];
   cwd: string;
   /** Onde o pi roda: o Ambiente do Espaço do ticket; sem ele (consulta, avaliação, simulação), o do serviço. */
@@ -190,9 +190,9 @@ function sinalizarSemEsperar(
 }
 
 export class CondutorDeTrabalhos {
-  private readonly harness = new HarnessPi();
+  #harness: Harness | undefined;
   private readonly vivas = new Map<Id | string, Viva>();
-  private readonly ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
+  private readonly ouvintes = new Map<string, Set<(evento: EventoDoAgente) => void>>();
   /** Os processos de ticket com condutor vivo, por id, com o grupo do pi e o Ambiente que o lançou, depois de lançado. */
   private readonly ativas = new Map<
     string,
@@ -206,6 +206,20 @@ export class CondutorDeTrabalhos {
   private parando = false;
   /** O endereço da API do agente (`FABRIQUINHA_API`): o serviço o informa depois do listen e o retira ao parar. */
   urlDaApi: string | undefined;
+
+  /** Sem o harness, o condutor espera o da composição (`montarHarness`). */
+  constructor(harness?: Harness) {
+    this.#harness = harness;
+  }
+
+  /** O harness que roda o agente; o resto do serviço o pede ao condutor, que o recebeu da composição. */
+  get harness(): Harness {
+    return existe(this.#harness, "o condutor não tem harness", "monte o harness pela composição do serviço");
+  }
+
+  montarHarness(harness: Harness): void {
+    this.#harness = harness;
+  }
 
   /**
    * O ambiente do pi com o token novo do processo: só o hash vai ao banco, e o token vale até o `fim` do processo, que o
@@ -223,7 +237,7 @@ export class CondutorDeTrabalhos {
   }
 
   private vivaDaSessao(sessao: string): Viva | undefined {
-    return [...this.vivas.values()].find((v) => v.sessaoPi === sessao);
+    return [...this.vivas.values()].find((v) => v.sessao === sessao);
   }
 
   /**
@@ -231,7 +245,7 @@ export class CondutorDeTrabalhos {
    * Quem assina recebe antes o que o retrato do JSONL pode ainda não ter: as mensagens terminadas ainda sem gravação
    * garantida e os eventos da mensagem em andamento até ali.
    */
-  assinar(sessao: string, ouvinte: (evento: EventoPi) => void): () => void {
+  assinar(sessao: string, ouvinte: (evento: EventoDoAgente) => void): () => void {
     const lista = this.ouvintes.get(sessao) ?? new Set();
     this.ouvintes.set(sessao, lista.add(ouvinte));
     const viva = this.vivaDaSessao(sessao);
@@ -243,7 +257,7 @@ export class CondutorDeTrabalhos {
   }
 
   /** Entrega o evento a cada ouvinte da sessão; o erro de um ouvinte vai para o `log` e não para o processo. */
-  private repassar(sessao: string, evento: EventoPi, log: string): void {
+  private repassar(sessao: string, evento: EventoDoAgente, log: string): void {
     for (const ouvinte of this.ouvintes.get(sessao) ?? []) {
       try {
         ouvinte(evento);
@@ -412,20 +426,15 @@ export class CondutorDeTrabalhos {
         processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
       if (ambiente) sinalizarSemEsperar(ambiente, processo, "SIGKILL");
     }
-    recuperarProcessosAbertos(banco, this.avisar);
+    recuperarProcessosAbertos(banco, this.avisar, this.harness);
   }
 
   /**
    * A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas, no ambiente sem credenciais dos outros
    * modos. Devolve a resposta e o Uso dela, ou `undefined` se o pi falhou ou passou de `limiteMs`.
    */
-  consultar(
-    prompt: string,
-    modelo: Modelo | undefined,
-    limiteMs: number,
-    rodar?: RodarComando,
-  ): Promise<RespostaDaConsulta | undefined> {
-    return this.harness.perguntar(prompt, modelo, limiteMs, rodar);
+  consultar(prompt: string, modelo: Modelo | undefined, limiteMs: number): Promise<RespostaDaConsulta | undefined> {
+    return this.harness.perguntar(prompt, modelo, limiteMs);
   }
 
   /**
@@ -443,7 +452,7 @@ export class CondutorDeTrabalhos {
   iniciar(r: PedidoDeProcesso, relogio: Relogio = relogioDoSistema): Promise<FalhaDaTentativa | undefined> {
     return new Promise((resolve) => {
       const agoraEmMs = () => Date.parse(relogio.agora());
-      const { id, sessaoPi } = r.execucao;
+      const { id, sessao } = r.execucao;
       const env = this.ambienteComToken(r);
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
@@ -458,7 +467,7 @@ export class CondutorDeTrabalhos {
       const ferramentasRodando = new Set<string>();
       let vigiaDoModelo: NodeJS.Timeout | undefined;
       let feito = false;
-      this.sessoesEmCurso.add(sessaoPi);
+      this.sessoesEmCurso.add(sessao);
       const fim = (falha?: FalhaDaTentativa) => {
         if (feito) return;
         feito = true;
@@ -467,7 +476,7 @@ export class CondutorDeTrabalhos {
         for (const t of expiracoes.values()) clearTimeout(t);
         this.vivas.delete(id);
         void pi.parar().then(() => {
-          this.sessoesEmCurso.delete(sessaoPi);
+          this.sessoesEmCurso.delete(sessao);
           resolve(falha);
         });
       };
@@ -523,14 +532,14 @@ export class CondutorDeTrabalhos {
       const mudou = () => {
         rearmarVigiaDoModelo();
         acertarRelogio();
-        this.avisar(sessaoPi, r.log);
+        this.avisar(sessao, r.log);
       };
       const ocupar = (ocupado: boolean) => {
         estaViva.ocupado = ocupado;
         estaViva.desde = relogio.agora();
       };
 
-      const aoRecusar = (evento: EventoPi) => {
+      const aoRecusar = (evento: EventoDoAgente) => {
         const recusa = `o pi recusou o comando ${String(evento.command)}: ${String(evento.error)}`;
         if (autonoma) {
           fim(falhaQueExigeOAuditor(recusa));
@@ -574,12 +583,12 @@ export class CondutorDeTrabalhos {
           pergunta,
         };
         anotar(r.log, `${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}`);
-        this.repassar(sessaoPi, { type: "resposta_automatica", ...registro }, r.log);
+        this.repassar(sessao, { type: "resposta_automatica", ...registro }, r.log);
         estaViva.responder(dialogo, {
           value: args.multiSelect ? JSON.stringify([decisao.resposta]) : decisao.resposta,
         });
       };
-      const aoDialogo = (evento: EventoPi) => {
+      const aoDialogo = (evento: EventoDoAgente) => {
         const dialogo = String(evento.id);
         const em = relogio.agora();
         // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
@@ -643,7 +652,7 @@ export class CondutorDeTrabalhos {
           if (r.terminaSozinho) return;
           if (agenteTerminou) estaViva.naoGravadas = [];
           agenteTerminou = false;
-          this.repassar(sessaoPi, evento, r.log);
+          this.repassar(sessao, evento, r.log);
           estaViva.atividade = atividadeDo(evento) ?? estaViva.atividade;
           switch (evento.type) {
             case "message_start":
@@ -675,7 +684,7 @@ export class CondutorDeTrabalhos {
               ferramentasRodando.delete(String(evento.toolCallId));
               perguntas.delete(String(evento.toolCallId));
               // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
-              this.avisar(sessaoPi, r.log);
+              this.avisar(sessao, r.log);
               break;
             case "agent_start":
               ocupar(true);
@@ -719,7 +728,7 @@ export class CondutorDeTrabalhos {
       });
       const estaViva: Viva = {
         execucao: id,
-        sessaoPi,
+        sessao,
         ocupado: r.prompt !== undefined,
         desde: relogio.agora(),
         pendentes,
@@ -754,5 +763,5 @@ export class CondutorDeTrabalhos {
   }
 }
 
-/** O condutor do serviço: todo pi e toda consulta ao modelo passam por ele. */
+/** O condutor do serviço: todo pi e toda consulta ao modelo passam por ele; o harness vem da composição. */
 export const condutor = new CondutorDeTrabalhos();

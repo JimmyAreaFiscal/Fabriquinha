@@ -19,7 +19,7 @@ import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomad
 import { enviarDemanda, lerConversa } from "../src/execucao/aplicacao/sessoes/sessoes_demanda.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/execucao/infra/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/harness/pi/pi.ts";
 import { anotar, pastasDoProcesso } from "../src/compartilhado/infra/registro.ts";
 import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";

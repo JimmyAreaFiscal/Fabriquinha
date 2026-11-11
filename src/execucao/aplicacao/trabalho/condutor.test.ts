@@ -22,7 +22,15 @@ import type { executar } from "../../../compartilhado/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
-import { atividadeDo, condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA, type PedidoDeProcesso } from "./condutor.ts";
+import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import {
+  atividadeDo,
+  condutor,
+  CondutorDeTrabalhos,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+  type PedidoDeProcesso,
+} from "./condutor.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
@@ -126,7 +134,7 @@ function rodar(
   let grupoDoPi = 0;
   const fim = condutor.iniciar(
     {
-      execucao: { id: sessao, sessaoPi: sessao, modo },
+      execucao: { id: sessao, sessao, modo },
       args: [],
       cwd: dir,
       env: { ...process.env, FABRIQUINHA_ROOT: dir },
@@ -264,7 +272,10 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
 function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
   const piDaTriagem: typeof executar = () =>
     Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
-  return (p) => triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p, piDaTriagem);
+  return (p) => {
+    condutor.montarHarness(new HarnessPi(piDaTriagem));
+    return triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p);
+  };
 }
 const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede o Sonar"}';
 
@@ -588,6 +599,8 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
           raiz: dir,
           porta_da_api: 3000,
           home_do_usuario: dir,
+          pacote_do_harness: PACOTE,
+          dir_do_harness_do_auditor: dirDoPiDoAuditor(),
         }),
     );
 
@@ -622,6 +635,8 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
               raiz: dir,
               porta_da_api: 3000,
               home_do_usuario: dir,
+              pacote_do_harness: PACOTE,
+              dir_do_harness_do_auditor: dirDoPiDoAuditor(),
             }),
         );
       condutor.recuperarNaSubida(banco);
@@ -639,8 +654,12 @@ test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que 
     (codigo: number): typeof executar =>
     () =>
       Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
-  assert.deepEqual(await condutor.consultar("pergunta", undefined, 1000, pi(0)), { saida: "resposta", uso: [] });
-  assert.equal(await condutor.consultar("pergunta", undefined, 1000, pi(1)), undefined);
+  assert.deepEqual(await new CondutorDeTrabalhos(new HarnessPi(pi(0))).consultar("pergunta", undefined, 1000), {
+    saida: "resposta",
+    uso: [],
+  });
+  assert.equal(await new CondutorDeTrabalhos(new HarnessPi(pi(1))).consultar("pergunta", undefined, 1000), undefined);
+  assert.throws(() => new CondutorDeTrabalhos().harness, /o condutor não tem harness/);
 });
 
 /** Um pi falso em `[ao vivo]` (que não termina sozinho) lançado pelo AmbienteContainer, com o condutor acompanhando-o. */
@@ -661,7 +680,7 @@ async function lancarPiNoContainer() {
   let ambienteDoPiGravado = "";
   const fim = condutor.acompanhar(id, () =>
     condutor.iniciar({
-      execucao: { id, sessaoPi: id, modo: "autonomo" },
+      execucao: { id, sessao: id, modo: "autonomo" },
       args: [],
       cwd: dir,
       ambiente: ambienteContainer,

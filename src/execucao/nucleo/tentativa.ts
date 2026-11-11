@@ -3,10 +3,16 @@
 import { z } from "zod";
 import type { TicketDemanda } from "../../demanda/nucleo/agregado_demanda.ts";
 import { AUDITOR, Ator, FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import type { Modelo } from "./configuracao_agente.ts";
 import { ErroDeReprovacao, ErroDeRegra, ErroExterno, mensagem } from "../../compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { type EtapaTicket, Id, Instante, Markdown, motivo } from "../../compartilhado/nucleo/primitivos.ts";
+import {
+  type EtapaTicket,
+  Id,
+  Instante,
+  Markdown,
+  type Modelo,
+  motivo,
+} from "../../compartilhado/nucleo/primitivos.ts";
 
 export const CausaDeInfraestrutura = z.enum([
   "tempo_limite",

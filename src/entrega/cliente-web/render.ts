@@ -1,9 +1,14 @@
 // Peças comuns do cliente (F7 §4.4) como funções puras que devolvem HTML: a navegação fixa, a página não encontrada e
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
-import type { Modelo } from "../../execucao/nucleo/configuracao_agente.ts";
-import type { EstadoDemanda, EstadoRodada, EstadoTicket, Instante } from "../../compartilhado/nucleo/primitivos.ts";
-import type { ModoTrabalho } from "../../execucao/nucleo/trabalho_agentico.ts";
+import type {
+  EstadoDemanda,
+  EstadoRodada,
+  EstadoTicket,
+  Instante,
+  Modelo,
+  ModoTrabalho,
+} from "../../compartilhado/nucleo/primitivos.ts";
 import type { Pagina } from "./caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */

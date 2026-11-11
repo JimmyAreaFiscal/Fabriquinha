@@ -12,6 +12,7 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
+import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { registrarProjeto } from "../src/ambiente/aplicacao/projeto/cadastro.ts";
 
@@ -47,6 +48,7 @@ async function parar(servico: ChildProcess): Promise<void> {
  * ainda escreve na raiz enquanto ela é apagada.
  */
 function matarPi(raiz: string): void {
+  condutor.montarHarness(new HarnessPi());
   const banco = abrir(raiz);
   condutor.recuperarNaSubida(banco);
   banco.close();

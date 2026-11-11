@@ -23,6 +23,11 @@ import {
   registrarProjeto,
   removerProjeto,
 } from "./cadastro.ts";
+import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+
+/** O pi falso do teste responde a conferência, como o harness do serviço. */
+const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;
@@ -705,11 +710,15 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
     revisar_rodada: { effort: "low" as const },
     entender_e_desenhar: {},
   };
-  const salvo = await cadastrarProjetoDoFormulario(banco, {
-    ...formularioDeLoja(repo),
-    hospedagem: "azure-devops",
-    configuracoes,
-  });
+  const salvo = await cadastrarProjetoDoFormulario(
+    banco,
+    {
+      ...formularioDeLoja(repo),
+      hospedagem: "azure-devops",
+      configuracoes,
+    },
+    conferirModeloNoPi,
+  );
   assert.equal(salvo.hospedagem, "github");
   assert.equal(salvo.chave_sonarqube, "loja");
   assert.deepEqual(salvo.configuracoes, {
@@ -723,7 +732,10 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
     "a etapa sem modelo nem effort não deixa linha",
   );
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
-  await assert.rejects(cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo)), /já existe o projeto loja/);
+  await assert.rejects(
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo), conferirModeloNoPi),
+    /já existe o projeto loja/,
+  );
   banco.close();
 });
 
@@ -731,20 +743,31 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
   piFalso.roteirizar([modelosDoPi]);
   const banco = novoBanco();
   const repo = clonePublicado();
-  await cadastrarProjetoDoFormulario(banco, {
-    ...formularioDeLoja(repo),
-    configuracoes: { planejar: { modelo: opus } },
-  });
+  await cadastrarProjetoDoFormulario(
+    banco,
+    {
+      ...formularioDeLoja(repo),
+      configuracoes: { planejar: { modelo: opus } },
+    },
+    conferirModeloNoPi,
+  );
   const cursor = cursorDaBase(banco, "loja");
   git(repo, "commit", "-q", "--allow-empty", "-m", "outro");
 
   // O modelo que o pi não lista: erro no campo da etapa, e nada muda.
   await assert.rejects(
-    editarProjetoDoFormulario(banco, {
-      ...formularioDeLoja(repo),
-      preparacao: ["npm ci"],
-      configuracoes: { planejar: { modelo: opus }, implementar: { modelo: { provedor: "inexistente", nome: "xyz" } } },
-    }),
+    editarProjetoDoFormulario(
+      banco,
+      {
+        ...formularioDeLoja(repo),
+        preparacao: ["npm ci"],
+        configuracoes: {
+          planejar: { modelo: opus },
+          implementar: { modelo: { provedor: "inexistente", nome: "xyz" } },
+        },
+      },
+      conferirModeloNoPi,
+    ),
     (erro: unknown) =>
       erro instanceof ZodError &&
       erro.issues.length === 1 &&
@@ -759,17 +782,25 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
 
   // Com o pi quebrado: o igual ao gravado salva sem chamá-lo; o trocado é rejeitado.
   piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
-  const editado = await editarProjetoDoFormulario(banco, {
-    ...formularioDeLoja(repo),
-    preparacao: ["npm ci"],
-    configuracoes: { planejar: { modelo: opus, effort: "low" } },
-  });
+  const editado = await editarProjetoDoFormulario(
+    banco,
+    {
+      ...formularioDeLoja(repo),
+      preparacao: ["npm ci"],
+      configuracoes: { planejar: { modelo: opus, effort: "low" } },
+    },
+    conferirModeloNoPi,
+  );
   assert.deepEqual(editado.verificacoes.preparacao, ["npm ci"]);
   assert.deepEqual(linhasDasEtapas(banco), [
     { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "low" },
   ]);
   await assert.rejects(
-    editarProjetoDoFormulario(banco, { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } }),
+    editarProjetoDoFormulario(
+      banco,
+      { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } },
+      conferirModeloNoPi,
+    ),
     ZodError,
   );
   assert.equal(cursorDaBase(banco, "loja"), cursor, "a edição não varre a base");
@@ -780,7 +811,7 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
   const banco = novoBanco();
   const pasta = mkdtempSync(join(base, "nao-git-"));
   await assert.rejects(
-    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta)),
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta), conferirModeloNoPi),
     (erro: unknown) =>
       erro instanceof ErroExterno &&
       erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,

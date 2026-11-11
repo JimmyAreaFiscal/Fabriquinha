@@ -19,28 +19,33 @@ import {
   reservarAmbienteParaEliminar,
 } from "../../armazenamento/ambientes.ts";
 import { configuracaoDoAmbiente } from "../../../compartilhado/armazenamento/servico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../execucao/infra/pi.ts";
 import { AmbienteContainer } from "../../infra/container/ambiente_container.ts";
 import type { Copias, GeradorDeAmbientes, Montagens } from "../../infra/container/gerador_de_ambientes.ts";
 import { recolherParaOEspaco } from "../../infra/container/pastas_do_ambiente.ts";
 
 const MS_POR_MINUTO = 60_000;
 
-/** O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha, a porta da API do agente e o home do usuário, de onde o container copia o `.claude` e o `.codex`. */
+/**
+ * O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha, a porta da API do
+ * agente, o home do usuário, de onde o container copia o `.claude` e o `.codex`, e o que o harness leva ao container: o
+ * pacote dele (montado, com o `bin` à frente no PATH) e a pasta de configuração do harness do Auditor, que é copiada.
+ */
 interface ServicoDoConjunto {
   raiz: string;
   porta_da_api: number;
   home_do_usuario: string;
+  pacote_do_harness: string;
+  dir_do_harness_do_auditor: string;
 }
 
 function comoAmbienteContainer(
   { id, container_id }: Pick<AmbienteGravado, "id" | "container_id">,
-  { raiz, porta_da_api }: ServicoDoConjunto,
+  { raiz, porta_da_api, pacote_do_harness }: ServicoDoConjunto,
 ): AmbienteContainer {
   return new AmbienteContainer({
     id,
     container_id,
-    bin_do_pacote: join(PACOTE, "bin"),
+    bin_do_pacote: join(pacote_do_harness, "bin"),
     raiz,
     url_da_api: `http://host.docker.internal:${String(porta_da_api)}`,
   });
@@ -105,9 +110,9 @@ export class ConjuntoDeAmbientes {
       pastaDasWorktreesDoProjeto: dirname(pastaDaDemanda(servico.raiz, projeto.nome, espaco.dono.demanda_id)),
       raiz_git: projeto.raiz_git,
       raiz: servico.raiz,
-      pacote: PACOTE,
+      pacote: servico.pacote_do_harness,
     };
-    const copias: Copias = { dir_do_pi: dirDoPiDoAuditor(), home_do_usuario: servico.home_do_usuario };
+    const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     return comoAmbienteContainer(
       await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias),
       servico,

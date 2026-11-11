@@ -4,7 +4,7 @@
 // escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../../fluxo/nucleo/ator.ts";
-import { type Modelo, resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
+import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { formatarTicketRef } from "../../demanda/nucleo/demanda.ts";
 import { desdeAReabertura, POLITICA_DE_TENTATIVAS, tentativasDoTicket } from "../nucleo/tentativa.ts";
 import { retomarTicketFalhoPorInfraestrutura } from "../../fluxo/nucleo/transicoes/transicoes_demanda.ts";
@@ -13,6 +13,7 @@ import { comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { type Relogio, relogioDoSistema } from "../../compartilhado/nucleo/relogio.ts";
 import { noLog } from "../../compartilhado/infra/registro.ts";
 import { demandasParaDespacho } from "./despacho.ts";
+import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 
 /**
  * Devolve a `aberto` os tickets falhos das demandas em andamento cuja política manda retomar: o do reinício sempre e na

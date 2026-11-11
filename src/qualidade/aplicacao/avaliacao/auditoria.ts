@@ -4,10 +4,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { Modelo } from "../../../execucao/nucleo/configuracao_agente.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
-import { HarnessPi } from "../../../execucao/infra/harness_pi.ts";
+import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
 
 export interface OpcoesDaAuditoria {
   /** Minutos sem mensagem até o pi parar (F4 §3, §6.6); a próxima mensagem o retoma na mesma sessão. */
@@ -46,8 +45,8 @@ export function subir(
 ): Promise<string | undefined> {
   const dir = join(raiz, pasta, sessao);
   const log = join(dir, "log");
-  const harness = new HarnessPi();
-  const args = harness.argumentos({ raiz, sessaoPi: sessao, modelo, extensoes });
+  const { harness } = condutor;
+  const args = harness.argumentos({ raiz, sessao, modelo, extensoes });
   anotar(log, `pi ${args.join(" ")}`);
   const sincronizarNoLog = (): void => {
     try {
@@ -61,10 +60,10 @@ export function subir(
   });
   const tarefa = condutor
     .iniciar({
-      execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
+      execucao: { id: sessao, sessao, modo: "consulta" },
       args,
       cwd: dir,
-      env: harness.ambiente(raiz, dir),
+      env: harness.variaveisDeAmbiente(raiz, dir),
       log,
       prompt,
       limiteMin: ociosidadeMin,

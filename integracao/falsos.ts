@@ -12,7 +12,7 @@ import { ConjuntoDeAmbientes } from "../src/ambiente/aplicacao/conjunto_de_ambie
 import { montarConjuntoDoServico } from "../src/ambiente/aplicacao/espaco/ambiente_do_servico.ts";
 import { gravarProjeto, projetoExistente } from "../src/ambiente/armazenamento/projetos.ts";
 import { salvarConfiguracaoDoAmbiente } from "../src/compartilhado/armazenamento/servico.ts";
-import { dirDoPiDoAuditor } from "../src/execucao/infra/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/harness/pi/pi.ts";
 import { GeradorDeAmbientes } from "../src/ambiente/infra/container/gerador_de_ambientes.ts";
 import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
@@ -103,6 +103,8 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
     raiz: c.raiz,
     porta_da_api: portaDaApi,
     home_do_usuario: c.raiz,
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
   });
   montarConjuntoDoServico(() => conjunto);
   const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git", "objects", "pi-falso"));

@@ -1,11 +1,7 @@
 // Qual modelo e qual effort o agente usa (CONCEITOS.md §13): o valor que ticket, plano, etapa do projeto, execução e
 // formulário carregam, e a D07 que o resolve, uma vez só, campo a campo.
 import { z } from "zod";
-import { Effort, Slug } from "../../compartilhado/nucleo/primitivos.ts";
-
-/** O modelo é sempre o par inteiro: provedor e nome vêm juntos, ou não há modelo. */
-export const Modelo = z.object({ provedor: Slug, nome: z.string().trim().min(1).max(200) });
-export type Modelo = z.infer<typeof Modelo>;
+import { Effort, Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 
 /** Campo ausente é "sem escolha": vale o próximo da D07, até o padrão do harness. */
 export const ConfiguracaoAgente = z.object({ modelo: Modelo.optional(), effort: Effort.optional() });

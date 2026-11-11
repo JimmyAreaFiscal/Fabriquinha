@@ -10,7 +10,7 @@ import type { AgregadoDemanda } from "../../../demanda/nucleo/agregado_demanda.t
 import { ErroDeRegra, ErroExterno } from "../../../compartilhado/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { metricasDasEtapas } from "../../../custos/aplicacao/metricas/metricas_das_etapas.ts";
-import { colunasDoModelo, lerUsoDoPi } from "../../../execucao/infra/leitor_de_uso_pi.ts";
+import { colunasDoModelo } from "../../../custos/nucleo/uso.ts";
 import { raizDo, escrever } from "../../../compartilhado/armazenamento/banco.ts";
 import {
   abrirAvaliacao,
@@ -26,7 +26,6 @@ import {
 } from "../../armazenamento/avaliacoes.ts";
 import { carregarDemanda } from "../../../demanda/armazenamento/demandas.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
-import { HarnessPi } from "../../../execucao/infra/harness_pi.ts";
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 import {
   causaDaFalha,
@@ -37,7 +36,7 @@ import {
   subir,
 } from "./auditoria.ts";
 import * as gestao from "../../../demanda/aplicacao/gestao_demandas.ts";
-import type { EventoPi } from "../../../execucao/infra/pi.ts";
+import type { EventoDoAgente } from "../../../harness/harness.ts";
 import { emMarkdown, lerConversa, type Mensagem, texto } from "../../../execucao/aplicacao/sessoes/sessoes_demanda.ts";
 
 interface EscopoDaAvaliacao {
@@ -66,8 +65,7 @@ function sincronizar(banco: DatabaseSync, raiz: string, id: string): void {
       ...(JSON.parse(l) as { titulo: string; descricao: string; evidencia: string }),
     })),
   );
-  const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
-  const linhasDeUso = jsonl ? lerUsoDoPi(readFileSync(jsonl, "utf8"), 0, Number.POSITIVE_INFINITY) : [];
+  const linhasDeUso = condutor.harness.lerUsoDaSessao(raiz, id, 0, Number.POSITIVE_INFINITY);
   regravarUso(
     banco,
     id,
@@ -232,7 +230,7 @@ export async function iniciarAvaliacao(
     }
     return id;
   } catch (error_) {
-    const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
+    const jsonl = condutor.harness.arquivoDaSessao(raiz, id);
     if (jsonl) rmSync(jsonl);
     rmSync(join(raiz, "sessoes", id), { recursive: true, force: true }); // a pasta própria da sessão
     apagarAvaliacao(banco, id);
@@ -263,7 +261,7 @@ export function abrir(banco: DatabaseSync, id: string) {
       i === primeira && ehPrompt(e.message) ? { ...e, fabriquinha: true } : e,
     ) as unknown[],
     /** Os eventos ao vivo, com `{ type: "estado", estado }` quando o estado muda. Devolve a função que cancela. */
-    assinar: (ouvinte: (evento: EventoPi) => void) =>
+    assinar: (ouvinte: (evento: EventoDoAgente) => void) =>
       condutor.assinar(id, (evento) => {
         if (evento.type === "estado") ouvinte({ type: "estado", estado: estadoDaAvaliacao(id) });
         else

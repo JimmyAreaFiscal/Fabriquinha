@@ -20,6 +20,7 @@ import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho
 import { AmbienteHostLocal } from "../../infra/ambiente_host_local.ts";
 import { naFilaDoProjeto } from "../../infra/worktree/worktree.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));
 const hospedagem = hospedagemFalsa(temporario);
@@ -181,6 +182,8 @@ function cenarioComContainer() {
     raiz: c.raiz,
     porta_da_api: 4999,
     home_do_usuario: c.raiz,
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
   });
   const registro = { raiz: c.raiz, log: c.log };
   const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };

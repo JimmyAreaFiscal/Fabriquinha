@@ -4,10 +4,7 @@ import { z } from "zod";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { TicketRef } from "../../demanda/nucleo/demanda.ts";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Id, Instante, Slug } from "../../compartilhado/nucleo/primitivos.ts";
-
-export const ModoTrabalho = z.enum(["autonomo", "interativo", "consulta"]);
-export type ModoTrabalho = z.infer<typeof ModoTrabalho>;
+import { Id, Instante, ModoTrabalho, Slug } from "../../compartilhado/nucleo/primitivos.ts";
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();

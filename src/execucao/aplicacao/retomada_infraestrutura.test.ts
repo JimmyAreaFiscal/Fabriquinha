@@ -10,7 +10,6 @@ import {
 } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../demanda/armazenamento/demandas.ts";
 import { Endereco } from "../../demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import {
   POLITICA_DE_TENTATIVAS,
   falhaPorServicoReiniciado,
@@ -20,6 +19,7 @@ import {
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { registrarProjeto } from "../../ambiente/aplicacao/projeto/cadastro.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
+import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 
 const falhouEm = "2026-01-01T00:00:00.000Z";
 const minutosDepois = (minutos: number) => relogioFixo(new Date(Date.parse(falhouEm) + minutos * 60_000).toISOString());
