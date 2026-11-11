@@ -135,7 +135,7 @@ test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as 
   mkdirSync(raizGit, { recursive: true });
   writeFileSync(
     join(raizGit, ".env"),
-    'DATABASE_URL=postgres://localhost/loja\n# comentário\nCOM_ASPAS="a b"\nFABRIQUINHA_TOKEN=do-env\n',
+    'DATABASE_URL=postgres://localhost/loja\n# comentário\nCOM_ASPAS="a b"\nFABRIQUINHA_TOKEN=do-env\nGH_TOKEN=gh-do-env\nGITHUB_TOKEN=github-do-env\nSONAR_TOKEN=sonar-do-env\n',
   );
   ambiente.levarEnvDoProjeto(raizGit);
   const saida = await ambiente.executar(comando("env", []));
@@ -144,6 +144,7 @@ test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as 
   assert.match(saida.saida, /^FABRIQUINHA_TOKEN=token-do-ticket$/m);
   assert.ok(!saida.saida.includes("sonar-segredo"));
   assert.ok(!saida.saida.includes("ssh-do-host"));
+  assert.doesNotMatch(saida.saida, /gh-do-env|github-do-env|sonar-do-env/); // credencial no .env do projeto também fica fora
   writeFileSync(join(raizGit, ".env"), 'COM_QUEBRA="a\nSONAR_TOKEN=x"\n');
   ambiente.levarEnvDoProjeto(raizGit);
   await assert.rejects(ambiente.executar(comando("true", [])), /quebra de linha/);

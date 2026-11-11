@@ -10,12 +10,13 @@ import { parseEnv } from "node:util";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { executar } from "../../processo.ts";
 import { abrigarNoAmbiente } from "./pastas_do_ambiente.ts";
-import type {
-  Ambiente,
-  ComandoNoAmbiente,
-  IdentificadorDoProcesso,
-  ProcessoNoAmbiente,
-  SaidaDoComando,
+import {
+  type Ambiente,
+  type ComandoNoAmbiente,
+  ehCredencialDeHospedagemOuSonar,
+  type IdentificadorDoProcesso,
+  type ProcessoNoAmbiente,
+  type SaidaDoComando,
 } from "../ambiente.ts";
 
 /** No container: um arquivo por processo, com o grupo de processos dele. */
@@ -180,7 +181,10 @@ export class AmbienteContainer implements Ambiente {
     if (!existsSync(this.#arquivoDoEnvDoProjeto)) return {};
     const variaveis = parseEnv(readFileSync(this.#arquivoDoEnvDoProjeto, "utf8"));
     return Object.fromEntries(
-      Object.entries(variaveis).filter((entrada): entrada is [string, string] => entrada[1] !== undefined),
+      Object.entries(variaveis).filter(
+        (entrada): entrada is [string, string] =>
+          entrada[1] !== undefined && !ehCredencialDeHospedagemOuSonar(entrada[0]),
+      ),
     );
   }
 

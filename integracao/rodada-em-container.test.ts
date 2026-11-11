@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
+import { createServer as createServidorHttp } from "node:http";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
@@ -18,7 +19,7 @@ import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraes
 import { enviarDemanda, lerConversa } from "../src/aplicacao/sessoes_demanda.ts";
 import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { PACOTE } from "../src/infra/agente/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/infra/agente/pi.ts";
 import { anotar, pastasDoProcesso } from "../src/infra/registro.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { AUDITOR } from "../src/nucleo/ator.ts";
@@ -762,5 +763,144 @@ test(
     const aOutra = await conectar(outraPorta);
     assert.notEqual(aOutra.codigo, 0);
     assert.doesNotMatch(aOutra.saida, /conectou/);
+  },
+);
+
+const TOKEN_DO_GITHUB = "ghp_0123456789abcdefghijklmnopqrstuvwxyz";
+
+/** Define variáveis no `process.env` do core até o fim do teste. */
+function definirNoEnvDoCore(t: TestContext, variaveis: Record<string, string>): void {
+  const antes = Object.fromEntries(Object.keys(variaveis).map((nome) => [nome, process.env[nome]]));
+  Object.assign(process.env, variaveis);
+  t.after(() => {
+    for (const [nome, valor] of Object.entries(antes))
+      if (valor === undefined) Reflect.deleteProperty(process.env, nome);
+      else process.env[nome] = valor;
+  });
+}
+
+test(
+  "nenhum token do GitHub entra no container: nem no env, nem nas cópias do pi, do .claude e do .codex, nem nas montagens",
+  COM_DOCKER,
+  async (t) => {
+    const { c } = cenarioEmContainer(t);
+    definirNoEnvDoCore(t, { GH_TOKEN: TOKEN_DO_GITHUB, GITHUB_TOKEN: TOKEN_DO_GITHUB });
+    writeFileSync(join(c.repo, ".env"), `GH_TOKEN=${TOKEN_DO_GITHUB}\nGITHUB_TOKEN=${TOKEN_DO_GITHUB}\n`);
+    for (const [pasta, arquivo] of [
+      [".claude", "settings.json"],
+      [".codex", "config.toml"],
+    ] as const) {
+      mkdirSync(join(c.raiz, pasta), { recursive: true });
+      writeFileSync(join(c.raiz, pasta, arquivo), `token = "${TOKEN_DO_GITHUB}"`);
+    }
+    writeFileSync(join(dirDoPiDoAuditor(), "settings.json"), `{"githubToken":"${TOKEN_DO_GITHUB}"}`);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
+    const [inspecao] = JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
+      Config: { Env: string[] };
+      HostConfig: { Binds: string[] };
+    }[];
+    assert.ok(inspecao);
+    const montagens = inspecao.HostConfig.Binds.map((bind) => bind.split(":")[1] ?? "");
+
+    // O env de um comando, com o token no env do core e no .env do projeto, e o env que o docker deu ao container.
+    const { saida: envDoComando } = await ambiente.executar({
+      programa: "env",
+      argumentos: [],
+      cwd,
+      env: { ...process.env } as Record<string, string>,
+    });
+    assert.doesNotMatch(envDoComando, /ghp_/);
+    assert.doesNotMatch(inspecao.Config.Env.join("\n"), /ghp_/);
+
+    // As cópias do home do container e todas as montagens.
+    const { codigo, saida } = await ambiente.executar({
+      programa: `grep -rIl 'ghp_' "$HOME" ${montagens.join(" ")} /tmp /trabalho`,
+      argumentos: [],
+      cwd,
+      env: {},
+      noShell: true,
+    });
+    assert.equal(saida.trim(), "", "nenhum arquivo do container tem token do GitHub");
+    assert.equal(codigo, 1, "o grep varreu tudo e não achou nada");
+  },
+);
+
+/** Põe na frente do PATH um `docker` que anota cada chamada em `registro` e chama o de verdade. */
+function registrarChamadasAoDocker(t: TestContext, dir: string): string {
+  const registro = join(dir, "chamadas-ao-docker");
+  const docker = execFileSync("sh", ["-c", "command -v docker"], { encoding: "utf8" }).trim();
+  mkdirSync(join(dir, "docker-que-registra"), { recursive: true });
+  writeFileSync(
+    join(dir, "docker-que-registra", "docker"),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${registro}'\nexec '${docker}' "$@"\n`,
+    { mode: 0o755 },
+  );
+  definirNoEnvDoCore(t, { PATH: `${join(dir, "docker-que-registra")}:${process.env.PATH ?? ""}` });
+  return registro;
+}
+
+test(
+  "o push da Rodada é feito pelo core, fora do container, e de dentro do container um git push falha por falta de credencial",
+  COM_DOCKER,
+  async (t) => {
+    // Um servidor HTTP que exige login: o git do container o alcança pela porta da API do agente e anota o que apresentou.
+    const credenciaisApresentadas: (string | undefined)[] = [];
+    const hospedagemQueExigeLogin = createServidorHttp((pedido, resposta) => {
+      credenciaisApresentadas.push(pedido.headers.authorization);
+      resposta.writeHead(401, { "www-authenticate": 'Basic realm="hospedagem"' }).end();
+    }).listen(0, "0.0.0.0");
+    await once(hospedagemQueExigeLogin, "listening");
+    t.after(() => {
+      hospedagemQueExigeLogin.close();
+    });
+    const portaDaApi = (hospedagemQueExigeLogin.address() as AddressInfo).port;
+    const registroDoDocker = registrarChamadasAoDocker(t, join(base, "docker-do-push"));
+    const { c, pi } = cenarioEmContainer(t, portaDaApi);
+
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, uso: null }]);
+    await ciclo(c, despachoComVerificacoesReais);
+    await revisar(c, id, { resultado: "aprovado" });
+    await encerrar(c, id);
+
+    // O push chegou à hospedagem falsa: a branch da Rodada está no remoto.
+    const branch = rodadaDe(c, id, 1)?.branch;
+    assert.ok(branch);
+    assert.equal(
+      git(c.bare, "rev-parse", `refs/heads/${branch}`),
+      git(caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }), "rev-parse", "HEAD"),
+    );
+    // Nenhum `docker exec` da Rodada rodou `git push`.
+    const chamadas = readFileSync(registroDoDocker, "utf8").split("\n");
+    assert.ok(
+      chamadas.some((chamada) => chamada.startsWith("exec ") && chamada.includes("git")),
+      "o git do commit rodou no container",
+    );
+    assert.deepEqual(
+      chamadas.filter((chamada) => /\bpush\b/.test(chamada)),
+      [],
+    );
+
+    // De dentro do container, o git não tem credencial nenhuma e o push falha.
+    const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    const push = await ambiente.executar({
+      programa: "git",
+      argumentos: [
+        "push",
+        `http://host.docker.internal:${String(portaDaApi)}/loja.git`,
+        "HEAD:refs/heads/do-container",
+      ],
+      cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
+      env: {},
+    });
+    assert.notEqual(push.codigo, 0);
+    assert.match(push.erro, /could not read Username|terminal prompts disabled|Authentication failed/);
+    assert.ok(credenciaisApresentadas.length > 0, "o git do container chegou à hospedagem");
+    assert.deepEqual(
+      credenciaisApresentadas.filter((credencial) => credencial !== undefined),
+      [],
+    );
   },
 );

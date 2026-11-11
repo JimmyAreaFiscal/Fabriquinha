@@ -14,6 +14,8 @@ const CREDENCIAIS = new Set([
   "SONAR_TOKEN",
 ]);
 
+export const ehCredencialDeHospedagemOuSonar = (nome: string): boolean => CREDENCIAIS.has(nome);
+
 /**
  * `base` sem as credenciais, com `gh` e `az` lendo a configuração de `dirVazio`, onde não há login salvo. Para o que
  * roda código do agente: o pi e os coletores de testes e fitness.
@@ -21,7 +23,7 @@ const CREDENCIAIS = new Set([
 export function ambienteSemCredenciais(base: NodeJS.ProcessEnv, dirVazio: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [nome, valor] of Object.entries(base))
-    if (valor !== undefined && !CREDENCIAIS.has(nome)) env[nome] = valor;
+    if (valor !== undefined && !ehCredencialDeHospedagemOuSonar(nome)) env[nome] = valor;
   return { ...env, GH_CONFIG_DIR: dirVazio, AZURE_CONFIG_DIR: dirVazio };
 }
 

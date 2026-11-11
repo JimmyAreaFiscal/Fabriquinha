@@ -101,6 +101,10 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
   return montagensComModo.flatMap(([origem, destino, modo]) => ["-v", `${origem}:${destino}:${modo}`]);
 }
 
+const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
+/** O container não leva credencial de hospedagem (o push é do core): o token do GitHub que estiver nas pastas copiadas sai da cópia. */
+const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
+
 /**
  * Copia `origem` (uma pasta do host) para `destinoNoHome`, relativo ao `HOME` do container, por `tar` no `docker exec`:
  * é cópia, e não montagem, então o que o agente altera ali não volta ao host.
@@ -123,7 +127,7 @@ function copiarParaOHomeDoContainer(
         containerId,
         "sh",
         "-c",
-        `mkdir -p "$HOME/${destinoNoHome}" && tar -x --no-same-owner -C "$HOME/${destinoNoHome}"`,
+        `d="$HOME/${destinoNoHome}" && mkdir -p "$d" && tar -x --no-same-owner -C "$d" && ${COMANDO_QUE_TIRA_TOKEN_DO_GITHUB}`,
       ],
       { stdio: ["pipe", "ignore", "pipe"], signal: sinal },
     );

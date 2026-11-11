@@ -218,6 +218,32 @@ test("criar copia o pi do Auditor, o .claude e o .codex para o home do container
   assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
 });
 
+test("criar tira das cópias o token do GitHub, e o resto do arquivo continua igual", async () => {
+  const dirDoPi = join(base, "pi-com-token");
+  const home = join(base, "home-com-token");
+  const token = `ghp_${"a1B2".repeat(9)}`;
+  const tokenFinoDoGithub = `github_pat_${"x9".repeat(15)}`;
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "settings.json"), `{"github":"${token}","tema":"escuro"}`);
+  writeFileSync(join(home, ".claude", "arquivo com espaço.md"), `token ${tokenFinoDoGithub} e ${token}\noutra linha`);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".pi", "agent", "settings.json"), "utf8"),
+    '{"github":"[token-do-github-removido]","tema":"escuro"}',
+  );
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".claude", "arquivo com espaço.md"), "utf8"),
+    "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
+  );
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
+});
+
 test("criar com cópia que falha elimina o container e diz o motivo", async () => {
   const dirDoPi = join(base, "pi-com-cópia-ruim");
   const home = join(base, "home-com-cópia-ruim");
