@@ -1,6 +1,8 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
 
@@ -87,13 +89,63 @@ export async function lancarSolto(comando: string, args: readonly string[], env:
 }
 
 /**
+ * O git do core roda no host com as credenciais, em repositórios que um container pode escrever (`.git/hooks`,
+ * `.git/config`). Por isso hooks e fsmonitor ficam desligados, e `core.sshCommand` e `credential.*.helper` valem os do
+ * sistema e do usuário do serviço, lidos como o git os leria dentro de `dir` (com os `includeIf` por diretório), mas
+ * sem os escopos do repositório.
+ */
+async function lerConfigsFixasDoServico(dir: string): Promise<string[]> {
+  const configs = (
+    await executar("git", ["-C", dir, "config", "--show-scope", "-z", "--list"], { limiteMs: LIMITE_COMANDO_MS })
+  ).saida
+    .split("\0")
+    // O -z separa o escopo, a chave e o valor assim: `escopo\0chave\nvalor\0`.
+    .reduce<{ escopo: string; chave: string; valor: string }[]>((lidas, campo, i, campos) => {
+      if (i % 2 === 1) {
+        const [chave = "", ...valor] = campo.split("\n");
+        lidas.push({ escopo: campos[i - 1] ?? "", chave, valor: valor.join("\n") });
+      }
+      return lidas;
+    }, []);
+  const doServico = configs.filter(({ escopo }) => escopo === "system" || escopo === "global");
+  const ehHelper = ({ chave }: { chave: string }) => /^credential\.(.*\.)?helper$/i.test(chave);
+  const sshCommand = doServico.findLast(({ chave }) => chave.toLowerCase() === "core.sshcommand")?.valor ?? "ssh";
+  // Valor vazio zera a lista da chave, inclusive o que o repositório definiu nela: zera toda chave vista e repete as do serviço.
+  const chavesDeHelper = new Set(["credential.helper", ...configs.filter(ehHelper).map(({ chave }) => chave)]);
+  return [
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    `core.sshCommand=${sshCommand}`,
+    ...[...chavesDeHelper].flatMap((chave) => ["-c", `${chave}=`]),
+    ...doServico.filter(ehHelper).flatMap(({ chave, valor }) => ["-c", `${chave}=${valor}`]),
+  ];
+}
+
+/**
+ * O git segue o `commondir` de um `.git` e executa a config que achar lá (`core.fsmonitor`, `receivepack`...) com o env do
+ * serviço. O container não escreve no topo do `.git` do clone, mas o core confere antes de usar: um `.git` de clone com
+ * `commondir` é forjado. O core só roda git na raiz do clone (nunca numa worktree, que o container controla).
+ */
+function suspeitaDeCommondirForjado(dir: string): string | null {
+  const commondir = join(dir, ".git", "commondir");
+  return existsSync(commondir)
+    ? `${commondir} existe num clone: recusado, o container não deveria tê-lo gravado`
+    : null;
+}
+
+/**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
  * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
  * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
-  const r = await executar("git", ["-C", dir, ...args], {
+  const suspeita = suspeitaDeCommondirForjado(dir);
+  if (suspeita) return { codigo: 128, saida: "", erro: suspeita, limiteEstourado: false };
+  const r = await executar("git", [...(await lerConfigsFixasDoServico(dir)), "-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
     limiteMs,
   });

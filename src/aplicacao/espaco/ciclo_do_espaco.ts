@@ -32,8 +32,8 @@ abstract class CicloDoEspaco {
   protected readonly espaco: EspacoDeTrabalho;
   protected readonly projeto: ProjetoDoCiclo;
   protected readonly registro: RegistroDoCiclo;
-  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. */
-  readonly ambiente: Ambiente;
+  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. Depois de alocar, é o container. */
+  ambiente: Ambiente;
   /** O conjunto de containers; `undefined` com o Ambiente no host local, que nunca chama o docker. */
   readonly #conjunto: ConjuntoDeAmbientes | undefined;
 
@@ -51,10 +51,13 @@ abstract class CicloDoEspaco {
     this.#conjunto = conjunto;
   }
 
-  /** Dá ao Espaço o container do Projeto; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
+  /** Dá ao Espaço o container do Projeto e passa a rodar nele; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
   protected async alocarContainerSeHouver(): Promise<void> {
-    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
-      await this.#conjunto.alocar(this.espaco, this.projeto);
+    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined) {
+      const container = await this.#conjunto.alocar(this.espaco, this.projeto);
+      container.levarEnvDoProjeto(this.projeto.raiz_git);
+      this.ambiente = container;
+    }
   }
 
   /**
@@ -121,7 +124,8 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
     await integrarPR(this.projeto, String(pr.numero));
     const { pasta: demanda, branch } = espacoDaDemanda(this.projeto, demanda_id, raiz);
     await naFilaDoProjeto(raiz, this.projeto.nome, async () => {
-      await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+      // No clone, e não na worktree: o container controla o `.git` da worktree, e o fetch roda com as credenciais do core.
+      await exigirGit(this.projeto.raiz_git, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
       await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
     });
   }

@@ -14,6 +14,7 @@ import { Projeto } from "../../nucleo/projeto.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { montarConjuntoDoServico } from "../espaco/ambiente_do_servico.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
+import { relogioDoSistema } from "../../nucleo/relogio.ts";
 import { eliminarAmbienteDoConjunto, listarAmbientesDoConjunto } from "./conjunto_da_configuracao.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-configuracao-"));
@@ -39,7 +40,11 @@ async function conjuntoComUmAlocado() {
   const banco = new DatabaseSync(":memory:");
   migrar(banco, MIGRACOES);
   validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container" });
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes());
+  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+    raiz: base,
+    porta_da_api: 4999,
+    home_do_usuario: base,
+  });
   const ambiente = await conjunto.alocar(espaco, projeto);
   return { docker, banco, conjunto, ambiente };
 }

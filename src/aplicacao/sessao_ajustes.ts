@@ -9,7 +9,7 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
-import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -18,7 +18,7 @@ import { projetoExistente } from "../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { descartarAlteracoes, exigirGitNoAmbiente } from "../infra/repositorio/worktree.ts";
-import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "./espaco/ambiente_do_servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { encerrarPiVivo } from "./etapas/pi_vivo.ts";
 import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
@@ -68,13 +68,14 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
   const projeto = projetoExistente(banco, ag.demanda.projeto);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
   const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
-  const pontas: [Ponta, string][] = [
-    [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pasta],
-    [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz).pasta],
+  const pontas: [Ponta, EspacoDeTrabalho][] = [
+    [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz)],
+    [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz)],
   ];
-  for (const [{ branch, sha }, worktree] of pontas) {
-    await exigirGitNoAmbiente(ambienteDoServico(), worktree, "update-ref", `refs/heads/${branch}`, sha);
-    await descartarAlteracoes(ambienteDoServico(), worktree, log);
+  for (const [{ branch, sha }, espaco] of pontas) {
+    const ambiente = ambienteDoEspaco(espaco);
+    await exigirGitNoAmbiente(ambiente, espaco.pasta, "update-ref", `refs/heads/${branch}`, sha);
+    await descartarAlteracoes(ambiente, espaco.pasta, log);
   }
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }
@@ -85,9 +86,10 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
  */
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
   const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
+  const espacoDaDemanda = espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco));
   const demanda = await exigirGitNoAmbiente(
-    ambienteDoServico(),
-    espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco)).pasta,
+    ambienteDoEspaco(espacoDaDemanda),
+    espacoDaDemanda.pasta,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,
   );

@@ -1,7 +1,7 @@
 // O ciclo do Espaço com git real (origin bare) e hospedagem falsa.
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
@@ -14,6 +14,7 @@ import { listarAmbientes } from "../../armazenamento/ambientes.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configuracao_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
+import { relogioDoSistema } from "../../nucleo/relogio.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
@@ -176,7 +177,11 @@ function cenarioComContainer() {
     cpus: 1,
     ociosidade_para_eliminar_min: 30,
   });
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes());
+  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+    raiz: c.raiz,
+    porta_da_api: 4999,
+    home_do_usuario: c.raiz,
+  });
   const registro = { raiz: c.raiz, log: c.log };
   const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };
   return {
@@ -198,9 +203,24 @@ test("com container e imagem, criar aloca o container ao Espaço e limpar o devo
   assert.equal(alocado.alocado_para, "I-1");
   await cicloDaDemanda().criar();
   assert.equal(listarAmbientes(banco).length, 1);
+  const ciclo = cicloDaDemanda();
+  assert.equal(ciclo.ambiente, ambiente);
+  await ciclo.criar();
+  assert.equal(ciclo.ambiente.id, alocado.id); // depois de alocar, o ciclo trabalha no container
+  assert.equal(ciclo.ambiente.tipo, "container");
   await cicloDaDemanda().limpar();
   assert.equal(listarAmbientes(banco)[0]?.estado, "livre");
   assert.equal(docker.containers().length, 1);
+});
+
+test("criar leva o .env do clone do Projeto para o container alocado", async () => {
+  const { c, docker, cicloDaDemanda } = cenarioComContainer();
+  writeFileSync(join(c.projeto.raiz_git, ".env"), "DATABASE_URL=postgres://localhost/loja\n");
+  const ciclo = cicloDaDemanda();
+  await ciclo.criar();
+  const { saida } = await ciclo.ambiente.executar({ programa: "env", argumentos: [], cwd: c.raiz, env: {} });
+  assert.match(saida, /^DATABASE_URL=postgres:\/\/localhost\/loja$/m);
+  assert.ok(docker.containers().length > 0);
 });
 
 test("com container, criar da rodada também aloca", async () => {

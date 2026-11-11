@@ -15,7 +15,7 @@ import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
 import { montarVerificacoesDaEtapa } from "../infra/verificacao/verificacao.ts";
-import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
+import { ambienteDoEspaco } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { submeterEvidencia } from "./evidencia/submeter.ts";
 
@@ -43,13 +43,10 @@ export async function prepararRevisaoRodada(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
   const raiz = raizDo(banco);
-  const ambiente = ambienteDoServico();
-  const espaco = await cicloDoEspaco(
-    espacoDoTicket(ag, { rodada_id }, projeto, raiz),
-    projeto,
-    { raiz, log: `${raiz}/log` },
-    ambiente,
-  ).criar();
+  const espacoDaRodada = espacoDoTicket(ag, { rodada_id }, projeto, raiz);
+  const ciclo = cicloDoEspaco(espacoDaRodada, projeto, { raiz, log: `${raiz}/log` }, ambienteDoEspaco(espacoDaRodada));
+  const espaco = await ciclo.criar();
+  const { ambiente } = ciclo;
   const worktree = espaco.pasta;
 
   // `base...head` é o diff desde o ancestral comum: o que a rodada fez, mesmo se a demanda avançou depois.

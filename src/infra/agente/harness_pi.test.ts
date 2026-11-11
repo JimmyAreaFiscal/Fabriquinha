@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -42,7 +51,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       "--mode",
       "rpc",
       "--session-dir",
-      "/r/sessoes",
+      "/r/sessoes/s-1",
       "--session-id",
       "s-1",
       "--provider",
@@ -68,7 +77,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "--mode",
     "rpc",
     "--session-dir",
-    "/r/sessoes",
+    "/r/sessoes/s-1",
     "--session-id",
     "s-1",
     "-e",
@@ -126,6 +135,37 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
   }
 });
 
+test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais de hospedagem ou do Sonar", () => {
+  const herdadas = {
+    HOME: "/home/host",
+    SSH_AUTH_SOCK: "/tmp/ssh",
+    GH_TOKEN: "segredo",
+    AZURE_DEVOPS_EXT_PAT: "segredo",
+    AZURE_OPENAI_API_KEY: "segredo",
+    SONAR_TOKEN: "segredo",
+    PI_CODING_AGENT_DIR: "/home/host/.pi/agent",
+    ANTHROPIC_API_KEY: "chave",
+  };
+  const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
+  Object.assign(process.env, herdadas);
+  try {
+    assert.deepEqual(harness.ambiente("/r", "/r/execucoes/E-7", 7, "container"), {
+      ANTHROPIC_API_KEY: "chave",
+      FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
+    });
+    assert.deepEqual(harness.ambiente("/r", "/r/avaliacoes/s", undefined, "container"), {
+      ANTHROPIC_API_KEY: "chave",
+      FABRIQUINHA_ROOT: "/r",
+      FABRIQUINHA_AUDITORIA: "1",
+    });
+  } finally {
+    for (const [nome, valor] of Object.entries(originais)) {
+      if (valor === undefined) Reflect.deleteProperty(process.env, nome);
+      else process.env[nome] = valor;
+    }
+  }
+});
+
 test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guarda, e o ambiente sem FABRIQUINHA_EXECUCAO", () => {
   const sessao = "11111111-1111-4111-8111-111111111111";
   const args = harness.argumentos({ raiz: "/r", sessaoPi: sessao });
@@ -133,7 +173,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
     "--mode",
     "rpc",
     "--session-dir",
-    "/r/sessoes",
+    `/r/sessoes/${sessao}`,
     "--session-id",
     sessao,
     "-e",
@@ -324,4 +364,27 @@ test("arquivoDaSessao: o arquivo do pi da sessão, nenhum se não há, e erro se
   assert.equal(harness.arquivoDaSessao(raiz, "s-1"), join(raiz, "sessoes", "2026-10-11T00-00-00-000Z_s-1.jsonl"));
   writeFileSync(join(raiz, "sessoes", "2026-10-12T00-00-00-000Z_s-1.jsonl"), "");
   assert.throws(() => harness.arquivoDaSessao(raiz, "s-1"), ErroDeRegra);
+});
+
+test("a sessão tem pasta própria, e o core a acha pelo caminho de sempre mesmo que a pasta seja um link para o Espaço (container)", () => {
+  const raiz = join(base, "sessoes-por-pasta");
+  assert.equal(harness.pastaDaSessao(raiz, "s-7"), join(raiz, "sessoes", "s-7"));
+  const doEspaco = join(base, "espaco-da-sessao", "s-7");
+  mkdirSync(doEspaco, { recursive: true });
+  writeFileSync(join(doEspaco, "2026-10-11T00-00-00-000Z_s-7.jsonl"), "");
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  symlinkSync(doEspaco, join(raiz, "sessoes", "s-7"));
+  assert.equal(
+    harness.arquivoDaSessao(raiz, "s-7"),
+    join(raiz, "sessoes", "s-7", "2026-10-11T00-00-00-000Z_s-7.jsonl"),
+  );
+  assert.equal(harness.pastaDaSessao(raiz, "s-7"), join(raiz, "sessoes", "s-7"));
+});
+
+test("a sessão que já nasceu solta em sessoes/ (antes da pasta própria) continua lá, para o pi retomá-la", () => {
+  const raiz = join(base, "sessoes-antigas");
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  writeFileSync(join(raiz, "sessoes", "2026-10-11T00-00-00-000Z_s-8.jsonl"), "");
+  assert.equal(harness.pastaDaSessao(raiz, "s-8"), join(raiz, "sessoes"));
+  assert.equal(harness.pastaDaSessao(raiz, "s-9"), join(raiz, "sessoes", "s-9"));
 });

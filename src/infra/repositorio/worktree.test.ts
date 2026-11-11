@@ -10,6 +10,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -114,6 +116,99 @@ test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
     (erro: unknown) =>
       erro instanceof ErroDeRegra &&
       /^git fetch origin .* falhou em .*: fatal: couldn't find remote ref/.test(erro.message),
+  );
+});
+
+test("git do core não executa hook nem comando de execução que o repositório (escrito pelo container) define", async () => {
+  const c = cenario();
+  const marca = join(c.raiz, "executou");
+  const gravaMarca = `#!/bin/sh\necho $0 >> ${marca}\n`;
+  mkdirSync(join(c.repo, ".git", "hooks"), { recursive: true });
+  const prePush = join(c.repo, ".git", "hooks", "pre-push");
+  writeFileSync(prePush, gravaMarca);
+  chmodSync(prePush, 0o755);
+  const comando = join(c.raiz, "comando.sh");
+  writeFileSync(comando, gravaMarca);
+  chmodSync(comando, 0o755);
+  git(c.repo, "config", "core.fsmonitor", comando);
+  git(c.repo, "config", "core.sshCommand", comando);
+  git(c.repo, "remote", "add", "remoto-ssh", "ssh://exemplo.invalido/repo.git");
+
+  await exigirGit(c.repo, "push", "origin", "main");
+  await exigirGit(c.repo, "fetch", "origin");
+  await exigirGit(c.repo, "status");
+  await assert.rejects(exigirGit(c.repo, "ls-remote", "remoto-ssh"), ErroDeRegra);
+
+  assert.equal(existsSync(marca), false);
+});
+
+/** Roda `corpo` com o git do usuário sendo `conteudoGlobal` (o caminho do arquivo é passado a quem monta o conteúdo). */
+async function comGitGlobal(conteudoGlobal: (arquivo: string) => string, corpo: () => Promise<void>) {
+  const arquivo = join(base, `gitconfig-${String(++n)}`);
+  writeFileSync(arquivo, conteudoGlobal(arquivo));
+  const original = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = arquivo;
+  try {
+    await corpo();
+  } finally {
+    process.env.GIT_CONFIG_GLOBAL = original;
+  }
+}
+
+function criarScriptQueGravaMarca(c: { raiz: string }, nome: string) {
+  const marca = join(c.raiz, `${nome}.marca`);
+  const script = join(c.raiz, `${nome}.sh`);
+  writeFileSync(script, `#!/bin/sh\necho "$@" >> ${marca}\necho username=u\necho password=p\n`);
+  chmodSync(script, 0o755);
+  return { marca, script };
+}
+
+/** Servidor HTTP que exige credencial: responde 401 sem Authorization e 404 com ela. */
+async function comServidorQueExigeCredencial(corpo: (url: string) => Promise<void>) {
+  const servidor = createServer((req, res) => {
+    res.writeHead(req.headers.authorization ? 404 : 401, { "WWW-Authenticate": "Basic realm=teste" }).end();
+  });
+  await new Promise<void>((pronto) => servidor.listen(0, "127.0.0.1", pronto));
+  try {
+    await corpo(`http://127.0.0.1:${String((servidor.address() as AddressInfo).port)}`);
+  } finally {
+    servidor.close();
+  }
+}
+
+test("git do core usa o credential.<url>.helper do config do usuário e ignora o que só o repositório define", async () => {
+  const c = cenario();
+  const { marca, script } = criarScriptQueGravaMarca(c, "helper");
+  await comServidorQueExigeCredencial(async (servidor) => {
+    const url = `${servidor}/repo.git`;
+    git(c.repo, "config", `credential.${servidor}.helper`, script);
+    await assert.rejects(exigirGit(c.repo, "ls-remote", url), ErroDeRegra);
+    assert.equal(existsSync(marca), false);
+
+    await comGitGlobal(
+      () => `[credential "${servidor}"]\n\thelper = ${script}\n`,
+      async () => {
+        await assert.rejects(exigirGit(c.repo, "ls-remote", url), ErroDeRegra);
+        assert.match(readFileSync(marca, "utf8"), /get/);
+      },
+    );
+  });
+});
+
+test("git do core usa o core.sshCommand que o config do usuário define para o diretório do repositório", async () => {
+  const c = cenario();
+  const { marca, script } = criarScriptQueGravaMarca(c, "ssh");
+  git(c.repo, "remote", "add", "remoto-ssh", "ssh://exemplo.invalido/repo.git");
+  await comGitGlobal(
+    (arquivo) => {
+      const incluido = `${arquivo}.ssh`;
+      writeFileSync(incluido, `[core]\n\tsshCommand = ${script}\n`);
+      return `[includeIf "gitdir:${c.repo}/.git"]\n\tpath = ${incluido}\n`;
+    },
+    async () => {
+      await assert.rejects(exigirGit(c.repo, "ls-remote", "remoto-ssh"), ErroDeRegra);
+      assert.match(readFileSync(marca, "utf8"), /exemplo\.invalido/);
+    },
   );
 });
 

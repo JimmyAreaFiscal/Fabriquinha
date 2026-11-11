@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,11 +12,17 @@ import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao/configurac
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
-import { relogioFixo } from "../../nucleo/relogio.ts";
+import { relogioDoSistema, relogioFixo } from "../../nucleo/relogio.ts";
+import { pastasDoAmbiente } from "../../infra/ambiente/container/pastas_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
+// O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
+const dirDoPiDoAuditorDoTeste = join(base, "pi-do-auditor");
+mkdirSync(dirDoPiDoAuditorDoTeste);
+writeFileSync(join(dirDoPiDoAuditorDoTeste, "auth.json"), "{}");
+process.env.PI_CODING_AGENT_DIR = dirDoPiDoAuditorDoTeste;
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
@@ -33,6 +39,7 @@ const projetoComImagem = (imagem_do_ambiente?: string) =>
 const projeto = projetoComImagem("alpine");
 const espacoA = espacoDaDemanda(projeto, "I-1", base);
 const espacoB = espacoDaRodada(projeto, "I-1", 2, base);
+const SERVICO = { raiz: base, porta_da_api: 4999, home_do_usuario: base };
 const LIMITES = { tipo: "container", memoria_maxima_mb: 768, cpus: 1.5, ociosidade_para_eliminar_min: 30 };
 
 let cenarios = 0;
@@ -42,23 +49,92 @@ function cenario() {
   migrar(banco, MIGRACOES);
   validarESalvarConfiguracaoDoAmbiente(banco, LIMITES);
   const gerador = new GeradorDeAmbientes();
-  const conjunto = new ConjuntoDeAmbientes(banco, gerador);
-  const criacoes = () => docker.registro().filter(([comando]) => comando === "run" || comando === "create");
+  const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioDoSistema, SERVICO);
+  // O `run --rm` é o container passageiro das regras de rede, não um Ambiente.
+  const criacoes = () =>
+    docker.registro().filter(([comando, opcao]) => (comando === "run" && opcao !== "--rm") || comando === "create");
   return { docker, banco, conjunto, gerador, criacoes, pastaDoDocker: join(base, `docker-${String(cenarios)}`) };
 }
 
 test("alocar sem livre cria o container com os limites da configuração e grava alocado", async () => {
   const { docker, banco, conjunto } = cenario();
   const ambiente = await conjunto.alocar(espacoA, projeto);
-  assert.equal(ambiente.estado, "alocado");
-  assert.equal(ambiente.alocado_para, "I-1");
-  assert.equal(ambiente.imagem, "alpine");
+  const [gravado] = listarAmbientes(banco);
+  assert.equal(gravado?.estado, "alocado");
+  assert.equal(gravado.alocado_para, "I-1");
+  assert.equal(gravado.imagem, "alpine");
+  assert.equal(ambiente.id, gravado.id);
   const [container] = docker.containers();
   assert.equal(container?.id, ambiente.container_id);
   assert.equal(container.memoria, 768 * 1048576);
   assert.equal(container.cpus, 1.5);
   assert.equal(container.rotulos["fabriquinha.ambiente"], ambiente.id);
-  assert.deepEqual(listarAmbientes(banco), [ambiente]);
+});
+
+test("alocar cria o container com a pasta das worktrees do projeto, o .git e só as pastas próprias de sessão e de execução montados", async () => {
+  const { docker, conjunto } = cenario();
+  const ambiente = await conjunto.alocar(espacoB, projeto);
+  const montagens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":").slice(0, 2));
+  const { sessoes, execucoes } = pastasDoAmbiente(base, ambiente.id);
+  const origens = montagens.map(([origem]) => origem);
+  assert.ok(origens.includes(join(base, "worktrees", "loja")), "a pasta das worktrees do projeto");
+  assert.ok(origens.includes(join(base, ".git")), "o .git do projeto");
+  assert.deepEqual(
+    montagens.filter(([, destino]) => destino === join(base, "sessoes")),
+    [[sessoes, join(base, "sessoes")]],
+  );
+  assert.deepEqual(
+    montagens.filter(([, destino]) => destino === join(base, "execucoes")),
+    [[execucoes, join(base, "execucoes")]],
+    "onde mora o FABRIQUINHA_SAIDA",
+  );
+  assert.ok(
+    !origens.includes(join(base, "sessoes")) && !origens.includes(join(base, "execucoes")),
+    "nunca a pasta inteira",
+  );
+  assert.ok(!origens.includes(espacoB.pasta), "a worktree do Espaço não é montada: o git do container a cria");
+});
+
+test("liberar tira do container as sessões e execuções do Espaço: o próximo Espaço não as vê, e o core ainda as lê", async () => {
+  const { conjunto } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  mkdirSync(join(base, "execucoes", "E-501", "saida"), { recursive: true });
+  mkdirSync(join(base, "sessoes", "s-501"), { recursive: true });
+  ambiente.abrigarProcesso(join(base, "execucoes", "E-501"), "s-501");
+  writeFileSync(join(base, "sessoes", "s-501", "2026_s-501.jsonl"), "do espaço A\n");
+  const { sessoes, execucoes } = pastasDoAmbiente(base, ambiente.id);
+  assert.ok(
+    existsSync(join(sessoes, "s-501")) && existsSync(join(execucoes, "E-501")),
+    "dentro, enquanto o Espaço usa",
+  );
+
+  await conjunto.liberar(espacoA);
+  const outroEspaco = await conjunto.alocar(espacoB, projeto);
+  assert.equal(outroEspaco.container_id, ambiente.container_id, "o mesmo container serve ao outro Espaço");
+  assert.equal(
+    existsSync(join(sessoes, "s-501")) || existsSync(join(execucoes, "E-501")),
+    false,
+    "o outro Espaço não as vê",
+  );
+  assert.equal(readlinkSync(join(base, "sessoes", "s-501")), join(base, "espacos", "I-1", "sessoes", "s-501"));
+  assert.equal(readFileSync(join(base, "sessoes", "s-501", "2026_s-501.jsonl"), "utf8"), "do espaço A\n");
+  assert.ok(existsSync(join(base, "execucoes", "E-501", "saida")));
+});
+
+test("o container reaproveitado para outra demanda do projeto continua com as worktrees dela montadas", async () => {
+  const { docker, banco, conjunto, criacoes } = cenario();
+  const primeiro = await conjunto.alocar(espacoA, projeto);
+  await conjunto.liberar(espacoA);
+  const espacoDeOutraDemanda = espacoDaDemanda(projeto, "I-2", base);
+  const segundo = await conjunto.alocar(espacoDeOutraDemanda, projeto);
+  assert.equal(segundo.container_id, primeiro.container_id);
+  assert.equal(criacoes().length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.alocado_para, "I-2");
+  const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0] ?? "");
+  const montadas = (caminho: string) => origens.some((origem) => caminho.startsWith(`${origem}/`));
+  assert.ok(montadas(espacoDeOutraDemanda.pasta), "a worktree da outra demanda");
+  const destinos = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[1] ?? "");
+  assert.ok(destinos.includes(join(base, "execucoes")), "onde o container vê a pasta de qualquer processo do Espaço");
 });
 
 test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async () => {
@@ -70,7 +146,7 @@ test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async (
 
 test("alocar e liberar gravam o instante do relógio recebido", async () => {
   const { banco, gerador } = cenario();
-  const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioFixo("2026-01-02T03:04:05.000Z"));
+  const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioFixo("2026-01-02T03:04:05.000Z"), SERVICO);
   await conjunto.alocar(espacoA, projeto);
   assert.equal(listarAmbientes(banco)[0]?.criado_em, "2026-01-02T03:04:05.000Z");
   await conjunto.liberar(espacoA);
@@ -95,7 +171,7 @@ test("liberar limpa o container e grava livre; o próximo alocar da mesma imagem
 
   const segundo = await conjunto.alocar(espacoB, projeto);
   assert.equal(segundo.container_id, primeiro.container_id);
-  assert.equal(segundo.alocado_para, "I-1.R2");
+  assert.equal(listarAmbientes(banco)[0]?.alocado_para, "I-1.R2");
   assert.equal(criacoes().length, 1);
 });
 
@@ -106,10 +182,11 @@ test("liberar de um Espaço sem container não faz nada", async () => {
 });
 
 test("liberar com a limpeza falhando grava sujo, e o sujo não é reusado", async () => {
-  const { docker, banco, conjunto } = cenario();
+  const { docker, banco, conjunto, pastaDoDocker } = cenario();
   const primeiro = await conjunto.alocar(espacoA, projeto);
   docker.falharComando("exec", "container travado");
   await conjunto.liberar(espacoA);
+  rmSync(join(pastaDoDocker, "falhas", "exec"));
   assert.equal(listarAmbientes(banco)[0]?.estado, "sujo");
   const segundo = await conjunto.alocar(espacoB, projeto);
   assert.notEqual(segundo.container_id, primeiro.container_id);
@@ -129,12 +206,17 @@ test("eliminar remove o container e grava eliminado, mas só do livre ou sujo", 
 });
 
 test("o livre de outra imagem não é reusado", async () => {
-  const { conjunto, criacoes } = cenario();
+  const { banco, conjunto, criacoes } = cenario();
   const daAlpine = await conjunto.alocar(espacoA, projeto);
   await conjunto.liberar(espacoA);
   const daBusybox = await conjunto.alocar(espacoB, projetoComImagem("busybox"));
   assert.notEqual(daBusybox.container_id, daAlpine.container_id);
-  assert.equal(daBusybox.imagem, "busybox");
+  assert.deepEqual(
+    listarAmbientes(banco)
+      .map(({ imagem }) => imagem)
+      .sort(),
+    ["alpine", "busybox"],
+  );
   assert.equal(criacoes().length, 2);
 });
 
@@ -199,7 +281,10 @@ test("eliminar de um livre enquanto um alocar o pega nunca entrega um container 
     docker.containers().map(({ id }) => id),
     [alocado.container_id],
   );
-  assert.deepEqual(listarAmbientes(banco), [alocado]);
+  assert.deepEqual(
+    listarAmbientes(banco).map(({ id, container_id }) => ({ id, container_id })),
+    [{ id: alocado.id, container_id: alocado.container_id }],
+  );
 });
 
 test("eliminarOciosos de um livre ocioso enquanto um alocar o pega nunca entrega um container que sumiu", async () => {
@@ -214,7 +299,10 @@ test("eliminarOciosos de um livre ocioso enquanto um alocar o pega nunca entrega
     docker.containers().map(({ id }) => id),
     [alocado.container_id],
   );
-  assert.deepEqual(listarAmbientes(banco), [alocado]);
+  assert.deepEqual(
+    listarAmbientes(banco).map(({ id, container_id }) => ({ id, container_id })),
+    [{ id: alocado.id, container_id: alocado.container_id }],
+  );
 });
 
 test("eliminar com o docker falhando deixa a linha eliminado e o container órfão para a próxima subida", async () => {
@@ -260,4 +348,81 @@ test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu 
       chamadas.some((argumentos) => argumentos.includes(intocavel)),
       false,
     );
+});
+
+test("alocar devolve o Ambiente do container, que roda com a API do host e o pi próprio, e ambienteAlocadoPara o reencontra", async () => {
+  const { conjunto, banco, docker } = cenario();
+  assert.equal(conjunto.ambienteAlocadoPara(espacoA), undefined);
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  assert.equal(ambiente.tipo, "container");
+  assert.equal(ambiente.id, listarAmbientes(banco)[0]?.id);
+  const saida = await ambiente.executar({
+    programa: 'echo "$FABRIQUINHA_API $PI_CODING_AGENT_DIR $HOME"',
+    argumentos: [],
+    cwd: base,
+    env: { FABRIQUINHA_API: "http://127.0.0.1:4000" },
+    noShell: true,
+  });
+  const homeDoContainer = docker.homeDoContainer(ambiente.container_id);
+  assert.equal(
+    saida.saida.trim(),
+    `http://host.docker.internal:4999 ${join(homeDoContainer, ".pi", "agent")} ${homeDoContainer}`,
+  );
+  // O pi do container é a cópia do pi do Auditor, feita na criação.
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
+  assert.equal(conjunto.ambienteAlocadoPara(espacoA)?.container_id, ambiente.container_id);
+  assert.equal(conjunto.ambienteAlocadoPara(espacoB), undefined);
+});
+
+test("sem a raiz da Fabriquinha o conjunto recusa alocar, antes de criar o container", async () => {
+  const { banco, gerador, conjunto, criacoes } = cenario();
+  const semServico = new ConjuntoDeAmbientes(banco, gerador);
+  await assert.rejects(semServico.alocar(espacoA, projeto), /não conhece a raiz/);
+  assert.equal(criacoes().length, 0);
+  await conjunto.alocar(espacoA, projeto);
+  assert.throws(() => semServico.ambienteAlocadoPara(espacoA), ErroDeRegra);
+});
+
+test("na subida o container ainda alocado é de um Espaço morto pelo reinício: o conjunto o limpa e o devolve livre", async () => {
+  const { docker, banco, conjunto, gerador } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  const chamadasAntes = docker.registro().length;
+
+  await conjunto.reconciliarNaSubida();
+
+  const [livre] = listarAmbientes(banco);
+  assert.deepEqual([livre?.estado, livre?.alocado_para], ["livre", null]);
+  assert.notEqual(livre?.liberado_em, null);
+  const limpeza = docker
+    .registro()
+    .slice(chamadasAntes)
+    .find(([comando, alvo]) => comando === "exec" && alvo === ambiente.container_id);
+  assert.match(String(limpeza?.at(-1)), /kill -9 -1; find \/tmp \/trabalho/);
+  assert.equal((await gerador.listarDaFabriquinha()).length, 1);
+  assert.equal((await conjunto.alocar(espacoB, projeto)).container_id, ambiente.container_id);
+});
+
+test("na subida, a limpeza que falha deixa o alocado sujo, e o que o docker perdeu não é limpo", async () => {
+  const { docker, banco, conjunto, pastaDoDocker } = cenario();
+  const comFalha = await conjunto.alocar(espacoA, projeto);
+  const perdido = await conjunto.alocar(espacoB, projeto);
+  rmSync(join(pastaDoDocker, "containers", perdido.container_id));
+  docker.falharComando("exec", "container travado");
+
+  await conjunto.reconciliarNaSubida();
+
+  assert.deepEqual(
+    listarAmbientes(banco).map(({ container_id, estado }) => ({ container_id, estado })),
+    [{ container_id: comFalha.container_id, estado: "sujo" }],
+  );
+});
+
+test("ambientePorId devolve o Ambiente do container gravado, e undefined para o desconhecido ou eliminado", async () => {
+  const { conjunto } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  assert.equal(conjunto.ambientePorId(ambiente.id)?.container_id, ambiente.container_id);
+  assert.equal(conjunto.ambientePorId("outro"), undefined);
+  await conjunto.liberar(espacoA);
+  await conjunto.eliminar(ambiente.id);
+  assert.equal(conjunto.ambientePorId(ambiente.id), undefined);
 });

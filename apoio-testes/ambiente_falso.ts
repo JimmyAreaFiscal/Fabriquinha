@@ -43,6 +43,10 @@ export class AmbienteFalso implements Ambiente {
   caminhoNoAmbiente(caminhoNoHost: string): string {
     return this.hostLocal.caminhoNoAmbiente(caminhoNoHost);
   }
+
+  abrigarProcesso(): void {
+    this.hostLocal.abrigarProcesso();
+  }
 }
 
 export interface ProcessoForaDoAmbiente {

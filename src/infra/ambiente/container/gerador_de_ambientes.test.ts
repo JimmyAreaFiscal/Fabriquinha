@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
-import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
+import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
+import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;
@@ -15,6 +25,7 @@ mkdirSync(join(raizGit, "ambiente"), { recursive: true });
 writeFileSync(join(raizGit, "ambiente", "Dockerfile"), "FROM alpine\n");
 const sha256DoDockerfile = createHash("sha256").update("FROM alpine\n").digest("hex");
 const limites = { memoria_maxima_mb: 512, cpus: 1.5 };
+const PORTA_DA_API = 4999;
 const gerador = new GeradorDeAmbientes();
 
 after(() => {
@@ -53,7 +64,7 @@ test("garantirImagem explica a falha do build", async () => {
 });
 
 test("criar sobe o container com rótulo, memória e CPUs, e o ambiente volta com o id do rótulo", async () => {
-  const criado = await gerador.criar("node:22-alpine", limites);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
   const [container] = docker.containers();
   assert.deepEqual(criado, { id: criado.id, container_id: container?.id });
   assert.deepEqual(
@@ -62,8 +73,210 @@ test("criar sobe o container com rótulo, memória e CPUs, e o ambiente volta co
   );
 });
 
+test("criar liga o container ao host pelo host-gateway, mesmo sem montagens, e trava no namespace dele tudo que não é a porta da API", async () => {
+  const antes = docker.registro().length;
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
+  const container = docker.containers().find((c) => c.id === criado.container_id);
+  assert.deepEqual([container?.hospedeiros, container?.montagens], [["host.docker.internal:host-gateway"], []]);
+  const chamadas = docker.registro().slice(antes);
+  const regras = chamadas.find(([comando, opcao]) => comando === "run" && opcao === "--rm");
+  const destino = "172.17.0.1";
+  assert.deepEqual(regras, [
+    "run",
+    "--rm",
+    "--label",
+    `fabriquinha.ambiente=${criado.id}-regras-de-rede`,
+    "--memory",
+    "64m",
+    "--cpus",
+    "0.5",
+    "--net",
+    `container:${criado.container_id}`,
+    "--cap-add",
+    "NET_ADMIN",
+    "fabriquinha/regras-de-rede:1",
+    "sh",
+    "-c",
+    `iptables -A OUTPUT -d ${destino} -p tcp --dport ${String(PORTA_DA_API)} -j ACCEPT && iptables -A OUTPUT -d ${destino} -j REJECT`,
+  ]);
+  // O container do Ambiente nasce sem NET_ADMIN: só o das regras o tem, e some ao terminar.
+  const run = chamadas.find(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
+  assert.ok(!run.includes("--cap-add") && !run.includes("--privileged"));
+});
+
+test("a imagem das regras de rede é construída uma vez só", async () => {
+  await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
+  const builds = docker
+    .registro()
+    .filter(([comando, , tag]) => comando === "build" && tag === "fabriquinha/regras-de-rede:1");
+  assert.equal(builds.length, 1);
+});
+
+test("criar elimina o container e repassa a falha quando as regras de rede não são aplicadas", async () => {
+  const antes = docker.containers().length;
+  docker.falharComando("exec", "sem /etc/hosts");
+  await assert.rejects(gerador.criar("node:22-alpine", limites, PORTA_DA_API), /docker exec falhou: sem \/etc\/hosts/);
+  rmSync(join(base, "docker", "falhas", "exec"));
+  assert.equal(docker.containers().length, antes);
+});
+
+test("criar recusa o container que não conhece o host.docker.internal e o elimina", async () => {
+  const semHost = join(base, "sem-host");
+  mkdirSync(semHost);
+  const registro = join(semHost, "chamadas");
+  writeFileSync(
+    join(semHost, "docker"),
+    `#!/bin/sh\necho "$1" >> ${registro}\ncase "$1" in run) echo abc;; exec) echo "127.0.0.1 localhost";; esac\n`,
+  );
+  chmodSync(join(semHost, "docker"), 0o755);
+  process.env.PATH = `${semHost}:${caminhoOriginal ?? ""}`;
+  try {
+    await assert.rejects(
+      gerador.criar("node:22-alpine", limites, PORTA_DA_API),
+      /não conhece o host\.docker\.internal/,
+    );
+    assert.deepEqual(readFileSync(registro, "utf8").trim().split("\n"), ["run", "exec", "rm"]);
+  } finally {
+    process.env.PATH = `${join(base, "docker", "bin")}:${caminhoOriginal ?? ""}`;
+  }
+});
+
+test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas próprias de sessão e de execução e o pacote (ro)", async () => {
+  const raiz = join(base, "fabriquinha-raiz");
+  mkdirSync(raiz);
+  writeFileSync(join(raiz, "fabriquinha.db"), "banco");
+  const pastaDasWorktreesDoProjeto = join(raiz, "worktrees", "projeto");
+  const pacote = join(base, "pacote-pi");
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, {
+    pastaDasWorktreesDoProjeto,
+    raiz_git: raizGit,
+    raiz,
+    pacote,
+  });
+  const montagens = docker
+    .containers()
+    .find((c) => c.id === criado.container_id)
+    ?.montagens.map((montagem) => {
+      const [origem, destino, modo] = montagem.split(":");
+      return { origem, destino, modo };
+    });
+  const mesmoCaminho = (caminho: string, modo: string) => ({ origem: caminho, destino: caminho, modo });
+  const { sessoes, execucoes } = pastasDoAmbiente(raiz, criado.id);
+  // Lista exata: nenhum ~/.pi, ~/.claude nem ~/.codex, nenhum auth.json e nem a pasta inteira de sessões ou de execuções.
+  assert.deepEqual(montagens, [
+    mesmoCaminho(pastaDasWorktreesDoProjeto, "rw"),
+    // O topo do `.git` (commondir, config, hooks, info) é só leitura; escrita só onde o git de uma worktree grava.
+    mesmoCaminho(join(raizGit, ".git"), "ro"),
+    mesmoCaminho(join(raizGit, ".git", "objects"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "refs"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "logs"), "rw"),
+    // `worktrees` fica só leitura, e com ele as worktrees do usuário, existam ou não ao criar o container.
+    mesmoCaminho(join(raizGit, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA), "rw"),
+    { origem: sessoes, destino: join(raiz, "sessoes"), modo: "rw" },
+    { origem: execucoes, destino: join(raiz, "execucoes"), modo: "rw" },
+    mesmoCaminho(pacote, "ro"),
+  ]);
+  const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 9);
+  assert.ok(!run.includes("--mount"));
+  assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
+  assert.deepEqual([readdirSync(sessoes), readdirSync(execucoes)], [[], []]);
+  assert.ok(!existsSync(join(raiz, "ambientes", criado.id, "pi")), "o pi não é montado");
+});
+
+test("criar copia o pi do Auditor, o .claude e o .codex para o home do container (por tar, sem docker cp e sem montagem)", async () => {
+  const dirDoPi = join(base, "pi-do-auditor");
+  const home = join(base, "home-do-usuario");
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(dirDoPi, "auth.json"), '{"anthropic":{"access":"segredo"}}');
+  writeFileSync(join(dirDoPi, "trust.json"), "{}");
+  writeFileSync(join(home, ".claude", "CLAUDE.md"), "instruções");
+  writeFileSync(join(home, ".codex", "config.toml"), "modelo");
+  const antes = docker.registro().length;
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"),
+    '{"anthropic":{"access":"segredo"}}',
+  );
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "trust.json"), "utf8"), "{}");
+  assert.equal(readFileSync(join(homeDoContainer, ".claude", "CLAUDE.md"), "utf8"), "instruções");
+  assert.equal(readFileSync(join(homeDoContainer, ".codex", "config.toml"), "utf8"), "modelo");
+  const chamadas = docker.registro().slice(antes);
+  assert.ok(!chamadas.some(([comando]) => comando === "cp"));
+  assert.ok(
+    !chamadas.some((chamada) =>
+      chamada.some((argumento) => argumento === dirDoPi || argumento.startsWith(`${dirDoPi}:`)),
+    ),
+  );
+  // Sem .claude nem .codex no home do usuário, só o pi vai.
+  const outro = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: join(base, "home-vazio"),
+  });
+  assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
+});
+
+test("criar tira das cópias o token do GitHub, e o resto do arquivo continua igual", async () => {
+  const dirDoPi = join(base, "pi-com-token");
+  const home = join(base, "home-com-token");
+  const token = `ghp_${"a1B2".repeat(9)}`;
+  const tokenFinoDoGithub = `github_pat_${"x9".repeat(15)}`;
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "settings.json"), `{"github":"${token}","tema":"escuro"}`);
+  writeFileSync(join(home, ".claude", "arquivo com espaço.md"), `token ${tokenFinoDoGithub} e ${token}\noutra linha`);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".pi", "agent", "settings.json"), "utf8"),
+    '{"github":"[token-do-github-removido]","tema":"escuro"}',
+  );
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".claude", "arquivo com espaço.md"), "utf8"),
+    "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
+  );
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
+});
+
+test("criar com cópia que falha elimina o container e diz o motivo", async () => {
+  const dirDoPi = join(base, "pi-com-cópia-ruim");
+  const home = join(base, "home-com-cópia-ruim");
+  mkdirSync(dirDoPi);
+  mkdirSync(home);
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(home, ".claude"), "arquivo, e não pasta: o tar não entra nele");
+  const antes = docker.containers().length;
+  await assert.rejects(
+    gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, { dir_do_pi: dirDoPi, home_do_usuario: home }),
+    /não foi possível copiar .*\.claude para o container: saiu com código/,
+  );
+  assert.equal(docker.containers().length, antes);
+});
+
+test("criar com cópia sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {
+  const antes = docker.registro().length;
+  await assert.rejects(
+    gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+      dir_do_pi: join(base, "nao-existe"),
+      home_do_usuario: base,
+    }),
+    /não existe o .*auth\.json.*entre no pi/s,
+  );
+  assert.equal(docker.registro().length, antes);
+});
+
 test("criar sem a imagem falha com a orientação", async () => {
-  await assert.rejects(gerador.criar("fantasma", limites), /docker run falhou: .*Docker está rodando/s);
+  await assert.rejects(gerador.criar("fantasma", limites, PORTA_DA_API), /docker run falhou: .*Docker está rodando/s);
 });
 
 test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou não", async () => {
@@ -71,7 +284,7 @@ test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou n�
   docker.semearContainer({ rotulos: { "com.docker.compose.project": "sonarqube" } });
   docker.semearContainer({});
   const doUsuario = docker.containers().length;
-  const criado = await gerador.criar("node:22-alpine", limites);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
   assert.equal(docker.containers().length, doUsuario + 1);
   const listados = await gerador.listarDaFabriquinha();
   assert.equal(listados.length, antes + 1);
@@ -80,7 +293,7 @@ test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou n�
 });
 
 test("limpar roda no container o que mata os processos e esvazia /tmp e a pasta de trabalho", async () => {
-  const criado = await gerador.criar("node:22-alpine", limites);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
   await gerador.limpar(criado);
   const exec = docker
     .containers()
@@ -96,7 +309,7 @@ test("limpar de container que não existe mais falha", async () => {
 });
 
 test("eliminar remove o container, e um que já não existe está eliminado", async () => {
-  const criado = await gerador.criar("node:22-alpine", limites);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
   await gerador.eliminar(criado);
   assert.ok(!docker.containers().some((c) => c.id === criado.container_id));
   await gerador.eliminar(criado);

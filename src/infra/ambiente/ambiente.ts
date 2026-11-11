@@ -14,6 +14,8 @@ const CREDENCIAIS = new Set([
   "SONAR_TOKEN",
 ]);
 
+export const ehCredencialDeHospedagemOuSonar = (nome: string): boolean => CREDENCIAIS.has(nome);
+
 /**
  * `base` sem as credenciais, com `gh` e `az` lendo a configuração de `dirVazio`, onde não há login salvo. Para o que
  * roda código do agente: o pi e os coletores de testes e fitness.
@@ -21,7 +23,7 @@ const CREDENCIAIS = new Set([
 export function ambienteSemCredenciais(base: NodeJS.ProcessEnv, dirVazio: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [nome, valor] of Object.entries(base))
-    if (valor !== undefined && !CREDENCIAIS.has(nome)) env[nome] = valor;
+    if (valor !== undefined && !ehCredencialDeHospedagemOuSonar(nome)) env[nome] = valor;
   return { ...env, GH_CONFIG_DIR: dirVazio, AZURE_CONFIG_DIR: dirVazio };
 }
 
@@ -77,4 +79,9 @@ export interface Ambiente {
   /** Também serve à recuperação da subida, com o identificador gravado antes do reinício. */
   sinalizar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): Promise<void>;
   caminhoNoAmbiente(caminhoNoHost: string): string;
+  /**
+   * Põe a pasta do processo (`E-<id>`) e a pasta da sessão do pi onde o Ambiente as enxerga, antes de o processo
+   * nascer. No host local elas já estão ao alcance; no container, só as pastas montadas nele ficam visíveis.
+   */
+  abrigarProcesso(pastaDaExecucao: string, sessao: string): void;
 }

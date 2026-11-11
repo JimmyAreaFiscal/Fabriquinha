@@ -8,7 +8,7 @@ import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../ambiente/ambiente.ts";
 import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
-import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto } from "./worktree.ts";
+import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto, podarWorktreesNoCore } from "./worktree.ts";
 
 type ProjetoLimpeza = Pick<Projeto, "nome" | "raiz_git">;
 
@@ -26,15 +26,8 @@ const pendenciaDaWorktree = (caminho: string): string[] => (existsSync(caminho) 
 
 /** `branch_local:<nome>` e `branch_remota:<nome>` da branch que a Fabriquinha criou; a posse vive na config da branch local. */
 async function pendenciasDaBranch(ambiente: Ambiente, raizGit: string, branch: string): Promise<string[]> {
-  const posse = await exigirGitNoAmbiente(
-    ambiente,
-    raizGit,
-    "config",
-    "--default",
-    "",
-    "--get",
-    `branch.${branch}.fabriquinha`,
-  );
+  // A posse mora na config do clone, que o container vê congelada e só em leitura: quem a lê e a apaga é o core.
+  const posse = await exigirGit(raizGit, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
   if (posse.trim() === "") return [];
   const pendentes: string[] = [];
   if (await refLocal(ambiente, raizGit, branch)) pendentes.push(`branch_local:${branch}`);
@@ -75,11 +68,11 @@ export async function pendenciasDeLimpeza(
 async function executar(ambiente: Ambiente, repo: string, tipo: string, alvo: string): Promise<boolean> {
   if (tipo === "worktree") {
     await gitNoAmbiente(ambiente, repo, "worktree", "remove", "--force", alvo);
-    await gitNoAmbiente(ambiente, repo, "worktree", "prune");
+    await podarWorktreesNoCore(repo); // o container não escreve em `.git/worktrees`
     return !existsSync(alvo);
   }
   if (tipo === "branch_local") {
-    await gitNoAmbiente(ambiente, repo, "branch", "-D", alvo);
+    await git(repo, "branch", "-D", alvo);
     return !(await refLocal(ambiente, repo, alvo));
   }
   if (tipo === "branch_remota") {

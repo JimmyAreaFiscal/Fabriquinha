@@ -1,6 +1,6 @@
 // A guarda dos anexos de uma evidência (F3 §5, passos 4 e 6): origem, classe e limite de cada arquivo, e a guarda.
 import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync, realpathSync } from "node:fs";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Ambiente } from "../../infra/ambiente/ambiente.ts";
@@ -85,6 +85,15 @@ export interface Origens {
 
 const dentro = (raiz: string, alvo: string) => relative(raiz, alvo).split(sep)[0] !== "..";
 
+/** A origem sem links: o caminho do descritor vem resolvido, e `abrigarProcesso` deixa a saída como link para a pasta do Ambiente. */
+function origemReal(raiz: string): string {
+  try {
+    return realpathSync(raiz);
+  } catch {
+    return raiz; // a origem ainda não existe (por exemplo, sem diretório de saída): vale o nome dado
+  }
+}
+
 /**
  * Abre o anexo sem seguir link no último componente e confere a origem pelo caminho do próprio descritor
  * (F3 §3.2): link de pasta no meio do caminho é resolvido, e trocar o arquivo depois da abertura não muda o que se
@@ -115,7 +124,7 @@ function abrir(caminho: string, origens: Origens, abrirEm: string = caminho): nu
     // corrida. Se o arquivo foi trocado depois da abertura, vem com " (deleted)": é o último lugar dele, e o
     // conteúdo é o que estava lá.
     const alvo = readlinkSync(`/proc/self/fd/${String(fd)}`);
-    if (![origens.worktree, origens.saida].some((raiz) => dentro(raiz, alvo))) {
+    if (![origens.worktree, origens.saida].some((raiz) => dentro(origemReal(raiz), alvo))) {
       throw new ErroDeRegra(`${caminho} está fora ${origens.fora}`, `copie-o para ${origens.copie}`);
     }
     const estado = fstatSync(fd);

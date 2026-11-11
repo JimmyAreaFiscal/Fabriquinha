@@ -5,15 +5,22 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
+import { inserirAmbienteAlocado } from "../../armazenamento/ambientes.ts";
+import { AmbienteContainer } from "../../infra/ambiente/container/ambiente_container.ts";
+import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
+import { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
+import { montarConjuntoDoServico } from "../espaco/ambiente_do_servico.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { executar } from "../../infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "../auditor_automatico.ts";
-import { type Relogio, relogioFixo } from "../../nucleo/relogio.ts";
+import { type Relogio, relogioDoSistema, relogioFixo } from "../../nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
 import { atividadeDo, condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA, type PedidoDeProcesso } from "./condutor.ts";
 
@@ -541,6 +548,92 @@ test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chego
   }
 });
 
+const EM = "2026-10-11T12:00:00.000Z";
+
+/** Um ticket em execução com um processo aberto, de um pi que a instância anterior lançou no Ambiente `ambienteId`. */
+function ticketComProcessoAberto(banco: DatabaseSync, ambienteId: string, grupoProcesso: number): void {
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('d', '/nao/existe', 'main', 'github', 'k');
+    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${EM}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+      VALUES ('I-1', 1, 'implementar', 'em_execucao', '${EM}');
+    INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1')`);
+  banco
+    .prepare(
+      "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo, ambiente_id) VALUES ('e1', 's1', ?, 0, ?, ?)",
+    )
+    .run(EM, grupoProcesso, ambienteId);
+}
+
+const execsNoContainer = (docker: ReturnType<typeof instalarDockerFalso>, container: string) =>
+  docker.registro().filter(([comando, alvo]) => comando === "exec" && alvo === container);
+
+test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker exec no container) e fecha o ticket como serviço reiniciado", async () => {
+  const dir = mkdtempSync(join(base, "recuperacao-"));
+  const docker = instalarDockerFalso(join(dir, "docker"));
+  const { id: container_id } = docker.semearContainer({});
+  const { banco, fechar } = abrirBancoTemporario();
+  try {
+    inserirAmbienteAlocado(banco, {
+      id: "amb-1",
+      container_id,
+      imagem: "alpine",
+      criado_em: EM,
+      alocado_para: "I-1",
+    });
+    ticketComProcessoAberto(banco, "amb-1", 4321);
+    montarConjuntoDoServico(
+      () =>
+        new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+          raiz: dir,
+          porta_da_api: 3000,
+          home_do_usuario: dir,
+        }),
+    );
+
+    condutor.recuperarNaSubida(banco);
+
+    await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
+    const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
+    assert.match(String(roteiro), /^kill -KILL .*\/pids\/4321 /);
+    assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
+    assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM tentativa").get(), {
+      resultado_tipo: "falha_infraestrutura",
+      causa: "servico_reiniciado",
+      motivo: "serviço reiniciado",
+    });
+  } finally {
+    montarConjuntoDoServico(() => undefined);
+    fechar();
+  }
+});
+
+test("recuperarNaSubida de processo de um container que o conjunto não conhece, ou sem conjunto, não sinaliza ninguém e ainda fecha o ticket", () => {
+  const dir = mkdtempSync(join(base, "recuperacao-"));
+  const docker = instalarDockerFalso(join(dir, "docker"));
+  for (const conjuntoMontado of [true, false]) {
+    const { banco, fechar } = abrirBancoTemporario();
+    try {
+      ticketComProcessoAberto(banco, "amb-sumido", 4321);
+      if (conjuntoMontado)
+        montarConjuntoDoServico(
+          () =>
+            new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+              raiz: dir,
+              porta_da_api: 3000,
+              home_do_usuario: dir,
+            }),
+        );
+      condutor.recuperarNaSubida(banco);
+      assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
+    } finally {
+      montarConjuntoDoServico(() => undefined);
+      fechar();
+    }
+  }
+  assert.deepEqual(docker.registro(), []);
+});
+
 test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que falhou", async () => {
   const pi =
     (codigo: number): typeof executar =>
@@ -548,4 +641,91 @@ test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que 
       Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
   assert.deepEqual(await condutor.consultar("pergunta", undefined, 1000, pi(0)), { saida: "resposta", uso: [] });
   assert.equal(await condutor.consultar("pergunta", undefined, 1000, pi(1)), undefined);
+});
+
+/** Um pi falso em `[ao vivo]` (que não termina sozinho) lançado pelo AmbienteContainer, com o condutor acompanhando-o. */
+async function lancarPiNoContainer() {
+  const dir = mkdtempSync(join(base, "container-"));
+  const dirDoDockerFalso = join(dir, "docker");
+  const docker = instalarDockerFalso(dirDoDockerFalso);
+  const { id: container_id } = docker.semearContainer({});
+  const ambienteContainer = new AmbienteContainer({
+    id: "amb-1",
+    container_id,
+    bin_do_pacote: join(dir, "pacote-pi", "bin"),
+    raiz: dir,
+    url_da_api: "http://host.docker.internal:3000",
+  });
+  const id = `ticket-no-container-${String(++n)}`;
+  let grupoDoPi = 0;
+  let ambienteDoPiGravado = "";
+  const fim = condutor.acompanhar(id, () =>
+    condutor.iniciar({
+      execucao: { id, sessaoPi: id, modo: "autonomo" },
+      args: [],
+      cwd: dir,
+      ambiente: ambienteContainer,
+      env: { ...process.env },
+      log: join(dir, "log"),
+      prompt: "[ao vivo]",
+      limiteMin: 1,
+      aoLancar: (grupo, ambienteId) => {
+        grupoDoPi = grupo;
+        ambienteDoPiGravado = ambienteId;
+      },
+    }),
+  );
+  const arquivoDoPid = () => join(dirDoDockerFalso, "pids", container_id, String(grupoDoPi));
+  await ate(
+    () => grupoDoPi !== 0 && existsSync(arquivoDoPid()) && readFileSync(arquivoDoPid(), "utf8").trim() !== "",
+    "o pi no container",
+  );
+  const grupoNoHost = Number(readFileSync(arquivoDoPid(), "utf8"));
+  const sinaisPeloDocker = () =>
+    docker
+      .registro()
+      .filter(
+        ([comando, alvo, , , roteiro]) =>
+          comando === "exec" && alvo === container_id && String(roteiro).startsWith("kill -"),
+      )
+      .map(([, , , , roteiro]) => String(roteiro).split(" ")[1]);
+  const piEstaVivo = () => {
+    try {
+      process.kill(-grupoNoHost, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return { id, fim, sinaisPeloDocker, piEstaVivo, grupoNoHost, ambienteDoPiGravado: () => ambienteDoPiGravado };
+}
+
+test("o pi no container avisa o Ambiente que o lançou; morto por sinal lá dentro sai com 137 e exige o Auditor, sem virar reinício", async () => {
+  const { id, fim, grupoNoHost, ambienteDoPiGravado } = await lancarPiNoContainer();
+  assert.equal(ambienteDoPiGravado(), "amb-1");
+  process.kill(-grupoNoHost, "SIGKILL");
+  const falha = await fim;
+  condutor.deixarDeAcompanhar(id);
+  assert.equal(falha?.tipo, "interrompida");
+  assert.match(falha.motivo, /código 137/);
+});
+
+test("interromper sinaliza o pi pelo Ambiente que o lançou: SIGTERM por docker exec dentro do container", async () => {
+  const { id, fim, sinaisPeloDocker, piEstaVivo } = await lancarPiNoContainer();
+  assert.equal(piEstaVivo(), true);
+  assert.equal(condutor.interromper(id), true);
+  await fim;
+  condutor.deixarDeAcompanhar(id);
+  // Depois do fim, o harness ainda manda TERM e KILL de limpeza; o que prova o caminho é o primeiro sinal.
+  assert.equal(sinaisPeloDocker()[0], "-TERM");
+  assert.equal(piEstaVivo(), false);
+});
+
+test("a parada do serviço passado o limite mata o pi pelo Ambiente que o lançou: SIGKILL por docker exec", async () => {
+  const { id, fim, sinaisPeloDocker, piEstaVivo } = await lancarPiNoContainer();
+  await condutor.aguardarTodos(50);
+  await fim;
+  condutor.deixarDeAcompanhar(id);
+  assert.equal(sinaisPeloDocker()[0], "-KILL");
+  assert.equal(piEstaVivo(), false);
 });

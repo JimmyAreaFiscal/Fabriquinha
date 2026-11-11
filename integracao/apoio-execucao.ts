@@ -1,7 +1,7 @@
 // Apoio comum aos testes que levam uma demanda à execução (CA-SDLC-07 em diante): pi falso com portão, despacho com as
 // verificações injetadas e a demanda com o plano aprovado. Cada arquivo de teste roda no seu processo, então o pi falso é por arquivo.
 import assert from "node:assert/strict";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
@@ -18,40 +18,68 @@ import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
-import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
+import { instalarPiFalso, type PassoPi } from "../apoio-testes/pi_falso.ts";
 
 export const pi = instalarPiFalso(base);
 
-// O "agente" do pi falso: espera o portão (o teste o abre) e então escreve na worktree, sem submeter nada.
-export const portao = join(base, "portao");
-process.env.FALSO_PI_PORTAO = portao;
-export const agente = join(base, "agente-portao.mjs");
-writeFileSync(
-  agente,
-  `import { appendFileSync, existsSync } from "node:fs";
+/**
+ * Os módulos do "agente" do pi falso, em `pasta`: esperam o portão (o arquivo `portao` ao lado deles, que o teste abre,
+ * e não uma variável de ambiente, que o pi no container não recebe). `agente` então escreve na worktree, sem submeter
+ * nada; `agenteMudo` não escreve: o teste submete as evidências do agente enquanto ele espera.
+ */
+function gravarModulosDoAgente(pasta: string) {
+  const modulos = {
+    portao: join(pasta, "portao"),
+    agente: join(pasta, "agente-portao.mjs"),
+    agenteMudo: join(pasta, "agente-mudo.mjs"),
+  };
+  const esperarOPortao = `  const portao = new URL("portao", import.meta.url);
+  while (!existsSync(portao)) await new Promise((r) => setTimeout(r, 20));`;
+  writeFileSync(
+    modulos.agente,
+    `import { appendFileSync, existsSync } from "node:fs";
 export default async () => {
-  while (!existsSync(process.env.FALSO_PI_PORTAO)) await new Promise((r) => setTimeout(r, 20));
+${esperarOPortao}
   appendFileSync("feature.txt", "linha\\n");
 };
 `,
-);
-/** Espera o portão como o `agente`, mas não escreve: o teste submete as evidências do agente enquanto ele espera. */
-export const agenteMudo = join(base, "agente-mudo.mjs");
-writeFileSync(
-  agenteMudo,
-  `import { existsSync } from "node:fs";
+  );
+  writeFileSync(
+    modulos.agenteMudo,
+    `import { existsSync } from "node:fs";
 export default async () => {
-  while (!existsSync(process.env.FALSO_PI_PORTAO)) await new Promise((r) => setTimeout(r, 20));
+${esperarOPortao}
 };
 `,
-);
+  );
+  return modulos;
+}
+const modulosDoArquivoDeTeste = gravarModulosDoAgente(base);
+export const { portao, agente, agenteMudo } = modulosDoArquivoDeTeste;
+
+// Onde o pi falso e o portão valem agora: a pasta do arquivo de teste ou, depois de `levarPiFalsoParaOContainer`, o container.
+let piEPortaoEmUso = { pi, ...modulosDoArquivoDeTeste };
+
+/**
+ * Leva o pi falso, o roteiro, o registro, o portão e os módulos do agente para `pasta`, que o container monta no mesmo
+ * caminho (`.git/objects/pi-falso` do repositório), e faz o core chamar o `pi` da imagem do projeto de teste em vez do arquivo do host.
+ * Devolve o pi falso de lá: o teste o roteiriza e lê o registro dele.
+ */
+export function levarPiFalsoParaOContainer(pasta: string) {
+  mkdirSync(pasta, { recursive: true });
+  const piDoContainer = instalarPiFalso(pasta);
+  piEPortaoEmUso = { pi: piDoContainer, ...gravarModulosDoAgente(pasta) };
+  process.env.FABRIQUINHA_PI = "pi";
+  return piDoContainer;
+}
+
 export const fecharPortao = () => {
-  rmSync(portao, { force: true });
+  rmSync(piEPortaoEmUso.portao, { force: true });
 };
 export const abrirPortao = () => {
-  writeFileSync(portao, "");
+  writeFileSync(piEPortaoEmUso.portao, "");
 };
-export const pisAteAgora = () => pi.prompts().length;
+export const pisAteAgora = () => piEPortaoEmUso.pi.prompts().length;
 
 export const verificacoes = (passou: boolean): RegistroDaVerificacao[] =>
   (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((t) => verificacaoDeTeste(t, passou));
@@ -66,9 +94,20 @@ export interface RodadaPlano {
   tickets: number;
 }
 
-/** Demanda aprovada que o `planejar` planejou: o plano está submetido e a demanda espera o Auditor em `gate_planejamento`. */
-export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPlano[]): Promise<void> {
-  pi.roteirizar([{ uso: null }]);
+const PASSO_DO_PLANEJAMENTO: PassoPi = { uso: null };
+
+/**
+ * Demanda aprovada que o `planejar` planejou: o plano está submetido e a demanda espera o Auditor em `gate_planejamento`.
+ * O pi do planejamento é interrompido pelo teste; com `passoDoPi.sai`, ele sai sozinho ao receber o prompt (o pi no
+ * container não é interrompido por sinal do serviço) e a execução termina sem decidir nada, como a interrompida.
+ */
+export async function planejarDemanda(
+  c: Cenario,
+  id: string,
+  rodadas: RodadaPlano[],
+  passoDoPi: PassoPi = PASSO_DO_PLANEJAMENTO,
+): Promise<void> {
+  piEPortaoEmUso.pi.roteirizar([passoDoPi]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
   const fim = new ConducaoDePlanejar({
     banco: c.banco,
@@ -76,8 +115,8 @@ export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPla
     condutor,
     registro: anotar,
   }).conduzir(Endereco.doTicket(id, 2));
-  await esperar(() => pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
-  interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
+  await esperar(() => piEPortaoEmUso.pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
+  if (!passoDoPi.sai) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;
   let ticket_id = 0;
   const tickets = rodadas.flatMap((r, i) =>
@@ -111,9 +150,13 @@ export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPla
 }
 
 /** Demanda aprovada, planejada e com o plano aprovado (as worktrees prontas): em `em_execucao`, com os tickets abertos. */
-export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Promise<string> {
+export async function demandaEmExecucao(
+  c: Cenario,
+  rodadas: RodadaPlano[],
+  passoDoPiDoPlanejamento?: PassoPi,
+): Promise<string> {
   const id = await demandaAprovada(c);
-  await planejarDemanda(c, id, rodadas);
+  await planejarDemanda(c, id, rodadas, passoDoPiDoPlanejamento);
   await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, id).demanda.estado, "em_execucao");
   return id;
@@ -173,7 +216,7 @@ export async function despacharComAgente(
   agir: () => Promise<void> | void,
 ): Promise<void> {
   fecharPortao();
-  pi.roteirizar([{ agente: agenteMudo, uso: null }]);
+  piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
   const fins = cicloDoDespacho(c.banco, c.config, deps);
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");

@@ -10,6 +10,7 @@ import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
 import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
+import { chavesDeProvedorDoLlm } from "../ambiente/container/ambiente_container.ts";
 import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
@@ -94,6 +95,10 @@ function usoDaSessaoEm(dir: string): LinhaDeUso[] {
   return readdirSync(dir).flatMap((nome) => lerUsoDoPi(readFileSync(join(dir, nome), "utf8"), 0, Infinity));
 }
 
+/** Os arquivos `<instante>_<sessaoPi>.jsonl` de `dir`; `dir` sem a pasta não tem nenhum. */
+const arquivosDaSessaoEm = (dir: string, sessaoPi: string): string[] =>
+  existsSync(dir) ? readdirSync(dir).filter((nome) => nome.endsWith(`_${sessaoPi}.jsonl`)) : [];
+
 export class HarnessPi {
   /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
   binarioPi(): string {
@@ -113,7 +118,7 @@ export class HarnessPi {
       "--mode",
       "rpc",
       "--session-dir",
-      join(l.raiz, "sessoes"),
+      this.pastaDaSessao(l.raiz, l.sessaoPi),
       "--session-id",
       l.sessaoPi,
       ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.nome] : []),
@@ -147,8 +152,23 @@ export class HarnessPi {
    * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
    * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
    * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * No Ambiente `container` o env começa vazio, sem `process.env`: só as chaves de provedor do LLM e as variáveis da
+   * Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio AmbienteContainer.
    */
-  ambiente(raiz: string, dir: string, execucao?: number | string): NodeJS.ProcessEnv {
+  ambiente(
+    raiz: string,
+    dir: string,
+    execucao?: number | string,
+    tipoDoAmbiente: Ambiente["tipo"] = "host_local",
+  ): NodeJS.ProcessEnv {
+    if (tipoDoAmbiente === "container") {
+      return {
+        ...chavesDeProvedorDoLlm(process.env),
+        ...(execucao === undefined
+          ? { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
+          : { FABRIQUINHA_SAIDA: join(dir, "saida") }),
+      };
+    }
     const {
       FABRIQUINHA_EXECUCAO: _execucaoHerdada,
       FABRIQUINHA_ROOT: _raizHerdada,
@@ -285,18 +305,29 @@ export class HarnessPi {
   }
 
   /**
-   * O arquivo JSONL que o pi grava em `<raiz>/sessoes/<instante>_<sessaoPi>.jsonl`, ou `undefined` se ainda não existe.
-   * Mais de um arquivo para o mesmo ID é erro (F6 §3.1): não há como saber qual é a sessão.
+   * A pasta onde o pi grava a sessão: `<raiz>/sessoes/<sessaoPi>`, uma por sessão, porque o container do Espaço monta
+   * só a da sessão dele. A sessão que nasceu antes disso, solta em `<raiz>/sessoes`, continua lá.
+   */
+  pastaDaSessao(raiz: string, sessaoPi: string): string {
+    const dirPlano = join(raiz, "sessoes");
+    return arquivosDaSessaoEm(dirPlano, sessaoPi).length > 0 ? dirPlano : join(dirPlano, sessaoPi);
+  }
+
+  /**
+   * O arquivo JSONL que o pi grava em `<raiz>/sessoes/<sessaoPi>/<instante>_<sessaoPi>.jsonl` (ou, nas sessões antigas,
+   * direto em `<raiz>/sessoes`), ou `undefined` se ainda não existe. Mais de um arquivo para o mesmo ID é erro (F6 §3.1):
+   * não há como saber qual é a sessão.
    */
   arquivoDaSessao(raiz: string, sessaoPi: string): string | undefined {
-    const dir = join(raiz, "sessoes");
-    const achados = existsSync(dir) ? readdirSync(dir).filter((nome) => nome.endsWith(`_${sessaoPi}.jsonl`)) : [];
+    const achados = [join(raiz, "sessoes"), join(raiz, "sessoes", sessaoPi)].flatMap((dir) =>
+      arquivosDaSessaoEm(dir, sessaoPi).map((nome) => join(dir, nome)),
+    );
     if (achados.length > 1) {
       throw new ErroDeRegra(
-        `a sessão ${sessaoPi} tem ${String(achados.length)} arquivos em ${dir}: ${achados.join(", ")}`,
+        `a sessão ${sessaoPi} tem ${String(achados.length)} arquivos: ${achados.join(", ")}`,
         "deixe só o arquivo da sessão e apague as cópias",
       );
     }
-    return achados[0] && join(dir, achados[0]);
+    return achados[0];
   }
 }

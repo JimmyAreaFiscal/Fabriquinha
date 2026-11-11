@@ -11,6 +11,7 @@ import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
+  gravarAmbienteDoProcesso,
   gravarTokenDoProcesso,
   processosAbertos,
   processoVivoDoToken,
@@ -209,9 +210,21 @@ test("CA-10: execuções abertas de qualquer ticket, com grupo de processo nulo 
   comTrabalhosDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarProcesso(x.execucoes, "e1", em, false) }));
   assert.deepEqual(ticketsComPiAtivo(b), new Set(["I-1.T1"]));
   assert.deepEqual(processosAbertos(b), [
-    { id: "e2", trabalho_id: "s1", demanda_id: "I-1", ticket_id: 1, grupo_processo: 4321 },
-    { id: "e3", trabalho_id: "s2", demanda_id: "I-1", ticket_id: 2, grupo_processo: null },
+    { id: "e2", trabalho_id: "s1", demanda_id: "I-1", ticket_id: 1, grupo_processo: 4321, ambiente_id: "host_local" },
+    { id: "e3", trabalho_id: "s2", demanda_id: "I-1", ticket_id: 2, grupo_processo: null, ambiente_id: "host_local" },
   ]);
+});
+
+test("o Ambiente gravado no processo aberto volta em processosAbertos, para a recuperação da subida", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [{ ...execucao("e1"), grupo_processo: 77 }], []);
+  gravarAmbienteDoProcesso(b, "e1", "amb-9");
+  assert.equal(processosAbertos(b)[0]?.ambiente_id, "amb-9");
+  comTrabalhosDoTicket(b, ref, (x) => ({
+    ...x,
+    execucoes: x.execucoes.map((e) => ({ ...e, grupo_processo: 78 })),
+  }));
+  assert.equal(processosAbertos(b)[0]?.ambiente_id, "amb-9"); // o upsert do processo não o apaga
 });
 
 test("o ticket dono do trabalho e os trabalhos da demanda; id desconhecido volta sem ticket", () => {
