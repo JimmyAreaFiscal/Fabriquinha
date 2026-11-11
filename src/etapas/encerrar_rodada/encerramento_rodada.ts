@@ -10,12 +10,12 @@ import { ticketAtualDaEtapa } from "../../sdlc/nucleo/item_de_trabalho/item_de_t
 import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { conferirPullRequestRodada } from "../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
-import { LIMITE_DO_CORPO } from "../../qualidade/aplicacao/pull_request/pr.ts";
+import { LIMITE_DO_CORPO } from "../../repositorio/aplicacao/corpo_do_pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
-import { produtividadeDaRodada } from "../../custos/aplicacao/produtividade_rodada.ts";
-import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { produtividadeDaRodada } from "../../metricas/aplicacao/produtividade_rodada.ts";
+import { varrerCommitsHumanos } from "../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
@@ -24,8 +24,8 @@ import {
   carregarTrabalhosDoTicket,
 } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../../repositorio/infra/hospedagem/pr.ts";
-import { ConferenciaDoPR } from "../../qualidade/infra/conferencia_do_pr.ts";
-import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
+import { ConferenciaDoPR } from "../../verificacao/infra/conferencia_do_pr.ts";
+import { montarVerificacoesDaEtapa } from "../../verificacao/infra/verificacao.ts";
 import { exigirGit } from "../../repositorio/infra/worktree/worktree.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";

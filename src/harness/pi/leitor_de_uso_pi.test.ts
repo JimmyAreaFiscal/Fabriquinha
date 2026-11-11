@@ -3,7 +3,7 @@
 // `subagents` do Auditor, com `cost` já somado e `turns`.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { colunasDoModelo } from "../../custos/nucleo/uso.ts";
+import { colunasDoModelo } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
 
 const SESSAO = "019f7639-8a5d-7794-9dd5-03edad5607ab";

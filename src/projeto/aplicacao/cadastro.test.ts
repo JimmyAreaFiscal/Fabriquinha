@@ -13,7 +13,7 @@ import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../compartilhado/infra/registro.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { cursorDaBase } from "../../custos/armazenamento/commits_humanos.ts";
+import { cursorDaBase } from "../../repositorio/armazenamento/commits_humanos.ts";
 import { buscarProjeto, listarProjetos } from "../armazenamento/projetos.ts";
 import {
   cadastrarProjetoDoFormulario,

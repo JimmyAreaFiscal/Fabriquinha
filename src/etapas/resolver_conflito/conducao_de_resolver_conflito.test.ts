@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../sdlc/nucleo/despacho/despacho.ts";
 import { podeTentarEncerramento } from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
-import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,

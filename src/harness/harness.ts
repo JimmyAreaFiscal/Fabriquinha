@@ -3,7 +3,7 @@
 // Só tipos: o adapter é quem tem valor.
 import type { Ambiente, IdentificadorDoProcesso } from "../sandbox/infra/ambiente.ts";
 import type { Effort, Modelo, ModoTrabalho } from "../compartilhado/nucleo/primitivos.ts";
-import type { LinhaDeUso } from "../custos/nucleo/uso.ts";
+import type { LinhaDeUso } from "../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
 
 /**
  * Um evento ou resposta do agente: um objeto JSON por linha do stdout, que o condutor lê pelo `type`.

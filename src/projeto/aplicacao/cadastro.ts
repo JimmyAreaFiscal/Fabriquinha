@@ -30,7 +30,7 @@ import {
   parDoModelo,
   projetoComConfiguracoesDasEtapas,
 } from "./configuracao_do_agente.ts";
-import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { varrerCommitsHumanos } from "./varredura_de_commits_humanos.ts";
 
 export { buscarProjeto, listarProjetos, projetoExistente } from "../armazenamento/projetos.ts";
 

@@ -5,7 +5,7 @@
 import type { EstadoDemanda } from "../../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import type { TipoMetrica } from "../../../etapas/definicao/tipos_declaraveis.ts";
-import type { LinhaDeUso } from "../../../custos/nucleo/uso.ts";
+import type { LinhaDeUso } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
 import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../contrato/metricas.ts";
 import {
   caminhoDaDemanda,

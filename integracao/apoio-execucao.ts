@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDITOR, type Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { RegistroDaVerificacao } from "../src/qualidade/aplicacao/evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "../src/verificacao/aplicacao/coleta_das_verificacoes.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { decidirGate } from "../src/etapas/gates.ts";

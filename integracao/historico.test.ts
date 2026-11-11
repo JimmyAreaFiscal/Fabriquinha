@@ -16,10 +16,10 @@ import {
   encaminharAchado,
   estadoDaAvaliacao,
   iniciarAvaliacao,
-} from "../src/qualidade/aplicacao/avaliacao/avaliacao.ts";
+} from "../src/avaliacao/aplicacao/melhoria/avaliacao.ts";
 import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { metricasDasEtapas } from "../src/custos/aplicacao/metricas/metricas_das_etapas.ts";
+import { metricasDasEtapas } from "../src/metricas/aplicacao/registro_das_metricas.ts";
 import { achadoDaDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../src/sdlc/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";

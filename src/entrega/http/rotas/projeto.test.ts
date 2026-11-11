@@ -10,7 +10,7 @@ import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import type { MetricasDoMes } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
+import type { MetricasDoMes } from "../../../metricas/aplicacao/metricas_do_periodo.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";

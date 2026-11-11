@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ErroDeReprovacao } from "../../compartilhado/nucleo/erros.ts";
 import { migrar } from "../../compartilhado/armazenamento/banco.ts";
-import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
 import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
 import type { ComandoNoAmbiente } from "../../sandbox/infra/ambiente.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";

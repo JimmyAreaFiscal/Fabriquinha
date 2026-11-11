@@ -8,8 +8,8 @@ import {
   encaminharAchado,
   enviarNaAvaliacao,
   iniciarAvaliacao,
-} from "../../../qualidade/aplicacao/avaliacao/avaliacao.ts";
-import { consultarAvaliacoes, consultarDemandasDoPeriodo } from "../../../qualidade/aplicacao/consultas/avaliacoes.ts";
+} from "../../../avaliacao/aplicacao/melhoria/avaliacao.ts";
+import { consultarAvaliacoes, consultarDemandasDoPeriodo } from "../../../avaliacao/aplicacao/consultas/avaliacoes.ts";
 import {
   AchadoEncaminhado,
   AvaliacaoCriada,

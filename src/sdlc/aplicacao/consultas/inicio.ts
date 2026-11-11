@@ -16,7 +16,7 @@ import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts"
 import { ticketsComPiAtivo } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../../entrega/contrato/inicio.ts";
 import { sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
-import { metricasDosMeses } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
+import { metricasDosMeses } from "../../../metricas/aplicacao/metricas_do_periodo.ts";
 import { bloqueiosDaDemanda } from "./pendencias/bloqueios.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias/pendencias.ts";
 

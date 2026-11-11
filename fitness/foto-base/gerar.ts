@@ -62,7 +62,7 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/qualidade/aplicacao/avaliacao/avaliacao.md",
+  "src/avaliacao/aplicacao/melhoria/avaliacao.md",
   ...arquivosMarkdown("src/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
@@ -70,7 +70,7 @@ for (const caminho of [
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
   const caminhoNaFotoBase = caminho
     .replace(/^src\/etapas\/[^/]+\//, "src/execucao/etapas/")
-    .replace("src/qualidade/aplicacao/avaliacao/", "src/execucao/");
+    .replace("src/avaliacao/aplicacao/melhoria/", "src/execucao/");
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 

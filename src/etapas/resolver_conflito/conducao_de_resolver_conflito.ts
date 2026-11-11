@@ -6,7 +6,7 @@ import { DEFINICAO_DO_RESOLVER_CONFLITO } from "./definicao.ts";
 import type { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { concluirResolucaoConflito } from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
 import { comDemanda } from "../../sdlc/armazenamento/demandas.ts";
-import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
 import type { DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";
 

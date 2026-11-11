@@ -27,18 +27,18 @@ import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.t
 import type { Projeto } from "../../projeto/nucleo/projeto.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
 import { carregarTrabalhosDaDemanda } from "../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { lerUsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
+import { lerUsoDeclarado } from "../../trabalho_agentico/armazenamento/uso_declarado.ts";
 import { logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import { pendenciasDeLimpeza, sobrasDaDemanda } from "../../repositorio/infra/worktree/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao } from "../../repositorio/infra/hospedagem/pr.ts";
-import { ConferenciaDoPR } from "../../qualidade/infra/conferencia_do_pr.ts";
-import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
+import { ConferenciaDoPR } from "../../verificacao/infra/conferencia_do_pr.ts";
+import { montarVerificacoesDaEtapa } from "../../verificacao/infra/verificacao.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "./encerramento_demanda.ts";
 import { submeterEvidencia } from "../../sdlc/aplicacao/evidencias/submeter.ts";
 import { publicarPRFinal } from "./publicacao_do_pr_final.ts";
-import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { varrerCommitsHumanos } from "../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { ConducaoDeterministica, type PassoDaEtapa, type ResultadoDoPasso } from "../conducao/conducao_de_etapa.ts";
 import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 

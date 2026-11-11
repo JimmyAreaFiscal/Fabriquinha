@@ -18,7 +18,7 @@ import { escrever, migrar, novoId } from "../compartilhado/armazenamento/banco.t
 import { MIGRACOES } from "../compartilhado/armazenamento/migracoes/migracoes.ts";
 import { registrarProjeto } from "../projeto/aplicacao/cadastro.ts";
 import { Configuracao, salvarConfiguracao } from "../compartilhado/armazenamento/servico.ts";
-import { criarUsuarioSimulado } from "../qualidade/armazenamento/simulacao.ts";
+import { criarUsuarioSimulado } from "../avaliacao/armazenamento/simulacao.ts";
 import { condutor } from "../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../sandbox/aplicacao/configuracao_do_ambiente.ts";

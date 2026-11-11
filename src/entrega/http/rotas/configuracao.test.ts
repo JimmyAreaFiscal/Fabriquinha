@@ -16,7 +16,7 @@ import { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../sandbox/armazenamento/ambientes.ts";
 import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../projeto/armazenamento/projetos.ts";
-import { cursorDaBase } from "../../../custos/armazenamento/commits_humanos.ts";
+import { cursorDaBase } from "../../../repositorio/armazenamento/commits_humanos.ts";
 import { casar } from "../../compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";

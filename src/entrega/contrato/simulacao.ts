@@ -2,7 +2,7 @@
 // (`NovoUsuarioSimulado`, `NovaTarefa`). São só schemas: o teste de rota confere o corpo por eles.
 import { z } from "zod";
 import { Id, Instante } from "../../compartilhado/nucleo/primitivos.ts";
-import { RelatorioSimulacao, StatusExecucaoSimulada } from "../../qualidade/nucleo/simulacao.ts";
+import { RelatorioSimulacao, StatusExecucaoSimulada } from "../../avaliacao/nucleo/simulacao.ts";
 
 /** Um arquivo anexado ao Usuário Simulado, com o que a tela mostra dele. */
 export const Anexo = z.object({ nome: z.string(), sha256: z.string(), bytes: z.number().int().nonnegative() });

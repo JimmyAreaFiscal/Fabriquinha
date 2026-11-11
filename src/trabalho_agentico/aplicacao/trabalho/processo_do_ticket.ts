@@ -14,7 +14,7 @@ import {
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
-import { colunasDoModelo, type LinhaDeUso } from "../../../custos/nucleo/uso.ts";
+import { colunasDoModelo, type LinhaDeUso } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import {
   carregarTrabalhosDoTicket,

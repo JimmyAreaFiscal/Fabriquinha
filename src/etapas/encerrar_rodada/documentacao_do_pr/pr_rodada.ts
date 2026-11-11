@@ -4,16 +4,8 @@ import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_dema
 import { formatarRodadaRef, formatarTicketRef } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
-import {
-  codigo,
-  dolares,
-  inteiro,
-  lista,
-  neutro,
-  plural,
-  tabela,
-} from "../../../qualidade/aplicacao/pull_request/pr.ts";
-import type { ProdutividadeRodada } from "../../../custos/aplicacao/produtividade_rodada.ts";
+import { codigo, dolares, inteiro, lista, neutro, plural, tabela } from "../../../repositorio/aplicacao/corpo_do_pr.ts";
+import type { ProdutividadeRodada } from "../../../metricas/aplicacao/produtividade_rodada.ts";
 
 // Os campos de `mensagem_pr` que o PR da rodada usa (schema do F3).
 interface MensagemPR {

@@ -2,7 +2,7 @@
 // cartões das Tarefas com os Usuários Simulados alocados, as execuções e o relatório. O DOM e a rede ficam em
 // simulacao-montar.ts.
 import type { Id } from "../../../compartilhado/nucleo/primitivos.ts";
-import type { RelatorioSimulacao, StatusExecucaoSimulada } from "../../../qualidade/nucleo/simulacao.ts";
+import type { RelatorioSimulacao, StatusExecucaoSimulada } from "../../../avaliacao/nucleo/simulacao.ts";
 import type { Tarefa, UsuarioSimulado } from "../../contrato/simulacao.ts";
 import { escapar } from "../render.ts";
 import { type Erros, idDe, marca, type ProjetoListado } from "./configuracao.ts";

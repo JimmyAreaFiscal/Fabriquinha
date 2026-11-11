@@ -10,7 +10,7 @@ import { after, before, test } from "node:test";
 import { iniciarServico, type Servico } from "../../composicao/servico.ts";
 import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
 import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
-import { criarUsuarioSimulado, usuariosSimulados } from "../../qualidade/armazenamento/simulacao.ts";
+import { criarUsuarioSimulado, usuariosSimulados } from "../../avaliacao/armazenamento/simulacao.ts";
 import ts from "typescript";
 import { SemCorpoEmJson } from "./rotas.ts";
 import { ROTAS } from "./servidor.ts";

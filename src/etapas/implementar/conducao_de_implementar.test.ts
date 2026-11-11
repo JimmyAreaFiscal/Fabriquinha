@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../sdlc/nucleo/despacho/despacho.ts";
-import { commitDoTicketDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 import {
   type CenarioDeImplementacao,

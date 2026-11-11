@@ -5,8 +5,8 @@ import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ende
 import { guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../../sdlc/armazenamento/evidencia_demanda.ts";
-import { gravarUsoDeclarado } from "../../../custos/armazenamento/uso_declarado.ts";
-import { metricasDasDemandasDoPeriodo } from "../../../custos/aplicacao/metricas/metricas_do_periodo.ts";
+import { gravarUsoDeclarado } from "../../../trabalho_agentico/armazenamento/uso_declarado.ts";
+import { metricasDasDemandasDoPeriodo } from "../../../metricas/aplicacao/metricas_do_periodo.ts";
 import { cenarioDemandas } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../contrato/demanda.ts";
 

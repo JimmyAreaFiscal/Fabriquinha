@@ -6,7 +6,7 @@ import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
-import type { LinhaDeUso } from "../../custos/nucleo/uso.ts";
+import type { LinhaDeUso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
 import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../sandbox/infra/ambiente.ts";
 import { executar } from "../../compartilhado/infra/processo.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";

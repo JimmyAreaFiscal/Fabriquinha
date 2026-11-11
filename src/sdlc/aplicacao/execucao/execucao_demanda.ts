@@ -27,12 +27,12 @@ import {
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
 } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { varrerCommitsHumanos } from "../../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { varrerCommitsHumanos } from "../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { carregarProjeto } from "../../../projeto/armazenamento/projetos.ts";
 import { caminhoArquivo } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
-import { commitDoTicketDemanda } from "../../armazenamento/commits_demanda.ts";
+import { commitDoTicketDemanda } from "../../../repositorio/armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../../armazenamento/evidencia_demanda.ts";
 import { anotar, noLog, pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
 import {

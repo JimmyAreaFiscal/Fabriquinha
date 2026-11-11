@@ -17,8 +17,8 @@ import {
   concluirResolucaoConflito,
   podeTentarEncerramento,
 } from "../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
-import { gravarCommitDemanda } from "../../sdlc/armazenamento/commits_demanda.ts";
-import { cursorDaBase } from "../../custos/armazenamento/commits_humanos.ts";
+import { gravarCommitDemanda } from "../../repositorio/armazenamento/commits_demanda.ts";
+import { cursorDaBase } from "../../repositorio/armazenamento/commits_humanos.ts";
 import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";

@@ -104,8 +104,9 @@ const DOMINIOS = new Set([
   "sandbox",
   "repositorio",
   "projeto",
-  "qualidade",
-  "custos",
+  "verificacao",
+  "metricas",
+  "avaliacao",
   "compartilhado",
 ]);
 
@@ -538,16 +539,16 @@ const ARQUIVO_DO_PROCESSO = "compartilhado/infra/processo.ts";
 const ARQUIVOS_COM_CHILD_PROCESS = new Set([ARQUIVO_DO_PROCESSO, ARQUIVO_DO_HARNESS]);
 // Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
 const CHAMADORES_DIRETOS_DO_PROCESSO = [
+  "avaliacao/aplicacao/simulacao/executor.ts",
   "composicao/cli.ts",
-  "custos/infra/commits_humanos.ts",
   "harness/pi/harness_pi.ts",
-  "qualidade/aplicacao/simulacao/executor.ts",
-  "qualidade/infra/tipos_de_verificacao/sonar.ts",
   "repositorio/infra/git/cadastro.ts",
+  "repositorio/infra/git/commits_humanos.ts",
   "repositorio/infra/git/heatmap.ts",
   "repositorio/infra/hospedagem/pr.ts",
   "repositorio/infra/worktree/limpeza_demanda.ts",
   "repositorio/infra/worktree/worktree.ts",
+  "verificacao/infra/tipos_de_verificacao/sonar.ts",
 ];
 
 const ehChildProcess = (alvo: string): boolean => /^(node:)?child_process$/.test(alvo);
@@ -688,8 +689,8 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
 // import, de valor ou de tipo. Dependência que fecha ciclo hoje é tolerada aqui com o passo da migração SDLC por seams que a
 // remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor derivado do
 // catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 ex-entrega); a
-// partir do 4c só restam 5 e 6. A ordem que o 4c deixou, de cima para baixo: etapas → qualidade → sdlc →
-// trabalho_agentico → harness, sandbox, repositorio, projeto → etapas/definicao → compartilhado.
+// partir do 5 só resta o 6. A ordem que o 5 deixou, de cima para baixo: etapas, avaliacao → metricas → sdlc →
+// trabalho_agentico → harness, verificacao → projeto → repositorio → sandbox → etapas/definicao → compartilhado.
 // A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar ciclo, a fitness também falha.
 interface DependenciaToleradaEntreDominios {
   de: string;
@@ -698,17 +699,13 @@ interface DependenciaToleradaEntreDominios {
 }
 
 const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
-  // O cadastro varre e lê os commits humanos; as métricas leem a Demanda, os commits e o Plano dela, o Trabalho Agêntico
-  // e o Uso dele, e o projeto de cada avaliação.
-  { de: "projeto", para: "custos", passo: 5 },
-  { de: "custos", para: "sdlc", passo: 5 },
-  { de: "custos", para: "trabalho_agentico", passo: 5 },
-  { de: "custos", para: "qualidade", passo: 5 },
   // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
   { de: "entrega/contrato", para: "projeto", passo: 6 },
   { de: "entrega/contrato", para: "sdlc", passo: 6 },
-  { de: "entrega/contrato", para: "trabalho_agentico", passo: 6 },
-  { de: "entrega/contrato", para: "qualidade", passo: 6 },
+  { de: "entrega/contrato", para: "avaliacao", passo: 6 },
+  // As consultas das páginas do Início e da Demanda (`sdlc/aplicacao/consultas/`) juntam o motor e as Métricas; saem do
+  // motor com as outras consultas que devolvem o contrato da API.
+  { de: "sdlc", para: "metricas", passo: 6 },
 ];
 
 // O que as Etapas declaram (o catálogo, `definicao/` e o `definicao.ts` de cada uma) conta como um domínio à parte, embaixo
@@ -842,18 +839,15 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
 
 // O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
 // em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. O motor
-// (sdlc/, trabalho_agentico/, projeto/, repositorio/, qualidade/) já pergunta ao catálogo desde o passo 4b, e desde o 4c
-// os enums de Etapa, de Gate e de estado saem do catálogo (`etapas/catalogo.ts` e `sdlc/nucleo/ciclo_de_vida/ciclos.ts`).
-// Saem custos/ no passo 5 e entrega/ no passo 6.
+// (sdlc/, trabalho_agentico/, projeto/, repositorio/, verificacao/, avaliacao/) já pergunta ao catálogo desde o passo 4b,
+// desde o 4c os enums de Etapa, de Gate e de estado saem do catálogo (`etapas/catalogo.ts` e
+// `sdlc/nucleo/ciclo_de_vida/ciclos.ts`), e desde o 5 as Métricas também (metricas/). Sai entrega/ no passo 6.
 // shortcut: o SQL em template não entra na conta (`ts.isStringLiteralLike` não vê o literal dentro de `'...'` no SQL);
-// `trabalho_agentico/armazenamento/trabalho_agentico.ts` e `custos/armazenamento/metricas_demanda.ts` ainda citam Etapas
-// no SQL.
+// `trabalho_agentico/armazenamento/trabalho_agentico.ts` ainda cita Etapas no SQL.
 // Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const PASTA_DAS_ETAPAS = "etapas/";
 const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
-  "custos/aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts",
-  "custos/aplicacao/metricas/metrica_de_uso.ts",
   "entrega/cliente-web/render.ts",
   "entrega/cliente-web/rotulos.ts",
   "entrega/cliente-web/telas/demandas.ts",

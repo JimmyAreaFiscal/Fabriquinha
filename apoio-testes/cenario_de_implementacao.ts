@@ -6,7 +6,7 @@ import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demand
 import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../src/sdlc/nucleo/tentativa.ts";
 import type { DepsDaConducao } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import type { RegistroDaVerificacao } from "../src/qualidade/aplicacao/evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "../src/verificacao/aplicacao/coleta_das_verificacoes.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 import {
   condutor as condutorDoServico,

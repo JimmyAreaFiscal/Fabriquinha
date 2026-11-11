@@ -16,7 +16,7 @@ import {
   DadosDaAvaliacao,
   DemandaDoPeriodo,
 } from "../../contrato/avaliacoes.ts";
-import { estadoDaAvaliacao } from "../../../qualidade/aplicacao/avaliacao/avaliacao.ts";
+import { estadoDaAvaliacao } from "../../../avaliacao/aplicacao/melhoria/avaliacao.ts";
 import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";

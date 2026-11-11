@@ -20,7 +20,7 @@ import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endere
 import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { gravarUsoDeclarado } from "../src/custos/armazenamento/uso_declarado.ts";
+import { gravarUsoDeclarado } from "../src/trabalho_agentico/armazenamento/uso_declarado.ts";
 import { type Configuracao, configuracao } from "../src/compartilhado/armazenamento/servico.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */

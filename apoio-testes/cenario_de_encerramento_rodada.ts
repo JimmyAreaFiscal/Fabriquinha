@@ -9,7 +9,7 @@ import { instalarPiFalso } from "./pi_falso.ts";
 import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
-import { gravarCommitDemanda } from "../src/sdlc/armazenamento/commits_demanda.ts";
+import { gravarCommitDemanda } from "../src/repositorio/armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";

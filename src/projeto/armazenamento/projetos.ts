@@ -288,3 +288,7 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   );
   return { execucoes, sessoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
 }
+
+/** O projeto da demanda, ou `undefined` se ela não existe. */
+export const projetoDaDemanda = (banco: DatabaseSync, demanda: string): string | undefined =>
+  (banco.prepare("SELECT projeto FROM demanda WHERE id = ?").get(demanda) as { projeto: string } | undefined)?.projeto;

@@ -7,7 +7,7 @@ import { createServer as servidorTcp } from "node:net";
 import { join } from "node:path";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
 import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
-import { criarTarefa, criarUsuarioSimulado } from "../src/qualidade/armazenamento/simulacao.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../src/avaliacao/armazenamento/simulacao.ts";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./apoio.ts";
 

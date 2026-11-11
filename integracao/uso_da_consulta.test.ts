@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import { produtividadeDaRodada } from "../src/custos/aplicacao/produtividade_rodada.ts";
+import { produtividadeDaRodada } from "../src/metricas/aplicacao/produtividade_rodada.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { marcaDoPRRodada, montarPRRodada, tituloDoPRRodada } from "./pr_rodada.ts";
-import type { ProdutividadeRodada } from "../../../custos/aplicacao/produtividade_rodada.ts";
+import type { ProdutividadeRodada } from "../../../metricas/aplicacao/produtividade_rodada.ts";
 
 const em = "2026-01-01T10:00:00Z";
 const ticket = (ticket_id: number, etapa: string, status = "concluido", titulo?: string) => ({

@@ -9,12 +9,12 @@ import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
 } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { produtividadeDaRodada } from "../src/custos/aplicacao/produtividade_rodada.ts";
+import { produtividadeDaRodada } from "../src/metricas/aplicacao/produtividade_rodada.ts";
 import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { metricasDasEtapas } from "../src/custos/aplicacao/metricas/metricas_das_etapas.ts";
-import type { MetricaDeUso } from "../src/custos/aplicacao/metricas/metrica_de_uso.ts";
-import type { ValorDe } from "../src/custos/aplicacao/metricas/calculo_de_metrica.ts";
-import { metricasDosMeses, usoDaDemanda } from "../src/custos/aplicacao/metricas/metricas_do_periodo.ts";
+import { metricasDasEtapas } from "../src/metricas/aplicacao/registro_das_metricas.ts";
+import type { MetricaDeUso } from "../src/metricas/aplicacao/metricas/metrica_de_uso.ts";
+import type { ValorDe } from "../src/metricas/aplicacao/calculo_de_metrica.ts";
+import { metricasDosMeses, usoDaDemanda } from "../src/metricas/aplicacao/metricas_do_periodo.ts";
 import { mesDoInstante } from "../src/compartilhado/nucleo/relogio.ts";
 import type { EtapaTicket } from "../src/etapas/catalogo.ts";
 import {

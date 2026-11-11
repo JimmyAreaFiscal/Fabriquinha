@@ -24,7 +24,7 @@ import { ConducaoDeImplementar } from "../../../etapas/implementar/conducao_de_i
 import { relogioFixo, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { gravarCommitDemanda } from "../../armazenamento/commits_demanda.ts";
+import { gravarCommitDemanda } from "../../../repositorio/armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";

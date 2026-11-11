@@ -13,7 +13,7 @@ import { carregarDemanda } from "../../src/sdlc/armazenamento/demandas.ts";
 import { buscarProjeto } from "../../src/projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../src/compartilhado/armazenamento/servico.ts";
 import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
-import { anexar } from "../../src/qualidade/armazenamento/simulacao.ts";
+import { anexar } from "../../src/avaliacao/armazenamento/simulacao.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";

@@ -2,7 +2,7 @@
 import {
   consultarMetricasDasDemandas,
   consultarMetricasDosMeses,
-} from "../../../custos/aplicacao/consultas/metricas.ts";
+} from "../../../metricas/aplicacao/consultas/metricas.ts";
 import { FiltroDeMetricas, MetricasDasDemandas, MetricasDosMeses } from "../../contrato/metricas.ts";
 import type { Rota } from "../rotas.ts";
 

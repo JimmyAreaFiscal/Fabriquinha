@@ -23,7 +23,7 @@ import { registrarCorrecoesSessao } from "../../src/sdlc/nucleo/transicoes/trans
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
-import type { RegistroDaVerificacao } from "../../src/qualidade/aplicacao/evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "../../src/verificacao/aplicacao/coleta_das_verificacoes.ts";
 import { cicloDoDespacho } from "../../src/sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../../src/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../../src/sdlc/aplicacao/execucao/execucao_demanda.ts";

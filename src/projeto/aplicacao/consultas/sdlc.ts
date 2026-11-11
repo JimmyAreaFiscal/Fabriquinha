@@ -1,6 +1,6 @@
 // A consulta da configuração SDLC do projeto (comparacao-sdlc §7.1): monta o contrato da resposta num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import { cursorDaBase } from "../../../custos/armazenamento/commits_humanos.ts";
+import { cursorDaBase } from "../../../repositorio/armazenamento/commits_humanos.ts";
 import { lerEmSnapshot } from "../../../compartilhado/armazenamento/snapshot.ts";
 import type { ConfiguracaoSdlcDoProjeto } from "../../../entrega/contrato/sdlc.ts";
 import { projetoExistente } from "../cadastro.ts";

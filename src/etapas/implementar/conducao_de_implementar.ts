@@ -23,9 +23,9 @@ import { concluirImplementacoesRodada } from "../../sdlc/nucleo/transicoes/trans
 import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { carregarProjeto } from "../../projeto/armazenamento/projetos.ts";
-import { HooksDoCommit } from "../../qualidade/infra/hooks_do_commit.ts";
-import type { OpcoesSonar } from "../../qualidade/infra/tipos_de_verificacao/sonar.ts";
-import { montarVerificacoesDaEtapa } from "../../qualidade/infra/verificacao.ts";
+import { HooksDoCommit } from "../../verificacao/infra/hooks_do_commit.ts";
+import type { OpcoesSonar } from "../../verificacao/infra/tipos_de_verificacao/sonar.ts";
+import { montarVerificacoesDaEtapa } from "../../verificacao/infra/verificacao.ts";
 import type { Ambiente } from "../../sandbox/infra/ambiente.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
@@ -34,7 +34,7 @@ import {
   coletarVerificacoes,
   type Falha,
   type RegistroDaVerificacao,
-} from "../../qualidade/aplicacao/evidencias/verificacoes.ts";
+} from "../../verificacao/aplicacao/coleta_das_verificacoes.ts";
 import { ConducaoAgentica, type ResultadoDaConferencia } from "../conducao/conducao_de_etapa.ts";
 import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 

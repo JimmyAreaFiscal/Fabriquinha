@@ -18,7 +18,7 @@ import { anotar, logDaOperacao } from "../../compartilhado/infra/registro.ts";
 import { ambienteDoEspaco } from "../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { cicloDoEspaco } from "../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../conducao/pi_vivo.ts";
-import { varrerCommitsHumanos } from "../../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { varrerCommitsHumanos } from "../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 
 const gate = new GateDoPlanejamento();
 

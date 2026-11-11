@@ -14,7 +14,7 @@ import {
 } from "../../../apoio-testes/cenario_de_encerramento_rodada.ts";
 import { commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { ErroDeRegra, ErroExterno } from "../../compartilhado/nucleo/erros.ts";
-import { cursorDaBase } from "../../custos/armazenamento/commits_humanos.ts";
+import { cursorDaBase } from "../../repositorio/armazenamento/commits_humanos.ts";
 import { anexosDaDemanda } from "../../sdlc/armazenamento/evidencia_demanda.ts";
 import { schemaDoTipo } from "../../sdlc/nucleo/evidencias/evidencia.ts";
 import { caminhoDaWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";

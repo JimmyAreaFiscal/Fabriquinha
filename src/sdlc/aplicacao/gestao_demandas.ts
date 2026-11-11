@@ -28,7 +28,7 @@ import {
   gravarDependenciaDemanda,
 } from "../armazenamento/dependencias_demanda.ts";
 import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
-import { gravarUsoDeclarado } from "../../custos/armazenamento/uso_declarado.ts";
+import { gravarUsoDeclarado } from "../../trabalho_agentico/armazenamento/uso_declarado.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencias/submeter.ts";
 import type { Origens } from "./evidencias/submissao.ts";
 import { cancelandoEmCascata } from "./gates/cancelamento_em_cascata.ts";
