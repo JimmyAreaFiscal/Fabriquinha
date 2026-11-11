@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
-import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
+import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;
@@ -146,14 +146,6 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
   mkdirSync(raiz);
   writeFileSync(join(raiz, "fabriquinha.db"), "banco");
   const pastaDasWorktreesDoProjeto = join(raiz, "worktrees", "projeto");
-  // Uma worktree do usuário (fora da pasta da Fabriquinha) e uma da Fabriquinha, já registradas no clone.
-  const registrarWorktree = (nome: string, caminho: string) => {
-    mkdirSync(join(raizGit, ".git", "worktrees", nome), { recursive: true });
-    writeFileSync(join(raizGit, ".git", "worktrees", nome, "gitdir"), `${caminho}/.git\n`);
-  };
-  registrarWorktree("do-usuario", join(base, "worktree-do-usuario"));
-  registrarWorktree("da-fabriquinha", join(pastaDasWorktreesDoProjeto, "I-1"));
-  mkdirSync(join(raizGit, ".git", "worktrees", "sem-gitdir"));
   const pacote = join(base, "pacote-pi");
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, {
     pastaDasWorktreesDoProjeto,
@@ -178,15 +170,14 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
     mesmoCaminho(join(raizGit, ".git", "objects"), "rw"),
     mesmoCaminho(join(raizGit, ".git", "refs"), "rw"),
     mesmoCaminho(join(raizGit, ".git", "logs"), "rw"),
-    mesmoCaminho(join(raizGit, ".git", "worktrees"), "rw"),
-    mesmoCaminho(join(raizGit, ".git", "worktrees", "do-usuario"), "ro"),
-    mesmoCaminho(join(raizGit, ".git", "worktrees", "sem-gitdir"), "ro"),
+    // `worktrees` fica só leitura, e com ele as worktrees do usuário, existam ou não ao criar o container.
+    mesmoCaminho(join(raizGit, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA), "rw"),
     { origem: sessoes, destino: join(raiz, "sessoes"), modo: "rw" },
     { origem: execucoes, destino: join(raiz, "execucoes"), modo: "rw" },
     mesmoCaminho(pacote, "ro"),
   ]);
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
-  assert.equal(run.filter((argumento) => argumento === "-v").length, 11);
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 9);
   assert.ok(!run.includes("--mount"));
   assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
   assert.deepEqual([readdirSync(sessoes), readdirSync(execucoes)], [[], []]);

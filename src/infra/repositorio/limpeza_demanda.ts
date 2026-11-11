@@ -8,7 +8,7 @@ import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../ambiente/ambiente.ts";
 import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
-import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto } from "./worktree.ts";
+import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto, podarWorktreesNoCore } from "./worktree.ts";
 
 type ProjetoLimpeza = Pick<Projeto, "nome" | "raiz_git">;
 
@@ -68,7 +68,7 @@ export async function pendenciasDeLimpeza(
 async function executar(ambiente: Ambiente, repo: string, tipo: string, alvo: string): Promise<boolean> {
   if (tipo === "worktree") {
     await gitNoAmbiente(ambiente, repo, "worktree", "remove", "--force", alvo);
-    await gitNoAmbiente(ambiente, repo, "worktree", "prune");
+    await podarWorktreesNoCore(repo); // o container não escreve em `.git/worktrees`
     return !existsSync(alvo);
   }
   if (tipo === "branch_local") {

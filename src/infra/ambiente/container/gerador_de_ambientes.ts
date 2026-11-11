@@ -3,10 +3,10 @@
 // só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
-import { dirname, join, sep } from "node:path";
+import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente.ts";
 import { executar } from "../../processo.ts";
@@ -14,6 +14,12 @@ import { DIR_DO_PI_NO_HOME, PADRAO_DE_TOKEN_DO_GITHUB } from "./ambiente_contain
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
+/**
+ * A pasta de `<raiz_git>/.git` onde ficam as pastas administrativas das worktrees da Fabriquinha: só ela aceita escrita
+ * no container (o resto de `.git`, inclusive `worktrees`, é só leitura), e cada entrada de `worktrees` da Fabriquinha é
+ * um link para cá. Uma worktree que o usuário criar depois do container fica fora do alcance dele.
+ */
+export const PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA = "fabriquinha-worktrees";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
 const PASTA_DE_TRABALHO = "/trabalho";
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
@@ -43,7 +49,7 @@ export interface Montagens {
    * pasta existiria desde a criação do container e não se removeria com a worktree.
    */
   pastaDasWorktreesDoProjeto: string;
-  /** O clone do usuário: só o `.git` entra, em leitura; escrita só em `objects`, `refs`, `logs` e `worktrees` (menos as worktrees do usuário). */
+  /** O clone do usuário: só o `.git` entra, em leitura; escrita só em `objects`, `refs`, `logs` e na pasta das entradas de worktree da Fabriquinha. */
   raiz_git: string;
   /** A raiz da Fabriquinha (R): o container monta só as pastas próprias de sessão e de execução, em leitura e escrita. */
   raiz: string;
@@ -82,24 +88,6 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
   );
 }
 
-/**
- * As entradas de `<raiz_git>/.git/worktrees` que não são worktrees da Fabriquinha (as do usuário): o git do usuário
- * segue o `commondir` e o `gitdir` delas, então o container não as altera.
- */
-function entradasDeWorktreeDoUsuario(raiz_git: string, pastaDasWorktreesDoProjeto: string): string[] {
-  const pasta = join(raiz_git, ".git", "worktrees");
-  return readdirSync(pasta)
-    .filter((nome) => {
-      try {
-        const gitdir = readFileSync(join(pasta, nome, "gitdir"), "utf8").trim();
-        return !gitdir.startsWith(`${pastaDasWorktreesDoProjeto}${sep}`);
-      } catch {
-        return true; // sem `gitdir` legível, não se sabe de quem é: fica protegida
-      }
-    })
-    .map((nome) => join(pasta, nome));
-}
-
 /** Cria no host o que o container monta e devolve os `-v` (`origem:destino:modo`). */
 function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
   const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote } = montagens;
@@ -107,16 +95,15 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
   const gitDoClone = join(raiz_git, ".git");
   // Só estas pastas do `.git` aceitam escrita; o resto (`commondir`, `config`, `hooks`, `info`, `HEAD`) o git do usuário
   // e o do core seguem para executar código, então fica só leitura.
-  const pastasDoGitComEscrita = ["objects", "refs", "logs", "worktrees"].map((nome) => join(gitDoClone, nome));
+  const pastasDoGitComEscrita = ["objects", "refs", "logs", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA].map((nome) =>
+    join(gitDoClone, nome),
+  );
   for (const dir of [pastaDasWorktreesDoProjeto, sessoes, execucoes, ...pastasDoGitComEscrita])
     mkdirSync(dir, { recursive: true });
-  // shortcut: só as worktrees do usuário que existem na criação do container ficam protegidas; as criadas depois, não.
-  const worktreesDoUsuario = entradasDeWorktreeDoUsuario(raiz_git, pastaDasWorktreesDoProjeto);
   const montagensComModo: [string, string, "rw" | "ro"][] = [
     [pastaDasWorktreesDoProjeto, pastaDasWorktreesDoProjeto, "rw"],
     [gitDoClone, gitDoClone, "ro"],
     ...pastasDoGitComEscrita.map((dir): [string, string, "rw"] => [dir, dir, "rw"]),
-    ...worktreesDoUsuario.map((dir): [string, string, "ro"] => [dir, dir, "ro"]),
     [sessoes, join(raiz, "sessoes"), "rw"],
     [execucoes, join(raiz, "execucoes"), "rw"],
     [pacote, pacote, "ro"],

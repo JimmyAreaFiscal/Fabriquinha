@@ -1,12 +1,31 @@
 // Worktree de agregação da demanda (comparacao-sdlc-implementacao.md §2.3/4.1).
-import { existsSync, lstatSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Slug } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../ambiente/ambiente.ts";
-import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto, preparar } from "./worktree.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../ambiente/container/gerador_de_ambientes.ts";
+import {
+  exigirGit,
+  exigirGitNoAmbiente,
+  gitNoAmbiente,
+  naFilaDoProjeto,
+  podarWorktreesNoCore,
+  preparar,
+} from "./worktree.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(
@@ -122,6 +141,36 @@ async function verificarCheckout(
   return existe;
 }
 
+/**
+ * `git worktree add`. No container o `.git/worktrees` é só leitura (o container não toca nas worktrees do usuário), então
+ * o core cria a worktree, sem hooks, e move a pasta administrativa dela para a pasta que o container escreve, deixando em
+ * `worktrees` um link para lá. O `commondir` relativo (`../..`) continua valendo, porque a pasta nova tem a mesma
+ * profundidade.
+ */
+async function adicionarWorktree(
+  ambiente: Ambiente,
+  raiz_git: string,
+  caminho: string,
+  argumentosDoAdd: string[],
+): Promise<void> {
+  if (ambiente.tipo === "host_local") {
+    await exigirGitNoAmbiente(ambiente, raiz_git, "worktree", "add", ...argumentosDoAdd);
+    return;
+  }
+  await exigirGit(raiz_git, "-c", "core.hooksPath=/dev/null", "worktree", "add", ...argumentosDoAdd);
+  const entrada = readFileSync(join(caminho, ".git"), "utf8")
+    .trim()
+    .replace(/^gitdir: /, "");
+  const entradaNaPastaDaFabriquinha = join(
+    dirname(dirname(entrada)),
+    PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
+    basename(entrada),
+  );
+  mkdirSync(dirname(entradaNaPastaDaFabriquinha), { recursive: true });
+  renameSync(entrada, entradaNaPastaDaFabriquinha);
+  symlinkSync(relative(dirname(entrada), entradaNaPastaDaFabriquinha), entrada);
+}
+
 type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
 
 /**
@@ -144,8 +193,8 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
     if (existsSync(caminho)) {
       // Checkout já validado; conservar o histórico.
     } else if (existe) {
-      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "prune", "--expire", "now");
-      await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", caminho, branch);
+      await podarWorktreesNoCore(projeto.raiz_git);
+      await adicionarWorktree(ambiente, projeto.raiz_git, caminho, [caminho, branch]);
     } else {
       await exigirGit(
         projeto.raiz_git,
@@ -155,17 +204,13 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
       );
       // A config do clone é só leitura no container: a posse da branch é gravada pelo core.
       await exigirGit(projeto.raiz_git, "config", chave, dono);
-      await exigirGitNoAmbiente(
-        ambiente,
-        projeto.raiz_git,
-        "worktree",
-        "add",
+      await adicionarWorktree(ambiente, projeto.raiz_git, caminho, [
         "--no-track",
         "-b",
         branch,
         caminho,
         `refs/remotes/origin/${projeto.branch_base}`,
-      );
+      ]);
     }
     const marca = (
       await exigirGitNoAmbiente(
@@ -265,21 +310,11 @@ export async function garantirWorktreeRodada(
       const existe = await verificarCheckout(ambiente, raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`);
       if (!existsSync(caminho)) {
         if (existe) {
-          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "prune", "--expire", "now");
-          await exigirGitNoAmbiente(ambiente, projeto.raiz_git, "worktree", "add", caminho, branch);
+          await podarWorktreesNoCore(projeto.raiz_git);
+          await adicionarWorktree(ambiente, projeto.raiz_git, caminho, [caminho, branch]);
         } else {
           await exigirGit(projeto.raiz_git, "config", `branch.${branch}.fabriquinha`, `rodada:${caminho}`);
-          await exigirGitNoAmbiente(
-            ambiente,
-            projeto.raiz_git,
-            "worktree",
-            "add",
-            "--no-track",
-            "-b",
-            branch,
-            caminho,
-            sha,
-          );
+          await adicionarWorktree(ambiente, projeto.raiz_git, caminho, ["--no-track", "-b", branch, caminho, sha]);
         }
       }
       return marcaPreparacao(ambiente, caminho);

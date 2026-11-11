@@ -691,9 +691,13 @@ test(
     git(c.repo, "worktree", "add", "-q", "-b", "do-usuario", worktreeDoUsuario);
     await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, "I-1.R1");
+    // Outra, criada com o container já vivo: também fica fora do alcance dele.
+    const worktreeCriadaDepois = join(c.dir, "worktree-criada-depois");
+    git(c.repo, "worktree", "add", "-q", "-b", "criada-depois", worktreeCriadaDepois);
     const marca = join(c.dir, "executado-no-host");
     const gitDoClone = join(c.repo, ".git");
-    const entradaDoUsuario = join(gitDoClone, "worktrees", "do-usuario");
+    const entradaDoUsuario = join(gitDoClone, "worktrees", "worktree-do-usuario");
+    const entradaCriadaDepois = join(gitDoClone, "worktrees", "worktree-criada-depois");
     const noContainer = (cwd: string, script: string) =>
       ambiente.executar({ programa: "sh", argumentos: ["-c", script], cwd, env: {} });
     const fsmonitor = `printf '[core]\\n\\tfsmonitor = "touch ${marca}; false"\\n'`;
@@ -709,14 +713,22 @@ test(
       ),
       noContainer(entradaDoUsuario, "echo ../../objects/forjado > commondir"),
       noContainer(entradaDoUsuario, "echo /tmp/forjado > gitdir"),
+      noContainer(
+        entradaCriadaDepois,
+        `mkdir ../../objects/forjado2 && ${fsmonitor} > ../../objects/forjado2/config && echo ../../objects/forjado2 > commondir`,
+      ),
     ]);
     for (const { codigo, saida } of tentativas) assert.notEqual(codigo, 0, saida);
     assert.ok(!existsSync(join(gitDoClone, "commondir")));
-    assert.ok(!existsSync(join(entradaDoUsuario, "commondir")));
+    for (const entrada of [entradaDoUsuario, entradaCriadaDepois]) {
+      assert.equal(readFileSync(join(entrada, "commondir"), "utf8"), "../..\n");
+      assert.match(readFileSync(join(entrada, "gitdir"), "utf8"), /^\S+\/\.git\n$/);
+    }
     assert.ok(!existsSync(join(gitDoClone, "hooks", "pre-commit")));
 
     git(c.repo, "status");
     git(worktreeDoUsuario, "status");
+    git(worktreeCriadaDepois, "status");
     git(c.repo, "branch", "nova");
     await exigirGit(c.repo, "push", "origin", "nova");
     assert.ok(!existsSync(marca), "nem o git do usuário nem o push do core executaram o que o container tentou gravar");
