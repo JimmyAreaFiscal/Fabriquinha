@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
-import { carregarDemanda } from "../../src/demanda/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../src/sdlc/armazenamento/demandas.ts";
 import { type Ambiente, subirAmbiente } from "../instancia_descartavel.ts";
 import { acoesHttpLeitura } from "./http_leitura.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";

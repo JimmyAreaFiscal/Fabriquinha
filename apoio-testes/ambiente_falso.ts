@@ -9,8 +9,8 @@ import type {
   IdentificadorDoProcesso,
   ProcessoNoAmbiente,
   SaidaDoComando,
-} from "../src/ambiente/infra/ambiente.ts";
-import { AmbienteHostLocal } from "../src/ambiente/infra/ambiente_host_local.ts";
+} from "../src/sandbox/infra/ambiente.ts";
+import { AmbienteHostLocal } from "../src/sandbox/infra/host_local/ambiente_host_local.ts";
 
 export interface ComandoRegistrado {
   via: "executar" | "lancar";
@@ -24,7 +24,9 @@ export class AmbienteFalso implements Ambiente {
   readonly registro: ComandoRegistrado[] = [];
   private readonly hostLocal = new AmbienteHostLocal();
   readonly id = this.hostLocal.id;
-  readonly tipo = this.hostLocal.tipo;
+  readonly processosMorremComOServico = this.hostLocal.processosMorremComOServico;
+  readonly isolaAsVariaveisDoServico = this.hostLocal.isolaAsVariaveisDoServico;
+  readonly escreveEmTodoOGitDoClone = this.hostLocal.escreveEmTodoOGitDoClone;
 
   executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     this.registro.push({ via: "executar", comando });

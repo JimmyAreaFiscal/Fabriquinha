@@ -33,38 +33,11 @@ export const Slug = z
 
 // Os níveis de `pi --thinking`.
 export const Effort = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-// Estados SDLC (comparacao-sdlc-implementacao.md §2.1, D01); independentes entre si.
-export const EstadoDemanda = z.enum([
-  "entender_e_desenhar",
-  "gate_demanda",
-  "planejar",
-  "gate_planejamento",
-  "em_execucao",
-  "revisar_demanda",
-  "encerrar_demanda",
-  "concluida",
-  "arquivada",
-  "cancelada",
-]);
-export const EstadoRodada = z.enum([
-  "implementar",
-  "revisar_rodada",
-  "encerrar_rodada",
-  "gate_pr",
-  "ajustar_resultado",
-  "concluida",
-]);
-export const EtapaTicket = z.enum([
-  "entender_e_desenhar",
-  "planejar",
-  "implementar",
-  "revisar_rodada",
-  "encerrar_rodada",
-  "ajustar_resultado",
-  "revisar_demanda",
-  "encerrar_demanda",
-  "resolver_conflito",
-]);
+/** O modelo do agente é sempre o par inteiro: provedor e nome vêm juntos, ou não há modelo. */
+export const Modelo = z.object({ provedor: Slug, nome: z.string().trim().min(1).max(200) });
+/** Como o agente trabalha: sozinho até o fim, conversando com o Auditor, ou só lendo (sem ferramentas de escrita). */
+export const ModoTrabalho = z.enum(["autonomo", "interativo", "consulta"]);
+// Os estados do ticket, do motor; os da demanda e da rodada saem do catálogo de Etapas (`sdlc/nucleo/ciclo_de_vida/ciclos.ts`).
 export const EstadoTicket = z.enum(["aberto", "em_execucao", "concluido", "falhou", "cancelado"]);
 
 // Cada tipo tem a sua sequência de IDs (F2 §3.4); o contexto dos comandos entrega `novoId(tipo)`.
@@ -73,8 +46,7 @@ export const TipoId = z.enum(["demanda"]);
 export type Id = z.infer<typeof Id>;
 export type Instante = z.infer<typeof Instante>;
 export type Effort = z.infer<typeof Effort>;
+export type Modelo = z.infer<typeof Modelo>;
+export type ModoTrabalho = z.infer<typeof ModoTrabalho>;
 export type TipoId = z.infer<typeof TipoId>;
-export type EstadoDemanda = z.infer<typeof EstadoDemanda>;
-export type EstadoRodada = z.infer<typeof EstadoRodada>;
-export type EtapaTicket = z.infer<typeof EtapaTicket>;
 export type EstadoTicket = z.infer<typeof EstadoTicket>;

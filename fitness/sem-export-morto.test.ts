@@ -13,7 +13,7 @@ const PASTAS_DE_TESTE_DO_PROJETO = ["integracao", "e2e", "estresse", "fitness"];
 // O pi e o bundle do navegador carregam estes arquivos pelo caminho, não por import.
 const ARQUIVOS_SEM_IMPORTADOR_POR_DESENHO = [
   /^src\/composicao\/fabriquinha\.ts$/,
-  /^src\/entrega\/cliente-web\/app\.ts$/,
+  /^src\/web\/app\.ts$/,
   /^pacote-pi\/extensions\/[^/]+\.ts$/,
 ];
 
@@ -192,7 +192,7 @@ test("a fitness acusa export sem importador e export só de teste sem a marca @t
   t.after(() => {
     rmSync(raiz, { recursive: true, force: true });
   });
-  for (const pasta of ["src/composicao", "src/entrega/cliente-web", "pacote-pi/extensions"])
+  for (const pasta of ["src/composicao", "src/web", "pacote-pi/extensions"])
     mkdirSync(join(raiz, pasta), { recursive: true });
   const escrever = (arquivo: string, linhas: string[]): void => {
     writeFileSync(join(raiz, arquivo), linhas.join("\n"));
@@ -216,7 +216,7 @@ test("a fitness acusa export sem importador e export só de teste sem a marca @t
     "console.log(consumidor, soNoTesteMarcado, soNoTesteMarcaSemJustificativa, soNoTesteSemMarca);",
   ]);
   escrever("src/composicao/fabriquinha.ts", ["export const pontoDeEntrada = 1;"]);
-  escrever("src/entrega/cliente-web/app.ts", ["export const pontoDeEntradaDoNavegador = 1;"]);
+  escrever("src/web/app.ts", ["export const pontoDeEntradaDoNavegador = 1;"]);
   escrever("pacote-pi/extensions/guarda.ts", ["export default function guarda(): void {}"]);
 
   assert.deepEqual(

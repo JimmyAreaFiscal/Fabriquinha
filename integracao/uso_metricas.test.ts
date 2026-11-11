@@ -4,16 +4,19 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarTrabalho, registrarUso } from "../src/execucao/nucleo/trabalho_agentico.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { produtividadeDaRodada } from "../src/custos/aplicacao/produtividade_rodada.ts";
-import { carregarDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { metricasDasEtapas } from "../src/custos/aplicacao/metricas/metricas_das_etapas.ts";
-import type { MetricaDeUso } from "../src/custos/aplicacao/metricas/metrica_de_uso.ts";
-import type { ValorDe } from "../src/custos/aplicacao/metricas/calculo_de_metrica.ts";
-import { metricasDosMeses, usoDaDemanda } from "../src/custos/aplicacao/metricas/metricas_do_periodo.ts";
+import { retomarTrabalho, registrarUso } from "../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import {
+  carregarTrabalhosDoTicket,
+  comTrabalhosDoTicket,
+} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { produtividadeDaRodada } from "../src/metricas/aplicacao/produtividade_rodada.ts";
+import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
+import { metricasDasEtapas } from "../src/metricas/aplicacao/registro_das_metricas.ts";
+import type { MetricaDeUso } from "../src/metricas/aplicacao/metricas/metrica_de_uso.ts";
+import type { ValorDe } from "../src/metricas/aplicacao/calculo_de_metrica.ts";
+import { metricasDosMeses, usoDaDemanda } from "../src/metricas/aplicacao/metricas_do_periodo.ts";
 import { mesDoInstante } from "../src/compartilhado/nucleo/relogio.ts";
-import type { EtapaTicket } from "../src/compartilhado/nucleo/primitivos.ts";
+import type { EtapaTicket } from "../src/etapas/catalogo.ts";
 import {
   abrirPortao,
   agente,

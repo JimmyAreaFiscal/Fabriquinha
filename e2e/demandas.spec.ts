@@ -3,7 +3,7 @@
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { processosAbertos } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { processosAbertos } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { projeto } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {
@@ -247,7 +247,7 @@ test("CA-20 e CA-21: aprovar o PR pede a nota e, com a nota, mostra-a na rodada"
   await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
   await pagina.setViewportSize({ width: 1440, height: 900 });
   // O gate do PR vem depois da lista de tickets da rodada.
-  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(2);
+  await expect(pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate")).toHaveCount(2);
   await expect(pagina.locator(".dm-gate-titulo", { hasText: "Aprovação do PR" })).toBeVisible();
   await info.attach("gate-pr-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });

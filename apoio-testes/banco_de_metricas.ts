@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { migrar } from "../src/compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../src/compartilhado/armazenamento/migracoes/migracoes.ts";
-import type { Recorte } from "../src/custos/nucleo/metrica.ts";
+import type { Recorte } from "../src/metricas/nucleo/metrica.ts";
 import { intervalo } from "../src/compartilhado/nucleo/periodo.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */

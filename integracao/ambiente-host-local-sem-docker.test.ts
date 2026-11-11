@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
 import { instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
-import { configuracaoDoAmbiente } from "../src/compartilhado/armazenamento/servico.ts";
 import { encerrar, revisar, rodadaEmRevisao } from "./apoio-execucao.ts";
 import { base, criarCenario } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
+import { configuracaoDoAmbiente } from "../src/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 ghFalso(base);
 

@@ -27,7 +27,7 @@ import {
   TICKETS_DA_API_DO_AGENTE,
   tokenDoTicket,
 } from "../apoio-testes/cenario_da_api_do_agente.ts";
-import { HarnessPi } from "../src/execucao/infra/harness_pi.ts";
+import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
 
 const pastaVazia = mkdtempSync(join(tmpdir(), "fabriquinha-cliente-empacotado-"));
 after(() => {
@@ -125,7 +125,7 @@ test("o ambiente que o harness dá ao agente do ticket não traz FABRIQUINHA_ROO
   const { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: execucao } = process.env;
   Object.assign(process.env, { FABRIQUINHA_ROOT: "/raiz", FABRIQUINHA_EXECUCAO: "exec-1" });
   try {
-    const ambiente = new HarnessPi().ambiente("/raiz", pastaVazia, "exec-1");
+    const ambiente = new HarnessPi().variaveisDeAmbiente("/raiz", pastaVazia, "ticket");
     assert.equal(ambiente.FABRIQUINHA_ROOT, undefined);
     assert.equal(ambiente.FABRIQUINHA_EXECUCAO, undefined);
     assert.ok(ambiente.PATH?.split(":").some((p) => p.endsWith("pacote-pi/bin")));

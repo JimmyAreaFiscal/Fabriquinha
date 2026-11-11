@@ -6,11 +6,11 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { type Ator } from "../src/fluxo/nucleo/ator.ts";
-import { HarnessPi } from "../src/execucao/infra/harness_pi.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { buscarProjeto, gravarProjeto } from "../src/ambiente/armazenamento/projetos.ts";
-import { Projeto } from "../src/ambiente/nucleo/projeto.ts";
+import { type Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { buscarProjeto, gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/projeto/nucleo/projeto.ts";
 import {
   AUTOR,
   base,
@@ -189,7 +189,7 @@ test("CA-SDLC-21: configuração de projeto inválida é rejeitada na fronteira,
   const etapaGravada = buscarProjeto(c.banco, c.projeto)?.etapas[0];
   const args = harness.argumentos({
     raiz: c.raiz,
-    sessaoPi: "s-1",
+    sessao: "s-1",
     skills: [],
     modelo: etapaGravada?.configuracao_agente?.modelo,
     effort: etapaGravada?.configuracao_agente?.effort,

@@ -1,8 +1,7 @@
 // Configuração do serviço (F4 §3, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { Modelo } from "../../execucao/nucleo/configuracao_agente.ts";
-import { ConfiguracaoDoAmbiente } from "../../ambiente/nucleo/projeto.ts";
+import { Modelo } from "../nucleo/primitivos.ts";
 
 export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),
@@ -48,36 +47,4 @@ export function salvarConfiguracao(banco: DatabaseSync, c: Configuracao): Config
       c.modeloAuditoria?.nome ?? null,
     );
   return c;
-}
-
-/**
- * O Ambiente em que o trabalho roda e os limites de cada container. Fora de `Configuracao`, que a web grava inteira.
- * @testes o consumidor de produção é o conjunto de Ambientes, de outro ticket da I-286.R1
- */
-export function configuracaoDoAmbiente(banco: DatabaseSync): ConfiguracaoDoAmbiente {
-  const l = banco
-    .prepare(
-      `SELECT ambiente_tipo, ambiente_memoria_maxima_mb, ambiente_cpus, ambiente_ociosidade_para_eliminar_min
-       FROM configuracao`,
-    )
-    .get() as Record<string, number | string>;
-  return ConfiguracaoDoAmbiente.parse({
-    tipo: l.ambiente_tipo,
-    memoria_maxima_mb: l.ambiente_memoria_maxima_mb,
-    cpus: l.ambiente_cpus,
-    ociosidade_para_eliminar_min: l.ambiente_ociosidade_para_eliminar_min,
-  });
-}
-
-/**
- * Grava a configuração do Ambiente inteira, já validada pela aplicação.
- */
-export function salvarConfiguracaoDoAmbiente(banco: DatabaseSync, a: ConfiguracaoDoAmbiente): ConfiguracaoDoAmbiente {
-  banco
-    .prepare(
-      `UPDATE configuracao SET ambiente_tipo = ?, ambiente_memoria_maxima_mb = ?, ambiente_cpus = ?,
-         ambiente_ociosidade_para_eliminar_min = ?`,
-    )
-    .run(a.tipo, a.memoria_maxima_mb, a.cpus, a.ociosidade_para_eliminar_min);
-  return a;
 }

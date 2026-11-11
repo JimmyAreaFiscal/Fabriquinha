@@ -2,24 +2,27 @@
 // entre agendador e "executar agora", implementação sem submissão e falha, timeout e reinício. O cenário é montado pelos
 // serviços e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web. As verificações
 // (testes, fitness e Sonar) são o único ponto injetado: o Sonar não existe aqui.
-import type { MotivoDeRecusa } from "../src/execucao/nucleo/despacho.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import type { MotivoDeRecusa } from "../src/sdlc/nucleo/despacho/despacho.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/execucao/nucleo/tentativa.ts";
-import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
-import { reabrirTicket } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/execucao/nucleo/trabalho_agentico.ts";
-import { cicloDoDespacho, executarAgora } from "../src/execucao/aplicacao/despacho.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
-import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
-import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
+import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/sdlc/nucleo/tentativa.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { reabrirTicket } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { cicloDoDespacho, executarAgora } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
 import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+import {
+  carregarTrabalhosDoTicket,
+  comTrabalhosDoTicket,
+} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,
@@ -34,6 +37,8 @@ import {
   ticketDe,
 } from "./apoio-execucao.ts";
 import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParalelismo } from "./apoio.ts";
+import { recuperacaoDaSubida } from "../src/composicao/servico.ts";
+import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
 
 const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
   const agregado = demanda(c, id);
@@ -253,7 +258,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarProcesso(criarTrabalho([], sessao), estado.execucoes, execucao),
   }));
-  condutor.recuperarNaSubida(c.banco);
+  condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida(c.banco, relogioDoSistema));
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

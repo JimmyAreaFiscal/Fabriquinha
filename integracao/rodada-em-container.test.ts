@@ -11,26 +11,28 @@ import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import type { DepsDespacho } from "../src/execucao/aplicacao/despacho.ts";
-import { ConducaoDePlanejar } from "../src/fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts";
-import { conjuntoDoServico } from "../src/ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
-import { enviarDemanda, lerConversa } from "../src/execucao/aplicacao/sessoes/sessoes_demanda.ts";
-import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
-import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/execucao/infra/pi.ts";
-import { anotar, pastasDoProcesso } from "../src/compartilhado/infra/registro.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
+import { ConducaoDePlanejar } from "../src/etapas/planejar/conducao_de_planejar.ts";
+import { conjuntoDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { enviarDemanda } from "../src/etapas/conducao/mensagem_do_auditor.ts";
+import { lerConversa } from "../src/trabalho_agentico/aplicacao/sessoes/conversa.ts";
+import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import {
+  carregarTrabalhosDoTicket,
+  gravarTokenDoProcesso,
+} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/harness/pi/pi.ts";
+import { anotar, pastasDoProcesso, noLog } from "../src/compartilhado/infra/registro.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../src/ambiente/infra/worktree/worktree.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../src/repositorio/infra/worktree/worktree.ts";
 import { iniciarServico } from "../src/composicao/servico.ts";
 import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
-import { gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import { servirWeb } from "../src/entrega/http/servidor.ts";
-import { noLog } from "../src/compartilhado/infra/registro.ts";
+import { servirWeb } from "../src/api/servidor.ts";
 import {
   atual,
   demandaEmExecucao,
@@ -60,9 +62,8 @@ const COM_DOCKER = {
 };
 
 /** O despacho que fecha o ticket com as Verificações de verdade: testes, e2e e fitness do projeto de teste rodam no container. */
-const despachoComVerificacoesReais: DepsDespacho = {
-  implementacao: { opcoesSonar: { limiteMs: 60_000, intervaloMs: 1 } },
-};
+const implementacaoComVerificacoesReais = { opcoesSonar: { limiteMs: 60_000, intervaloMs: 1 } };
+const despachoComVerificacoesReais = despachoDasEtapas({ implementacao: implementacaoComVerificacoesReais });
 
 /** O pi do planejamento sai sozinho ao receber o prompt: interrompê-lo por sinal pede o Ambiente do processo. */
 const PLANEJAMENTO_QUE_SAI_SOZINHO: PassoPi = { uso: null, sai: { codigo: 0 } };
@@ -178,7 +179,7 @@ async function implementarComHook(
       uso: null,
     },
   ]);
-  await ciclo(c, { implementacao: { ...despachoComVerificacoesReais.implementacao, limiteCommitMs } });
+  await ciclo(c, despachoDasEtapas({ implementacao: { ...implementacaoComVerificacoesReais, limiteCommitMs } }));
   const ref = ticketDe(c, id, 1);
   const tentativa = demanda(c, id).tentativas.findLast((x) => x.ticket.ticket_id === ref.ticket_id);
   assert.ok(tentativa, "o ticket tem Tentativa");
@@ -573,7 +574,11 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    assert.ok(!origens.some((origem) => /\/\.(pi|claude|codex)/.test(origem ?? "")));
+    // Pelo caminho das pastas copiadas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
+    const copiadas = [dirDoPiDoAuditor(), join(c.raiz, ".claude"), join(c.raiz, ".codex")];
+    assert.ok(
+      !origens.some((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
+    );
     assert.equal(binds?.length, 9);
   },
 );
@@ -678,8 +683,7 @@ test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_
     alocado_para: string;
   }[];
   assert.ok(alocados.length > 0);
-  for (const { alocado_para } of alocados)
-    await conjuntoDoServico()?.liberar({ dono: Endereco.ler(alocado_para), branch: "b", base: "b", pasta: "/p" });
+  for (const { alocado_para } of alocados) await conjuntoDoServico()?.liberar({ dono: alocado_para });
 
   const segunda = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
 

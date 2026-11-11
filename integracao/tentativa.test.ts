@@ -15,12 +15,19 @@ import {
   montarTicket,
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/execucao/nucleo/trabalho_agentico.ts";
-import type { Tentativa } from "../src/execucao/nucleo/tentativa.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../src/execucao/armazenamento/trabalho_agentico.ts";
-import type { PaginaDaDemanda } from "../src/entrega/contrato/demanda.ts";
-import { pagina } from "../src/entrega/cliente-web/telas/demandas.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import type { Tentativa } from "../src/sdlc/nucleo/tentativa.ts";
+import {
+  comTrabalhosDoTicket,
+  gravarTokenDoProcesso,
+} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { PaginaDaDemanda } from "../src/contrato/demanda.ts";
+import { pagina } from "../src/web/telas/demandas/demandas.ts";
+import { descreverEtapasDoSdlc } from "../src/api/rotas/etapas.ts";
+import { definirEtapasDoSdlc } from "../src/web/apresentacao/etapas.ts";
+
+definirEtapasDoSdlc(descreverEtapasDoSdlc());
 
 const ticket = Endereco.doTicket("I-206", 3);
 const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({

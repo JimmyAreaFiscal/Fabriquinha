@@ -6,22 +6,45 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { MotivoDeRecusa } from "../execucao/nucleo/despacho.ts";
+import type { MotivoDeRecusa } from "../sdlc/nucleo/despacho/despacho.ts";
 import { ErroDeRegra, mensagem } from "../compartilhado/nucleo/erros.ts";
-import { relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
-import { varrerCommitsHumanos } from "../custos/aplicacao/metricas/varrer_commits_humanos.ts";
+import { type Relogio, relogioDoSistema } from "../compartilhado/nucleo/relogio.ts";
+import { varrerCommitsHumanos } from "../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { abrir } from "../compartilhado/armazenamento/banco.ts";
-import { garantirPacoteDoAgente } from "../execucao/infra/pacote_do_agente.ts";
+import { garantirPacoteDoAgente } from "../harness/pi/pacote_do_agente.ts";
+import { HarnessPi } from "../harness/pi/harness_pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../harness/pi/pi.ts";
 import { noLog } from "../compartilhado/infra/registro.ts";
-import { projetosAVarrer } from "../custos/armazenamento/commits_humanos.ts";
-import { configuracao, configuracaoDoAmbiente } from "../compartilhado/armazenamento/servico.ts";
-import { servirWeb } from "../entrega/http/servidor.ts";
-import { cicloDoDespacho, executarAgora } from "../execucao/aplicacao/despacho.ts";
-import { condutor } from "../execucao/aplicacao/trabalho/condutor.ts";
-import { montarAmbienteDoServico, montarConjuntoDoServico } from "../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
-import { AmbienteHostLocal } from "../ambiente/infra/ambiente_host_local.ts";
-import { GeradorDeAmbientes } from "../ambiente/infra/container/gerador_de_ambientes.ts";
-import { ConjuntoDeAmbientes } from "../ambiente/aplicacao/conjunto_de_ambientes/conjunto.ts";
+import { projetosAVarrer } from "../repositorio/armazenamento/commits_humanos.ts";
+import { configuracao } from "../compartilhado/armazenamento/servico.ts";
+import { servirWeb } from "../api/servidor.ts";
+import { cicloDoDespacho, executarAgora } from "../sdlc/aplicacao/despacho/despacho.ts";
+import { despachoDasEtapas } from "../etapas/conducoes.ts";
+import { condutor, type RecuperacaoDaSubida } from "../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { falhaPorServicoReiniciado } from "../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
+import { recolherGruposDasAvaliacoes } from "../avaliacao/armazenamento/avaliacoes.ts";
+import { falharPendentes } from "../avaliacao/armazenamento/simulacao.ts";
+import { falharTicketDemanda } from "../sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { montarAmbienteDoServico, montarConjuntoDoServico } from "../sandbox/aplicacao/ambiente_do_servico.ts";
+import { AmbienteHostLocal } from "../sandbox/infra/host_local/ambiente_host_local.ts";
+import { conjuntoDoTipoConfigurado } from "../sandbox/aplicacao/configuracao_do_ambiente.ts";
+import type { ConjuntoDeAmbientes } from "../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
+
+/** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
+export const harnessDoServico = new HarnessPi();
+
+/**
+ * O que a subida recupera além dos processos dos tickets, de quem é dono de cada coisa: a avaliação e a simulação recolhem
+ * os grupos do pi delas (a simulação pendente falha), e o motor falha o ticket que ficou sem processo.
+ * @testes os testes e o e2e recuperam a subida como o serviço, sem subi-lo
+ */
+export const recuperacaoDaSubida = (banco: DatabaseSync, relogio: Relogio): RecuperacaoDaSubida => ({
+  gruposDoServico: [
+    ...recolherGruposDasAvaliacoes(banco),
+    ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
+  ],
+  falharTicket: falharTicketDemanda,
+});
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -57,6 +80,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
   montarAmbienteDoServico(new AmbienteHostLocal());
+  condutor.montarHarness(harnessDoServico);
   const relogio = relogioDoSistema;
   const noLogDoServico = (erro: unknown): void => {
     noLog(erro, relogio);
@@ -90,23 +114,21 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   const { port: porta } = web.address() as AddressInfo;
   condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
-  /** O conjunto de Ambientes em container: só existe com `tipo = container`, e com `host_local` o docker nunca é chamado. */
-  let conjuntoDeAmbientes: ConjuntoDeAmbientes | undefined;
-  const conjuntoDoBanco = (banco: DatabaseSync): ConjuntoDeAmbientes | undefined => {
-    if (configuracaoDoAmbiente(banco).tipo !== "container") return undefined;
-    return (conjuntoDeAmbientes ??= new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogio, {
-      raiz,
-      porta_da_api: porta,
-      home_do_usuario: homedir(),
-    }));
-  };
+  /** O conjunto de Ambientes do tipo configurado; com `host_local` não há conjunto. */
+  const conjuntoDoBanco = conjuntoDoTipoConfigurado(relogio, {
+    raiz,
+    porta_da_api: porta,
+    home_do_usuario: homedir(),
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+  });
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
     const bancoAberto = aberto;
     // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
     montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
-    condutor.recuperarNaSubida(aberto, relogio);
+    condutor.recuperarNaSubida(aberto, recuperacaoDaSubida(aberto, relogio));
     web.on(
       "request",
       servirWeb({
@@ -124,12 +146,13 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     throw error_;
   }
   const banco = aberto;
+  const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
 
-  const conjuntoSeContainer = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
-  // Docker fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica para a próxima subida.
-  await conjuntoSeContainer()?.reconciliarNaSubida().catch(noLogDoServico);
+  // O conjunto fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica
+  // para a próxima subida.
+  await conjuntoConfigurado()?.reconciliarNaSubida().catch(noLogDoServico);
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
@@ -153,7 +176,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     batida = Date.parse(relogio.agora());
     try {
       const c = configuracao(banco);
-      const conjunto = conjuntoSeContainer();
+      const conjunto = conjuntoConfigurado();
       if (conjunto && !eliminacaoDeOciosos)
         eliminacaoDeOciosos = conjunto
           .eliminarOciosos(relogio.agora())
@@ -171,7 +194,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c, {}, relogio))
+      for (const fim of cicloDoDespacho(banco, c, despachoDasEtapas(), relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -184,7 +207,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), {}, relogio);
+      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), despachoDasEtapas(), relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

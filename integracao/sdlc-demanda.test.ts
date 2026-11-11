@@ -3,15 +3,15 @@
 // temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/fluxo/nucleo/ator.ts";
+import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo } from "../src/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { interromperExecucaoDemanda } from "../src/execucao/aplicacao/execucao_demanda.ts";
-import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
-import * as gestao from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { registrarDependenciaDemanda } from "../src/demanda/aplicacao/gestao_demandas.ts";
-import { carregarTrabalhosDoTicket } from "../src/execucao/armazenamento/trabalho_agentico.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
+import { interromperExecucaoDemanda } from "../src/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
   AUTOR,
@@ -29,12 +29,13 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
+import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
 
 const pi = instalarPiFalso(base);
 
 /** O planejamento é uma sessão interativa: dispara o ciclo, espera o pi receber o prompt e interrompe a execução. */
 async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<void> {
-  const fins = cicloDoDespacho(c.banco, c.config);
+  const fins = cicloDoDespacho(c.banco, c.config, despachoDasEtapas());
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
   await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
   const ref = { demanda_id: id, ticket_id: 2 };
@@ -98,7 +99,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
     demanda(c, reprovada).tickets.map((x) => [x.etapa, x.estado]),
     [["entender_e_desenhar", "cancelado"]],
   );
-  assert.equal(cicloDoDespacho(c.banco, c.config).length, 0);
+  assert.equal(cicloDoDespacho(c.banco, c.config, despachoDasEtapas()).length, 0);
   assert.equal(pi.prompts().length, 0);
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
@@ -130,7 +131,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   // A, de outro projeto, ainda espera a decisão; B (deste projeto) já foi aprovada, mas depende de A.
   const a = demandaEnviada(c, undefined, "outro");
   const b = await demandaAprovada(c, [a]);
-  assert.equal(cicloDoDespacho(c.banco, c.config).length, 0);
+  assert.equal(cicloDoDespacho(c.banco, c.config, despachoDasEtapas()).length, 0);
   assert.equal(pi.prompts().length, 0);
   assert.deepEqual(
     demanda(c, b).tickets.map((x) => [x.etapa, x.estado]),

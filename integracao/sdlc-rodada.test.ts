@@ -6,20 +6,20 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Ator, AUDITOR } from "../src/fluxo/nucleo/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/fluxo/nucleo/gate.ts";
-import { Endereco } from "../src/demanda/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { registrarCorrecoesSessao } from "../src/fluxo/nucleo/transicoes/transicoes_rodada.ts";
-import { marcaDoPRRodada } from "../src/qualidade/aplicacao/pull_request/pr_rodada.ts";
-import { decidirGate } from "../src/fluxo/aplicacao/gates/decidir_gate.ts";
-import { cicloDoDespacho } from "../src/execucao/aplicacao/despacho.ts";
+import { Ator, AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/sdlc/nucleo/gate.ts";
+import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
+import { decidirGate } from "../src/etapas/gates.ts";
+import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
 import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
-} from "../src/execucao/aplicacao/trabalho/condutor.ts";
-import { concluirSessaoAjustes } from "../src/execucao/aplicacao/sessoes/sessao_ajustes.ts";
-import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+} from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
+import { comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
+import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

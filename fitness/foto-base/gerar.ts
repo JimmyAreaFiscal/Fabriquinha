@@ -16,17 +16,22 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { AgregadoDemanda, TicketDemanda } from "../../src/demanda/nucleo/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/compartilhado/nucleo/primitivos.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { EtapaTicket } from "../../src/etapas/catalogo.ts";
 import { relogioDoSistema } from "../../src/compartilhado/nucleo/relogio.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/execucao/nucleo/trabalho_agentico.ts";
-import { montarPromptDemanda } from "../../src/fluxo/aplicacao/prompt_demanda.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { abrir, raizDo } from "../../src/compartilhado/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comTrabalhosDoTicket, gravarTokenDoProcesso } from "../../src/execucao/armazenamento/trabalho_agentico.ts";
-import { servirWeb } from "../../src/entrega/http/servidor.ts";
+import {
+  comTrabalhosDoTicket,
+  gravarTokenDoProcesso,
+} from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { servirWeb } from "../../src/api/servidor.ts";
 import { noLog } from "../../src/compartilhado/infra/registro.ts";
-import { publicarPRDe } from "../../src/ambiente/infra/repositorio/pr.ts";
+import { publicarPRDe } from "../../src/repositorio/infra/hospedagem/pr.ts";
+// O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
+import "../../apoio-testes/harness_do_teste.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");
@@ -57,15 +62,15 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/qualidade/aplicacao/avaliacao/avaliacao.md",
-  ...arquivosMarkdown("src/fluxo/aplicacao/etapas"),
+  "src/avaliacao/aplicacao/melhoria/avaliacao.md",
+  ...arquivosMarkdown("src/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
   const caminhoNaFotoBase = caminho
-    .replace("src/fluxo/aplicacao/etapas/", "src/execucao/etapas/")
-    .replace("src/qualidade/aplicacao/avaliacao/", "src/execucao/");
+    .replace(/^src\/etapas\/[^/]+\//, "src/execucao/etapas/")
+    .replace("src/avaliacao/aplicacao/melhoria/", "src/execucao/");
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 
@@ -108,15 +113,15 @@ for (const etapa of EtapaTicket.options.filter((e) => e !== "entender_e_desenhar
     descricao: "Detalhe.",
     etapa,
   } as TicketDemanda;
-  const prompt = montarPromptDemanda({
+  const contexto = {
     ag: agregadoDoPrompt,
     ticket,
     projeto: { nome: "loja", branch_base: "main" },
     worktree: "/w",
     saida: "/s",
     anexos: [],
-  });
-  gravarFoto(join("prompts", etapa), prompt);
+  };
+  gravarFoto(join("prompts", etapa), promptDaEtapa(contexto));
 }
 
 // 3. O CLI do agente da demanda: a aula do código (HTML e recusas) e a leitura da demanda. É o cliente empacotado

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import type { Pedido } from "../../../entrega/http/rotas.ts";
-import type { DadosDoChatDemanda } from "../../../entrega/contrato/chat.ts";
-import { ROTAS_DO_CHAT } from "../../../entrega/http/rotas/chat.ts";
+import type { Pedido } from "../../../api/rotas.ts";
+import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
+import { ROTAS_DO_CHAT } from "../../../api/rotas/sessoes/chat.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 

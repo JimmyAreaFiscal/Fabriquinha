@@ -5,19 +5,22 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/fluxo/nucleo/ator.ts";
-import { formatarTicketRef } from "../src/demanda/nucleo/demanda.ts";
+import { AUDITOR, FABRIQUINHA } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { formatarTicketRef } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { relogioFixo } from "../src/compartilhado/nucleo/relogio.ts";
-import { reabrirTicket } from "../src/fluxo/nucleo/transicoes/transicoes_demanda.ts";
+import { reabrirTicket } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import {
   registrarFalhaEncerramento,
   registrarTentativaEncerramento,
-} from "../src/fluxo/nucleo/transicoes/transicoes_encerramento.ts";
-import { marcaDoPRFinal } from "../src/qualidade/aplicacao/pull_request/encerramento_demanda.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/execucao/aplicacao/retomada_infraestrutura.ts";
-import { comDemanda } from "../src/demanda/armazenamento/demandas.ts";
-import { integrarPR } from "../src/ambiente/infra/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/ambiente/infra/worktree/worktree-demanda.ts";
+} from "../src/sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+import { marcaDoPRFinal } from "../src/etapas/encerrar_demanda/encerramento_demanda.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
+import { integrarPR } from "../src/repositorio/infra/hospedagem/pr.ts";
+import {
+  caminhoDaWorktreeDemanda,
+  caminhoDaWorktreeRodada,
+} from "../src/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,
