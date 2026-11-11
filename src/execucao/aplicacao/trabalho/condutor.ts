@@ -17,7 +17,13 @@ import {
 import { recolherGruposDasAvaliacoes } from "../../../qualidade/armazenamento/avaliacoes.ts";
 import { falharPendentes } from "../../../qualidade/armazenamento/simulacao.ts";
 import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
-import type { EventoDoAgente, Harness, RespostaDaConsulta } from "../../../harness/harness.ts";
+import type {
+  EventoDoAgente,
+  Harness,
+  Lancamento,
+  ProcessoDoAgente,
+  RespostaDaConsulta,
+} from "../../../harness/harness.ts";
 import type { Ambiente, IdentificadorDoProcesso } from "../../../ambiente/infra/ambiente.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoServico, conjuntoDoServico } from "../../../ambiente/aplicacao/espaco/ambiente_do_servico.ts";
@@ -154,21 +160,20 @@ function daPergunta(
 export interface PedidoDeProcesso {
   /** O processo de um ticket, ou da avaliação (`id` é a sessão), que roda como consulta e fica fora do agregado. */
   execucao: { id: Id | string; sessao: string; modo: ModoTrabalho };
-  args: string[];
+  /**
+   * O agente a lançar, que o harness transforma em linha de comando e variáveis de ambiente. O da simulação lê o
+   * prompt dos argumentos, não usa o RPC e sai quando termina o trabalho; sair, com qualquer código ou sinal, é o
+   * desfecho normal, e o `limiteMin` é o único relógio.
+   */
+  lancamento: Lancamento;
   cwd: string;
   /** Onde o pi roda: o Ambiente do Espaço do ticket; sem ele (consulta, avaliação, simulação), o do serviço. */
   ambiente?: Ambiente;
-  env: NodeJS.ProcessEnv;
   /** Com o banco, o processo é de um ticket e recebe o token com que o agente fala com a API (`FABRIQUINHA_TOKEN`). */
   banco?: DatabaseSync;
   log: string;
   prompt: string | undefined;
   limiteMin: number;
-  /**
-   * O pi em `--mode json` (a simulação): lê o prompt dos argumentos, não usa o RPC e sai quando termina o trabalho;
-   * sair, com qualquer código ou sinal, é o desfecho normal, e o `limiteMin` é o único relógio.
-   */
-  terminaSozinho?: boolean;
   /** Chamado com o grupo de processos do pi e o Ambiente que o lançou, logo depois de lançado, para quem precisa matá-lo no reinício (F4 §7). */
   aoLancar(pgid: number, ambienteId: string): void;
   /**
@@ -222,18 +227,30 @@ export class CondutorDeTrabalhos {
   }
 
   /**
-   * O ambiente do pi com o token novo do processo: só o hash vai ao banco, e o token vale até o `fim` do processo, que o
-   * invalida. Sem banco (consulta, simulação), o ambiente segue como veio.
+   * O token novo do processo e o endereço da API do agente, que o harness soma às variáveis do agente: só o hash vai ao
+   * banco, e o token vale até o `fim` do processo, que o invalida. Sem banco (consulta, simulação), nenhuma.
    */
-  private ambienteComToken(r: PedidoDeProcesso): NodeJS.ProcessEnv {
-    if (r.banco === undefined) return r.env;
+  private variaveisDoServico(r: PedidoDeProcesso): Record<string, string> {
+    if (r.banco === undefined) return {};
     const token = randomBytes(32).toString("hex");
     gravarTokenDoProcesso(r.banco, String(r.execucao.id), token);
     return {
-      ...r.env,
       FABRIQUINHA_TOKEN: token,
       ...(this.urlDaApi !== undefined && { FABRIQUINHA_API: this.urlDaApi }),
     };
+  }
+
+  /**
+   * O harness pode recusar o lançamento antes de subir o agente (a raiz git sumiu, a sessão tem dois arquivos): a sessão
+   * deixa de estar em curso, para a próxima tentativa poder lançar, e o erro segue para quem pediu.
+   */
+  private lancarSemPrenderASessao(sessao: string, lancar: () => ProcessoDoAgente): ProcessoDoAgente {
+    try {
+      return lancar();
+    } catch (erro) {
+      this.sessoesEmCurso.delete(sessao);
+      throw erro;
+    }
   }
 
   private vivaDaSessao(sessao: string): Viva | undefined {
@@ -453,7 +470,8 @@ export class CondutorDeTrabalhos {
     return new Promise((resolve) => {
       const agoraEmMs = () => Date.parse(relogio.agora());
       const { id, sessao } = r.execucao;
-      const env = this.ambienteComToken(r);
+      const variaveisDoServico = this.variaveisDoServico(r);
+      const terminaSozinho = r.lancamento.tipo === "simulacao";
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
       const expiracoes = new Map<string, NodeJS.Timeout>();
@@ -643,13 +661,10 @@ export class CondutorDeTrabalhos {
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
       const ambienteDoPi = r.ambiente ?? ambienteDoServico();
-      const pi = this.harness.lancar(
-        ambienteDoPi,
-        r.args,
-        { cwd: r.cwd, env, log: r.log, ...(r.terminaSozinho && { fecharStdin: true }) },
-        (evento) => {
+      const pi = this.lancarSemPrenderASessao(sessao, () =>
+        this.harness.lancar(ambienteDoPi, r.lancamento, { cwd: r.cwd, log: r.log, variaveisDoServico }, (evento) => {
           // O `--mode json` não fala o protocolo RPC: o resultado do trabalho é o que ele grava em disco.
-          if (r.terminaSozinho) return;
+          if (terminaSozinho) return;
           if (agenteTerminou) estaViva.naoGravadas = [];
           agenteTerminou = false;
           this.repassar(sessao, evento, r.log);
@@ -698,7 +713,7 @@ export class CondutorDeTrabalhos {
               break;
           }
           rearmarVigiaDoModelo();
-        },
+        }),
       );
       // Sem pid (o pi nem subiu) não há grupo a gravar; o `saiu` do pi relata o erro.
       if (Number.isInteger(pi.identificador.grupo_processo)) {
@@ -712,7 +727,7 @@ export class CondutorDeTrabalhos {
         r.aoLancar(pi.identificador.grupo_processo, pi.identificador.ambiente_id);
       }
       void pi.saiu.then((codigo) => {
-        if (r.terminaSozinho) {
+        if (terminaSozinho) {
           fim();
           return;
         }

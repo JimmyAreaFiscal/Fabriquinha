@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
 import { PACOTE } from "../src/harness/pi/pi.ts";
-import { skillsDaEtapaDemanda } from "../src/execucao/aplicacao/trabalho/argumentos_do_ticket.ts";
+import { skillsDaEtapaDemanda } from "../src/execucao/aplicacao/trabalho/lancamento_do_ticket.ts";
 import { condutor } from "../src/execucao/aplicacao/trabalho/condutor.ts";
 
 const harness = new HarnessPi();
@@ -45,7 +45,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     // importou e inicializou (`<caminho> factory`), na ordem de carga.
     const pi = spawnSync(harness.binarioPi(), [...args, "-e", sonda], {
       cwd: dir,
-      env: { ...harness.variaveisDeAmbiente(dir, dir, 1), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+      env: { ...harness.variaveisDeAmbiente(dir, dir, "ticket"), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
       input: "",
       encoding: "utf8",
       timeout: 30_000,

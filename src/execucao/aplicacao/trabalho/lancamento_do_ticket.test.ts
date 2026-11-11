@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../../../demanda/nucleo/agregado_demanda.ts";
 import { catalogoDaEtapa } from "../../../qualidade/nucleo/evidencias/evidencia_etapa.ts";
 import { EtapaTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
 import { PACOTE, skillDoTipo } from "../../../harness/pi/pi.ts";
-import { argumentosDoAgenteDoTicket, skillsDaEtapaDemanda } from "./argumentos_do_ticket.ts";
+import { lancamentoDoTicket, skillsDaEtapaDemanda } from "./lancamento_do_ticket.ts";
 
-const base = { raiz: "/r", sessao: "s", confianca: undefined, modo: "autonomo" as const };
+// O pi do Auditor do teste não tem trust.json: a confiança fica no padrão, sem ler a da máquina.
+process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "fabriquinha-pi-do-auditor-"));
+const base = { raiz: "/r", sessao: "s", dir: "/r/execucoes/E-1", repositorio: tmpdir(), modo: "autonomo" as const };
+/** A linha de comando que o adapter pi monta do lançamento do ticket. */
+const argumentosDoAgenteDoTicket = (entrada: Parameters<typeof lancamentoDoTicket>[0]): string[] =>
+  new HarnessPi().argumentosDoLancamento(lancamentoDoTicket(entrada));
 const ticket = (campos: Partial<TicketDemanda> = {}) =>
   ({ etapa: "implementar", ...campos }) as unknown as TicketDemanda;
 const daEtapa = {
@@ -14,6 +23,15 @@ const daEtapa = {
   configuracao_agente: { modelo: { provedor: "p2", nome: "m2" }, effort: "low" as const },
 };
 const flags = (args: string[], flag: string) => args.flatMap((a, i) => (args[i - 1] === flag ? [a] : []));
+
+test("o lançamento é do ticket, com a sessão, a pasta e o repositório de onde vem a confiança", () => {
+  assert.partialDeepStrictEqual(lancamentoDoTicket({ ...base, ticket: ticket(), etapasDoProjeto: [] }), {
+    tipo: "ticket",
+    sessao: "s",
+    dir: "/r/execucoes/E-1",
+    repositorio: tmpdir(),
+  });
+});
 
 test("revisar_rodada traz só as duas skills do catálogo (CA-3)", () => {
   const args = argumentosDoAgenteDoTicket({
@@ -58,7 +76,8 @@ test("pacote real: toda skill de agente do catálogo existe, em todas as etapas 
     const doCatalogo = catalogoDaEtapa(etapa)
       .filter((item) => item.produtor === "agente")
       .map((item) => skillDoTipo(item.tipo));
-    assert.deepEqual(skillsDaEtapaDemanda(etapa), doCatalogo, `skills ausentes no pacote para ${etapa}`);
+    assert.deepEqual(skillsDaEtapaDemanda(etapa), doCatalogo, `skills do catálogo para ${etapa}`);
+    for (const skill of doCatalogo) assert.ok(existsSync(join(PACOTE, "skills", skill)), `${skill} falta no pacote`);
   }
   assert.ok(EtapaTicket.options.includes("encerrar_rodada"));
 });

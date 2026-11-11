@@ -47,7 +47,7 @@ import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./trabalho/auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
-import { argumentosDoAgenteDoTicket } from "./trabalho/argumentos_do_ticket.ts";
+import { lancamentoDoTicket } from "./trabalho/lancamento_do_ticket.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "../../fluxo/aplicacao/prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes/sessoes_demanda.ts";
 import type { ModoTrabalho } from "../../compartilhado/nucleo/primitivos.ts";
@@ -165,23 +165,21 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         })),
       });
     writeFileSync(join(dir, "prompt.md"), prompt);
-    const args = argumentosDoAgenteDoTicket({
-      raiz,
-      sessao: sessao.id,
-      confianca: condutor.harness.confiancaNoRepositorio(projeto.raiz_git),
-      modo: sessao.modo,
-      ticket: c.ticket,
-      etapasDoProjeto: projeto.etapas,
-    });
     // Parada em curso durante a preparação: não lança um pi novo; a falha vira reinício do serviço abaixo.
     if (condutor.emParada()) throw new Error("o serviço está parando");
-    anotar(log, `pi ${args.join(" ")}`);
     falha = await condutor.iniciar({
       execucao: { id: execucao.id, sessao: sessao.id, modo: sessao.modo },
-      args,
+      lancamento: lancamentoDoTicket({
+        raiz,
+        sessao: sessao.id,
+        dir,
+        repositorio: projeto.raiz_git,
+        modo: sessao.modo,
+        ticket: c.ticket,
+        etapasDoProjeto: projeto.etapas,
+      }),
       cwd: worktree,
       ambiente,
-      env: condutor.harness.variaveisDeAmbiente(raiz, dir, execucao.id, ambiente.tipo),
       banco: c.banco,
       log,
       prompt,

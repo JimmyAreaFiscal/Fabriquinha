@@ -125,7 +125,7 @@ test("o ambiente que o harness dá ao agente do ticket não traz FABRIQUINHA_ROO
   const { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: execucao } = process.env;
   Object.assign(process.env, { FABRIQUINHA_ROOT: "/raiz", FABRIQUINHA_EXECUCAO: "exec-1" });
   try {
-    const ambiente = new HarnessPi().variaveisDeAmbiente("/raiz", pastaVazia, "exec-1");
+    const ambiente = new HarnessPi().variaveisDeAmbiente("/raiz", pastaVazia, "ticket");
     assert.equal(ambiente.FABRIQUINHA_ROOT, undefined);
     assert.equal(ambiente.FABRIQUINHA_EXECUCAO, undefined);
     assert.ok(ambiente.PATH?.split(":").some((p) => p.endsWith("pacote-pi/bin")));

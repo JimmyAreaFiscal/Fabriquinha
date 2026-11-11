@@ -14,7 +14,6 @@ import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
 import { dirDaExecucaoSimulada, noLog } from "../../../compartilhado/infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../../armazenamento/simulacao.ts";
-import { ambienteSemCredenciais } from "../../../ambiente/infra/ambiente.ts";
 import { executar } from "../../../compartilhado/infra/processo.ts";
 import { condutor } from "../../../execucao/aplicacao/trabalho/condutor.ts";
 
@@ -104,21 +103,17 @@ async function executarUma(
   // Sem falha, o pi saiu sozinho; a única falha possível é o limite de tempo do condutor.
   const falhaPorTempoLimite = await condutor.iniciar({
     execucao: { id: identificador, sessao: identificador, modo: "autonomo" },
-    args: condutor.harness.argumentosDaSimulacao({
-      dirDaSessao: join(dir, "sessao"),
+    lancamento: {
+      tipo: "simulacao",
+      dir,
       anexos,
       prompt: promptDaPersona(usuario, texto, link, anexos.length > 0),
-    }),
-    cwd: dir,
-    env: {
-      ...ambienteSemCredenciais(process.env, join(dir, "vazio")),
-      FABRIQUINHA_LINK: link,
-      FABRIQUINHA_SAIDA: saida,
+      link,
     },
+    cwd: dir,
     log: join(dir, "log"),
     prompt: undefined,
     limiteMin: timeoutMin,
-    terminaSozinho: true,
     aoLancar: (pgid) => {
       gravarPgid(banco, id, pgid);
     },

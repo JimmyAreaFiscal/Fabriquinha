@@ -15,7 +15,7 @@ import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
 import type {
   EventoDoAgente,
   Harness,
-  LancamentoDaSimulacao,
+  Lancamento,
   LancamentoDeAuditoria,
   LancamentoDoTicket,
   ProcessoDoAgente,
@@ -73,6 +73,18 @@ const arquivosDaSessaoEm = (dir: string, sessaoPi: string): string[] =>
 /** Como a consulta roda o pi: `executar` do host; os testes trocam. */
 type RodarComando = typeof executar;
 
+/** A linha de comando do ticket, com as skills que o pacote tem e a confiança do `trust.json` já resolvidas. */
+interface LinhaDeComandoDoTicket extends Pick<LancamentoDoTicket, "raiz" | "sessao" | "modelo" | "effort" | "modo"> {
+  skills: readonly string[];
+  confianca: boolean | undefined;
+}
+
+type LinhaDeComandoDaAuditoria = Omit<LancamentoDeAuditoria, "tipo" | "dir">;
+
+/** As skills que existem em `pacote-pi/skills`: o pi ignora em silêncio um `--skill` que não existe (CA-12). */
+const skillsDoPacote = (skills: readonly string[]): string[] =>
+  skills.filter((skill) => existsSync(join(PACOTE, "skills", skill)));
+
 export class HarnessPi implements Harness {
   readonly #rodarComando: RodarComando;
 
@@ -93,7 +105,7 @@ export class HarnessPi implements Harness {
    * A auditoria do Histórico (`LancamentoDeAuditoria`) tira essas mesmas ferramentas e só a guarda, que deixa o
    * `subagent` chamar apenas o `scout`, vai com ela.
    */
-  argumentos(l: LancamentoDoTicket | LancamentoDeAuditoria): string[] {
+  argumentos(l: LinhaDeComandoDoTicket | LinhaDeComandoDaAuditoria): string[] {
     const comum = [
       "--mode",
       "rpc",
@@ -126,37 +138,41 @@ export class HarnessPi implements Harness {
     ];
   }
 
-  /** F8 §5: o pi em `--mode json`, só com as ferramentas do `navegador`, os anexos como `@arquivo` e o prompt por último. */
-  argumentosDaSimulacao({ dirDaSessao, anexos, prompt }: LancamentoDaSimulacao): string[] {
-    return [
-      "--mode",
-      "json",
-      "--session-dir",
-      dirDaSessao,
-      "--tools",
-      FERRAMENTAS_DA_SIMULACAO,
-      "-e",
-      join(PACOTE, "extensions", "navegador.ts"),
-      ...anexos.map((arquivo) => `@${arquivo}`),
-      prompt,
-    ];
-  }
-
-  /** As skills que existem em `pacote-pi/skills`: o pi ignora em silêncio um `--skill` que não existe. */
-  skillsDisponiveis(skills: readonly string[]): string[] {
-    return skills.filter((skill) => existsSync(join(PACOTE, "skills", skill)));
-  }
-
-  /** F4 §6.1.1: a decisão de confiança do `trust.json` do pi do Auditor. */
-  confiancaNoRepositorio(repositorio: string): boolean | undefined {
-    return confianca(repositorio);
+  /**
+   * A linha de comando do `lancamento`. A simulação (F8 §5) é o pi em `--mode json`, só com as ferramentas do
+   * `navegador`, a sessão em `<dir>/sessao`, os anexos como `@arquivo` e o prompt por último.
+   */
+  argumentosDoLancamento(lancamento: Lancamento): string[] {
+    switch (lancamento.tipo) {
+      case "ticket":
+        return this.argumentos({
+          ...lancamento,
+          skills: skillsDoPacote(lancamento.skills),
+          confianca: confianca(lancamento.repositorio),
+        });
+      case "auditoria":
+        return this.argumentos(lancamento);
+      case "simulacao":
+        return [
+          "--mode",
+          "json",
+          "--session-dir",
+          join(lancamento.dir, "sessao"),
+          "--tools",
+          FERRAMENTAS_DA_SIMULACAO,
+          "-e",
+          join(PACOTE, "extensions", "navegador.ts"),
+          ...lancamento.anexos.map((arquivo) => `@${arquivo}`),
+          lancamento.prompt,
+        ];
+    }
   }
 
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
-   * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket (`execucao`) fala com a API pelo cliente
+   * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket fala com a API pelo cliente
    * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
-   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. Sem `execucao` (a auditoria `<raiz>/avaliacoes/<sessão>`), que não é de
+   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. A auditoria (`<raiz>/avaliacoes/<sessão>`), que não é de
    * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
    * No Ambiente `container` o env começa vazio, sem `process.env`: só as chaves de provedor do LLM e as variáveis da
    * Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio AmbienteContainer.
@@ -164,13 +180,13 @@ export class HarnessPi implements Harness {
   variaveisDeAmbiente(
     raiz: string,
     dir: string,
-    execucao?: number | string,
+    agente: "ticket" | "auditoria",
     tipoDoAmbiente: Ambiente["tipo"] = "host_local",
   ): NodeJS.ProcessEnv {
     if (tipoDoAmbiente === "container") {
       return {
         ...chavesDeProvedorDoLlm(process.env),
-        ...(execucao === undefined
+        ...(agente === "auditoria"
           ? { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
           : { FABRIQUINHA_SAIDA: join(dir, "saida") }),
       };
@@ -180,7 +196,7 @@ export class HarnessPi implements Harness {
       FABRIQUINHA_ROOT: _raizHerdada,
       ...semCredenciais
     } = ambienteSemCredenciais(process.env, join(dir, "vazio"));
-    return execucao === undefined
+    return agente === "auditoria"
       ? { ...semCredenciais, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
       : {
           ...semCredenciais,
@@ -190,11 +206,47 @@ export class HarnessPi implements Harness {
   }
 
   /**
+   * As variáveis do `lancamento` no Ambiente `tipoDoAmbiente`. A auditoria roda sempre no Ambiente do serviço, com as do
+   * host; a simulação (F8 §5) recebe o produto em `FABRIQUINHA_LINK` e a pasta do relatório em `FABRIQUINHA_SAIDA`.
+   */
+  variaveisDoLancamento(lancamento: Lancamento, tipoDoAmbiente: Ambiente["tipo"]): NodeJS.ProcessEnv {
+    switch (lancamento.tipo) {
+      case "ticket":
+        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "ticket", tipoDoAmbiente);
+      case "auditoria":
+        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "auditoria");
+      case "simulacao":
+        return {
+          ...ambienteSemCredenciais(process.env, join(lancamento.dir, "vazio")),
+          FABRIQUINHA_LINK: lancamento.link,
+          FABRIQUINHA_SAIDA: join(lancamento.dir, "saida"),
+        };
+    }
+  }
+
+  /**
+   * Lança o agente do `lancamento`: a linha de comando vai para o `log` (a da simulação não, que traz o prompt inteiro),
+   * e o stdin da simulação fecha já, porque ela lê o prompt dos argumentos.
+   */
+  lancar(
+    ambiente: Ambiente,
+    lancamento: Lancamento,
+    { cwd, log, variaveisDoServico }: { cwd: string; log: string; variaveisDoServico?: Record<string, string> },
+    aoEvento: (evento: EventoDoAgente) => void,
+  ): ProcessoDoAgente {
+    const args = this.argumentosDoLancamento(lancamento);
+    const simulacao = lancamento.tipo === "simulacao";
+    if (!simulacao) anotar(log, `pi ${args.join(" ")}`);
+    const env = { ...this.variaveisDoLancamento(lancamento, ambiente.tipo), ...variaveisDoServico };
+    return this.lancarProcesso(ambiente, args, { cwd, env, log, fecharStdin: simulacao }, aoEvento);
+  }
+
+  /**
    * Lança o pi, pelo `ambiente`, num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
    * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
    * e o modo RPC precisa do stdin aberto.
    */
-  lancar(
+  lancarProcesso(
     ambiente: Ambiente,
     args: readonly string[],
     { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },

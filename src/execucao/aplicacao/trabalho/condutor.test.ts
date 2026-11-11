@@ -22,6 +22,7 @@ import type { executar } from "../../../compartilhado/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
+import type { Harness } from "../../../harness/harness.ts";
 import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
 import {
   atividadeDo,
@@ -135,9 +136,9 @@ function rodar(
   const fim = condutor.iniciar(
     {
       execucao: { id: sessao, sessao, modo },
-      args: [],
+      // A auditoria: o agente sem token, com o FABRIQUINHA_ROOT da pasta do teste.
+      lancamento: { tipo: "auditoria", raiz: dir, sessao, dir },
       cwd: dir,
-      env: { ...process.env, FABRIQUINHA_ROOT: dir },
       log: join(dir, "log"),
       prompt: "trabalhe",
       limiteMin,
@@ -649,6 +650,29 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
   assert.deepEqual(docker.registro(), []);
 });
 
+test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessão em curso", async () => {
+  const recusa = new ErroDeRegra("a sessão s-recusada tem 2 arquivos", "deixe só um");
+  const harnessQueRecusa = {
+    lancar: () => {
+      throw recusa;
+    },
+  } as unknown as Harness;
+  const condutorQueRecusa = new CondutorDeTrabalhos(harnessQueRecusa);
+  await assert.rejects(
+    condutorQueRecusa.iniciar({
+      execucao: { id: "s-recusada", sessao: "s-recusada", modo: "consulta" },
+      lancamento: { tipo: "auditoria", raiz: base, sessao: "s-recusada", dir: base },
+      cwd: base,
+      log: join(base, "log-recusado"),
+      prompt: undefined,
+      limiteMin: 1,
+      aoLancar: () => undefined,
+    }),
+    recusa,
+  );
+  assert.equal(condutorQueRecusa.emCurso("s-recusada"), false);
+});
+
 test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que falhou", async () => {
   const pi =
     (codigo: number): typeof executar =>
@@ -681,10 +705,9 @@ async function lancarPiNoContainer() {
   const fim = condutor.acompanhar(id, () =>
     condutor.iniciar({
       execucao: { id, sessao: id, modo: "autonomo" },
-      args: [],
+      lancamento: { tipo: "auditoria", raiz: dir, sessao: id, dir },
       cwd: dir,
       ambiente: ambienteContainer,
-      env: { ...process.env },
       log: join(dir, "log"),
       prompt: "[ao vivo]",
       limiteMin: 1,

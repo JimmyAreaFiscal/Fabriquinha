@@ -115,7 +115,7 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
   process.env.SYSTEM_ACCESSTOKEN = "segredo";
   process.env.SONAR_TOKEN = "segredo";
   try {
-    const env = harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", 7);
+    const env = harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket");
     assert.equal(env.GH_TOKEN, undefined);
     assert.equal(env.SYSTEM_ACCESSTOKEN, undefined);
     assert.equal(env.SONAR_TOKEN, undefined);
@@ -149,11 +149,11 @@ test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais
   const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
   Object.assign(process.env, herdadas);
   try {
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", 7, "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket", "container"), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
     });
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", undefined, "container"), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", "auditoria", "container"), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_ROOT: "/r",
       FABRIQUINHA_AUDITORIA: "1",
@@ -203,7 +203,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {
-    const env = harness.variaveisDeAmbiente("/r", `/r/avaliacoes/${sessao}`);
+    const env = harness.variaveisDeAmbiente("/r", `/r/avaliacoes/${sessao}`, "auditoria");
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
     assert.equal(env.PATH, process.env.PATH);
     assert.equal(env.GH_TOKEN, undefined);
@@ -223,7 +223,7 @@ test("pi que nem roda: o erro vai para o log, saiu resolve, e enviar e parar nã
   try {
     // Variável indefinida do env não vai ao Ambiente.
     const env = { ...process.env, SEM_VALOR: undefined };
-    const pi = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env, log }, () => undefined);
+    const pi = harness.lancarProcesso(new AmbienteHostLocal(), [], { cwd: base, env, log }, () => undefined);
     pi.enviar({ type: "prompt", message: "oi" });
     assert.equal(await pi.saiu, -2);
     await pi.parar();
@@ -246,7 +246,7 @@ test("stdout: cada objeto JSON vira evento; texto solto, null e número vão par
   process.env.FABRIQUINHA_ROOT = base;
   try {
     const eventos: unknown[] = [];
-    const pi = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env: process.env, log }, (e) =>
+    const pi = harness.lancarProcesso(new AmbienteHostLocal(), [], { cwd: base, env: process.env, log }, (e) =>
       eventos.push(e),
     );
     assert.equal(await pi.saiu, 0);
@@ -271,14 +271,19 @@ test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", a
   process.env.FABRIQUINHA_ROOT = base;
   try {
     // O pi só termina no EOF; sem fecharStdin, ficaria preso até o parar().
-    const piFechado = harness.lancar(
+    const piFechado = harness.lancarProcesso(
       new AmbienteHostLocal(),
       [],
       { cwd: base, env: process.env, log, fecharStdin: true },
       () => undefined,
     );
     assert.equal(await piFechado.saiu, 0);
-    const aberto = harness.lancar(new AmbienteHostLocal(), [], { cwd: base, env: process.env, log }, () => undefined);
+    const aberto = harness.lancarProcesso(
+      new AmbienteHostLocal(),
+      [],
+      { cwd: base, env: process.env, log },
+      () => undefined,
+    );
     const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
     assert.equal(preso, "preso");
     await aberto.parar();
@@ -389,11 +394,60 @@ test("a sessão que já nasceu solta em sessoes/ (antes da pasta própria) conti
   assert.equal(harness.pastaDaSessao(raiz, "s-9"), join(raiz, "sessoes", "s-9"));
 });
 
-test("skillsDisponiveis: só as que existem no pacote, na ordem pedida (CA-12)", () => {
-  assert.deepEqual(harness.skillsDisponiveis(["artefato-plano", "artefato-inexistente", "artefato-mensagem-pr"]), [
-    "artefato-plano",
-    "artefato-mensagem-pr",
-  ]);
+test("lançamento do ticket: só as skills que o pacote tem (CA-12) e a confiança do trust.json do pi do Auditor", () => {
+  const agente = join(base, "agente-da-confianca");
+  mkdirSync(agente);
+  writeFileSync(join(agente, "trust.json"), JSON.stringify({ [base]: true }));
+  const anterior = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agente;
+  try {
+    const args = harness.argumentosDoLancamento({
+      tipo: "ticket",
+      raiz: "/r",
+      sessao: "s-1",
+      dir: "/r/execucoes/E-1",
+      skills: ["artefato-plano", "artefato-inexistente", "artefato-mensagem-pr"],
+      modelo: undefined,
+      modo: "autonomo",
+      repositorio: base,
+    });
+    assert.deepEqual(
+      args.flatMap((a, i) => (args[i - 1] === "--skill" ? [a] : [])),
+      ["artefato-plano", "artefato-mensagem-pr"].map((skill) => join(PACOTE, "skills", skill)),
+    );
+    assert.ok(args.includes("--approve"));
+  } finally {
+    if (anterior === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = anterior;
+  }
+});
+
+test("lancar: a auditoria vai com a linha de comando no log e o stdin aberto; a simulação, com o stdin fechado e sem a linha", async () => {
+  const log = join(base, "log-do-lancamento");
+  const dir = join(base, "processo-do-lancamento");
+  const piFalso = instalarPiFalso(base).roteirizar([{ saidaDoProcesso: { esperaEof: true } }]);
+  try {
+    const auditoria = harness.lancar(
+      new AmbienteHostLocal(),
+      { tipo: "auditoria", raiz: base, sessao: "s-2", dir },
+      { cwd: base, log, variaveisDoServico: { FABRIQUINHA_EXECUCAO: "do-servico" } },
+      () => undefined,
+    );
+    assert.equal(await Promise.race([auditoria.saiu, dormir(200, "preso")]), "preso");
+    await auditoria.parar();
+    assert.match(readFileSync(log, "utf8"), /pi --mode rpc --session-dir /);
+    assert.equal(piFalso.registro()[0]?.execucao, "do-servico", "as variáveis do serviço vão por cima");
+    const simulacao = harness.lancar(
+      new AmbienteHostLocal(),
+      { tipo: "simulacao", dir, anexos: [], prompt: "imite o usuário", link: "http://produto" },
+      { cwd: base, log },
+      () => undefined,
+    );
+    assert.equal(await simulacao.saiu, 0);
+    assert.doesNotMatch(readFileSync(log, "utf8"), /pi --mode json/);
+  } finally {
+    delete process.env.FABRIQUINHA_PI;
+  }
 });
 
 test("lerUsoDaSessao: o Uso do JSONL da sessão na janela, e nenhum sem o arquivo", () => {
@@ -419,18 +473,4 @@ test("lerUsoDaSessao: o Uso do JSONL da sessão na janela, e nenhum sem o arquiv
     harness.lerUsoDaSessao(raiz, "s-1", Date.parse("2026-10-11T12:00:00.000Z"), Infinity).map((l) => l.chamadas),
     [1],
   );
-});
-
-test("confiancaNoRepositorio: a decisão do trust.json do pi do Auditor", () => {
-  const agente = join(base, "agente-da-confianca");
-  mkdirSync(agente);
-  writeFileSync(join(agente, "trust.json"), JSON.stringify({ [base]: true }));
-  const anterior = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = agente;
-  try {
-    assert.equal(harness.confiancaNoRepositorio(base), true);
-  } finally {
-    if (anterior === undefined) delete process.env.PI_CODING_AGENT_DIR;
-    else process.env.PI_CODING_AGENT_DIR = anterior;
-  }
 });

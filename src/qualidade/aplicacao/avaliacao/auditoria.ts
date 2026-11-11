@@ -45,9 +45,6 @@ export function subir(
 ): Promise<string | undefined> {
   const dir = join(raiz, pasta, sessao);
   const log = join(dir, "log");
-  const { harness } = condutor;
-  const args = harness.argumentos({ raiz, sessao, modelo, extensoes });
-  anotar(log, `pi ${args.join(" ")}`);
   const sincronizarNoLog = (): void => {
     try {
       sincronizar();
@@ -61,9 +58,8 @@ export function subir(
   const tarefa = condutor
     .iniciar({
       execucao: { id: sessao, sessao, modo: "consulta" },
-      args,
+      lancamento: { tipo: "auditoria", raiz, sessao, dir, modelo, extensoes },
       cwd: dir,
-      env: harness.variaveisDeAmbiente(raiz, dir),
       log,
       prompt,
       limiteMin: ociosidadeMin,

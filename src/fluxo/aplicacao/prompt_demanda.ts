@@ -9,7 +9,7 @@ import type { EtapaTicket } from "../../compartilhado/nucleo/primitivos.ts";
 import { impactoExigeReversao } from "../../qualidade/nucleo/evidencias/schemas.ts";
 import type { RetornoAoAgente } from "../../execucao/nucleo/tentativa.ts";
 import type { AnexoDaDemanda } from "../../qualidade/armazenamento/evidencia_demanda.ts";
-import { skillsDaEtapaDemanda } from "../../execucao/aplicacao/trabalho/argumentos_do_ticket.ts";
+import { skillsDaEtapaDemanda } from "../../execucao/aplicacao/trabalho/lancamento_do_ticket.ts";
 
 /** Um anexo de evidência da demanda com o caminho do arquivo no disco, que o agente lê direto. */
 type AnexoNoDisco = AnexoDaDemanda & { caminho: string };

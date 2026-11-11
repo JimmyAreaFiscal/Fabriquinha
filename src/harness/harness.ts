@@ -18,35 +18,52 @@ export interface RespostaDaConsulta {
   uso: LinhaDeUso[];
 }
 
-/** O agente do ticket de uma demanda, ou o da sessão de ajustes. */
+/**
+ * O agente do ticket de uma demanda, ou o da sessão de ajustes: o adapter monta a linha de comando, filtra as skills que
+ * o pacote dele tem e resolve a confiança do Auditor no `repositorio`.
+ */
 export interface LancamentoDoTicket {
+  tipo: "ticket";
   raiz: string;
   sessao: string;
-  /** As skills de artefato da etapa (P1 §5.1), já filtradas por `skillsDisponiveis`. */
-  skills: string[];
+  /** A pasta do processo (`saida/`, `vazio/`), sob a raiz. */
+  dir: string;
+  /** As skills de artefato da etapa (P1 §5.1), as do catálogo. */
+  skills: readonly string[];
   modelo: Modelo | undefined;
   effort?: Effort;
-  /** A decisão de confiança do Auditor no repositório (`confiancaNoRepositorio`); `undefined`: vale o padrão. */
-  confianca: boolean | undefined;
   modo: ModoTrabalho;
+  /** A raiz git do projeto, de onde vem a confiança herdada do Auditor. */
+  repositorio: string;
 }
 
 /** A auditoria do Histórico: sem skills, effort nem confiança herdada; o `modelo` é o da Configuração, ou o padrão do harness. */
 export interface LancamentoDeAuditoria {
+  tipo: "auditoria";
   raiz: string;
   sessao: string;
+  /** A pasta da conversa, sob a raiz. */
+  dir: string;
   modelo?: Modelo | null;
   /** As extensões a mais da conversa (a `achado.ts` da avaliação), pelo nome do arquivo no pacote. */
   extensoes?: string[];
 }
 
-/** A execução simulada (F8 §5): o agente imita o Usuário Simulado pelo navegador e sai sozinho ao terminar. */
-export interface LancamentoDaSimulacao {
-  dirDaSessao: string;
+/**
+ * A execução simulada (F8 §5): o agente imita o Usuário Simulado no produto em `link`, lê o prompt dos argumentos,
+ * não fala o protocolo e sai sozinho ao terminar; o resultado é o que ele grava em `<dir>/saida`.
+ */
+interface LancamentoDaSimulacao {
+  tipo: "simulacao";
+  /** A pasta da execução: a sessão, a saída e o diretório vazio das credenciais ficam nela. */
+  dir: string;
   /** Os arquivos que vão junto do prompt. */
   anexos: string[];
   prompt: string;
+  link: string;
 }
+
+export type Lancamento = LancamentoDoTicket | LancamentoDeAuditoria | LancamentoDaSimulacao;
 
 /** O processo do agente lançado num Ambiente. */
 export interface ProcessoDoAgente {
@@ -61,32 +78,15 @@ export interface ProcessoDoAgente {
 }
 
 export interface Harness {
-  /** A linha de comando do agente do ticket ou da auditoria. */
-  argumentos(lancamento: LancamentoDoTicket | LancamentoDeAuditoria): string[];
-  /** A linha de comando da execução simulada, que lê o prompt dos argumentos e sai sozinha. */
-  argumentosDaSimulacao(lancamento: LancamentoDaSimulacao): string[];
   /**
-   * As variáveis de ambiente do agente, sem credenciais, para o processo em `dir`. Com `execucao`, é o agente de um
-   * ticket; sem ela, o da auditoria.
-   */
-  variaveisDeAmbiente(
-    raiz: string,
-    dir: string,
-    execucao?: number | string,
-    tipoDoAmbiente?: Ambiente["tipo"],
-  ): NodeJS.ProcessEnv;
-  /** As `skills` que o pacote do harness tem, na mesma ordem. */
-  skillsDisponiveis(skills: readonly string[]): string[];
-  /** A decisão de confiança do Auditor mais próxima de `repositorio`; `undefined`: vale o padrão dele. */
-  confiancaNoRepositorio(repositorio: string): boolean | undefined;
-  /**
-   * Lança o agente no `ambiente`, com o stderr no `log`; cada evento do stdout vai para `aoEvento`. Com `fecharStdin`,
-   * o stdin fecha já (o agente que lê o prompt dos argumentos).
+   * Lança o agente do `lancamento` no `ambiente`, em `cwd`, com o stderr no `log`; cada evento do stdout vai para
+   * `aoEvento`. O adapter monta a linha de comando e as variáveis de ambiente sem credenciais; `variaveisDoServico` (o
+   * token e o endereço da API do agente) entram por cima delas.
    */
   lancar(
     ambiente: Ambiente,
-    args: readonly string[],
-    opcoes: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
+    lancamento: Lancamento,
+    opcoes: { cwd: string; log: string; variaveisDoServico?: Record<string, string> },
     aoEvento: (evento: EventoDoAgente) => void,
   ): ProcessoDoAgente;
   /**
