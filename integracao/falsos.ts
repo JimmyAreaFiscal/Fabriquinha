@@ -37,9 +37,9 @@ export function ghFalso(dir: string) {
   };
 }
 
-/** O pi falso da imagem: roteiro e registro ficam no `.git` do repositório, que o container monta no mesmo caminho do host. */
+/** O pi falso da imagem: roteiro e registro ficam em `.git/objects/pi-falso`, a única parte gravável do `.git` que o container monta. */
 const PI_DA_IMAGEM = `#!/bin/sh
-pasta=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
+pasta=$(git rev-parse --path-format=absolute --git-common-dir)/objects/pi-falso || exit 1
 FALSO_PI_ROTEIRO="$pasta/pi-roteiro.json" FALSO_PI_REGISTRO="$pasta/pi-registro.jsonl" exec node /opt/pi-falso/pi_falso.ts "$@"
 `;
 
@@ -105,7 +105,7 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
     home_do_usuario: c.raiz,
   });
   montarConjuntoDoServico(() => conjunto);
-  const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git"));
+  const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git", "objects", "pi-falso"));
   t.after(async () => {
     montarConjuntoDoServico(() => undefined);
     for (const criado of gerador.criados) await gerador.eliminar(criado);

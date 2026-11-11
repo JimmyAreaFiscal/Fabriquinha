@@ -1,6 +1,8 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
 
@@ -123,12 +125,29 @@ async function lerConfigsFixasDoServico(dir: string): Promise<string[]> {
 }
 
 /**
+ * O git segue o `commondir` de um `.git` e executa a config que achar lá (`core.fsmonitor`, `receivepack`...) com o env do
+ * serviço. O container não escreve no topo do `.git` do clone, mas o core confere antes de usar: um `.git` de clone com
+ * `commondir` é forjado. O core só roda git na raiz do clone (nunca numa worktree, que o container controla).
+ */
+async function suspeitaDeCommondirForjado(dir: string): Promise<string | null> {
+  const commondir = join(dir, ".git", "commondir");
+  return (await access(commondir).then(
+    () => true,
+    () => false,
+  ))
+    ? `${commondir} existe num clone: recusado, o container não deveria tê-lo gravado`
+    : null;
+}
+
+/**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
  * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
  * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
+  const suspeita = await suspeitaDeCommondirForjado(dir);
+  if (suspeita) return { codigo: 128, saida: "", erro: suspeita, limiteEstourado: false };
   const r = await executar("git", [...(await lerConfigsFixasDoServico(dir)), "-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
     limiteMs,

@@ -561,7 +561,7 @@ test(
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
     assert.ok(!origens.some((origem) => /\/\.(pi|claude|codex)/.test(origem ?? "")));
-    assert.equal(binds?.length, 7);
+    assert.equal(binds?.length, 9);
   },
 );
 
@@ -682,24 +682,44 @@ test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_
 });
 
 test(
-  "o container não escreve a config nem os hooks do clone, e o git do host no clone não executa nada",
+  "o container não altera o que o git do host lê a partir do clone (commondir, config, hooks e worktrees do usuário), e o git do usuário e o push do core não executam nada",
   COM_DOCKER,
   async (t) => {
     const { c } = cenarioEmContainer(t);
+    // Uma worktree do usuário, que já existe quando o container é criado.
+    const worktreeDoUsuario = join(c.dir, "worktree-do-usuario");
+    git(c.repo, "worktree", "add", "-q", "-b", "do-usuario", worktreeDoUsuario);
     await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, "I-1.R1");
     const marca = join(c.dir, "executado-no-host");
-    const noContainer = (script: string) =>
-      ambiente.executar({ programa: "sh", argumentos: ["-c", script], cwd: join(c.repo, ".git"), env: {} });
+    const gitDoClone = join(c.repo, ".git");
+    const entradaDoUsuario = join(gitDoClone, "worktrees", "do-usuario");
+    const noContainer = (cwd: string, script: string) =>
+      ambiente.executar({ programa: "sh", argumentos: ["-c", script], cwd, env: {} });
+    const fsmonitor = `printf '[core]\\n\\tfsmonitor = "touch ${marca}; false"\\n'`;
+    const receivepack = `printf '[remote "origin"]\\n\\treceivepack = "touch ${marca}; git-receive-pack"\\n'`;
 
-    const config = await noContainer(`printf '[core]\\n\\tfsmonitor = "touch ${marca}; false"\\n' >> config`);
-    const hook = await noContainer("printf '#!/bin/sh\\n' > hooks/pre-commit");
-    assert.notEqual(config.codigo, 0);
-    assert.notEqual(hook.codigo, 0);
+    const tentativas = await Promise.all([
+      noContainer(gitDoClone, `${fsmonitor} >> config`),
+      noContainer(gitDoClone, `${receivepack} >> config`),
+      noContainer(gitDoClone, "printf '#!/bin/sh\\n' > hooks/pre-commit"),
+      noContainer(
+        gitDoClone,
+        `mkdir objects/forjado && ${fsmonitor} > objects/forjado/config && echo objects/forjado > commondir`,
+      ),
+      noContainer(entradaDoUsuario, "echo ../../objects/forjado > commondir"),
+      noContainer(entradaDoUsuario, "echo /tmp/forjado > gitdir"),
+    ]);
+    for (const { codigo, saida } of tentativas) assert.notEqual(codigo, 0, saida);
+    assert.ok(!existsSync(join(gitDoClone, "commondir")));
+    assert.ok(!existsSync(join(entradaDoUsuario, "commondir")));
+    assert.ok(!existsSync(join(gitDoClone, "hooks", "pre-commit")));
 
     git(c.repo, "status");
-    assert.ok(!existsSync(marca), "o git do host no clone não executou o que o container tentou gravar");
-    assert.ok(!existsSync(join(c.repo, ".git", "hooks", "pre-commit")));
+    git(worktreeDoUsuario, "status");
+    git(c.repo, "branch", "nova");
+    await exigirGit(c.repo, "push", "origin", "nova");
+    assert.ok(!existsSync(marca), "nem o git do usuário nem o push do core executaram o que o container tentou gravar");
   },
 );
 
@@ -752,6 +772,14 @@ test(
       env: {},
     });
     assert.notEqual(escreveOHook.codigo, 0);
+    const forjaOGit = await ambiente.executar({
+      programa: `git_comum="$(git rev-parse --path-format=absolute --git-common-dir)" && echo "$git_comum/objects" > "$git_comum/commondir" && printf '[remote "origin"]\\n\\treceivepack = "echo executou >> ${marca}"\\n' >> "$git_comum/config"`,
+      noShell: true,
+      argumentos: [],
+      cwd,
+      env: {},
+    });
+    assert.notEqual(forjaOGit.codigo, 0);
     git(c.repo, "branch", "nova");
     await exigirGit(c.repo, "push", "origin", "nova");
     assert.equal(existsSync(marca), false, "o git do core não executou o pre-push");

@@ -146,6 +146,14 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
   mkdirSync(raiz);
   writeFileSync(join(raiz, "fabriquinha.db"), "banco");
   const pastaDasWorktreesDoProjeto = join(raiz, "worktrees", "projeto");
+  // Uma worktree do usuário (fora da pasta da Fabriquinha) e uma da Fabriquinha, já registradas no clone.
+  const registrarWorktree = (nome: string, caminho: string) => {
+    mkdirSync(join(raizGit, ".git", "worktrees", nome), { recursive: true });
+    writeFileSync(join(raizGit, ".git", "worktrees", nome, "gitdir"), `${caminho}/.git\n`);
+  };
+  registrarWorktree("do-usuario", join(base, "worktree-do-usuario"));
+  registrarWorktree("da-fabriquinha", join(pastaDasWorktreesDoProjeto, "I-1"));
+  mkdirSync(join(raizGit, ".git", "worktrees", "sem-gitdir"));
   const pacote = join(base, "pacote-pi");
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, {
     pastaDasWorktreesDoProjeto,
@@ -165,15 +173,20 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
   // Lista exata: nenhum ~/.pi, ~/.claude nem ~/.codex, nenhum auth.json e nem a pasta inteira de sessões ou de execuções.
   assert.deepEqual(montagens, [
     mesmoCaminho(pastaDasWorktreesDoProjeto, "rw"),
-    mesmoCaminho(join(raizGit, ".git"), "rw"),
-    mesmoCaminho(join(raizGit, ".git", "config"), "ro"),
-    mesmoCaminho(join(raizGit, ".git", "hooks"), "ro"),
+    // O topo do `.git` (commondir, config, hooks, info) é só leitura; escrita só onde o git de uma worktree grava.
+    mesmoCaminho(join(raizGit, ".git"), "ro"),
+    mesmoCaminho(join(raizGit, ".git", "objects"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "refs"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "logs"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "worktrees"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "worktrees", "do-usuario"), "ro"),
+    mesmoCaminho(join(raizGit, ".git", "worktrees", "sem-gitdir"), "ro"),
     { origem: sessoes, destino: join(raiz, "sessoes"), modo: "rw" },
     { origem: execucoes, destino: join(raiz, "execucoes"), modo: "rw" },
     mesmoCaminho(pacote, "ro"),
   ]);
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
-  assert.equal(run.filter((argumento) => argumento === "-v").length, 7);
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 11);
   assert.ok(!run.includes("--mount"));
   assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
   assert.deepEqual([readdirSync(sessoes), readdirSync(execucoes)], [[], []]);
