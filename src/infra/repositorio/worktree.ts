@@ -1,13 +1,14 @@
 // Preparação da worktree (F5 §3.2), descarte das alterações (F5 §3.3), remoção das worktrees do projeto e fila de
 // comandos git (F5 §6).
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../ambiente/ambiente.ts";
 import { anotar } from "../registro.ts";
 import { LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../ambiente/container/gerador_de_ambientes.ts";
 import { git } from "../processo.ts";
 
 /**
@@ -49,6 +50,20 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
     );
   }
   return r.saida;
+}
+
+/**
+ * `git worktree prune` no core: o container não escreve em `.git/worktrees`. Depois dele, apaga a pasta administrativa
+ * da Fabriquinha cuja entrada (o link em `worktrees`) a poda levou.
+ */
+export async function podarWorktreesNoCore(raiz_git: string): ReturnType<typeof git> {
+  const r = await git(raiz_git, "worktree", "prune", "--expire", "now");
+  const pastaDasEntradas = join(raiz_git, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA);
+  if (r.codigo === 0 && existsSync(pastaDasEntradas))
+    for (const nome of readdirSync(pastaDasEntradas))
+      if (!existsSync(join(raiz_git, ".git", "worktrees", nome)))
+        rmSync(join(pastaDasEntradas, nome), { recursive: true, force: true });
+  return r;
 }
 
 /** O env completo do serviço, no formato do Ambiente (sem as variáveis indefinidas). */
@@ -158,7 +173,7 @@ export function removerWorktrees(raiz: string, projeto: Pick<Projeto, "nome" | "
     } catch (error_) {
       avisos.push(`não foi possível apagar ${pasta}: ${mensagem(error_)}`);
     }
-    const r = await git(projeto.raiz_git, "worktree", "prune");
+    const r = await podarWorktreesNoCore(projeto.raiz_git);
     if (r.codigo !== 0) avisos.push(`git -C ${projeto.raiz_git} worktree prune falhou: ${r.erro.trim()}`);
     return avisos;
   });

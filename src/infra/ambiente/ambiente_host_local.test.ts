@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -133,6 +133,16 @@ test("git tem limite: o git parado é morto e o stderr diz por quê; sem estoura
   const v = await git(dir, "--version");
   assert.equal(v.limiteEstourado, false);
   assert.match(v.saida, /^git version /);
+});
+
+test("git recusa o clone cujo .git tem commondir, que um container forjaria para o git executar a config dele", async () => {
+  const dir = mkdtempSync(join(base, "clone-"));
+  await git(dir, "init", "-q");
+  assert.equal((await git(dir, "status")).codigo, 0);
+  writeFileSync(join(dir, ".git", "commondir"), "forjado\n");
+  const r = await git(dir, "status");
+  assert.notEqual(r.codigo, 0);
+  assert.match(r.erro, /commondir existe num clone: recusado/);
 });
 
 test("lancar: conversa por stdin e stdout até saiu e devolve o grupo do processo", async () => {

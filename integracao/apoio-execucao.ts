@@ -1,7 +1,7 @@
 // Apoio comum aos testes que levam uma demanda à execução (CA-SDLC-07 em diante): pi falso com portão, despacho com as
 // verificações injetadas e a demanda com o plano aprovado. Cada arquivo de teste roda no seu processo, então o pi falso é por arquivo.
 import assert from "node:assert/strict";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
@@ -62,10 +62,11 @@ let piEPortaoEmUso = { pi, ...modulosDoArquivoDeTeste };
 
 /**
  * Leva o pi falso, o roteiro, o registro, o portão e os módulos do agente para `pasta`, que o container monta no mesmo
- * caminho (o `.git` do repositório), e faz o core chamar o `pi` da imagem do projeto de teste em vez do arquivo do host.
+ * caminho (`.git/objects/pi-falso` do repositório), e faz o core chamar o `pi` da imagem do projeto de teste em vez do arquivo do host.
  * Devolve o pi falso de lá: o teste o roteiriza e lê o registro dele.
  */
 export function levarPiFalsoParaOContainer(pasta: string) {
+  mkdirSync(pasta, { recursive: true });
   const piDoContainer = instalarPiFalso(pasta);
   piEPortaoEmUso = { pi: piDoContainer, ...gravarModulosDoAgente(pasta) };
   process.env.FABRIQUINHA_PI = "pi";

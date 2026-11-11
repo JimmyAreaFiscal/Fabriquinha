@@ -53,8 +53,11 @@ abstract class CicloDoEspaco {
 
   /** Dá ao Espaço o container do Projeto e passa a rodar nele; sem conjunto ou sem imagem do Ambiente, o Espaço fica no host local. */
   protected async alocarContainerSeHouver(): Promise<void> {
-    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
-      this.ambiente = await this.#conjunto.alocar(this.espaco, this.projeto);
+    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined) {
+      const container = await this.#conjunto.alocar(this.espaco, this.projeto);
+      container.levarEnvDoProjeto(this.projeto.raiz_git);
+      this.ambiente = container;
+    }
   }
 
   /**
@@ -121,7 +124,8 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
     await integrarPR(this.projeto, String(pr.numero));
     const { pasta: demanda, branch } = espacoDaDemanda(this.projeto, demanda_id, raiz);
     await naFilaDoProjeto(raiz, this.projeto.nome, async () => {
-      await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+      // No clone, e não na worktree: o container controla o `.git` da worktree, e o fetch roda com as credenciais do core.
+      await exigirGit(this.projeto.raiz_git, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
       await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
     });
   }

@@ -58,4 +58,8 @@ export class AmbienteHostLocal implements Ambiente {
   caminhoNoAmbiente(caminhoNoHost: string): string {
     return caminhoNoHost;
   }
+
+  abrigarProcesso(): void {
+    // O processo do host local enxerga as pastas da Fabriquinha onde elas estão.
+  }
 }

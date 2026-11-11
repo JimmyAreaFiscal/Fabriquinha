@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { branchDemanda, branchRodada } from "../../nucleo/demanda.ts";
@@ -10,7 +19,9 @@ import {
   rodarGit as git,
 } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada, garantirWorktreeDemanda } from "./worktree-demanda.ts";
+import { podarWorktreesNoCore } from "./worktree.ts";
 import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../ambiente/container/gerador_de_ambientes.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -263,4 +274,28 @@ test("o git local da worktree roda no Ambiente e o fetch, que precisa de credenc
   }
   // O fetch no core atualizou a ref da base no clone do usuário.
   assert.equal(git(pasta, "rev-parse", "HEAD"), git(c.repo, "rev-parse", "origin/integracao"));
+});
+
+test("no container o core cria a worktree e deixa a pasta administrativa dela na pasta que o container escreve, com um link em worktrees", async () => {
+  const c = criarRepositorioDeTeste();
+  const ambienteContainer = Object.create(ambiente, { tipo: { value: "container" } }) as AmbienteHostLocal;
+  const comandosGitNoAmbiente: string[][] = [];
+  ambienteContainer.executar = (comando) => {
+    if (comando.programa === "git") comandosGitNoAmbiente.push(comando.argumentos);
+    return ambiente.executar(comando);
+  };
+  const pasta = await garantirWorktreeDemanda(ambienteContainer, c.raiz, c.projeto, "D-1", c.log);
+
+  assert.ok(!comandosGitNoAmbiente.some((argumentos) => argumentos.includes("add")), "o `worktree add` é do core");
+  const entrada = join(c.repo, ".git", "worktrees", "demanda");
+  assert.ok(lstatSync(entrada).isSymbolicLink());
+  assert.ok(existsSync(join(c.repo, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA, "demanda", "HEAD")));
+  assert.equal(git(pasta, "status", "--porcelain"), "");
+  assert.match(git(c.repo, "worktree", "list"), /demanda/);
+
+  // Sem a worktree, a poda leva o link e a pasta administrativa.
+  rmSync(dirname(pasta), { recursive: true });
+  await podarWorktreesNoCore(c.repo);
+  assert.ok(!existsSync(entrada));
+  assert.deepEqual(readdirSync(join(c.repo, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA)), []);
 });

@@ -13,7 +13,7 @@ import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts"
 import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
 import { inserirAmbienteAlocado } from "../../armazenamento/ambientes.ts";
-import { AmbienteContainer, dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
+import { AmbienteContainer } from "../../infra/ambiente/container/ambiente_container.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../ambiente/conjunto.ts";
 import { montarConjuntoDoServico } from "../espaco/ambiente_do_servico.ts";
@@ -584,7 +584,11 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
     ticketComProcessoAberto(banco, "amb-1", 4321);
     montarConjuntoDoServico(
       () =>
-        new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, { raiz: dir, porta_da_api: 3000 }),
+        new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
+          raiz: dir,
+          porta_da_api: 3000,
+          home_do_usuario: dir,
+        }),
     );
 
     condutor.recuperarNaSubida(banco);
@@ -617,6 +621,7 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
             new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
               raiz: dir,
               porta_da_api: 3000,
+              home_do_usuario: dir,
             }),
         );
       condutor.recuperarNaSubida(banco);
@@ -648,7 +653,7 @@ async function lancarPiNoContainer() {
     id: "amb-1",
     container_id,
     bin_do_pacote: join(dir, "pacote-pi", "bin"),
-    dir_do_pi: dirDoPiDoAmbiente(dir, "amb-1"),
+    raiz: dir,
     url_da_api: "http://host.docker.internal:3000",
   });
   const id = `ticket-no-container-${String(++n)}`;

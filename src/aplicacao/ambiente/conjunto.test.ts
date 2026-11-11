@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +13,7 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
 import { relogioDoSistema, relogioFixo } from "../../nucleo/relogio.ts";
-import { dirDoPiDoAmbiente } from "../../infra/ambiente/container/ambiente_container.ts";
+import { pastasDoAmbiente } from "../../infra/ambiente/container/pastas_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/ambiente/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 
@@ -39,7 +39,7 @@ const projetoComImagem = (imagem_do_ambiente?: string) =>
 const projeto = projetoComImagem("alpine");
 const espacoA = espacoDaDemanda(projeto, "I-1", base);
 const espacoB = espacoDaRodada(projeto, "I-1", 2, base);
-const SERVICO = { raiz: base, porta_da_api: 4999 };
+const SERVICO = { raiz: base, porta_da_api: 4999, home_do_usuario: base };
 const LIMITES = { tipo: "container", memoria_maxima_mb: 768, cpus: 1.5, ociosidade_para_eliminar_min: 30 };
 
 let cenarios = 0;
@@ -71,15 +71,54 @@ test("alocar sem livre cria o container com os limites da configuração e grava
   assert.equal(container.rotulos["fabriquinha.ambiente"], ambiente.id);
 });
 
-test("alocar cria o container com a pasta das worktrees do projeto, o .git, as sessões e as execuções montados", async () => {
+test("alocar cria o container com a pasta das worktrees do projeto, o .git e só as pastas próprias de sessão e de execução montados", async () => {
   const { docker, conjunto } = cenario();
-  await conjunto.alocar(espacoB, projeto);
-  const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0]);
+  const ambiente = await conjunto.alocar(espacoB, projeto);
+  const montagens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":").slice(0, 2));
+  const { sessoes, execucoes } = pastasDoAmbiente(base, ambiente.id);
+  const origens = montagens.map(([origem]) => origem);
   assert.ok(origens.includes(join(base, "worktrees", "loja")), "a pasta das worktrees do projeto");
   assert.ok(origens.includes(join(base, ".git")), "o .git do projeto");
-  assert.ok(origens.includes(join(base, "sessoes")), "as sessões");
-  assert.ok(origens.includes(join(base, "execucoes")), "as pastas dos processos, onde mora o FABRIQUINHA_SAIDA");
+  assert.deepEqual(
+    montagens.filter(([, destino]) => destino === join(base, "sessoes")),
+    [[sessoes, join(base, "sessoes")]],
+  );
+  assert.deepEqual(
+    montagens.filter(([, destino]) => destino === join(base, "execucoes")),
+    [[execucoes, join(base, "execucoes")]],
+    "onde mora o FABRIQUINHA_SAIDA",
+  );
+  assert.ok(
+    !origens.includes(join(base, "sessoes")) && !origens.includes(join(base, "execucoes")),
+    "nunca a pasta inteira",
+  );
   assert.ok(!origens.includes(espacoB.pasta), "a worktree do Espaço não é montada: o git do container a cria");
+});
+
+test("liberar tira do container as sessões e execuções do Espaço: o próximo Espaço não as vê, e o core ainda as lê", async () => {
+  const { conjunto } = cenario();
+  const ambiente = await conjunto.alocar(espacoA, projeto);
+  mkdirSync(join(base, "execucoes", "E-501", "saida"), { recursive: true });
+  mkdirSync(join(base, "sessoes", "s-501"), { recursive: true });
+  ambiente.abrigarProcesso(join(base, "execucoes", "E-501"), "s-501");
+  writeFileSync(join(base, "sessoes", "s-501", "2026_s-501.jsonl"), "do espaço A\n");
+  const { sessoes, execucoes } = pastasDoAmbiente(base, ambiente.id);
+  assert.ok(
+    existsSync(join(sessoes, "s-501")) && existsSync(join(execucoes, "E-501")),
+    "dentro, enquanto o Espaço usa",
+  );
+
+  await conjunto.liberar(espacoA);
+  const outroEspaco = await conjunto.alocar(espacoB, projeto);
+  assert.equal(outroEspaco.container_id, ambiente.container_id, "o mesmo container serve ao outro Espaço");
+  assert.equal(
+    existsSync(join(sessoes, "s-501")) || existsSync(join(execucoes, "E-501")),
+    false,
+    "o outro Espaço não as vê",
+  );
+  assert.equal(readlinkSync(join(base, "sessoes", "s-501")), join(base, "espacos", "I-1", "sessoes", "s-501"));
+  assert.equal(readFileSync(join(base, "sessoes", "s-501", "2026_s-501.jsonl"), "utf8"), "do espaço A\n");
+  assert.ok(existsSync(join(base, "execucoes", "E-501", "saida")));
 });
 
 test("o container reaproveitado para outra demanda do projeto continua com as worktrees dela montadas", async () => {
@@ -94,7 +133,8 @@ test("o container reaproveitado para outra demanda do projeto continua com as wo
   const origens = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[0] ?? "");
   const montadas = (caminho: string) => origens.some((origem) => caminho.startsWith(`${origem}/`));
   assert.ok(montadas(espacoDeOutraDemanda.pasta), "a worktree da outra demanda");
-  assert.ok(montadas(join(base, "execucoes", "E-99", "saida")), "a pasta de qualquer processo");
+  const destinos = (docker.containers()[0]?.montagens ?? []).map((montagem) => montagem.split(":")[1] ?? "");
+  assert.ok(destinos.includes(join(base, "execucoes")), "onde o container vê a pasta de qualquer processo do Espaço");
 });
 
 test("alocar duas vezes para o mesmo Espaço devolve o mesmo container", async () => {
@@ -311,19 +351,25 @@ test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu 
 });
 
 test("alocar devolve o Ambiente do container, que roda com a API do host e o pi próprio, e ambienteAlocadoPara o reencontra", async () => {
-  const { conjunto, banco } = cenario();
+  const { conjunto, banco, docker } = cenario();
   assert.equal(conjunto.ambienteAlocadoPara(espacoA), undefined);
   const ambiente = await conjunto.alocar(espacoA, projeto);
   assert.equal(ambiente.tipo, "container");
   assert.equal(ambiente.id, listarAmbientes(banco)[0]?.id);
   const saida = await ambiente.executar({
-    programa: 'echo "$FABRIQUINHA_API $PI_CODING_AGENT_DIR"',
+    programa: 'echo "$FABRIQUINHA_API $PI_CODING_AGENT_DIR $HOME"',
     argumentos: [],
     cwd: base,
     env: { FABRIQUINHA_API: "http://127.0.0.1:4000" },
     noShell: true,
   });
-  assert.equal(saida.saida.trim(), `http://host.docker.internal:4999 ${dirDoPiDoAmbiente(base, ambiente.id)}`);
+  const homeDoContainer = docker.homeDoContainer(ambiente.container_id);
+  assert.equal(
+    saida.saida.trim(),
+    `http://host.docker.internal:4999 ${join(homeDoContainer, ".pi", "agent")} ${homeDoContainer}`,
+  );
+  // O pi do container é a cópia do pi do Auditor, feita na criação.
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
   assert.equal(conjunto.ambienteAlocadoPara(espacoA)?.container_id, ambiente.container_id);
   assert.equal(conjunto.ambienteAlocadoPara(espacoB), undefined);
 });

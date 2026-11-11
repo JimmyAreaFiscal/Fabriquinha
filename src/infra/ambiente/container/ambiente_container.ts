@@ -3,35 +3,33 @@
 // hospedagem ou do SonarQube: o container não as tem, e o git que precisa delas fica no core.
 import { spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { parseEnv } from "node:util";
 import { ErroDeRegra } from "../../../nucleo/erros.ts";
 import { executar } from "../../processo.ts";
-import type {
-  Ambiente,
-  ComandoNoAmbiente,
-  IdentificadorDoProcesso,
-  ProcessoNoAmbiente,
-  SaidaDoComando,
+import { abrigarNoAmbiente } from "./pastas_do_ambiente.ts";
+import {
+  type Ambiente,
+  type ComandoNoAmbiente,
+  ehCredencialDeHospedagemOuSonar,
+  type IdentificadorDoProcesso,
+  type ProcessoNoAmbiente,
+  type SaidaDoComando,
 } from "../ambiente.ts";
 
 /** No container: um arquivo por processo, com o grupo de processos dele. */
 const PASTA_DOS_PIDS = "/fabriquinha/pids";
 const LIMITE_DO_SINAL_MS = 30_000;
-const VARIAVEIS_DA_FABRIQUINHA = new Set([
-  "FABRIQUINHA_API",
-  "FABRIQUINHA_TOKEN",
-  "FABRIQUINHA_SAIDA",
-  "PI_CODING_AGENT_DIR",
-]);
+/** Onde, em relação ao `HOME` do container, mora a cópia do pi do Auditor. */
+export const DIR_DO_PI_NO_HOME = ".pi/agent";
+const VARIAVEIS_DA_FABRIQUINHA = new Set(["FABRIQUINHA_API", "FABRIQUINHA_TOKEN", "FABRIQUINHA_SAIDA"]);
 const SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM = "_API_KEY";
 // O pi aceita `AZURE_OPENAI_API_KEY`, mas o container nunca recebe variável de hospedagem ou do SonarQube.
 const CREDENCIAL_QUE_NUNCA_ENTRA = /^(GH_|AZURE_|SONAR_)/;
-
-/** A pasta do `PI_CODING_AGENT_DIR` do container `id`, onde mora só a cópia do `auth.json`. */
-export const dirDoPiDoAmbiente = (raiz: string, idDoAmbiente: string): string =>
-  join(raiz, "ambientes", idDoAmbiente, "pi");
+export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
+const VALOR_COM_TOKEN_DO_GITHUB = new RegExp(PADRAO_DE_TOKEN_DO_GITHUB);
 
 interface ContainerDoAmbiente {
   /** O id do Ambiente, o valor do rótulo `fabriquinha.ambiente`. */
@@ -39,8 +37,8 @@ interface ContainerDoAmbiente {
   container_id: string;
   /** `pacote-pi/bin`, que vai à frente do PATH da imagem para o `fabriquinha` empacotado. */
   bin_do_pacote: string;
-  /** O `PI_CODING_AGENT_DIR` do container (`dirDoPiDoAmbiente`). */
-  dir_do_pi: string;
+  /** A raiz da Fabriquinha: as pastas de sessão e de execução do container moram em `<raiz>/ambientes/<id>`. */
+  raiz: string;
   /** A API do agente vista de dentro do container; o `FABRIQUINHA_API` do core (127.0.0.1) não chega do container. */
   url_da_api: string;
 }
@@ -73,15 +71,29 @@ export class AmbienteContainer implements Ambiente {
   /** O id do container no docker; o teste o confere com o do conjunto. */
   readonly container_id: string;
   readonly #binDoPacote: string;
-  readonly #dirDoPi: string;
+  readonly #raiz: string;
   readonly #urlDaApi: string;
 
-  constructor({ id, container_id, bin_do_pacote, dir_do_pi, url_da_api }: ContainerDoAmbiente) {
+  constructor({ id, container_id, bin_do_pacote, raiz, url_da_api }: ContainerDoAmbiente) {
     this.id = id;
     this.container_id = container_id;
     this.#binDoPacote = bin_do_pacote;
-    this.#dirDoPi = dir_do_pi;
+    this.#raiz = raiz;
     this.#urlDaApi = url_da_api;
+  }
+
+  /** Onde o `.env` do projeto do Espaço fica para os `docker exec`; fora das pastas que o container monta. */
+  get #arquivoDoEnvDoProjeto(): string {
+    return join(this.#raiz, "ambientes", this.id, "env-do-projeto");
+  }
+
+  /** Guarda o `.env` do clone `raizGit` para os próximos comandos; o container serve a outro projeto depois, então sem `.env` limpa o anterior. */
+  levarEnvDoProjeto(raizGit: string): void {
+    const origem = join(raizGit, ".env");
+    if (existsSync(origem)) {
+      mkdirSync(dirname(this.#arquivoDoEnvDoProjeto), { recursive: true });
+      copyFileSync(origem, this.#arquivoDoEnvDoProjeto);
+    } else rmSync(this.#arquivoDoEnvDoProjeto, { force: true });
   }
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
@@ -161,6 +173,26 @@ export class AmbienteContainer implements Ambiente {
     return caminhoNoHost;
   }
 
+  /** O container só enxerga as pastas montadas nele (`pastasDoAmbiente`): leva para lá a do processo (`E-<id>`) e a da sessão do pi. */
+  abrigarProcesso(pastaDaExecucao: string, sessao: string): void {
+    abrigarNoAmbiente(this.#raiz, this.id, "execucoes", basename(pastaDaExecucao));
+    abrigarNoAmbiente(this.#raiz, this.id, "sessoes", sessao);
+  }
+
+  #variaveisDoEnvDoProjeto(): Record<string, string> {
+    if (!existsSync(this.#arquivoDoEnvDoProjeto)) return {};
+    const variaveis = parseEnv(readFileSync(this.#arquivoDoEnvDoProjeto, "utf8"));
+    return Object.fromEntries(
+      Object.entries(variaveis).filter(
+        (entrada): entrada is [string, string] =>
+          entrada[1] !== undefined &&
+          !CREDENCIAL_QUE_NUNCA_ENTRA.test(entrada[0]) &&
+          !ehCredencialDeHospedagemOuSonar(entrada[0]) &&
+          !VALOR_COM_TOKEN_DO_GITHUB.test(entrada[1]),
+      ),
+    );
+  }
+
   // shortcut: sem `setsid`, porque o `docker exec` já faz do comando líder do próprio grupo, e o `setsid` faria um fork
   // que perde o código de saída; o arquivo de pid de cada comando fica em PASTA_DOS_PIDS até o container ser eliminado.
   /**
@@ -175,9 +207,9 @@ export class AmbienteContainer implements Ambiente {
     const identificador = { ambiente_id: this.id, grupo_processo: randomInt(1, 2 ** 31) };
     const programaEArgumentos = noShell ? ["sh", "-c", `exec 2>&1; ${programa}`] : [programa, ...argumentos];
     const variaveis = Object.entries({
+      ...this.#variaveisDoEnvDoProjeto(),
       ...variaveisPermitidas(env),
       FABRIQUINHA_API: this.#urlDaApi,
-      PI_CODING_AGENT_DIR: this.#dirDoPi,
     });
     if (variaveis.some(([, valor]) => valor.includes("\n")))
       throw new ErroDeRegra(
@@ -191,6 +223,7 @@ export class AmbienteContainer implements Ambiente {
       `mkdir -p ${PASTA_DOS_PIDS}`,
       `echo $$ > ${PASTA_DOS_PIDS}/${String(identificador.grupo_processo)}`,
       `export PATH=${entreAspas(this.#binDoPacote)}:"$PATH"`,
+      `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // a cópia do pi do Auditor, feita na criação do container
       `exec ${programaEArgumentos.map(entreAspas).join(" ")}`,
     ].join("; ");
     return {

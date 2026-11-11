@@ -43,6 +43,7 @@ async function conjuntoComUmAlocado() {
   const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
     raiz: base,
     porta_da_api: 4999,
+    home_do_usuario: base,
   });
   const ambiente = await conjunto.alocar(espaco, projeto);
   return { docker, banco, conjunto, ambiente };

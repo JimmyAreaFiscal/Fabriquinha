@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
-import { dirDoPiDoAmbiente } from "./ambiente_container.ts";
-import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
+import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
+import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;
@@ -132,12 +141,8 @@ test("criar recusa o container que não conhece o host.docker.internal e o elimi
   }
 });
 
-test("criar monta exatamente a pasta das worktrees do projeto, o .git, as sessões, as execuções, o pacote (ro) e o dir do pi com o auth.json", async () => {
+test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas próprias de sessão e de execução e o pacote (ro)", async () => {
   const raiz = join(base, "fabriquinha-raiz");
-  const authJson = join(base, "pi-do-usuario", "auth.json");
-  mkdirSync(join(base, "pi-do-usuario"));
-  writeFileSync(authJson, '{"anthropic":{"access":"segredo"}}');
-  writeFileSync(join(base, "pi-do-usuario", "trust.json"), "{}");
   mkdirSync(raiz);
   writeFileSync(join(raiz, "fabriquinha.db"), "banco");
   const pastaDasWorktreesDoProjeto = join(raiz, "worktrees", "projeto");
@@ -147,9 +152,7 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as sessõ
     raiz_git: raizGit,
     raiz,
     pacote,
-    auth_json: authJson,
   });
-  const dirDoPi = dirDoPiDoAmbiente(raiz, criado.id);
   const montagens = docker
     .containers()
     .find((c) => c.id === criado.container_id)
@@ -158,35 +161,114 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as sessõ
       return { origem, destino, modo };
     });
   const mesmoCaminho = (caminho: string, modo: string) => ({ origem: caminho, destino: caminho, modo });
+  const { sessoes, execucoes } = pastasDoAmbiente(raiz, criado.id);
+  // Lista exata: nenhum ~/.pi, ~/.claude nem ~/.codex, nenhum auth.json e nem a pasta inteira de sessões ou de execuções.
   assert.deepEqual(montagens, [
     mesmoCaminho(pastaDasWorktreesDoProjeto, "rw"),
-    mesmoCaminho(join(raizGit, ".git"), "rw"),
-    mesmoCaminho(join(raizGit, ".git", "config"), "ro"),
-    mesmoCaminho(join(raizGit, ".git", "hooks"), "ro"),
-    mesmoCaminho(join(raiz, "sessoes"), "rw"),
-    mesmoCaminho(join(raiz, "execucoes"), "rw"),
+    // O topo do `.git` (commondir, config, hooks, info) é só leitura; escrita só onde o git de uma worktree grava.
+    mesmoCaminho(join(raizGit, ".git"), "ro"),
+    mesmoCaminho(join(raizGit, ".git", "objects"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "refs"), "rw"),
+    mesmoCaminho(join(raizGit, ".git", "logs"), "rw"),
+    // `worktrees` fica só leitura, e com ele as worktrees do usuário, existam ou não ao criar o container.
+    mesmoCaminho(join(raizGit, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA), "rw"),
+    { origem: sessoes, destino: join(raiz, "sessoes"), modo: "rw" },
+    { origem: execucoes, destino: join(raiz, "execucoes"), modo: "rw" },
     mesmoCaminho(pacote, "ro"),
-    mesmoCaminho(dirDoPi, "rw"),
   ]);
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
-  assert.equal(run.filter((argumento) => argumento === "-v").length, 8);
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 9);
   assert.ok(!run.includes("--mount"));
-  // O pi do container só tem o auth.json (nem o trust.json do usuário), e o banco da raiz não é montado.
-  assert.deepEqual(readdirSync(dirDoPi), ["auth.json"]);
-  assert.equal(readFileSync(join(dirDoPi, "auth.json"), "utf8"), '{"anthropic":{"access":"segredo"}}');
-  assert.equal(statSync(join(dirDoPi, "auth.json")).mode & 0o777, 0o600);
   assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
+  assert.deepEqual([readdirSync(sessoes), readdirSync(execucoes)], [[], []]);
+  assert.ok(!existsSync(join(raiz, "ambientes", criado.id, "pi")), "o pi não é montado");
 });
 
-test("criar com montagens sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {
+test("criar copia o pi do Auditor, o .claude e o .codex para o home do container (por tar, sem docker cp e sem montagem)", async () => {
+  const dirDoPi = join(base, "pi-do-auditor");
+  const home = join(base, "home-do-usuario");
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(dirDoPi, "auth.json"), '{"anthropic":{"access":"segredo"}}');
+  writeFileSync(join(dirDoPi, "trust.json"), "{}");
+  writeFileSync(join(home, ".claude", "CLAUDE.md"), "instruções");
+  writeFileSync(join(home, ".codex", "config.toml"), "modelo");
+  const antes = docker.registro().length;
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"),
+    '{"anthropic":{"access":"segredo"}}',
+  );
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "trust.json"), "utf8"), "{}");
+  assert.equal(readFileSync(join(homeDoContainer, ".claude", "CLAUDE.md"), "utf8"), "instruções");
+  assert.equal(readFileSync(join(homeDoContainer, ".codex", "config.toml"), "utf8"), "modelo");
+  const chamadas = docker.registro().slice(antes);
+  assert.ok(!chamadas.some(([comando]) => comando === "cp"));
+  assert.ok(
+    !chamadas.some((chamada) =>
+      chamada.some((argumento) => argumento === dirDoPi || argumento.startsWith(`${dirDoPi}:`)),
+    ),
+  );
+  // Sem .claude nem .codex no home do usuário, só o pi vai.
+  const outro = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: join(base, "home-vazio"),
+  });
+  assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
+});
+
+test("criar tira das cópias o token do GitHub, e o resto do arquivo continua igual", async () => {
+  const dirDoPi = join(base, "pi-com-token");
+  const home = join(base, "home-com-token");
+  const token = `ghp_${"a1B2".repeat(9)}`;
+  const tokenFinoDoGithub = `github_pat_${"x9".repeat(15)}`;
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "settings.json"), `{"github":"${token}","tema":"escuro"}`);
+  writeFileSync(join(home, ".claude", "arquivo com espaço.md"), `token ${tokenFinoDoGithub} e ${token}\noutra linha`);
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".pi", "agent", "settings.json"), "utf8"),
+    '{"github":"[token-do-github-removido]","tema":"escuro"}',
+  );
+  assert.equal(
+    readFileSync(join(homeDoContainer, ".claude", "arquivo com espaço.md"), "utf8"),
+    "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
+  );
+  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
+});
+
+test("criar com cópia que falha elimina o container e diz o motivo", async () => {
+  const dirDoPi = join(base, "pi-com-cópia-ruim");
+  const home = join(base, "home-com-cópia-ruim");
+  mkdirSync(dirDoPi);
+  mkdirSync(home);
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(home, ".claude"), "arquivo, e não pasta: o tar não entra nele");
+  const antes = docker.containers().length;
+  await assert.rejects(
+    gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, { dir_do_pi: dirDoPi, home_do_usuario: home }),
+    /não foi possível copiar .*\.claude para o container: saiu com código/,
+  );
+  assert.equal(docker.containers().length, antes);
+});
+
+test("criar com cópia sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {
   const antes = docker.registro().length;
   await assert.rejects(
-    gerador.criar("node:22-alpine", limites, PORTA_DA_API, {
-      pastaDasWorktreesDoProjeto: join(base, "w"),
-      raiz_git: raizGit,
-      raiz: join(base, "fabriquinha-raiz"),
-      pacote: join(base, "pacote-pi"),
-      auth_json: join(base, "nao-existe", "auth.json"),
+    gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+      dir_do_pi: join(base, "nao-existe"),
+      home_do_usuario: base,
     }),
     /não existe o .*auth\.json.*entre no pi/s,
   );

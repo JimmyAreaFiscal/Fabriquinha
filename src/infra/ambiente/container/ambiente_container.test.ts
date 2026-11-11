@@ -1,25 +1,34 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
-import { AmbienteContainer, dirDoPiDoAmbiente } from "./ambiente_container.ts";
+import { AmbienteContainer } from "./ambiente_container.ts";
+import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-container-")));
 const caminhoOriginal = process.env.PATH;
 const dirDoDockerFalso = join(base, "docker");
 const docker = instalarDockerFalso(dirDoDockerFalso);
 const binDoPacote = join(base, "pacote-pi", "bin");
-const dirDoPi = dirDoPiDoAmbiente(base, "amb-1");
 const urlDaApi = "http://host.docker.internal:3000";
 const { id: containerId } = docker.semearContainer({});
 const ambiente = new AmbienteContainer({
   id: "amb-1",
   container_id: containerId,
   bin_do_pacote: binDoPacote,
-  dir_do_pi: dirDoPi,
+  raiz: base,
   url_da_api: urlDaApi,
 });
 
@@ -100,9 +109,11 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
       "PI_CODING_AGENT_DIR",
     ],
   );
-  assert.equal(variaveis.HOME, "/root");
+  const homeDoContainer = docker.homeDoContainer(containerId);
+  assert.equal(variaveis.HOME, homeDoContainer);
   assert.equal(variaveis.FABRIQUINHA_API, urlDaApi); // o 127.0.0.1 do core não chega do container
-  assert.equal(variaveis.PI_CODING_AGENT_DIR, dirDoPi);
+  // O pi lê a cópia que a criação do container fez no home dele, e não o diretório do host.
+  assert.equal(variaveis.PI_CODING_AGENT_DIR, join(homeDoContainer, ".pi", "agent"));
   assert.equal(variaveis.FABRIQUINHA_TOKEN, "token-do-ticket");
   assert.equal(variaveis.ANTHROPIC_API_KEY, "chave-do-provedor");
   // O pacote vai à frente do PATH da imagem, e o PATH do core não passa.
@@ -117,6 +128,37 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
     "ssh-do-host",
   ])
     assert.ok(!saida.saida.includes(segredo), segredo);
+});
+
+test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as da Fabriquinha, e o resto do host continua fora", async () => {
+  const raizGit = join(base, "clone");
+  mkdirSync(raizGit, { recursive: true });
+  writeFileSync(
+    join(raizGit, ".env"),
+    'DATABASE_URL=postgres://localhost/loja\n# comentário\nCOM_ASPAS="a b"\nFABRIQUINHA_TOKEN=do-env\nGH_TOKEN=gh-do-env\nGITHUB_TOKEN=github-do-env\nSONAR_TOKEN=sonar-do-env\n',
+  );
+  ambiente.levarEnvDoProjeto(raizGit);
+  const saida = await ambiente.executar(comando("env", []));
+  assert.match(saida.saida, /^DATABASE_URL=postgres:\/\/localhost\/loja$/m);
+  assert.match(saida.saida, /^COM_ASPAS=a b$/m);
+  assert.match(saida.saida, /^FABRIQUINHA_TOKEN=token-do-ticket$/m);
+  assert.ok(!saida.saida.includes("sonar-segredo"));
+  assert.ok(!saida.saida.includes("ssh-do-host"));
+  assert.doesNotMatch(saida.saida, /gh-do-env|github-do-env|sonar-do-env/); // credencial no .env do projeto também fica fora
+  writeFileSync(join(raizGit, ".env"), 'COM_QUEBRA="a\nSONAR_TOKEN=x"\n');
+  ambiente.levarEnvDoProjeto(raizGit);
+  await assert.rejects(ambiente.executar(comando("true", [])), /quebra de linha/);
+  writeFileSync(
+    join(raizGit, ".env"),
+    "GH_PAT=ghp_0123456789abcdefghijklmnopqrstuvwxyz\nSONAR_HOST_URL=http://sonar\nAZURE_DEVOPS_PAT=az\nGITHUB_PAT=github_pat_0123456789abcdefghijklmn\nVARIAVEL_COMUM=fica\n",
+  );
+  ambiente.levarEnvDoProjeto(raizGit);
+  const saidaSemCredenciais = (await ambiente.executar(comando("env", []))).saida;
+  assert.doesNotMatch(saidaSemCredenciais, /^(GH_PAT|SONAR_HOST_URL|AZURE_DEVOPS_PAT|GITHUB_PAT)=/m); // prefixo e padrão de token do GitHub
+  assert.match(saidaSemCredenciais, /^VARIAVEL_COMUM=fica$/m);
+  rmSync(join(raizGit, ".env"));
+  ambiente.levarEnvDoProjeto(raizGit); // sem .env, as variáveis do projeto anterior somem
+  assert.doesNotMatch((await ambiente.executar(comando("env", []))).saida, /DATABASE_URL|COM_ASPAS/);
 });
 
 test("executar: o docker exec leva -w, --env-file e o container, e o env-file some depois", async () => {
@@ -201,7 +243,7 @@ test("executar: container que não roda devolve a falha do docker exec", async (
     id: "amb-2",
     container_id: "inexistente",
     bin_do_pacote: binDoPacote,
-    dir_do_pi: dirDoPi,
+    raiz: base,
     url_da_api: urlDaApi,
   });
   const saida = await parado.executar(comando("true", []));
@@ -289,4 +331,14 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
 test("o caminho no ambiente é o do host (mesmos caminhos nas montagens)", () => {
   assert.equal(ambiente.caminhoNoAmbiente("/a/b"), "/a/b");
   assert.deepEqual([ambiente.id, ambiente.tipo], ["amb-1", "container"]);
+});
+
+test("abrigarProcesso: a pasta do processo e a da sessão vão para as pastas do container, e o caminho do host aponta para elas", () => {
+  const pastaDaExecucao = join(base, "execucoes", "E-7");
+  mkdirSync(join(pastaDaExecucao, "saida"), { recursive: true });
+  ambiente.abrigarProcesso(pastaDaExecucao, "sessao-7");
+  const { execucoes, sessoes } = pastasDoAmbiente(base, "amb-1");
+  assert.ok(existsSync(join(execucoes, "E-7", "saida")), "a execução está na pasta do container");
+  assert.equal(realpathSync(pastaDaExecucao), join(execucoes, "E-7"));
+  assert.equal(realpathSync(join(base, "sessoes", "sessao-7")), join(sessoes, "sessao-7"));
 });

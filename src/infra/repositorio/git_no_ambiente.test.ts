@@ -17,6 +17,7 @@ function ambienteQueResponde(saida: Partial<SaidaDoComando>) {
     lancar: () => assert.fail("o git não lança processo interativo"),
     sinalizar: () => assert.fail("o git não sinaliza"),
     caminhoNoAmbiente: (caminho) => `/ambiente${caminho}`,
+    abrigarProcesso: () => assert.fail("o git não abriga processo"),
   };
   return { ambiente, comandos };
 }

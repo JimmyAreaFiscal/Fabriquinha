@@ -1,6 +1,6 @@
 // Cadastro do projeto (C19: registrar, editar e remover; F2 §4 e §6). `registrarProjeto` e `editarProjeto` só validam e
 // gravam; as conferências externas (F5 §2, F4 §9) são de `cadastrarProjetoDoFormulario` e `editarProjetoDoFormulario`.
-import { readdir, rm } from "node:fs/promises";
+import { readdir, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
@@ -212,10 +212,17 @@ export async function removerProjeto(
 
   const raiz = raizDo(banco);
   const avisos: string[] = [];
-  const apagar = (caminho: string) =>
-    rm(caminho, { recursive: true, force: true }).catch((error_: unknown) => {
-      avisos.push(`não foi possível apagar ${caminho}: ${(error_ as Error).message}`);
-    });
+  // A pasta de um processo em container é um symlink para a pasta de dentro do container: apaga as duas.
+  const apagar = async (caminho: string) => {
+    const deVerdade = await realpath(caminho).catch(() => caminho);
+    await Promise.all(
+      [...new Set([deVerdade, caminho])].map((alvo) =>
+        rm(alvo, { recursive: true, force: true }).catch((error_: unknown) => {
+          avisos.push(`não foi possível apagar ${alvo}: ${(error_ as Error).message}`);
+        }),
+      ),
+    );
+  };
 
   // `<instante>_<conversa>.jsonl`: o instante não tem `_`, então a conversa é o que vem depois do primeiro.
   const conversas = new Set(sessoes);
@@ -228,6 +235,7 @@ export async function removerProjeto(
     ...execucoes.map((id) => apagar(join(raiz, "execucoes", id.startsWith("E-") ? id : `E-${id}`))),
     ...simuladas.map((id) => apagar(dirDaExecucaoSimulada(raiz, id))),
     ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
+    ...sessoes.map((conversa) => apagar(join(dirSessoes, conversa))), // a pasta própria da sessão
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
   ]);
   avisos.push(...(await removerWorktrees(raiz, removido)));
