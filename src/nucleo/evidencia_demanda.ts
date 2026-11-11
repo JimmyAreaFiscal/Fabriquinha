@@ -1,4 +1,4 @@
-// Evidência por dono da demanda SDLC (comparacao-sdlc-implementacao.md §7.4; fabriquinha/03-evidencias.md §4.1).
+// Evidência por dono da demanda SDLC (comparacao-sdlc-implementacao.md §7.4; CONCEITOS.md §5).
 // `dados` segue opaco: o schema de cada tipo é do F3.
 import { type AgregadoDemanda, donoDe } from "./agregado_demanda.ts";
 
