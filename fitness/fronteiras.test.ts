@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
+import { EtapaTicket } from "../src/compartilhado/nucleo/primitivos.ts";
 
 const MODULO_CLIENTE_WEB = "entrega/cliente-web";
 
@@ -97,7 +98,7 @@ function moduloDoArquivo(caminhoRelativoASrc: string): string {
 
 function listarArquivosDeProducao(src: string): string[] {
   return readdirSync(src, { recursive: true, encoding: "utf8" })
-    .filter((arquivo) => arquivo.endsWith(".ts") && !arquivo.endsWith(".test.ts"))
+    .filter((arquivo) => /\.tsx?$/.test(arquivo) && !/\.test\.tsx?$/.test(arquivo))
     .sort();
 }
 
@@ -624,5 +625,247 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(raiz).sort(), [
     "aplicacao/importa_gravar.ts importa gravarAnexos de armazenamento/evidencia_demanda.ts",
     "aplicacao/monta_lista.ts monta evidencias a partir da lista atual",
+  ]);
+});
+
+// Os domínios de src/ (a primeira pasta; cada `entrega/<sub>` é um, como na matriz e no mapa-alvo) não formam ciclo de
+// import, de valor ou de tipo. Dependência que fecha ciclo hoje é tolerada aqui com o passo da migração SDLC por seams que a
+// remove (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4 sdlc/, 5 verificacao/ e metricas/, 6 ex-entrega).
+// A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar ciclo, a fitness também falha.
+interface DependenciaToleradaEntreDominios {
+  de: string;
+  para: string;
+  passo: 1 | 2 | 3 | 4 | 5 | 6;
+}
+
+const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [
+  // servico.ts lê o `Modelo` do agente.
+  { de: "compartilhado", para: "execucao", passo: 1 },
+  // servico.ts lê a ConfiguracaoDoAmbiente; processo.ts, o LIMITE_COMANDO_MS do Ambiente.
+  { de: "compartilhado", para: "ambiente", passo: 2 },
+  // O Conjunto de Ambientes, o cadastro e a configuração do Projeto usam o pi, o HarnessPi e a configuração do agente.
+  { de: "ambiente", para: "execucao", passo: 1 },
+  // O Espaço de Trabalho, a worktree e as consultas do Projeto leem a Demanda e o seu fluxo.
+  { de: "ambiente", para: "demanda", passo: 2 },
+  { de: "ambiente", para: "fluxo", passo: 2 },
+  // O cadastro e o commit do Ticket varrem os commits humanos.
+  { de: "ambiente", para: "custos", passo: 5 },
+  // As métricas por Etapa leem a definição da Etapa.
+  { de: "custos", para: "fluxo", passo: 3 },
+  { de: "custos", para: "demanda", passo: 5 },
+  { de: "custos", para: "execucao", passo: 5 },
+  { de: "custos", para: "qualidade", passo: 5 },
+  // O agregado e a gestão da Demanda leem e submetem a Evidência.
+  { de: "demanda", para: "qualidade", passo: 3 },
+  // O ciclo derivado: Demanda, Despacho, Tentativa e Ciclo de Vida se leem nas duas direções.
+  { de: "demanda", para: "execucao", passo: 4 },
+  { de: "demanda", para: "fluxo", passo: 4 },
+  { de: "execucao", para: "fluxo", passo: 4 },
+  // A avaliação e a simulação usam o HarnessPi e o condutor; as verificações, a Tentativa e o Ator.
+  { de: "qualidade", para: "execucao", passo: 4 },
+  { de: "qualidade", para: "fluxo", passo: 4 },
+  // O contrato da API reusa os schemas dos núcleos, e as consultas das aplicações devolvem tipos do contrato.
+  { de: "entrega/contrato", para: "ambiente", passo: 6 },
+  { de: "entrega/contrato", para: "custos", passo: 6 },
+  { de: "entrega/contrato", para: "demanda", passo: 6 },
+  { de: "entrega/contrato", para: "execucao", passo: 6 },
+  { de: "entrega/contrato", para: "qualidade", passo: 6 },
+];
+
+function dominioDoArquivo(caminhoRelativoASrc: string): string {
+  const [primeiro, segundo] = caminhoRelativoASrc.split("/");
+  return primeiro === "entrega" && segundo ? `entrega/${segundo}` : (primeiro ?? "");
+}
+
+const descreverDependencia = ({ de, para }: { de: string; para: string }): string => `${de} → ${para}`;
+
+// Uma aresta por par de domínios, com o primeiro arquivo que a cria.
+function acharDependenciasEntreDominios(src: string): Aresta[] {
+  const dependencias = new Map<string, Aresta>();
+  for (const arquivo of listarArquivosDeProducao(src)) {
+    const caminho = join(src, arquivo);
+    const de = dominioDoArquivo(arquivo);
+    for (const { fileName: alvo } of ts.preProcessFile(readFileSync(caminho, "utf8"), true, true).importedFiles) {
+      if (!alvo.startsWith(".")) continue;
+      const para = dominioDoArquivo(relative(src, resolve(dirname(caminho), alvo)));
+      const descricao = descreverDependencia({ de, para });
+      if (para !== de && !dependencias.has(descricao))
+        dependencias.set(descricao, { de, para, arquivo, achado: { arquivo, import: alvo } });
+    }
+  }
+  return [...dependencias.values()];
+}
+
+function acharCiclosEntreDominios(src: string, toleradas: DependenciaToleradaEntreDominios[]): string[] {
+  const listadas = new Set(toleradas.map(descreverDependencia));
+  const naoToleradas = acharDependenciasEntreDominios(src).filter(
+    (aresta) => !listadas.has(descreverDependencia(aresta)),
+  );
+  return acharCiclosEntreModulos(naoToleradas).map(({ import: ciclo }) => ciclo);
+}
+
+// Vencida: a dependência sumiu, ou já não há caminho de volta de `para` a `de` (deixou de fechar ciclo).
+function acharToleranciasVencidas(src: string, toleradas: DependenciaToleradaEntreDominios[]): string[] {
+  const dependencias = acharDependenciasEntreDominios(src);
+  const existentes = new Set(dependencias.map(descreverDependencia));
+  const alcanca = (origem: string, destino: string): boolean => {
+    const visitados = [origem];
+    for (const dominio of visitados) {
+      for (const { de, para } of dependencias) if (de === dominio && !visitados.includes(para)) visitados.push(para);
+    }
+    return visitados.includes(destino);
+  };
+  return toleradas
+    .filter((tolerada) => !existentes.has(descreverDependencia(tolerada)) || !alcanca(tolerada.para, tolerada.de))
+    .map(descreverDependencia);
+}
+
+test("os domínios de src/ não formam ciclo de import fora das dependências toleradas", () => {
+  assert.deepEqual(acharCiclosEntreDominios(SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
+});
+
+test("toda dependência tolerada entre domínios ainda existe e ainda fecha ciclo", () => {
+  assert.deepEqual(acharToleranciasVencidas(SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
+});
+
+test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tipo, e a tolerância vencida", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-dominios-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    "fluxo/nucleo/etapa.ts": 'import { Demanda } from "../../demanda/nucleo/demanda.ts";\n',
+    "demanda/nucleo/demanda.ts": 'import type { Etapa } from "../../fluxo/nucleo/etapa.ts";\n',
+    "demanda/aplicacao/tela.tsx": 'import { c } from "../../entrega/contrato/x.ts";\n',
+    "entrega/contrato/x.ts": 'import { z } from "zod";\n',
+    "entrega/http/rota.ts":
+      'import { a } from "../../demanda/nucleo/demanda.ts";\nimport { c } from "../contrato/x.ts";\n',
+    "fluxo/nucleo/etapa.test.ts": 'import { r } from "../../entrega/http/rota.ts";\n',
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharCiclosEntreDominios(raiz, []), ["ciclo entre módulos: demanda → fluxo → demanda"]);
+  const toleradas: DependenciaToleradaEntreDominios[] = [
+    { de: "demanda", para: "fluxo", passo: 4 },
+    { de: "entrega/http", para: "demanda", passo: 6 },
+    { de: "execucao", para: "fluxo", passo: 4 },
+  ];
+  assert.deepEqual(acharCiclosEntreDominios(raiz, toleradas), []);
+  assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), ["entrega/http → demanda", "execucao → fluxo"]);
+});
+
+// O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto ou chave de objeto (`{ planejar: … }`), só
+// em src/etapas/ e nos arquivos abaixo: a catraca de hoje, que encolhe a cada passo da migração SDLC por seams. primitivos.ts
+// (onde o enum nasce) e o catálogo das Etapas (fluxo/nucleo/etapa.ts, ciclos.ts) saem só nos passos 3 e 4.
+// Arquivo novo citando o nome falha; arquivo da lista que deixou de citar também.
+const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
+const PASTA_DAS_ETAPAS = "etapas/";
+const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA = [
+  "ambiente/aplicacao/consultas/projeto.ts",
+  "ambiente/aplicacao/espaco/commit_ticket_demanda.ts",
+  "compartilhado/nucleo/primitivos.ts",
+  "custos/aplicacao/metricas/metrica_de_exigencias_de_alteracao.ts",
+  "custos/aplicacao/metricas/metrica_de_uso.ts",
+  "demanda/aplicacao/consultas/demanda.ts",
+  "demanda/aplicacao/consultas/inicio.ts",
+  "demanda/nucleo/agregado_demanda.ts",
+  "demanda/nucleo/pendencia.ts",
+  "demanda/nucleo/plano.ts",
+  "entrega/cliente-web/render.ts",
+  "entrega/cliente-web/rotulos.ts",
+  "entrega/cliente-web/telas/demandas.ts",
+  "entrega/cliente-web/telas/inicio.ts",
+  "entrega/cliente-web/telas/metricas.ts",
+  "entrega/cliente-web/telas/projeto.ts",
+  "entrega/contrato/inicio.ts",
+  "execucao/aplicacao/agente/decidir_revisao.ts",
+  "execucao/aplicacao/despacho.ts",
+  "execucao/aplicacao/execucao_demanda.ts",
+  "execucao/aplicacao/sessoes/sessao_ajustes.ts",
+  "execucao/aplicacao/sessoes/sessoes_demanda.ts",
+  "execucao/aplicacao/trabalho/auditor_automatico.ts",
+  "execucao/nucleo/despacho.ts",
+  "execucao/nucleo/tentativa.ts",
+  "fluxo/aplicacao/encerramento_rodada.ts",
+  "fluxo/aplicacao/etapas/agenticas/conducao_de_implementar.ts",
+  "fluxo/aplicacao/etapas/encerramento/conducao_de_encerrar_demanda.ts",
+  "fluxo/aplicacao/etapas/interativas/conducao_de_ajustar_resultado.ts",
+  "fluxo/aplicacao/etapas/interativas/conducao_de_planejar.ts",
+  "fluxo/aplicacao/gates/pr.ts",
+  "fluxo/aplicacao/prompt_demanda.ts",
+  "fluxo/nucleo/ciclo_de_vida/ciclos.ts",
+  "fluxo/nucleo/etapa.ts",
+  "fluxo/nucleo/gate.ts",
+  "fluxo/nucleo/transicoes/conclusao_ticket.ts",
+  "fluxo/nucleo/transicoes/transicoes_demanda.ts",
+  "fluxo/nucleo/transicoes/transicoes_encerramento.ts",
+  "fluxo/nucleo/transicoes/transicoes_rodada.ts",
+  "qualidade/aplicacao/evidencias/aula.ts",
+  "qualidade/aplicacao/evidencias/verificacoes.ts",
+  "qualidade/aplicacao/revisao_rodada.ts",
+  "qualidade/nucleo/evidencias/evidencia.ts",
+];
+
+// `forEachChild` para no primeiro filho que devolve verdadeiro: basta um nome por arquivo.
+function citaNomeDeEtapa(no: ts.Node): boolean {
+  const texto = ts.isStringLiteralLike(no)
+    ? no.text
+    : ts.isPropertyAssignment(no) && ts.isIdentifier(no.name)
+      ? no.name.text
+      : undefined;
+  return (texto !== undefined && NOMES_DE_ETAPA.has(texto)) || ts.forEachChild(no, citaNomeDeEtapa) === true;
+}
+
+function acharArquivosQueCitamNomeDeEtapa(src: string): string[] {
+  return listarArquivosDeProducao(src).filter((arquivo) =>
+    citaNomeDeEtapa(ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest)),
+  );
+}
+
+test("nome de Etapa só em src/etapas/ e nos arquivos da catraca", () => {
+  assert.deepEqual(
+    acharArquivosQueCitamNomeDeEtapa(SRC).filter(
+      (arquivo) => !arquivo.startsWith(PASTA_DAS_ETAPAS) && !ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA.includes(arquivo),
+    ),
+    [],
+  );
+});
+
+test("todo arquivo da catraca de nomes de Etapa ainda cita um nome", () => {
+  const citam = new Set(acharArquivosQueCitamNomeDeEtapa(SRC));
+  assert.deepEqual(
+    ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA.filter((arquivo) => !citam.has(arquivo)),
+    [],
+  );
+});
+
+test("a fitness de nomes de Etapa acusa literal e chave de objeto, em .ts e .tsx, e ignora comentário e teste", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-etapas-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    "fluxo/nucleo/literal.ts": 'if (etapa === "revisar_rodada") pular();\n',
+    "fluxo/nucleo/template.ts": "const etapa = `planejar`;\n",
+    "entrega/cliente-web/rotulos.ts": 'export const ROTULOS = { encerrar_demanda: "Encerrar" };\n',
+    "entrega/cliente-web/tela.tsx": 'export const Tela = () => <p title="implementar">ok</p>;\n',
+    "etapas/planejar/definicao.ts": 'export const nome = "planejar";\n',
+    "fluxo/nucleo/comentario.ts": '// planejar e "implementar"\nconst planejar = 1;\nconst x = "planejar_demanda";\n',
+    "fluxo/nucleo/literal.test.ts": 'const etapa = "planejar";\n',
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharArquivosQueCitamNomeDeEtapa(raiz).sort(), [
+    "entrega/cliente-web/rotulos.ts",
+    "entrega/cliente-web/tela.tsx",
+    "etapas/planejar/definicao.ts",
+    "fluxo/nucleo/literal.ts",
+    "fluxo/nucleo/template.ts",
   ]);
 });
