@@ -7,10 +7,11 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { MotivoDeRecusa } from "../nucleo/despacho.ts";
-import { ErroDeRegra } from "../nucleo/erros.ts";
+import { ErroDeRegra, mensagem } from "../nucleo/erros.ts";
 import { relogioDoSistema } from "../nucleo/relogio.ts";
 import { varrerCommitsHumanos } from "../aplicacao/metricas/varrer_commits_humanos.ts";
 import { abrir } from "../armazenamento/banco.ts";
+import { garantirPacoteDoAgente } from "../infra/agente/pacote_do_agente.ts";
 import { noLog } from "../infra/registro.ts";
 import { projetosAVarrer } from "../armazenamento/commits_humanos.ts";
 import { configuracao, configuracaoDoAmbiente } from "../armazenamento/servico.ts";
@@ -45,10 +46,15 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  * Sobe o serviço: ocupa `127.0.0.1:<portaDoServico>` como trava de instância única antes de tocar no banco (uma
  * segunda instância, mesmo de versão mais nova, sai com erro sem migrar nada), abre o banco, encerra as execuções da
  * instância anterior e liga o agendador. A porta 0 escolhe uma livre, sem a trava, e o `web.url` leva a escolhida: os
- * testes sobem várias instâncias juntas sem disputar porta.
+ * testes sobem várias instâncias juntas sem disputar porta. Antes da porta, garante o CLI do agente em
+ * `pastaDoPacote` (a pasta bin do pacote-pi): sem ele os agentes rodam sem poder submeter evidências, então a falha
+ * em gerá-lo impede a subida.
  */
-export async function iniciarServico(raiz: string): Promise<Servico> {
+export async function iniciarServico(raiz: string, pastaDoPacote: string): Promise<Servico> {
   const pedida = portaDoServico();
+  await garantirPacoteDoAgente(join(pastaDoPacote, "fabriquinha")).catch((erro: unknown) => {
+    throw new ErroDeRegra(`não foi possível gerar o CLI do agente (pacote-pi/bin/fabriquinha): ${mensagem(erro)}`);
+  });
   // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
   montarAmbienteDoServico(new AmbienteHostLocal());
   const relogio = relogioDoSistema;

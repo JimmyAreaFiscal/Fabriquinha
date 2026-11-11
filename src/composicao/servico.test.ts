@@ -3,12 +3,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { beforeEach, type TestContext, test } from "node:test";
+import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
@@ -68,7 +68,13 @@ beforeEach(async () => {
   }
 });
 
-const subir = (raiz = novaRaiz()) => iniciarServico(raiz);
+/** O destino do pacote do agente nos testes: nunca o pacote-pi do repositório. */
+const pastaDoPacote = mkdtempSync(join(tmpdir(), "fabriquinha-pacote-do-servico-"));
+after(() => {
+  rmSync(pastaDoPacote, { recursive: true, force: true });
+});
+
+const subir = (raiz = novaRaiz()) => iniciarServico(raiz, pastaDoPacote);
 
 /** A porta do teste está livre: dá para escutar nela. */
 async function portaLivre(): Promise<void> {
@@ -110,6 +116,32 @@ test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida"
   assert.equal(condutor.urlDaApi, undefined);
 });
 
+test("o pacote do agente é gerado antes de a porta abrir", async () => {
+  const pasta = mkdtempSync(join(tmpdir(), "fabriquinha-pacote-antes-da-porta-"));
+  const arquivo = join(pasta, "fabriquinha");
+  const s = await iniciarServico(novaRaiz(), pasta);
+  try {
+    assert.ok(statSync(arquivo).isFile(), "o pacote existe quando a subida termina");
+    assert.match(readFileSync(`${arquivo}.versao`, "utf8"), /^[0-9a-f]{64}$/);
+  } finally {
+    await s.parar();
+    rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
+test("falha ao gerar o pacote do agente: o serviço não sobe e a porta fica livre", async () => {
+  // Um arquivo no lugar da pasta bin: o mkdir do pacote falha.
+  const arquivoNoLugarDaPasta = join(pastaDoPacote, "ocupado");
+  writeFileSync(arquivoNoLugarDaPasta, "");
+  await assert.rejects(
+    iniciarServico(novaRaiz(), join(arquivoNoLugarDaPasta, "bin")),
+    (erro: unknown) =>
+      erro instanceof ErroDeRegra &&
+      erro.message.startsWith("não foi possível gerar o CLI do agente (pacote-pi/bin/fabriquinha): "),
+  );
+  await portaLivre();
+});
+
 test("instância única: a porta é a trava, e a segunda instância sai com erro antes de abrir o banco", async () => {
   const raiz = novaRaiz();
   const s = await subir(raiz);
@@ -119,7 +151,7 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   // A raiz da segunda nem existe: ela recusa pela porta sem chegar a criá-la nem a migrar o banco.
   const outraRaiz = join(raiz, "nunca-criada");
   await assert.rejects(
-    iniciarServico(outraRaiz),
+    iniciarServico(outraRaiz, pastaDoPacote),
     (erro: unknown) =>
       erro instanceof ErroDeRegra &&
       erro.message.startsWith(`a Fabriquinha não conseguiu abrir 127.0.0.1:${porta}: listen EADDRINUSE`),
