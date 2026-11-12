@@ -249,18 +249,36 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
   assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
 });
 
-test("criar com cópia que falha elimina o container e diz o motivo", async () => {
+test("criar com cópia que falha mata o docker exec da cópia, elimina o container e diz o motivo", async () => {
   const dirDoPi = join(base, "pi-com-cópia-ruim");
   const home = join(base, "home-com-cópia-ruim");
   mkdirSync(dirDoPi);
   mkdirSync(home);
   writeFileSync(join(dirDoPi, "auth.json"), "{}");
-  writeFileSync(join(home, ".claude"), "arquivo, e não pasta: o tar não entra nele");
-  const antes = docker.containers().length;
-  await assert.rejects(
-    gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, { dir_do_pi: dirDoPi, home_do_usuario: home }),
-    /não foi possível copiar .*\.claude para o container: saiu com código/,
+  // O `docker exec` da cópia guarda o pid e fica preso; o tar só falha depois disso, para encontrá-lo ainda vivo.
+  const comExecDaCopiaPreso = join(base, "com-exec-da-copia-preso");
+  const arquivoDoPidDoExecPreso = join(comExecDaCopiaPreso, "pid");
+  mkdirSync(comExecDaCopiaPreso);
+  writeFileSync(
+    join(comExecDaCopiaPreso, "docker"),
+    `#!/bin/sh\ncase "$*" in *'tar -x'*) echo $$ > '${arquivoDoPidDoExecPreso}'; exec sleep 30;; esac\nexec '${join(base, "docker", "bin", "docker")}' "$@"\n`,
   );
+  writeFileSync(
+    join(comExecDaCopiaPreso, "tar"),
+    `#!/bin/sh\nwhile [ ! -s '${arquivoDoPidDoExecPreso}' ]; do sleep 0.01; done\necho 'tar: sem espaço' >&2\nexit 2\n`,
+  );
+  for (const programa of ["docker", "tar"]) chmodSync(join(comExecDaCopiaPreso, programa), 0o755);
+  process.env.PATH = `${comExecDaCopiaPreso}:${caminhoOriginal ?? ""}`;
+  const antes = docker.containers().length;
+  try {
+    await assert.rejects(
+      gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, { dir_do_pi: dirDoPi, home_do_usuario: home }),
+      /não foi possível copiar .*pi-com-cópia-ruim para o container: saiu com código 2; tar: sem espaço/,
+    );
+  } finally {
+    process.env.PATH = `${join(base, "docker", "bin")}:${caminhoOriginal ?? ""}`;
+  }
+  assert.throws(() => process.kill(Number(readFileSync(arquivoDoPidDoExecPreso, "utf8")), 0), { code: "ESRCH" });
   assert.equal(docker.containers().length, antes);
 });
 

@@ -135,22 +135,29 @@ function copiarParaOHomeDoContainer(
       { stdio: ["pipe", "ignore", "pipe"], signal: sinal },
     );
     let motivo = "";
-    let terminaram = 0;
-    const falhou = (erro: unknown) => {
-      reject(
-        new ErroDeRegra(
-          `não foi possível copiar ${origem} para o container: ${String(erro)}; ${motivo.trim()}`,
-          "confira o Docker e o espaço em disco do container",
-        ),
-      );
+    let primeiraFalha: string | undefined;
+    let processosEncerrados = 0;
+    // A falha de um mata o outro, mas a promessa só se resolve quando os dois fecharam: um `docker exec` que sobra
+    // continuaria mexendo no container depois que o chamador já o eliminou.
+    const registrarFalhaEMatarOsProcessos = (erro: unknown) => {
+      primeiraFalha ??= String(erro);
+      for (const filho of [empacotar, extrair]) filho.kill();
     };
-    pipeline(empacotar.stdout, extrair.stdin).catch(falhou);
+    pipeline(empacotar.stdout, extrair.stdin).catch(registrarFalhaEMatarOsProcessos);
     for (const filho of [empacotar, extrair]) {
       filho.stderr.on("data", (parte: Buffer) => (motivo += parte.toString()));
-      filho.on("error", falhou);
+      filho.on("error", registrarFalhaEMatarOsProcessos);
       filho.on("close", (codigo) => {
-        if (codigo !== 0) falhou(`saiu com código ${String(codigo)}`);
-        else if (++terminaram === 2) resolve();
+        if (codigo !== 0) registrarFalhaEMatarOsProcessos(`saiu com código ${String(codigo)}`);
+        if (++processosEncerrados < 2) return;
+        if (primeiraFalha === undefined) resolve();
+        else
+          reject(
+            new ErroDeRegra(
+              `não foi possível copiar ${origem} para o container: ${primeiraFalha}; ${motivo.trim()}`,
+              "confira o Docker e o espaço em disco do container",
+            ),
+          );
       });
     }
   });
