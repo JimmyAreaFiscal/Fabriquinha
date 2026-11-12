@@ -1,5 +1,5 @@
-import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 
 /** structuredClone perde o protótipo de Endereco; o snapshot precisa preservar as identidades do domínio. */
 export function clonarAgregadoDemanda(agregado: AgregadoDemanda): AgregadoDemanda {

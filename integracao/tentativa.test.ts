@@ -15,17 +15,17 @@ import {
   montarTicket,
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import type { Tentativa } from "../src/sdlc/nucleo/tentativa.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import type { Tentativa } from "../src/modulos/sdlc/nucleo/tentativa.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
-} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { PaginaDaDemanda } from "../src/contrato/demanda.ts";
-import { pagina } from "../src/web/telas/demandas/demandas.ts";
-import { descreverEtapasDoSdlc } from "../src/api/rotas/etapas.ts";
-import { definirEtapasDoSdlc } from "../src/web/apresentacao/etapas.ts";
+} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { PaginaDaDemanda } from "../src/server/contrato/demanda.ts";
+import { pagina } from "../src/server/web/telas/demandas/demandas.ts";
+import { descreverEtapasDoSdlc } from "../src/server/api/rotas/etapas.ts";
+import { definirEtapasDoSdlc } from "../src/server/web/apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
 

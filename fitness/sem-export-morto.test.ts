@@ -12,8 +12,8 @@ const PASTAS_DE_PRODUCAO = ["src", "pacote-pi"];
 const PASTAS_DE_TESTE_DO_PROJETO = ["integracao", "e2e", "estresse", "fitness"];
 // O pi e o bundle do navegador carregam estes arquivos pelo caminho, não por import.
 const ARQUIVOS_SEM_IMPORTADOR_POR_DESENHO = [
-  /^src\/composicao\/fabriquinha\.ts$/,
-  /^src\/web\/app\.ts$/,
+  /^src\/server\/composicao\/fabriquinha\.ts$/,
+  /^src\/server\/web\/app\.ts$/,
   /^pacote-pi\/extensions\/[^/]+\.ts$/,
 ];
 
@@ -192,7 +192,7 @@ test("a fitness acusa export sem importador e export só de teste sem a marca @t
   t.after(() => {
     rmSync(raiz, { recursive: true, force: true });
   });
-  for (const pasta of ["src/composicao", "src/web", "pacote-pi/extensions"])
+  for (const pasta of ["src/server/composicao", "src/server/web", "pacote-pi/extensions"])
     mkdirSync(join(raiz, pasta), { recursive: true });
   const escrever = (arquivo: string, linhas: string[]): void => {
     writeFileSync(join(raiz, arquivo), linhas.join("\n"));
@@ -215,8 +215,8 @@ test("a fitness acusa export sem importador e export só de teste sem a marca @t
     'import { soNoTesteMarcado, soNoTesteMarcaSemJustificativa, soNoTesteSemMarca } from "./usado.ts";',
     "console.log(consumidor, soNoTesteMarcado, soNoTesteMarcaSemJustificativa, soNoTesteSemMarca);",
   ]);
-  escrever("src/composicao/fabriquinha.ts", ["export const pontoDeEntrada = 1;"]);
-  escrever("src/web/app.ts", ["export const pontoDeEntradaDoNavegador = 1;"]);
+  escrever("src/server/composicao/fabriquinha.ts", ["export const pontoDeEntrada = 1;"]);
+  escrever("src/server/web/app.ts", ["export const pontoDeEntradaDoNavegador = 1;"]);
   escrever("pacote-pi/extensions/guarda.ts", ["export default function guarda(): void {}"]);
 
   assert.deepEqual(
@@ -373,7 +373,7 @@ test("a fitness trata tipo, default, cadeia de reexport, reexport renomeado, nam
   t.after(() => {
     rmSync(raiz, { recursive: true, force: true });
   });
-  for (const pasta of ["src/composicao", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
+  for (const pasta of ["src/server/composicao", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
   const escrever = (arquivo: string, linhas: string[]): void => {
     writeFileSync(join(raiz, arquivo), linhas.join("\n"));
   };
@@ -397,13 +397,13 @@ test("a fitness trata tipo, default, cadeia de reexport, reexport renomeado, nam
   escrever("src/espaco.ts", ["export const doEspaco = 1;"]);
   escrever("src/agrupa.ts", ['export * as espaco from "./espaco.ts";']);
   escrever("src/dinamico.ts", ["export const carregado = 1;", "export const naoCarregado = 2;"]);
-  escrever("src/composicao/fabriquinha.ts", [
-    'import type { Usado, Forma } from "../tipos.ts";',
-    'import calcular from "../padrao.ts";',
-    'import { naCadeia } from "../fim.ts";',
-    'import { apelido } from "../meio.ts";',
-    'import { espaco } from "../agrupa.ts";',
-    'const dinamico = await import("../dinamico.ts");',
+  escrever("src/server/composicao/fabriquinha.ts", [
+    'import type { Usado, Forma } from "../../tipos.ts";',
+    'import calcular from "../../padrao.ts";',
+    'import { naCadeia } from "../../fim.ts";',
+    'import { apelido } from "../../meio.ts";',
+    'import { espaco } from "../../agrupa.ts";',
+    'const dinamico = await import("../../dinamico.ts");',
     "const forma: Forma = { lado: 1 };",
     "const usado: Usado = calcular();",
     "export const daEntrada = [forma, usado, naCadeia, apelido, espaco.doEspaco, dinamico.carregado];",

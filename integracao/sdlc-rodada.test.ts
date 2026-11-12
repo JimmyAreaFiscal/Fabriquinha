@@ -6,20 +6,20 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Ator, AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/sdlc/nucleo/gate.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { marcaDoPRRodada } from "../src/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import { Ator, AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/modulos/sdlc/nucleo/gate.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
-} from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
-import { comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+} from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
+import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   agente,
   agora,

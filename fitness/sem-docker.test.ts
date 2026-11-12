@@ -1,5 +1,5 @@
 // Fitness function: só o GeradorDeAmbientes chama o docker (CONCEITOS.md §7), e todo `create`/`run` dele leva limite de
-// memória, de CPU e o rótulo da Fabriquinha. Fora de `src/sandbox/infra/container/` a regra antiga vale: o SonarQube é
+// memória, de CPU e o rótulo da Fabriquinha. Fora de `src/modulos/sandbox/infra/container/` a regra antiga vale: o SonarQube é
 // um serviço do Auditor, único contêiner que não é Ambiente; o scanner roda no host (`sonar-scanner` do PATH). Um
 // `docker run` sem limite estoura a memória da VM do Docker Desktop (código 137) e cria contêineres fora do controle
 // do Auditor.
@@ -10,7 +10,7 @@ import { test } from "node:test";
 
 const PASTAS = ["src", "pacote-pi", "skills"];
 // O único lugar que pode chamar o docker: o GeradorDeAmbientes (CONCEITOS.md §7).
-const PASTA_DO_GERADOR = "src/sandbox/infra/container/";
+const PASTA_DO_GERADOR = "src/modulos/sandbox/infra/container/";
 const CHAMADA_PROIBIDA_FORA_DO_GERADOR = /\bdocker\s+(run|create|exec|start)\b|"docker"/;
 // Uma criação de container escrita como texto (`docker run ...`) ou como lista de argumentos (`["run", ...]`).
 const CRIACAO_DE_CONTAINER = /\bdocker\s+(?:run|create)\b[^\n]*|\[\s*"(?:run|create)"[^\]]*\]/g;

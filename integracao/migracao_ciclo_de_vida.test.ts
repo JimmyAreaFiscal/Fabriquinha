@@ -3,17 +3,17 @@
 // e os Auditores levam a demanda até `concluida`. O pi e o `gh` são falsos; o git é real.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { iniciarRevisaoIntegral } from "../src/sdlc/aplicacao/revisao_demanda.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { concluirSessaoAjustes } from "../src/etapas/ajustar_resultado/sessao_ajustes.ts";
-import type { EstadoDemanda } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
-import { integrarPR } from "../src/repositorio/infra/hospedagem/pr.ts";
+import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { iniciarRevisaoIntegral } from "../src/modulos/sdlc/aplicacao/revisao_demanda.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
+import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
+import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
   agregadoNoEstado,
@@ -63,7 +63,7 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
-import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];

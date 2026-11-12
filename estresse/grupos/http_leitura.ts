@@ -4,16 +4,16 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { guardarBytes } from "../../src/compartilhado/armazenamento/arquivos.ts";
-import { criarAvaliacao } from "../../src/avaliacao/armazenamento/avaliacoes.ts";
-import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../src/sdlc/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../src/sdlc/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/projeto/aplicacao/cadastro.ts";
-import { comTrabalhosDoTicket } from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
-import { ROTAS } from "../../src/api/servidor.ts";
+import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
+import { criarAvaliacao } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
+import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { gravarAnexos } from "../../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
+import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { ROTAS } from "../../src/server/api/servidor.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 
 /** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */

@@ -2,9 +2,9 @@
 // gravações de armazenamento que o cenário precisa. O teste da camada de entrega não importa o armazenamento nem prepara SQL.
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
-export { caminhoArquivo } from "../src/compartilhado/armazenamento/arquivos.ts";
-export { carregarDemanda, comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-export { comTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+export { caminhoArquivo } from "../src/modulos/compartilhado/armazenamento/arquivos.ts";
+export { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+export { comTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 
 /** Executa o `sql` (insert, update, delete) com os `parametros`. */
 export function executarSql(banco: DatabaseSync, sql: string, ...parametros: SQLInputValue[]): void {

@@ -1,19 +1,19 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { CICLO_DA_DEMANDA } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { validarPlano } from "../src/sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import type { EstadoDemanda } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/projeto/nucleo/projeto.ts";
-import { criarDemandaNova } from "../src/sdlc/armazenamento/demandas.ts";
-import { garantirWorktreeDemanda } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { CICLO_DA_DEMANDA } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { validarPlano } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { gravarProjeto } from "../src/modulos/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import { criarDemandaNova } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { garantirWorktreeDemanda } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
-import { AmbienteHostLocal } from "../src/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

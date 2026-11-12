@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { iniciarServico } from "../src/composicao/servico.ts";
+import { iniciarServico } from "../src/server/composicao/servico.ts";
 
 let base: string;
 let pastaDoPacote: string;

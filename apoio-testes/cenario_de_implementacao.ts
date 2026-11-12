@@ -2,21 +2,24 @@
 // na pasta de trabalho e a demanda I-1 com a rodada 1 em `implementar` (ou, com `conflito`, em `encerrar_demanda`).
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { motivoDaFalhaDoTicket } from "../src/sdlc/nucleo/tentativa.ts";
-import type { DepsDaConducao } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import type { RegistroDaVerificacao } from "../src/verificacao/aplicacao/coleta_das_verificacoes.ts";
-import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
+import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { motivoDaFalhaDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
+import type { DepsDaConducao } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import type { RegistroDaVerificacao } from "../src/modulos/verificacao/aplicacao/coleta_das_verificacoes.ts";
+import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import {
   condutor as condutorDoServico,
   type CondutorDeTrabalhos,
-} from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { anotar } from "../src/compartilhado/infra/registro.ts";
-import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
-import { AmbienteHostLocal } from "../src/sandbox/infra/host_local/ambiente_host_local.ts";
+} from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
+import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";

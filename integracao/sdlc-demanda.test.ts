@@ -3,15 +3,15 @@
 // temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeEscopo } from "../src/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { interromperExecucaoDemanda } from "../src/sdlc/aplicacao/execucao/execucao_demanda.ts";
-import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { registrarDependenciaDemanda } from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { ErroDeEscopo } from "../src/modulos/compartilhado/nucleo/erros.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
   AUTOR,
@@ -29,7 +29,7 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
+import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 
 const pi = instalarPiFalso(base);
 

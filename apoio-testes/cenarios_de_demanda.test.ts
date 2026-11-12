@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EstadoDemanda } from "../src/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { carregarDemanda, criarDemandaNova } from "../src/sdlc/armazenamento/demandas.ts";
+import { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { carregarDemanda, criarDemandaNova } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,

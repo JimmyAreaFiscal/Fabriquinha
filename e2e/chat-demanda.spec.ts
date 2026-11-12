@@ -4,10 +4,10 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { falharTicketDemanda } from "../src/sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { falharTicketDemanda } from "../src/modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import { comPlanoSubmetido } from "../apoio-testes/cenarios_de_demanda.ts";
-import { comDemanda } from "../src/sdlc/armazenamento/demandas.ts";
+import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";

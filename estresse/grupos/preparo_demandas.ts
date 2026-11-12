@@ -6,24 +6,24 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { registrarCorrecoesSessao } from "../../src/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { criarAvaliacao } from "../../src/avaliacao/armazenamento/avaliacoes.ts";
-import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
-import { comDemanda } from "../../src/sdlc/armazenamento/demandas.ts";
+import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { criarAvaliacao } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
+import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { importarAchados } from "../../src/avaliacao/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/projeto/aplicacao/cadastro.ts";
-import { criarTarefa, criarUsuarioSimulado } from "../../src/avaliacao/armazenamento/simulacao.ts";
-import { comTrabalhosDoTicket } from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { importarAchados } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
+import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../../src/modulos/avaliacao/armazenamento/simulacao.ts";
+import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
-} from "../../src/repositorio/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
+} from "../../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
 

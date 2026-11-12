@@ -6,17 +6,17 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, type Ator } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { interromperExecucaoDemanda } from "../src/sdlc/aplicacao/execucao/execucao_demanda.ts";
-import { cicloDoDespacho, executarAgora } from "../src/sdlc/aplicacao/despacho/despacho.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { gravarProjeto, projetoExistente } from "../src/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/projeto/nucleo/projeto.ts";
-import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { cicloDoDespacho, executarAgora } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { gravarProjeto, projetoExistente } from "../src/modulos/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
+import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 
 const pi = instalarPiFalso(base);
 
