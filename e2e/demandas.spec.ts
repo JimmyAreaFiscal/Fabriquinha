@@ -2,8 +2,8 @@
 // cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { processosAbertos } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { processosAbertos } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { projeto } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {

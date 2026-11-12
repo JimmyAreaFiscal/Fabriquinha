@@ -6,19 +6,23 @@
 import { Buffer } from "node:buffer";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ROTAS } from "../../src/api/servidor.ts";
-import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../src/sandbox/armazenamento/ambientes.ts";
-import { abrir } from "../../src/compartilhado/armazenamento/banco.ts";
-import { carregarDemanda } from "../../src/sdlc/armazenamento/demandas.ts";
-import { buscarProjeto } from "../../src/projeto/armazenamento/projetos.ts";
-import { configuracao } from "../../src/compartilhado/armazenamento/servico.ts";
-import { exigirGit } from "../../src/repositorio/infra/worktree/worktree.ts";
-import { anexar } from "../../src/avaliacao/armazenamento/simulacao.ts";
+import { ROTAS } from "../../src/server/api/servidor.ts";
+import {
+  inserirAmbienteAlocado,
+  liberarAmbiente,
+  listarAmbientes,
+} from "../../src/modulos/sandbox/armazenamento/ambientes.ts";
+import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { buscarProjeto } from "../../src/modulos/projeto/armazenamento/projetos.ts";
+import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
+import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { anexar } from "../../src/modulos/avaliacao/armazenamento/simulacao.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
-import { configuracaoDoAmbiente } from "../../src/sandbox/armazenamento/configuracao_do_ambiente.ts";
+import { configuracaoDoAmbiente } from "../../src/modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 /** Uma rota POST ou DELETE medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoMutacao {

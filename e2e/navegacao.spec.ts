@@ -1,7 +1,7 @@
 // Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7): a página inicial é o Início, em
 // /home, e o menu não tem Demandas nem Auditoria.
 import type { TestInfo } from "@playwright/test";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
 import { expect, fotografar, test } from "./apoio.ts";
 
 const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
@@ -195,7 +195,7 @@ test("a caixa abre sobre a página e fecha com Esc, com o ✕ e clicando fora", 
     pagina.evaluate(async () => {
       // O módulo é o mesmo que o app.ts carregou: o navegador guarda um por endereço.
       const modulo = "/static/dom.ts";
-      const dom = (await import(modulo)) as typeof import("../src/web/dom.ts");
+      const dom = (await import(modulo)) as typeof import("../src/server/web/dom.ts");
       dom.abrirCaixa({
         titulo: "Desenho da solução",
         meta: "desenho_solucao · desenho · T-109",

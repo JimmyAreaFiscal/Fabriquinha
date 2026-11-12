@@ -11,12 +11,12 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { recuperacaoDaSubida } from "../src/composicao/servico.ts";
-import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
-import { HarnessPi } from "../src/harness/pi/harness_pi.ts";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
+import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
+import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
+import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -92,7 +92,7 @@ export const test = base.extend<{
         process.execPath,
         [
           "--disable-warning=ExperimentalWarning",
-          join(import.meta.dirname, "../src/composicao/fabriquinha.ts"),
+          join(import.meta.dirname, "../src/server/composicao/fabriquinha.ts"),
           "servidor",
         ],
         {

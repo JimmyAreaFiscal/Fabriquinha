@@ -3,10 +3,10 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
+import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

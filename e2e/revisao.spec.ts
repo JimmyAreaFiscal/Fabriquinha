@@ -3,12 +3,12 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../src/sdlc/nucleo/tentativa.ts";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { gravarProjeto } from "../src/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/projeto/nucleo/projeto.ts";
-import { carregarDemanda } from "../src/sdlc/armazenamento/demandas.ts";
+import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { gravarProjeto } from "../src/modulos/projeto/armazenamento/projetos.ts";
+import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "./apoio.ts";
 

@@ -11,28 +11,28 @@ import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/etapas/conducoes.ts";
-import { ConducaoDePlanejar } from "../src/etapas/planejar/conducao_de_planejar.ts";
-import { conjuntoDoServico } from "../src/sandbox/aplicacao/ambiente_do_servico.ts";
-import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
-import { enviarDemanda } from "../src/etapas/conducao/mensagem_do_auditor.ts";
-import { lerConversa } from "../src/trabalho_agentico/aplicacao/sessoes/conversa.ts";
-import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
+import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
+import { conjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
+import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/modulos/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { enviarDemanda } from "../src/modulos/etapas/conducao/mensagem_do_auditor.ts";
+import { lerConversa } from "../src/modulos/trabalho_agentico/aplicacao/sessoes/conversa.ts";
+import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
   carregarTrabalhosDoTicket,
   gravarTokenDoProcesso,
-} from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/harness/pi/pi.ts";
-import { anotar, pastasDoProcesso, noLog } from "../src/compartilhado/infra/registro.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { relogioDoSistema } from "../src/compartilhado/nucleo/relogio.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../src/repositorio/infra/worktree/worktree.ts";
-import { iniciarServico } from "../src/composicao/servico.ts";
-import { raizDo } from "../src/compartilhado/armazenamento/banco.ts";
-import { servirWeb } from "../src/api/servidor.ts";
+} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/harness/pi/pi.ts";
+import { anotar, pastasDoProcesso, noLog } from "../src/modulos/compartilhado/infra/registro.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
+import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { exigirGit } from "../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { iniciarServico } from "../src/server/composicao/servico.ts";
+import { raizDo } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { servirWeb } from "../src/server/api/servidor.ts";
 import {
   atual,
   demandaEmExecucao,

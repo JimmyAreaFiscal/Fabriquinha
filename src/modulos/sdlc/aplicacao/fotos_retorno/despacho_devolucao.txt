@@ -1,0 +1,82 @@
+# Contexto
+
+- Projeto: loja (branch base integracao)
+- Worktree (diretório de trabalho): <raiz>/worktrees/loja/I-2/rodadas/1
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): <raiz>/execucoes/E-<execucao>/saida
+
+## Demanda
+
+I-2, t (funcionalidade)
+
+d
+
+## Critérios de aceite da demanda
+
+(vazio)
+
+## Rodada
+
+I-2.R1, r1 (estado implementar)
+
+Critérios citados:
+
+(nenhum)
+
+## Ticket
+
+I-2.T1, sem título (etapa implementar)
+
+
+
+Dependências:
+
+(nenhuma)
+
+Caminhos:
+
+(nenhum)
+
+## Devolução
+
+O ticket I-2.T1 foi devolvido a você: a entrega anterior não passou. Corrija o que o motivo aponta e não refaça o resto.
+
+Motivo: o teste falhou em x.ts
+
+## Modo de trabalhar: implementar
+
+**Objetivo:** implementar o ticket I-2.T1, e só ele, na rodada I-2.R1 da demanda I-2, seguindo o plano aprovado.
+
+**Passos:**
+
+1. Leia o plano, a descrição do ticket I-2.T1 e os critérios que a rodada I-2.R1 atende.
+2. Implemente com testes na worktree, só nos arquivos previstos do ticket.
+3. Rode os testes e as verificações do projeto até passarem.
+   Docker, containers e deploy de teste estão liberados para isso; não peça permissão.
+   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/server/api/`, `src/server/cli/`, qualquer pasta `armazenamento/` ou `infra/` de `src/`, `src/server/composicao/` ou os condutores do agendador e das execuções (`src/modulos/sdlc/aplicacao/despacho/`, `src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts`, `src/modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts`, `src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts`).
+   Se a falha vier de outro ticket ou do ambiente (contêiner órfão, porta ocupada, fixture que não limpa o que criou), corrija a causa mesmo fora dos seus arquivos previstos, só o necessário para passar, e diga na resposta o que corrigiu e por quê.
+
+**Entregas:** o código e os testes do ticket I-2.T1 na worktree.
+A Fabriquinha roda os testes, as fitness functions e o SonarQube depois de você; ela coleta o resultado e, se tudo passar, conclui o ticket e faz o commit. Se algo falhar, ela devolve o ticket a você com o motivo.
+
+**Quando parar:** quando o ticket estiver implementado e os testes passarem; termine a sua resposta.
+
+**O que não fazer:** esta etapa não faz commit nem PR por conta própria: não faça commit, não faça push e não crie PR. Não vá além do ticket I-2.T1, não mexa em arquivos previstos de outros tickets (salvo a correção do passo 3) e não mude o que o plano deixou fora do escopo. Refira-se a tickets e rodadas só pelos endereços públicos, como I-2.T1 e I-2.R1.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Esta etapa não tem evidência do agente.
+
+A Fabriquinha produz:
+
+- `execucao_testes`
+- `matriz_fitness`
+- `relatorio_sonar`

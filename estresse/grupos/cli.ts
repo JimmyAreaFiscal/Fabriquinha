@@ -7,17 +7,17 @@ import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { COMANDOS_DEMANDA_EXTERNA } from "../../src/cli/demanda_externa.ts";
-import { COMANDOS_DO_AGENTE } from "../../src/cli-agente/comandos.ts";
-import type { AgregadoDemanda } from "../../src/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { registrar, submeterEvidencia } from "../../src/sdlc/aplicacao/gestao_demandas.ts";
-import { abrir, escrever, novoId } from "../../src/compartilhado/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../src/sdlc/armazenamento/demandas.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
+import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
+import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { registrar, submeterEvidencia } from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { abrir, escrever, novoId } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
-} from "../../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+} from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 
@@ -37,7 +37,7 @@ const BUSY = /SQLITE_BUSY|database is locked/i;
 
 const CLI_EXTERNO = [
   "--disable-warning=ExperimentalWarning",
-  join(import.meta.dirname, "../../src/composicao/fabriquinha.ts"),
+  join(import.meta.dirname, "../../src/server/composicao/fabriquinha.ts"),
 ];
 const CLI_DO_AGENTE = [join(import.meta.dirname, "../../pacote-pi/bin/fabriquinha")];
 

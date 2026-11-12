@@ -12,8 +12,8 @@ import {
   eliminarAmbiente,
   inserirAmbienteAlocado,
   liberarAmbiente,
-} from "../src/sandbox/armazenamento/ambientes.ts";
-import { GeradorDeAmbientes } from "../src/sandbox/infra/container/gerador_de_ambientes.ts";
+} from "../src/modulos/sandbox/armazenamento/ambientes.ts";
+import { GeradorDeAmbientes } from "../src/modulos/sandbox/infra/container/gerador_de_ambientes.ts";
 
 const IMAGEM_MINIMA = "busybox:1";
 const LIMITES = { memoria_maxima_mb: 512, cpus: 0.5 };

@@ -7,23 +7,23 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { AUDITOR } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/etapas/gates.ts";
-import { predecessorasPendentes } from "../src/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
   encaminharAchado,
   estadoDaAvaliacao,
   iniciarAvaliacao,
-} from "../src/avaliacao/aplicacao/melhoria/avaliacao.ts";
-import { condutor } from "../src/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import * as gestao from "../src/sdlc/aplicacao/gestao_demandas.ts";
-import { metricasDasEtapas } from "../src/metricas/aplicacao/registro_das_metricas.ts";
-import { achadoDaDemanda } from "../src/sdlc/armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../src/sdlc/armazenamento/dependencias_demanda.ts";
-import { configuracao } from "../src/compartilhado/armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket } from "../src/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+} from "../src/modulos/avaliacao/aplicacao/melhoria/avaliacao.ts";
+import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { metricasDasEtapas } from "../src/modulos/metricas/aplicacao/registro_das_metricas.ts";
+import { achadoDaDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { predecessorasDaDemanda } from "../src/modulos/sdlc/armazenamento/dependencias_demanda.ts";
+import { configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
+import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   abrirPortao,
   agente,
@@ -44,7 +44,7 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "./apoio.ts";
-import { cicloDoDespacho } from "../src/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b

@@ -45,7 +45,7 @@ const MOTIVO_RODADAS_EM_CADEIA =
 const MOTIVO_VERIFICACOES_JA_FEITAS =
   "otimização: a revisão usa os testes, as fitness e o Sonar que a Fabriquinha já rodou no commit, sem sleep de espera";
 const LINHA_DO_ESTRESSE =
-  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/api/`, `src/cli/`, qualquer pasta `armazenamento/` ou `infra/` de `src/`, `src/composicao/` ou os condutores do agendador e das execuções (`src/sdlc/aplicacao/despacho/`, `src/sdlc/aplicacao/execucao/execucao_demanda.ts`, `src/sdlc/aplicacao/sessoes/sessoes_demanda.ts`, `src/trabalho_agentico/aplicacao/trabalho/condutor.ts`).";
+  "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/server/api/`, `src/server/cli/`, qualquer pasta `armazenamento/` ou `infra/` de `src/`, `src/server/composicao/` ou os condutores do agendador e das execuções (`src/modulos/sdlc/aplicacao/despacho/`, `src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts`, `src/modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts`, `src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts`).";
 const USE_AS_VERIFICACOES_JA_FEITAS =
   ' Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).';
 const SECAO_VERIFICACOES_JA_FEITAS =

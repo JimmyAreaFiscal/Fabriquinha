@@ -4,8 +4,8 @@ import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { abrir } from "../src/compartilhado/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/projeto/aplicacao/cadastro.ts";
+import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
 import { expect, test } from "./apoio.ts";
 
 /** O instante de `meses` meses antes de hoje (ISO). */
