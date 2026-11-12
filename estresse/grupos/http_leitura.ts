@@ -149,7 +149,11 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
 }
 
 /** Uma chamada: o tempo até o fim do corpo (ou, no SSE, até o primeiro evento); lança se o status não for 200. */
-async function cronometrar(amb: Ambiente, caminho: string, sse: boolean): Promise<number> {
+export async function cronometrar(
+  amb: Pick<Ambiente, "base" | "cookie">,
+  caminho: string,
+  sse: boolean,
+): Promise<number> {
   const inicio = performance.now();
   const r = await fetch(`${amb.base}${caminho}`, { headers: { cookie: amb.cookie } });
   if (r.status !== 200) {
