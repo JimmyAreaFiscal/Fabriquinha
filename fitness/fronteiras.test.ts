@@ -1,290 +1,53 @@
-// Fitness function: os módulos de src/ dependem numa só direção (matriz abaixo), sem ciclo, e só `armazenamento` fala SQL.
-// Lista de permitidos em vez de proibidos: uma dependência nova precisa ser liberada aqui de propósito.
-// Violação que ainda existe vira exceção datada (demanda que a remove); a exceção que deixou de existir também falha.
+// Fitness function: os módulos de src/ dependem numa só direção, sem ciclo, e só `armazenamento` fala SQL.
+// O motor e as regras ficam em fitness/fronteiras/: a matriz das camadas do legado (legado.ts) e um arquivo de regras por
+// domínio de destino (dominios/<domínio>.ts); o topo de fronteiras/motor.ts diz como um ticket declara o seu domínio migrado.
+// Violação que ainda existe vira exceção no arquivo do domínio, com o ticket que a remove; a que deixou de existir também falha.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
 import { EtapaTicket } from "../src/modulos/etapas/catalogo.ts";
-
-const MODULO_CLIENTE_WEB = "web";
-const MODULO_COMPARTILHADO_COM_O_NAVEGADOR = "web/compartilhado";
-const MODULO_DAS_CONSULTAS_DAS_TELAS = "api/consultas";
-const MODULO_DO_HARNESS = "harness";
-const MODULO_DO_ADAPTER_PI = "harness/pi";
-
-// Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
-const QUALQUER_EXTERNO = () => true;
-const SO_NODE_SEM_SQLITE = (alvo: string) => alvo.startsWith("node:") && alvo !== "node:sqlite";
-const SO_ZOD_E_PATH = (alvo: string) => alvo === "zod" || alvo === "node:path";
-
-// O pacote de um especificador externo: `react-dom/client` → `react-dom`, `@assistant-ui/react/x` → `@assistant-ui/react`.
-const pacoteDe = (alvo: string): string =>
-  alvo
-    .split("/")
-    .slice(0, alvo.startsWith("@") ? 2 : 1)
-    .join("/");
-const PACOTES_DO_NAVEGADOR = new Set(["react-dom", "@assistant-ui/react", "markdown-it"]);
-
-interface RegraDoModulo {
-  modulosPermitidos: string[];
-  externoPermitido: (alvo: string) => boolean;
-  /** Módulos de que só se importa tipo (`import type`), apagado na execução; o valor fica fora de `modulosPermitidos`. */
-  modulosSoComoTipo?: string[];
-}
-
-const MATRIZ: Record<string, RegraDoModulo> = {
-  nucleo: { modulosPermitidos: [], externoPermitido: SO_ZOD_E_PATH },
-  armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
-  aplicacao: {
-    modulosPermitidos: ["nucleo", "armazenamento", "infra", MODULO_DO_HARNESS],
-    externoPermitido: QUALQUER_EXTERNO,
-  },
-  // A interface do Harness: só tipos, que o adapter implementa e o condutor usa.
-  [MODULO_DO_HARNESS]: { modulosPermitidos: [], modulosSoComoTipo: ["nucleo", "infra"], externoPermitido: () => false },
-  // O adapter pi é infra do harness; só a composição o importa (o resto do serviço pede o harness ao condutor).
-  [MODULO_DO_ADAPTER_PI]: {
-    modulosPermitidos: ["nucleo", "infra", MODULO_DO_HARNESS],
-    externoPermitido: QUALQUER_EXTERNO,
-  },
-  // Puro: importável pelo servidor e pelo navegador.
-  [MODULO_COMPARTILHADO_COM_O_NAVEGADOR]: { modulosPermitidos: [], externoPermitido: () => false },
-  // Os tipos e schemas da API: só o núcleo e o zod. Nenhum domínio o importa (as consultas das telas ficam em
-  // api/consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
-  contrato: { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
-  // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios: a regra da aplicação, mais o contrato.
-  [MODULO_DAS_CONSULTAS_DAS_TELAS]: {
-    modulosPermitidos: ["nucleo", "armazenamento", "infra", "aplicacao", "contrato"],
-    externoPermitido: QUALQUER_EXTERNO,
-  },
-  api: {
-    modulosPermitidos: [
-      "aplicacao",
-      "nucleo",
-      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
-      "contrato",
-      MODULO_DAS_CONSULTAS_DAS_TELAS,
-    ],
-    externoPermitido: QUALQUER_EXTERNO,
-  },
-  cli: { modulosPermitidos: ["aplicacao", "nucleo", "contrato"], externoPermitido: QUALQUER_EXTERNO },
-  // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
-  "cli-agente": { modulosPermitidos: ["contrato"], externoPermitido: SO_NODE_SEM_SQLITE },
-  // Roda no navegador: de valor, só o `web/compartilhado` (o `casar` e o relógio do navegador); do contrato e do núcleo,
-  // só `import type`; de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só nos testes,
-  // que a matriz não lê).
-  [MODULO_CLIENTE_WEB]: {
-    modulosPermitidos: [MODULO_COMPARTILHADO_COM_O_NAVEGADOR],
-    modulosSoComoTipo: ["contrato", "nucleo"],
-    externoPermitido: (alvo) => PACOTES_DO_NAVEGADOR.has(pacoteDe(alvo)),
-  },
-  composicao: {
-    modulosPermitidos: [
-      "nucleo",
-      "armazenamento",
-      "infra",
-      "aplicacao",
-      "api",
-      "cli",
-      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
-      "contrato",
-      MODULO_CLIENTE_WEB,
-      MODULO_DO_HARNESS,
-      MODULO_DO_ADAPTER_PI,
-    ],
-    externoPermitido: QUALQUER_EXTERNO,
-  },
-};
-
-const MODULO_COM_SQL = "armazenamento";
-
-interface Achado {
-  arquivo: string;
-  import: string;
-}
-interface Excecao extends Achado {
-  demanda: string;
-}
-
-// Cada exceção cita a demanda (04 a 26) que a remove. Vazia: a 20 limpou a API (ex-entrega/http) e nada mais ficou pendente.
-const EXCECOES: Excecao[] = [];
-
-// `src/modulos/<domínio>/…` (os domínios) ou `src/server/<domínio>/…` (a entrega: API, web, CLIs, contrato e composição).
-// O grupo não muda a regra: o módulo sai do caminho dentro dele. Arquivo fora dos dois grupos é módulo desconhecido.
-const GRUPOS_DE_SRC = new Set(["modulos", "server"]);
-
-function caminhoDentroDoGrupo(caminhoRelativoASrc: string): string {
-  const [grupo, ...resto] = caminhoRelativoASrc.split("/");
-  return grupo !== undefined && GRUPOS_DE_SRC.has(grupo) ? resto.join("/") : "";
-}
-
-// `<domínio>/<camada>/…`: o domínio agrupa por conceito, e a regra de dependência é a da camada.
-const DOMINIOS = new Set([
-  "sdlc",
-  "trabalho_agentico",
-  "sandbox",
-  "repositorio",
-  "projeto",
-  "verificacao",
-  "metricas",
-  "compartilhado",
-]);
-
-// `src/modulos/etapas/` não tem pasta por camada: a pasta é a Etapa, ou o que é comum a elas. O que a Etapa declara é valor puro,
-// com a regra do núcleo, para o motor ler o catálogo sem trazer condução nem banco: o catálogo, `definicao/` e, em cada
-// Etapa, `definicao.ts` e a regra do Gate dela (`gate.ts`, agregado → agregado). O resto (a condução e os registros das
-// conduções e dos Gates, a montagem do prompt, a decisão dos Gates e os casos de uso), a da aplicação.
-const DOMINIO_DAS_ETAPAS = "etapas";
-const VALOR_PURO_DAS_ETAPAS = /^etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/(definicao|gate)\.ts)$/;
-
-// `src/modulos/harness/<arquivo>` é a interface; `src/modulos/harness/<adapter>/…`, um módulo por adapter.
-// `src/server/api/consultas/` e `src/server/web/compartilhado/` são módulos à parte dentro da API e da web; `contrato/`,
-// `cli/` e `cli-agente/`, cada um o seu.
-function moduloDoArquivo(caminhoRelativoASrc: string): string {
-  const caminho = caminhoDentroDoGrupo(caminhoRelativoASrc);
-  const [primeiro, segundo] = caminho.split("/");
-  if (primeiro === DOMINIO_DAS_ETAPAS) return VALOR_PURO_DAS_ETAPAS.test(caminho) ? "nucleo" : "aplicacao";
-  if (primeiro === "api") return segundo === "consultas" ? MODULO_DAS_CONSULTAS_DAS_TELAS : "api";
-  if (primeiro === MODULO_CLIENTE_WEB)
-    return segundo === "compartilhado" ? MODULO_COMPARTILHADO_COM_O_NAVEGADOR : MODULO_CLIENTE_WEB;
-  if (primeiro === MODULO_DO_HARNESS)
-    return segundo === undefined || segundo.endsWith(".ts") ? MODULO_DO_HARNESS : `${MODULO_DO_HARNESS}/${segundo}`;
-  if (primeiro !== undefined && DOMINIOS.has(primeiro)) return segundo ?? "";
-  return primeiro ?? "";
-}
-
-function listarArquivosDeProducao(src: string): string[] {
-  return readdirSync(src, { recursive: true, encoding: "utf8" })
-    .filter((arquivo) => /\.tsx?$/.test(arquivo) && !/\.test\.tsx?$/.test(arquivo))
-    .sort();
-}
-
-// Especificadores que só aparecem em `import type` / `export type … from` (nunca num import de valor).
-function acharEspecificadoresSoDeTipo(fonte: ts.SourceFile): Set<string> {
-  const deTipo = new Set<string>();
-  const deValor = new Set<string>();
-  for (const declaracao of fonte.statements) {
-    let especificador: ts.Expression | undefined;
-    let ehSoDeTipo = false;
-    if (ts.isImportDeclaration(declaracao)) {
-      especificador = declaracao.moduleSpecifier;
-      ehSoDeTipo = declaracao.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword;
-    } else if (ts.isExportDeclaration(declaracao)) {
-      especificador = declaracao.moduleSpecifier;
-      ehSoDeTipo = declaracao.isTypeOnly;
-    }
-    if (especificador && ts.isStringLiteral(especificador)) (ehSoDeTipo ? deTipo : deValor).add(especificador.text);
-  }
-  return new Set([...deTipo].filter((alvo) => !deValor.has(alvo)));
-}
-
-// shortcut: sem checker de tipos, `.prepare(` é sempre SQL e `.exec(` só conta com literal de texto (SQL); RegExp.exec recebe variável.
-function acharChamadasDeSql(fonte: ts.SourceFile): string[] {
-  const chamadas = new Set<string>();
-  const visitar = (no: ts.Node): void => {
-    if (ts.isCallExpression(no) && ts.isPropertyAccessExpression(no.expression)) {
-      const metodo = no.expression.name.text;
-      const primeiroArgumento = no.arguments[0];
-      const ehTexto = primeiroArgumento && ts.isStringLiteralLike(primeiroArgumento);
-      const ehTemplate = primeiroArgumento && ts.isTemplateExpression(primeiroArgumento);
-      if (metodo === "prepare" || (metodo === "exec" && (ehTexto || ehTemplate))) chamadas.add(`.${metodo}(`);
-    }
-    ts.forEachChild(no, visitar);
-  };
-  visitar(fonte);
-  return [...chamadas];
-}
-
-interface Aresta {
-  de: string;
-  para: string;
-  arquivo: string;
-  achado: Achado;
-}
-
-function acharViolacoesEArestas(src: string): { violacoes: Achado[]; arestas: Aresta[] } {
-  const violacoes: Achado[] = [];
-  const arestas: Aresta[] = [];
-  for (const arquivo of listarArquivosDeProducao(src)) {
-    const modulo = moduloDoArquivo(arquivo);
-    const regra = MATRIZ[modulo];
-    if (!regra) {
-      violacoes.push({ arquivo, import: `módulo desconhecido: ${modulo}` });
-      continue;
-    }
-    const caminho = join(src, arquivo);
-    const texto = readFileSync(caminho, "utf8");
-    const fonte = ts.createSourceFile(caminho, texto, ts.ScriptTarget.Latest);
-    const soDeTipo = acharEspecificadoresSoDeTipo(fonte);
-    for (const { fileName: alvo } of ts.preProcessFile(texto, true, true).importedFiles) {
-      const moduloAlvo = alvo.startsWith(".")
-        ? moduloDoArquivo(relative(src, resolve(dirname(caminho), alvo)))
-        : undefined;
-      const permitido =
-        moduloAlvo === undefined
-          ? regra.externoPermitido(alvo)
-          : moduloAlvo === modulo || regra.modulosPermitidos.includes(moduloAlvo);
-      const tipoBasta =
-        moduloAlvo !== undefined && regra.modulosSoComoTipo?.includes(moduloAlvo) === true && soDeTipo.has(alvo);
-      const achado = { arquivo, import: alvo };
-      if (!permitido && !tipoBasta) violacoes.push(achado);
-      if (moduloAlvo !== undefined && moduloAlvo !== modulo)
-        arestas.push({ de: modulo, para: moduloAlvo, arquivo, achado });
-    }
-    if (modulo !== MODULO_COM_SQL) {
-      for (const chamada of acharChamadasDeSql(fonte)) violacoes.push({ arquivo, import: `SQL ${chamada}` });
-    }
-  }
-  return { violacoes, arestas };
-}
-
-function acharCiclosEntreModulos(arestas: Aresta[]): Achado[] {
-  const vizinhos = new Map<string, Aresta[]>();
-  for (const aresta of arestas) vizinhos.set(aresta.de, [...(vizinhos.get(aresta.de) ?? []), aresta]);
-  const ciclos: Achado[] = [];
-  const emVisita: Aresta[] = [];
-  const concluidos = new Set<string>();
-  const visitar = (modulo: string): void => {
-    for (const aresta of vizinhos.get(modulo) ?? []) {
-      const inicioDoCiclo = emVisita.findIndex((passo) => passo.de === aresta.para);
-      if (inicioDoCiclo >= 0 || aresta.para === modulo) {
-        const volta = [...emVisita.slice(Math.max(inicioDoCiclo, 0)), aresta];
-        const caminho = [...volta.map((passo) => passo.de), aresta.para].join(" → ");
-        ciclos.push({ arquivo: volta[0]?.arquivo ?? aresta.arquivo, import: `ciclo entre módulos: ${caminho}` });
-      } else if (!concluidos.has(aresta.para)) {
-        emVisita.push(aresta);
-        visitar(aresta.para);
-        emVisita.pop();
-      }
-    }
-    concluidos.add(modulo);
-  };
-  for (const modulo of vizinhos.keys()) if (!concluidos.has(modulo)) visitar(modulo);
-  return ciclos;
-}
-
-// A aresta de uma exceção listada fica fora do grafo: a dívida já é cobrada pela lista, e o ciclo que sobrar é novo.
-function acharViolacoes(src: string, excecoes: Excecao[]): Achado[] {
-  const { violacoes, arestas } = acharViolacoesEArestas(src);
-  const listadas = new Set(excecoes.map(descrever));
-  const unicas = new Map(violacoes.map((achado) => [descrever(achado), achado]));
-  const ciclos = acharCiclosEntreModulos(arestas.filter(({ achado }) => !listadas.has(descrever(achado))));
-  return [...new Map([...unicas.values(), ...ciclos].map((achado) => [descrever(achado), achado])).values()];
-}
-
-function descrever({ arquivo, import: alvo }: Achado): string {
-  return `${arquivo} importa ${alvo}`;
-}
+import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
+import {
+  ARMAZENAMENTO_DE_EVIDENCIA,
+  ARQUIVO_DO_CATALOGO,
+  ARQUIVO_QUE_SUBMETE_EVIDENCIA,
+  ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA,
+  PASTA_DOS_CASOS_DE_USO_DO_AGENTE,
+  PASTAS_QUE_CITAM_NOME_DE_ETAPA,
+} from "./fronteiras/dominios/ciclo_de_vida.ts";
+import { PASTA_DA_API_DO_AGENTE, PASTA_DA_COMPOSICAO } from "./fronteiras/dominios/server.ts";
+import { ARQUIVO_DO_CONDUTOR, ARQUIVO_DO_HARNESS } from "./fronteiras/dominios/sessoes.ts";
+import {
+  ARQUIVO_DO_PROCESSO,
+  ARQUIVO_DO_RELOGIO,
+  PASTA_DO_HISTORICO_DO_ESQUEMA,
+} from "./fronteiras/dominios/shared.ts";
+import {
+  acharCiclosEntreDominios,
+  acharEspecificadoresDe,
+  acharEspecificadoresSoDeTipo,
+  acharImportadoresDe,
+  acharToleranciasVencidas,
+  acharViolacoes,
+  type DependenciaToleradaEntreDominios,
+  dependenciasToleradasDe,
+  descrever,
+  excecoesDe,
+  listarArquivosDeProducao,
+  moduloDoArquivo,
+} from "./fronteiras/motor.ts";
 
 const SRC = resolve(import.meta.dirname, "../src");
+const EXCECOES = excecoesDe(ARQUITETURA_DE_SRC);
+const moduloDe = (caminhoRelativoASrc: string) => moduloDoArquivo(caminhoRelativoASrc, ARQUITETURA_DE_SRC);
 
 test("src respeita a matriz de dependências, não tem ciclo e só armazenamento fala SQL (fora das exceções datadas)", () => {
   const listadas = new Set(EXCECOES.map(descrever));
   assert.deepEqual(
-    acharViolacoes(SRC, EXCECOES)
+    acharViolacoes(SRC, ARQUITETURA_DE_SRC, EXCECOES)
       .map(descrever)
       .filter((descricao) => !listadas.has(descricao)),
     [],
@@ -292,36 +55,35 @@ test("src respeita a matriz de dependências, não tem ciclo e só armazenamento
 });
 
 test("toda exceção listada ainda existe no código", () => {
-  const existentes = new Set(acharViolacoes(SRC, []).map(descrever));
+  const existentes = new Set(acharViolacoes(SRC, ARQUITETURA_DE_SRC, []).map(descrever));
   assert.deepEqual(
     EXCECOES.map(descrever).filter((descricao) => !existentes.has(descricao)),
     [],
   );
 });
 
-test("toda exceção cita arquivo, import e uma demanda de 04 a 26", () => {
+test("toda exceção cita arquivo, import e um ticket de 04 a 22", () => {
   for (const excecao of EXCECOES) {
     assert.ok(excecao.arquivo && excecao.import, `exceção sem arquivo ou import: ${JSON.stringify(excecao)}`);
-    assert.match(excecao.demanda, /^(0[4-9]|1\d|2[0-6])$/, `${descrever(excecao)}: demanda ${excecao.demanda}`);
+    assert.match(excecao.ticket, /^(0[4-9]|1\d|2[0-2])$/, `${descrever(excecao)}: ticket ${excecao.ticket}`);
   }
 });
 
-test("a lista de exceções está vazia: a API não importa armazenamento nem chama .prepare(", () => {
-  assert.deepEqual(EXCECOES, []);
-  const daApi = acharViolacoes(SRC, []).filter(({ arquivo }) => arquivo.startsWith("server/api/"));
+test("a API não importa armazenamento nem chama .prepare(, nem por exceção", () => {
+  const daApi = acharViolacoes(SRC, ARQUITETURA_DE_SRC, []).filter(({ arquivo }) => arquivo.startsWith("server/api/"));
   assert.deepEqual(daApi.map(descrever), []);
 });
 
 // A matriz libera `aplicacao` inteira à API; a API do agente só alcança os casos de uso do agente.
 test("api/agente só importa de aplicacao o etapas/agente", () => {
-  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith("server/api/agente/"));
+  const daApiDoAgente = listarArquivosDeProducao(SRC).filter((arquivo) => arquivo.startsWith(PASTA_DA_API_DO_AGENTE));
   assert.ok(daApiDoAgente.length > 0);
   const deAplicacaoFora = daApiDoAgente.flatMap((arquivo) => {
     const caminho = join(SRC, arquivo);
     return ts
       .preProcessFile(readFileSync(caminho, "utf8"), true, true)
       .importedFiles.map(({ fileName: alvo }) => relative(SRC, resolve(dirname(caminho), alvo)))
-      .filter((alvo) => moduloDoArquivo(alvo) === "aplicacao" && !alvo.startsWith("modulos/etapas/agente/"))
+      .filter((alvo) => moduloDe(alvo) === "aplicacao" && !alvo.startsWith(PASTA_DOS_CASOS_DE_USO_DO_AGENTE))
       .map((alvo) => `${arquivo} importa ${alvo}`);
   });
   assert.deepEqual(deAplicacaoFora, []);
@@ -329,7 +91,7 @@ test("api/agente só importa de aplicacao o etapas/agente", () => {
 
 test("nenhum importador da API fora de composicao e da própria API", () => {
   const importadores = listarArquivosDeProducao(SRC)
-    .filter((arquivo) => !arquivo.startsWith("server/composicao/") && !arquivo.startsWith("server/api/"))
+    .filter((arquivo) => !arquivo.startsWith(PASTA_DA_COMPOSICAO) && !arquivo.startsWith("server/api/"))
     .filter((arquivo) => /from ['"](\.\.\/)+(server\/)?api\//.test(readFileSync(join(SRC, arquivo), "utf8")));
   assert.deepEqual(importadores, []);
 });
@@ -422,7 +184,7 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
   }
 
   assert.deepEqual(
-    acharViolacoes(raiz, []).map(descrever).sort(),
+    acharViolacoes(raiz, ARQUITETURA_DE_SRC, []).map(descrever).sort(),
     [
       "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → aplicacao",
       "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → api/consultas → aplicacao",
@@ -465,13 +227,12 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
 
 // O relógio é do `composicao` (que o injeta) e de `nucleo/relogio.ts`: `new Date(` em qualquer outro .ts de src/ (cliente web
 // e compartilhado inclusive) lê a hora ou faz conta de calendário fora dele. Os *.test.ts (já fora da lista) e *_cenario.ts ficam de fora.
-const ARQUIVO_DO_RELOGIO = "modulos/compartilhado/nucleo/relogio.ts";
 
 function acharNewDateForaDoRelogio(src: string): string[] {
   return listarArquivosDeProducao(src)
     .filter(
       (arquivo) =>
-        arquivo !== ARQUIVO_DO_RELOGIO && !arquivo.startsWith("server/composicao/") && !arquivo.endsWith("_cenario.ts"),
+        arquivo !== ARQUIVO_DO_RELOGIO && !arquivo.startsWith(PASTA_DA_COMPOSICAO) && !arquivo.endsWith("_cenario.ts"),
     )
     .filter((arquivo) => {
       const chamadas: ts.Node[] = [];
@@ -497,7 +258,7 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_DO_RELOGIO]: "export const agora = () => new Date().toISOString();\n",
-    "server/composicao/servico.ts": "const batida = new Date(inicio);\n",
+    [`${PASTA_DA_COMPOSICAO}servico.ts`]: "const batida = new Date(inicio);\n",
     "aplicacao/ruim.ts": "const agora = new Date().toISOString();\n",
     "web/ruim.ts": "const ano = new Date(instante).getFullYear();\n",
     "web/compartilhado/ruim.ts": "export const dia = (i: string) => new Date(i);\n",
@@ -519,8 +280,6 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 });
 
 // Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
-const ARQUIVO_DO_CONDUTOR = "modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-const ARQUIVO_DO_HARNESS = "modulos/harness/pi/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
 // shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
@@ -573,43 +332,19 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
 });
 
 // O processo do Espaço passa pelo `Ambiente`: `node:child_process` só nestes arquivos, e `infra/processo.ts` só nestes chamadores do core.
-// O Ambiente em si: a interface e os adapters, a infra do sandbox; o git e a hospedagem (repositorio/) seguem a regra comum.
-const INICIOS_DO_AMBIENTE = ["modulos/sandbox/infra/"];
-const ARQUIVO_DO_PROCESSO = "modulos/compartilhado/infra/processo.ts";
-const ARQUIVOS_COM_CHILD_PROCESS = new Set([ARQUIVO_DO_PROCESSO, ARQUIVO_DO_HARNESS]);
-// Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
-const CHAMADORES_DIRETOS_DO_PROCESSO = [
-  "server/composicao/cli.ts",
-  "modulos/harness/pi/harness_pi.ts",
-  "modulos/repositorio/infra/git/cadastro.ts",
-  "modulos/repositorio/infra/git/commits_humanos.ts",
-  "modulos/repositorio/infra/git/heatmap.ts",
-  "modulos/repositorio/infra/hospedagem/pr.ts",
-  "modulos/repositorio/infra/worktree/limpeza_demanda.ts",
-  "modulos/repositorio/infra/worktree/worktree.ts",
-  "modulos/verificacao/infra/tipos_de_verificacao/sonar.ts",
-];
+// Cada domínio declara os seus em `processoDoHost`: as pastas do próprio Ambiente, quem importa child_process e a lista fixa
+// dos chamadores diretos, cada um falando com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem
+// worktree ou a rede do git com credenciais.
+const PROCESSO_DO_HOST = Object.values(ARQUITETURA_DE_SRC.dominios).map((regras) => regras.processoDoHost);
+const PASTAS_LIBERADAS_DO_PROCESSO = PROCESSO_DO_HOST.flatMap((declarado) => declarado.pastasLiberadas);
+const ARQUIVOS_COM_CHILD_PROCESS = new Set(PROCESSO_DO_HOST.flatMap((declarado) => declarado.importamChildProcess));
+const CHAMADORES_DIRETOS_DO_PROCESSO = PROCESSO_DO_HOST.flatMap((declarado) => declarado.chamadoresDiretos);
 
 const ehChildProcess = (alvo: string): boolean => /^(node:)?child_process$/.test(alvo);
 const ehProcessoDoServico = (alvo: string): boolean => /(^|\/)processo\.ts$/.test(alvo);
 
-function acharEspecificadoresDe(src: string, arquivo: string): string[] {
-  const fonte = ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest);
-  return fonte.statements.flatMap((declaracao) =>
-    (ts.isImportDeclaration(declaracao) || ts.isExportDeclaration(declaracao)) &&
-    declaracao.moduleSpecifier &&
-    ts.isStringLiteral(declaracao.moduleSpecifier)
-      ? [declaracao.moduleSpecifier.text]
-      : [],
-  );
-}
-
-function acharImportadoresDe(src: string, ehAlvo: (alvo: string) => boolean): string[] {
-  return listarArquivosDeProducao(src).filter((arquivo) => acharEspecificadoresDe(src, arquivo).some(ehAlvo));
-}
-
 function acharViolacoesDoProcesso(src: string, chamadoresDiretos: readonly string[]): string[] {
-  const doAmbiente = (arquivo: string) => INICIOS_DO_AMBIENTE.some((inicio) => arquivo.startsWith(inicio));
+  const doAmbiente = (arquivo: string) => PASTAS_LIBERADAS_DO_PROCESSO.some((inicio) => arquivo.startsWith(inicio));
   return [
     ...acharImportadoresDe(src, ehChildProcess)
       .filter((arquivo) => !doAmbiente(arquivo) && !ARQUIVOS_COM_CHILD_PROCESS.has(arquivo))
@@ -639,7 +374,7 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_DO_PROCESSO]: 'import { spawn } from "node:child_process";\n',
-    "modulos/sandbox/infra/host_local/ambiente_host_local.ts":
+    [`${PASTAS_LIBERADAS_DO_PROCESSO[0] ?? ""}host_local/ambiente_host_local.ts`]:
       'import { spawn } from "child_process";\nimport { executar } from "../../../compartilhado/infra/processo.ts";\n',
     "modulos/repositorio/infra/hospedagem/pr.ts":
       'import { executar } from "../../../compartilhado/infra/processo.ts";\n',
@@ -659,8 +394,6 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
 });
 
 // Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada.
-const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "modulos/sdlc/aplicacao/evidencias/submeter.ts";
-const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
 const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
 
 // shortcut: o padrão de lista é textual, então também acusa o literal dentro de comentário ou string; nenhum existe hoje em src/.
@@ -669,7 +402,7 @@ function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
     .filter(
       (arquivo) =>
         arquivo !== ARQUIVO_QUE_SUBMETE_EVIDENCIA &&
-        moduloDoArquivo(arquivo) !== "armazenamento" &&
+        moduloDe(arquivo) !== "armazenamento" &&
         !arquivo.endsWith("_cenario.ts"),
     )
     .flatMap((arquivo) => {
@@ -684,8 +417,7 @@ function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
         const ligacoes = declaracao.importClause?.namedBindings;
         if (!ligacoes || !ts.isNamedImports(ligacoes)) continue;
         for (const nome of ligacoes.elements.map((elemento) => (elemento.propertyName ?? elemento.name).text)) {
-          if (nome.startsWith("gravar"))
-            achados.push(`${arquivo} importa ${nome} de armazenamento/evidencia_demanda.ts`);
+          if (nome.startsWith("gravar")) achados.push(`${arquivo} importa ${nome} de ${ARMAZENAMENTO_DE_EVIDENCIA}`);
         }
       }
       return achados;
@@ -703,14 +435,11 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_QUE_SUBMETE_EVIDENCIA]: "const x = { ...ag, evidencias: [...ag.evidencias, nova] };\n",
-    "modulos/armazenamento/evidencia_demanda.ts": "export function gravarAnexos() {}\n",
-    "modulos/armazenamento/outro.ts":
-      'import { gravarAnexos } from "./evidencia_demanda.ts";\nconst x = { evidencias: [...a.evidencias] };\n',
+    [`modulos/${ARMAZENAMENTO_DE_EVIDENCIA}`]: "export function gravarAnexos() {}\n",
+    "modulos/armazenamento/outro.ts": `import { gravarAnexos } from "../${ARMAZENAMENTO_DE_EVIDENCIA}";\nconst x = { evidencias: [...a.evidencias] };\n`,
     "modulos/aplicacao/monta_lista.ts": "const x = { ...ag, evidencias: [...ag.evidencias, nova] };\n",
-    "modulos/aplicacao/importa_gravar.ts":
-      'import { gravarAnexos as gravar } from "../armazenamento/evidencia_demanda.ts";\n',
-    "modulos/aplicacao/le_anexos.ts":
-      'import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";\nconst x = { evidencias: [] };\n',
+    "modulos/aplicacao/importa_gravar.ts": `import { gravarAnexos as gravar } from "../${ARMAZENAMENTO_DE_EVIDENCIA}";\n`,
+    "modulos/aplicacao/le_anexos.ts": `import { anexosDaDemanda } from "../${ARMAZENAMENTO_DE_EVIDENCIA}";\nconst x = { evidencias: [] };\n`,
     "modulos/aplicacao/gravar_de_outro.ts": 'import { gravarAnexos } from "../armazenamento/outro.ts";\n',
     "modulos/aplicacao/teste_que_grava.test.ts": "const x = { evidencias: [...ag.evidencias] };\n",
     "modulos/aplicacao/montagem_cenario.ts": "const x = { evidencias: [...ag.evidencias] };\n",
@@ -721,88 +450,24 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   }
 
   assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(raiz).sort(), [
-    "modulos/aplicacao/importa_gravar.ts importa gravarAnexos de armazenamento/evidencia_demanda.ts",
+    `modulos/aplicacao/importa_gravar.ts importa gravarAnexos de ${ARMAZENAMENTO_DE_EVIDENCIA}`,
     "modulos/aplicacao/monta_lista.ts monta evidencias a partir da lista atual",
   ]);
 });
 
-// Os domínios de src/ (a primeira pasta, como no mapa-alvo) não formam ciclo de import, de valor ou de tipo. A migração
-// SDLC por seams (1 harness/, 2 sandbox/, repositorio/ e projeto/, 3 etapas/, 4a sdlc/ e trabalho_agentico/, 4b o motor
-// derivado do catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 api/,
-// web/, cli/, cli-agente/ e contrato/ no lugar de entrega/) tolerava aqui, com o passo que a removia, a dependência que
-// fechava ciclo; desde o 6 não resta nenhuma. A ordem, de cima para baixo: api, cli, cli-agente, web, composicao →
-// contrato → etapas, metricas → sdlc → trabalho_agentico → harness, verificacao → projeto → repositorio →
-// sandbox → etapas/definicao → compartilhado. A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar
+// Os domínios de src/ (as duas primeiras pastas, `modulos/<domínio>` e `server/<parte>`, e o shared inteiro) não formam
+// ciclo de import, de valor ou de tipo. A migração SDLC por seams tolerava aqui, com o passo que a removia, a dependência
+// que fechava ciclo; desde o passo 6 não resta nenhuma. Na refatoração em módulos, a dependência tolerada fica no arquivo
+// do domínio (`dependenciasToleradas`), com o ticket que a remove; fora do grafo, e se sumir do código ou deixar de fechar
 // ciclo, a fitness também falha.
-interface DependenciaToleradaEntreDominios {
-  de: string;
-  para: string;
-  /** O passo da migração, ou a demanda, que remove a dependência. */
-  removidaEm: string;
-}
-
-const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS: DependenciaToleradaEntreDominios[] = [];
-
-// O que as Etapas declaram (o catálogo, `definicao/` e o `definicao.ts` de cada uma) conta como um domínio à parte, embaixo
-// do motor: todo o serviço lê os nomes das Etapas e o que cada uma declara, e a declaração só depende de `compartilhado`.
-// O resto de `etapas/` (as conduções, os Gates, o prompt, a API do agente) é o domínio `etapas`, em cima do motor.
-const DECLARACOES_DAS_ETAPAS = /^modulos\/etapas\/(catalogo\.ts|definicao\/.+|[^/]+\/definicao\.ts)$/;
-const DOMINIO_DAS_DECLARACOES_DAS_ETAPAS = "modulos/etapas/definicao";
-
-function dominioDoArquivo(caminhoRelativoASrc: string): string {
-  if (DECLARACOES_DAS_ETAPAS.test(caminhoRelativoASrc)) return DOMINIO_DAS_DECLARACOES_DAS_ETAPAS;
-  return caminhoRelativoASrc.split("/").slice(0, 2).join("/");
-}
-
-const descreverDependencia = ({ de, para }: { de: string; para: string }): string => `${de} → ${para}`;
-
-// Uma aresta por par de domínios, com o primeiro arquivo que a cria.
-function acharDependenciasEntreDominios(src: string): Aresta[] {
-  const dependencias = new Map<string, Aresta>();
-  for (const arquivo of listarArquivosDeProducao(src)) {
-    const caminho = join(src, arquivo);
-    const de = dominioDoArquivo(arquivo);
-    for (const { fileName: alvo } of ts.preProcessFile(readFileSync(caminho, "utf8"), true, true).importedFiles) {
-      if (!alvo.startsWith(".")) continue;
-      const para = dominioDoArquivo(relative(src, resolve(dirname(caminho), alvo)));
-      const descricao = descreverDependencia({ de, para });
-      if (para !== de && !dependencias.has(descricao))
-        dependencias.set(descricao, { de, para, arquivo, achado: { arquivo, import: alvo } });
-    }
-  }
-  return [...dependencias.values()];
-}
-
-function acharCiclosEntreDominios(src: string, toleradas: DependenciaToleradaEntreDominios[]): string[] {
-  const listadas = new Set(toleradas.map(descreverDependencia));
-  const naoToleradas = acharDependenciasEntreDominios(src).filter(
-    (aresta) => !listadas.has(descreverDependencia(aresta)),
-  );
-  return acharCiclosEntreModulos(naoToleradas).map(({ import: ciclo }) => ciclo);
-}
-
-// Vencida: a dependência sumiu, ou já não há caminho de volta de `para` a `de` (deixou de fechar ciclo).
-function acharToleranciasVencidas(src: string, toleradas: DependenciaToleradaEntreDominios[]): string[] {
-  const dependencias = acharDependenciasEntreDominios(src);
-  const existentes = new Set(dependencias.map(descreverDependencia));
-  const alcanca = (origem: string, destino: string): boolean => {
-    const visitados = [origem];
-    for (const dominio of visitados) {
-      for (const { de, para } of dependencias) if (de === dominio && !visitados.includes(para)) visitados.push(para);
-    }
-    return visitados.includes(destino);
-  };
-  return toleradas
-    .filter((tolerada) => !existentes.has(descreverDependencia(tolerada)) || !alcanca(tolerada.para, tolerada.de))
-    .map(descreverDependencia);
-}
+const DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS = dependenciasToleradasDe(ARQUITETURA_DE_SRC);
 
 test("os domínios de src/ não formam ciclo de import fora das dependências toleradas", () => {
-  assert.deepEqual(acharCiclosEntreDominios(SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
+  assert.deepEqual(acharCiclosEntreDominios(SRC, ARQUITETURA_DE_SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
 });
 
 test("toda dependência tolerada entre domínios ainda existe e ainda fecha ciclo", () => {
-  assert.deepEqual(acharToleranciasVencidas(SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
+  assert.deepEqual(acharToleranciasVencidas(SRC, ARQUITETURA_DE_SRC, DEPENDENCIAS_TOLERADAS_ENTRE_DOMINIOS), []);
 });
 
 test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tipo, e a tolerância vencida", (t) => {
@@ -824,7 +489,7 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharCiclosEntreDominios(raiz, []), [
+  assert.deepEqual(acharCiclosEntreDominios(raiz, ARQUITETURA_DE_SRC, []), [
     "ciclo entre módulos: modulos/demanda → modulos/fluxo → modulos/demanda",
   ]);
   const toleradas: DependenciaToleradaEntreDominios[] = [
@@ -832,8 +497,8 @@ test("a fitness de ciclos entre domínios acusa o ciclo novo, de valor ou de tip
     { de: "server/api", para: "modulos/demanda", removidaEm: "6" },
     { de: "modulos/execucao", para: "modulos/fluxo", removidaEm: "5" },
   ];
-  assert.deepEqual(acharCiclosEntreDominios(raiz, toleradas), []);
-  assert.deepEqual(acharToleranciasVencidas(raiz, toleradas), [
+  assert.deepEqual(acharCiclosEntreDominios(raiz, ARQUITETURA_DE_SRC, toleradas), []);
+  assert.deepEqual(acharToleranciasVencidas(raiz, ARQUITETURA_DE_SRC, toleradas), [
     "server/api → modulos/demanda",
     "modulos/execucao → modulos/fluxo",
   ]);
@@ -863,7 +528,7 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharCiclosEntreDominios(raiz, []).sort(), [
+  assert.deepEqual(acharCiclosEntreDominios(raiz, ARQUITETURA_DE_SRC, []).sort(), [
     "ciclo entre módulos: modulos/etapas/definicao → modulos/sdlc → modulos/etapas/definicao",
     "ciclo entre módulos: modulos/sdlc → modulos/etapas → modulos/sdlc",
   ]);
@@ -873,7 +538,7 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
     join(raiz, "modulos/etapas/planejar/definicao.ts"),
     'import { e } from "../../compartilhado/nucleo/erros.ts";\n',
   );
-  assert.deepEqual(acharCiclosEntreDominios(raiz, []), []);
+  assert.deepEqual(acharCiclosEntreDominios(raiz, ARQUITETURA_DE_SRC, []), []);
 });
 
 // O nome de cada Etapa (os valores de EtapaTicket) como dado, em literal de texto, chave de objeto (`{ planejar: … }`) ou
@@ -885,8 +550,7 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
 // citando o nome falha, e arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const NOME_DE_ETAPA_NO_SQL = new RegExp(`'(${[...NOMES_DE_ETAPA].join("|")})'`);
-const PASTAS_QUE_CITAM_NOME_DE_ETAPA = ["modulos/etapas/", "modulos/compartilhado/armazenamento/migracoes/"];
-const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA: string[] = [];
+const PASTAS_LIBERADAS_PARA_NOME_DE_ETAPA = [...PASTAS_QUE_CITAM_NOME_DE_ETAPA, PASTA_DO_HISTORICO_DO_ESQUEMA];
 
 /** O texto de um literal, de um trecho de template ou da chave de um objeto; `undefined` em qualquer outro nó. */
 function textoDoNo(no: ts.Node): string | undefined {
@@ -912,7 +576,7 @@ test("nome de Etapa só em src/modulos/etapas/ e nas migrações", () => {
   assert.deepEqual(
     acharArquivosQueCitamNomeDeEtapa(SRC).filter(
       (arquivo) =>
-        !PASTAS_QUE_CITAM_NOME_DE_ETAPA.some((pasta) => arquivo.startsWith(pasta)) &&
+        !PASTAS_LIBERADAS_PARA_NOME_DE_ETAPA.some((pasta) => arquivo.startsWith(pasta)) &&
         !ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA.includes(arquivo),
     ),
     [],
@@ -963,7 +627,6 @@ test("a fitness de nomes de Etapa acusa literal, chave de objeto e SQL, em .ts e
 // O motor deriva do catálogo, na carga do módulo, os ciclos de vida e os enums que citam papéis: o catálogo não pode estar
 // num ciclo de import de valor, senão quem o lê na carga o acha ainda em TDZ, conforme a ordem em que os módulos sobem.
 // As definições e as seções do prompt importam do motor só tipos e funções que não leem o catálogo.
-const ARQUIVO_DO_CATALOGO = "modulos/etapas/catalogo.ts";
 
 function acharVoltasAoCatalogo(src: string): string[] {
   const importadosPorValor = (arquivo: string): string[] => {

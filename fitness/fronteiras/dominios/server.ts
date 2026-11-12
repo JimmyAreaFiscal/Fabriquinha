@@ -1,0 +1,102 @@
+// Regras de fronteira do Servidor, src/server/ (MELHORIAS §6): as partes dele são módulos da matriz, cada uma com o que pode
+// importar. O ticket que mexe no servidor (05, 21) muda só este arquivo; o motor (../motor.ts) explica os campos.
+import {
+  MODULO_DAS_FACHADAS,
+  QUALQUER_EXTERNO,
+  type RegraDoModulo,
+  type RegrasDoDominio,
+  SO_NODE_SEM_SQLITE,
+} from "../motor.ts";
+
+const MODULO_CLIENTE_WEB = "web";
+const MODULO_COMPARTILHADO_COM_O_NAVEGADOR = "web/compartilhado";
+const MODULO_DAS_CONSULTAS_DAS_TELAS = "api/consultas";
+
+// O pacote de um especificador externo: `react-dom/client` → `react-dom`, `@assistant-ui/react/x` → `@assistant-ui/react`.
+const pacoteDe = (alvo: string): string =>
+  alvo
+    .split("/")
+    .slice(0, alvo.startsWith("@") ? 2 : 1)
+    .join("/");
+const PACOTES_DO_NAVEGADOR = new Set(["react-dom", "@assistant-ui/react", "markdown-it"]);
+
+export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
+  // Puro: importável pelo servidor e pelo navegador.
+  [MODULO_COMPARTILHADO_COM_O_NAVEGADOR]: { modulosPermitidos: [], externoPermitido: () => false },
+  // Os tipos e schemas da API: só o núcleo e o zod. Nenhum domínio o importa (as consultas das telas ficam em
+  // api/consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  contrato: { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
+  // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios: a regra da aplicação, mais o contrato.
+  [MODULO_DAS_CONSULTAS_DAS_TELAS]: {
+    modulosPermitidos: ["nucleo", "armazenamento", "infra", "aplicacao", "contrato", MODULO_DAS_FACHADAS],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  api: {
+    modulosPermitidos: [
+      "aplicacao",
+      "nucleo",
+      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
+      "contrato",
+      MODULO_DAS_CONSULTAS_DAS_TELAS,
+      MODULO_DAS_FACHADAS,
+    ],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  cli: {
+    modulosPermitidos: ["aplicacao", "nucleo", "contrato", MODULO_DAS_FACHADAS],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
+  "cli-agente": { modulosPermitidos: ["contrato"], externoPermitido: SO_NODE_SEM_SQLITE },
+  // Roda no navegador: de valor, só o `web/compartilhado` (o `casar` e o relógio do navegador); do contrato, do núcleo e
+  // das fachadas, só `import type`; de fora, só os pacotes do navegador, servidos em /static/ pelo import map (`node:` só
+  // nos testes, que a matriz não lê).
+  [MODULO_CLIENTE_WEB]: {
+    modulosPermitidos: [MODULO_COMPARTILHADO_COM_O_NAVEGADOR],
+    modulosSoComoTipo: ["contrato", "nucleo", MODULO_DAS_FACHADAS],
+    externoPermitido: (alvo) => PACOTES_DO_NAVEGADOR.has(pacoteDe(alvo)),
+  },
+  composicao: {
+    modulosPermitidos: [
+      "nucleo",
+      "armazenamento",
+      "infra",
+      "aplicacao",
+      "api",
+      "cli",
+      MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
+      "contrato",
+      MODULO_CLIENTE_WEB,
+      "harness",
+      "harness/pi",
+      MODULO_DAS_FACHADAS,
+    ],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+};
+
+// `server/api/consultas/` e `server/web/compartilhado/` são módulos à parte dentro da API e da web; `contrato/`, `cli/`,
+// `cli-agente/` e `composicao/`, cada um o seu.
+export function moduloDoArquivoDoServidor(caminhoEmServer: string): string {
+  const [primeiro, segundo] = caminhoEmServer.split("/");
+  if (primeiro === "api") return segundo === "consultas" ? MODULO_DAS_CONSULTAS_DAS_TELAS : "api";
+  if (primeiro === MODULO_CLIENTE_WEB)
+    return segundo === "compartilhado" ? MODULO_COMPARTILHADO_COM_O_NAVEGADOR : MODULO_CLIENTE_WEB;
+  return primeiro ?? "";
+}
+
+/** A composição injeta o relógio: `new Date(` é liberado nela. */
+export const PASTA_DA_COMPOSICAO = "server/composicao/";
+/** A API do agente, que só alcança os casos de uso do agente. */
+export const PASTA_DA_API_DO_AGENTE = "server/api/agente/";
+
+// O servidor já está no destino; as partes dele são módulos da matriz, sem subdomínios.
+export const REGRAS_DO_SERVIDOR: RegrasDoDominio = {
+  migrado: true,
+  dependeDe: ["demandas", "ciclo_de_vida", "sessoes", "repositorio", "ambiente"],
+  subdominios: {},
+  posseDasTabelas: "inventario",
+  excecoes: [],
+  dependenciasToleradas: [],
+  processoDoHost: { pastasLiberadas: [], importamChildProcess: [], chamadoresDiretos: ["server/composicao/cli.ts"] },
+};
