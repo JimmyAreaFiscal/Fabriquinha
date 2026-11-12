@@ -16,7 +16,6 @@ import {
   donoDoRepositorio,
   gravarProjeto,
   projetoExistente,
-  tarefaComExecucaoSimuladaPendente,
   ticketEmAndamentoDoProjeto,
 } from "../armazenamento/projetos.ts";
 import { dirDaExecucaoSimulada, noLog } from "../../compartilhado/infra/registro.ts";
@@ -79,19 +78,14 @@ export function editarProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
 
 /**
  * Grava a configuração SDLC do projeto que existe (a chave do SonarQube e as Verificações, menos a preparação); as
- * etapas, a preparação e o link do produto ficam como o cadastro os deixou.
+ * etapas e a preparação ficam como o cadastro os deixou.
  */
 export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto): Projeto {
   return escrever(banco, () => {
-    const { etapas, link_produto, verificacoes } = projetoExistente(
-      banco,
-      configurado.nome,
-      "cadastre o projeto antes",
-    );
+    const { etapas, verificacoes } = projetoExistente(banco, configurado.nome, "cadastre o projeto antes");
     const gravado = {
       ...configurado,
       etapas,
-      link_produto,
       verificacoes: { ...configurado.verificacoes, preparacao: verificacoes.preparacao },
     };
     gravarProjeto(banco, gravado);
@@ -100,7 +94,7 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
 }
 
 /** O projeto como o formulário o manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-type ProjetoDoFormulario = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "link_produto"> & {
+type ProjetoDoFormulario = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> & {
   hospedagem?: Hospedagem;
   preparacao: Projeto["verificacoes"]["preparacao"];
   configuracoes: ConfiguracoesDasEtapas;
@@ -190,20 +184,13 @@ export const editarProjetoDoFormulario = (
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) => conferirEGravar(banco, formulario, editarProjeto, conferirModeloNoHarness);
 
-/** Recusa a remoção enquanto o projeto tem execução, de ticket ou simulada, em andamento. */
+/** Recusa a remoção enquanto o projeto tem execução de ticket em andamento. */
 function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string): void {
   const ticketEmAndamento = ticketEmAndamentoDoProjeto(banco, nome);
   if (ticketEmAndamento) {
     throw new ErroDeRegra(
       `o projeto ${nome} tem execução em andamento no ${formatarTicketRef(ticketEmAndamento)}`,
       "espere ela terminar ou pare a sessão, e remova de novo",
-    );
-  }
-  const tarefaPendente = tarefaComExecucaoSimuladaPendente(banco, nome);
-  if (tarefaPendente !== undefined) {
-    throw new ErroDeRegra(
-      `o projeto ${nome} tem execução simulada pendente na Tarefa ${tarefaPendente}`,
-      "espere ela terminar, e remova de novo",
     );
   }
 }

@@ -109,48 +109,6 @@ test("-p imprime a saída do passo (objeto em JSON, texto cru) e sem saída sai 
   assert.equal(rodar(["-p", "x"], [{ chamadaUnica: { saida: "parcial", codigo: 2 } }]).status, 2);
 });
 
-test("--mode json espera o EOF do stdin e entrega o relatório; relatório null, texto cru e ordem", () => {
-  const saida = pasta();
-  const ordem = join(saida, "ordem");
-  const extra = { FABRIQUINHA_SAIDA: saida, FALSO_PI_ORDEM: ordem, FABRIQUINHA_LINK: "http://x", GH_TOKEN: "segredo" };
-  const normal = rodar(["--mode", "json", "prompt"], [{ simulacao: { demoraMs: 10, registraArgs: true } }], extra);
-  assert.equal(normal.status, 0);
-  assert.equal((JSON.parse(normal.stdout.trim()) as Evento).type, "agent_start");
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(saida, "relatorio.json"), "utf8")) as object), [
-    "usabilidade",
-    "bugs",
-  ]);
-  assert.equal(readFileSync(ordem, "utf8"), "ini\nfim\n");
-  const sinal = (cwd: string) => JSON.parse(readFileSync(join(cwd, "args.json"), "utf8")) as Record<string, unknown>;
-  const cwd = pasta();
-  spawnSync(piFalso, ["--mode", "json", "p"], {
-    cwd,
-    env: ambiente([{ simulacao: { demoraMs: 0, registraArgs: true } }], extra),
-    input: "",
-  });
-  assert.deepEqual(
-    [sinal(cwd).args, sinal(cwd).link, sinal(cwd).token, sinal(cwd).saida],
-    [["--mode", "json", "p"], "http://x", "segredo", saida],
-  );
-  rodar(["--mode", "json"], [{ simulacao: { relatorio: "isso não é json", demoraMs: 0 } }], extra);
-  assert.equal(readFileSync(join(saida, "relatorio.json"), "utf8"), "isso não é json");
-  rmSync(join(saida, "relatorio.json"));
-  rodar(["--mode", "json"], [{ simulacao: { relatorio: null, demoraMs: 0 } }], extra);
-  assert.equal(existsSync(join(saida, "relatorio.json")), false);
-});
-
-test("--mode json com nuncaTermina segue vivo depois do EOF até ser morto", async () => {
-  const pi = spawn(piFalso, ["--mode", "json"], {
-    cwd: pasta(),
-    env: ambiente([{ simulacao: { nuncaTermina: true } }], { FABRIQUINHA_SAIDA: pasta() }),
-  });
-  pi.stdin.end();
-  await new Promise((p) => setTimeout(p, 300));
-  assert.equal(pi.exitCode, null);
-  pi.kill();
-  await new Promise((p) => pi.on("close", p));
-});
-
 test("RPC: o passo vazio responde, grava user e assistant (com custo) na sessão e assenta", async () => {
   const sessoes = join(pasta(), "sessoes");
   const pi = await umPrompt([{}], "olá", [
@@ -417,12 +375,6 @@ test("RPC: sem roteiro vale o comportamento do e2e, escolhido pelas marcas do pr
   assert.match(eco2.content[0]?.text ?? "", /Resposta do diálogo: .*Validade mais próxima/);
   pergunta.fechar();
   await pergunta.saida;
-
-  const auditoria = await umPrompt(undefined, "# Auditoria do mês");
-  assert.equal(
-    auditoria.eventos.some((e) => e.type === "message_end" && (e.message as { role: string }).role === "toolResult"),
-    true,
-  );
 });
 
 test("RPC (marcas): [ao vivo] transmite sem terminar, o steer o redireciona e o abort fecha o fluxo", async () => {
@@ -443,14 +395,6 @@ test("RPC (marcas): [ao vivo] transmite sem terminar, o steer o redireciona e o 
   await pi.esperarEvento("agent_settled");
   pi.fechar();
   await pi.saida;
-});
-
-test("RPC (marcas): a avaliação grava os achados na pasta, e [20 achados] grava vinte", async () => {
-  const tres = await umPrompt(undefined, "# Avaliação do mês");
-  assert.equal(readFileSync(join(tres.cwd, "achados.jsonl"), "utf8").trim().split("\n").length, 3);
-  const vinte = await umPrompt(undefined, "# Avaliação [20 achados]");
-  assert.equal(readFileSync(join(vinte.cwd, "achados.jsonl"), "utf8").trim().split("\n").length, 20);
-  assert.equal(vinte.tipos().includes("agent_end"), true);
 });
 
 test("instalarPiFalso aponta o ambiente para o pi, roteiriza e registra início, comandos e prompts", async () => {

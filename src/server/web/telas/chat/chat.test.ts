@@ -22,7 +22,6 @@ import {
   linhaDoDialogo,
   linhasDaExecucao,
   mensagem,
-  modeloDaConversa,
   modeloDe,
   respostaDoDialogo,
   valorDoSelect,
@@ -109,10 +108,9 @@ test("modelo: o fixado na sessão, senão o da última resposta do agente, senã
   assert.equal(modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "session" }]), "anthropic / opus");
   assert.equal(modeloDe(cabecalho(), [resposta()]), "modelo padrão do pi");
   assert.equal(modeloDe(cabecalho(), []), "modelo padrão do pi");
-  // A mesma leitura serve à avaliação, que não tem cabeçalho de sessão.
-  assert.equal(modeloDaConversa([{ type: "message", message: { role: "user" } }]), "modelo padrão do pi");
+  assert.equal(modeloDe(cabecalho(), [{ type: "message", message: { role: "user" } }]), "modelo padrão do pi");
   assert.equal(
-    modeloDaConversa([resposta("sonnet"), resposta("opus"), { type: "message", message: { role: "toolResult" } }]),
+    modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "message", message: { role: "toolResult" } }]),
     "anthropic / opus",
   );
 });

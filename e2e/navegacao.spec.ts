@@ -26,10 +26,8 @@ test("entra pelo link de web.url e navega entre as páginas pela navegação fix
   });
   const paginas = [
     ["Projetos", "/projects", "Projetos"],
-    ["Simulação", "/simulation", "Simulação"],
     ["Métricas", "/metrics", "Métricas"],
     ["Histórico", "/history", "Histórico"],
-    ["Avaliações", "/evaluations", "Avaliações"],
     ["Configuração", "/config", "Configuração"],
     ["Início", "/home", "Início"],
   ] as const;
@@ -68,18 +66,15 @@ test("/, /entrar e /demandas levam a /home; o menu com Início, sem Demandas, ab
   await page.goto(`${fabriquinha.base}/demandas`);
   await expect(page).toHaveURL(`${fabriquinha.base}/home`);
   const nav = page.getByRole("navigation", { name: "Páginas" });
-  await expect(nav.getByRole("link")).toHaveText([
-    "Início",
-    "Projetos",
-    "Simulação",
-    "Métricas",
-    "Histórico",
-    "Avaliações",
-    "Configuração",
-  ]);
+  await expect(nav.getByRole("link")).toHaveText(["Início", "Projetos", "Métricas", "Histórico", "Configuração"]);
+  // A Simulação e a Avaliação saíram (ticket 02): os endereços delas não são de nenhuma página.
+  for (const caminho of ["/simulation", "/simulation/loja", "/evaluations", "/evaluations/a"]) {
+    await page.goto(`${fabriquinha.base}${caminho}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Página não encontrada");
+  }
   for (const largura of [1440, 375]) {
     await page.setViewportSize({ width: largura, height: 900 });
-    for (const item of ["Início", "Avaliações", "Métricas", "Histórico", "Projetos", "Configuração"]) {
+    for (const item of ["Início", "Métricas", "Histórico", "Projetos", "Configuração"]) {
       await nav.getByRole("link", { name: item }).click();
       await expect(nav.getByRole("link", { name: item })).toHaveAttribute("aria-current", "page");
       await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();

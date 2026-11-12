@@ -12,7 +12,6 @@ export const EstadoDaConfiguracao = z.strictObject({
   intervaloMin: z.number(),
   timeoutMin: z.number(),
   ociosidadeMin: z.number(),
-  modeloAuditoria: Modelo.nullable(),
   proximaBusca: z.string().nullable(),
 });
 export type EstadoDaConfiguracao = z.infer<typeof EstadoDaConfiguracao>;
@@ -53,7 +52,6 @@ export const FormularioDoProjeto = Projeto.pick({
   nome: true,
   raiz_git: true,
   branch_base: true,
-  link_produto: true,
 }).extend({
   hospedagem: Hospedagem.optional(),
   preparacao: ComandosDePreparacao,

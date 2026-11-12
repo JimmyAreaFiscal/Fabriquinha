@@ -115,7 +115,7 @@ test("ambiente: variáveis da Fabriquinha, sem credenciais e com gh e az num dir
   process.env.SYSTEM_ACCESSTOKEN = "segredo";
   process.env.SONAR_TOKEN = "segredo";
   try {
-    const env = harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket");
+    const env = harness.variaveisDeAmbiente("/r/execucoes/E-7");
     assert.equal(env.GH_TOKEN, undefined);
     assert.equal(env.SYSTEM_ACCESSTOKEN, undefined);
     assert.equal(env.SONAR_TOKEN, undefined);
@@ -150,71 +150,15 @@ test("ambiente container: começa vazio, sem HOME, SSH_AUTH_SOCK nem credenciais
   const originais = Object.fromEntries(Object.keys(herdadas).map((nome) => [nome, process.env[nome]]));
   Object.assign(process.env, herdadas);
   try {
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/execucoes/E-7", "ticket", AMBIENTE_ISOLADO), {
+    assert.deepEqual(harness.variaveisDeAmbiente("/r/execucoes/E-7", AMBIENTE_ISOLADO), {
       ANTHROPIC_API_KEY: "chave",
       FABRIQUINHA_SAIDA: "/r/execucoes/E-7/saida",
-    });
-    assert.deepEqual(harness.variaveisDeAmbiente("/r", "/r/avaliacoes/s", "auditoria", AMBIENTE_ISOLADO), {
-      ANTHROPIC_API_KEY: "chave",
-      FABRIQUINHA_ROOT: "/r",
-      FABRIQUINHA_AUDITORIA: "1",
     });
   } finally {
     for (const [nome, valor] of Object.entries(originais)) {
       if (valor === undefined) Reflect.deleteProperty(process.env, nome);
       else process.env[nome] = valor;
     }
-  }
-});
-
-test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guarda, e o ambiente sem FABRIQUINHA_EXECUCAO", () => {
-  const sessao = "11111111-1111-4111-8111-111111111111";
-  const args = harness.argumentos({ raiz: "/r", sessao });
-  assert.deepEqual(args, [
-    "--mode",
-    "rpc",
-    "--session-dir",
-    `/r/sessoes/${sessao}`,
-    "--session-id",
-    sessao,
-    "-e",
-    `${PACOTE}/extensions/guarda.ts`,
-    "--exclude-tools",
-    "edit,write,bash,powershell",
-  ]);
-  // Com o modelo da Configuração, `--provider` e `--model` vêm logo depois de `--session-id`; `null` é sem modelo.
-  assert.deepEqual(harness.argumentos({ raiz: "/r", sessao, modelo: null }), args);
-  const com = harness.argumentos({
-    raiz: "/r",
-    sessao,
-    modelo: { provedor: "llamacpp", nome: "qwen3-coder-30b" },
-  });
-  assert.deepEqual(com.slice(4, 9), ["--session-id", sessao, "--provider", "llamacpp", "--model"]);
-  assert.deepEqual(com.slice(9, 11), ["qwen3-coder-30b", "-e"]);
-  assert.equal(com.length, args.length + 4);
-  // Extensões extras entram depois da guarda, antes de `--exclude-tools`.
-  const extra = harness.argumentos({ raiz: "/r", sessao, modelo: null, extensoes: ["achado.ts"] });
-  assert.deepEqual(extra.slice(6, 10), [
-    "-e",
-    `${PACOTE}/extensions/guarda.ts`,
-    "-e",
-    `${PACOTE}/extensions/achado.ts`,
-  ]);
-  assert.equal(extra.length, args.length + 2);
-  process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
-  process.env.GH_TOKEN = "segredo";
-  try {
-    const env = harness.variaveisDeAmbiente("/r", `/r/avaliacoes/${sessao}`, "auditoria");
-    assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
-    assert.equal(env.PATH, process.env.PATH);
-    assert.equal(env.GH_TOKEN, undefined);
-    assert.deepEqual(
-      [env.FABRIQUINHA_ROOT, env.FABRIQUINHA_AUDITORIA, env.GH_CONFIG_DIR],
-      ["/r", "1", `/r/avaliacoes/${sessao}/vazio`],
-    );
-  } finally {
-    delete process.env.FABRIQUINHA_EXECUCAO;
-    delete process.env.GH_TOKEN;
   }
 });
 
@@ -261,33 +205,6 @@ test("stdout: cada objeto JSON vira evento; texto solto, null e número vão par
     // Escrever depois que o pi saiu dá EPIPE, que só vai para o log.
     pi.enviar({ type: "abort" });
     await pi.parar();
-  } finally {
-    delete process.env.FABRIQUINHA_PI;
-  }
-});
-
-test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", async () => {
-  const log = join(base, "log-eof");
-  instalarPiFalso(base).roteirizar([{ saidaDoProcesso: { esperaEof: true } }]);
-  process.env.FABRIQUINHA_ROOT = base;
-  try {
-    // O pi só termina no EOF; sem fecharStdin, ficaria preso até o parar().
-    const piFechado = harness.lancarProcesso(
-      new AmbienteHostLocal(),
-      [],
-      { cwd: base, env: process.env, log, fecharStdin: true },
-      () => undefined,
-    );
-    assert.equal(await piFechado.saiu, 0);
-    const aberto = harness.lancarProcesso(
-      new AmbienteHostLocal(),
-      [],
-      { cwd: base, env: process.env, log },
-      () => undefined,
-    );
-    const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
-    assert.equal(preso, "preso");
-    await aberto.parar();
   } finally {
     delete process.env.FABRIQUINHA_PI;
   }
@@ -423,29 +340,30 @@ test("lançamento do ticket: só as skills que o pacote tem (CA-12) e a confian�
   }
 });
 
-test("lancar: a auditoria vai com a linha de comando no log e o stdin aberto; a simulação, com o stdin fechado e sem a linha", async () => {
+test("lancar: o ticket vai com a linha de comando no log, o stdin aberto e as variáveis do serviço por cima", async () => {
   const log = join(base, "log-do-lancamento");
   const dir = join(base, "processo-do-lancamento");
   const piFalso = instalarPiFalso(base).roteirizar([{ saidaDoProcesso: { esperaEof: true } }]);
   try {
-    const auditoria = harness.lancar(
+    const ticket = harness.lancar(
       new AmbienteHostLocal(),
-      { tipo: "auditoria", raiz: base, sessao: "s-2", dir },
+      {
+        tipo: "ticket",
+        raiz: base,
+        sessao: "s-2",
+        dir,
+        skills: [],
+        modelo: undefined,
+        modo: "autonomo",
+        repositorio: base,
+      },
       { cwd: base, log, variaveisDoServico: { FABRIQUINHA_EXECUCAO: "do-servico" } },
       () => undefined,
     );
-    assert.equal(await Promise.race([auditoria.saiu, dormir(200, "preso")]), "preso");
-    await auditoria.parar();
+    assert.equal(await Promise.race([ticket.saiu, dormir(200, "preso")]), "preso");
+    await ticket.parar();
     assert.match(readFileSync(log, "utf8"), /pi --mode rpc --session-dir /);
     assert.equal(piFalso.registro()[0]?.execucao, "do-servico", "as variáveis do serviço vão por cima");
-    const simulacao = harness.lancar(
-      new AmbienteHostLocal(),
-      { tipo: "simulacao", dir, anexos: [], prompt: "imite o usuário", link: "http://produto" },
-      { cwd: base, log },
-      () => undefined,
-    );
-    assert.equal(await simulacao.saiu, 0);
-    assert.doesNotMatch(readFileSync(log, "utf8"), /pi --mode json/);
   } finally {
     delete process.env.FABRIQUINHA_PI;
   }

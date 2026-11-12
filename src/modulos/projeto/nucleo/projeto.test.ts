@@ -48,16 +48,8 @@ test("Projeto aceita preparação; os campos do fluxo legado são rejeitados", (
   assert.equal(completo.hospedagem, "azure-devops");
   for (const campoLegado of ["testes", "fitness", "modelos", "efforts"])
     assert.equal(Projeto.safeParse({ ...cadastro, [campoLegado]: [] }).success, false, campoLegado);
-});
-
-test("link_produto: http(s) válido passa, vazio vira ausente, o resto dá a mensagem do campo", () => {
-  for (const link of ["https://demo.exemplo.com", "http://localhost:3000/app"])
-    assert.equal(Projeto.parse({ ...cadastro, link_produto: link }).link_produto, link);
-  assert.equal(Projeto.parse({ ...cadastro, link_produto: "" }).link_produto, undefined);
-  for (const linkInvalido of ["isso nao e um link", "ftp://produto.exemplo.com", "javascript:alert(1)"])
-    assert.deepEqual(erros({ ...cadastro, link_produto: linkInvalido }), [
-      "link_produto: Informe um link http(s) válido, como https://produto.exemplo.com",
-    ]);
+  // O link do produto era da Simulação, que saiu (ticket 02).
+  assert.equal(Projeto.safeParse({ ...cadastro, link_produto: "https://produto.exemplo.com" }).success, false);
 });
 
 test("Projeto recusa cada campo fora da regra, com o caminho do campo", () => {

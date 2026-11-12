@@ -18,7 +18,7 @@ import { gravarTokenDoProcesso, processosAbertos } from "../../armazenamento/tra
 import type {
   EventoDoAgente,
   Harness,
-  Lancamento,
+  LancamentoDoTicket,
   ProcessoDoAgente,
   RespostaDaConsulta,
 } from "../../../harness/harness.ts";
@@ -75,7 +75,7 @@ export type Dialogo = EventoDoAgente & { em: string; expiraEm?: string };
 
 /** O que o estado da sessão (F4 §5.2) lê de um processo vivo. */
 export interface Situacao {
-  /** O id do processo; a avaliação (fora do agregado) usa o id da sessão. */
+  /** O id do processo. */
   execucao: Id | string;
   /** O agente está trabalhando; falso quando uma sessão interativa espera a próxima mensagem. */
   ocupado: boolean;
@@ -156,16 +156,12 @@ function daPergunta(
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface PedidoDeProcesso {
-  /** O processo de um ticket, ou da avaliação (`id` é a sessão), que roda como consulta e fica fora do agregado. */
+  /** O processo de um ticket. */
   execucao: { id: Id | string; sessao: string; modo: ModoTrabalho };
-  /**
-   * O agente a lançar, que o harness transforma em linha de comando e variáveis de ambiente. O da simulação lê o
-   * prompt dos argumentos, não usa o RPC e sai quando termina o trabalho; sair, com qualquer código ou sinal, é o
-   * desfecho normal, e o `limiteMin` é o único relógio.
-   */
-  lancamento: Lancamento;
+  /** O agente a lançar, que o harness transforma em linha de comando e variáveis de ambiente. */
+  lancamento: LancamentoDoTicket;
   cwd: string;
-  /** Onde o pi roda: o Ambiente do Espaço do ticket; sem ele (consulta, avaliação, simulação), o do serviço. */
+  /** Onde o pi roda: o Ambiente do Espaço do ticket; sem ele, o do serviço. */
   ambiente?: Ambiente;
   /** Com o banco, o processo é de um ticket e recebe o token com que o agente fala com a API (`FABRIQUINHA_TOKEN`). */
   banco?: DatabaseSync;
@@ -194,8 +190,6 @@ function sinalizarSemEsperar(
 
 /** O que a subida do serviço recupera além dos processos dos tickets, dito por quem é dono de cada coisa. */
 export interface RecuperacaoDaSubida {
-  /** Os grupos de processo do pi que a avaliação e a simulação deixaram abertos, no Ambiente do serviço. */
-  gruposDoServico: readonly number[];
   falharTicket: FalharTicketSemProcesso;
 }
 
@@ -233,7 +227,7 @@ export class CondutorDeTrabalhos {
 
   /**
    * O token novo do processo e o endereço da API do agente, que o harness soma às variáveis do agente: só o hash vai ao
-   * banco, e o token vale até o `fim` do processo, que o invalida. Sem banco (consulta, simulação), nenhuma.
+   * banco, e o token vale até o `fim` do processo, que o invalida. Sem banco, nenhuma.
    */
   private variaveisDoServico(r: PedidoDeProcesso): Record<string, string> {
     if (r.banco === undefined) return {};
@@ -426,19 +420,15 @@ export class CondutorDeTrabalhos {
 
   /**
    * F4 §7: todo processo em andamento é de uma instância anterior. Mata o grupo do pi de cada processo de ticket, pelo
-   * Ambiente que o lançou (o host local ou um container do conjunto), e os `gruposDoServico` que os outros donos de pi
-   * (cada avaliação e cada execução simulada pendente, que falha) recolheram; os processos dos tickets se encerram com
+   * Ambiente que o lançou (o host local ou um container do conjunto); os processos dos tickets se encerram com
    * "serviço reiniciado", decidido aqui, que sabe quem reiniciou, e o motor falha o ticket deles (`falharTicket`). O
    * container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
    */
-  recuperarNaSubida(banco: DatabaseSync, { gruposDoServico, falharTicket }: RecuperacaoDaSubida): void {
+  recuperarNaSubida(banco: DatabaseSync, { falharTicket }: RecuperacaoDaSubida): void {
     const doServico = ambienteDoServico();
-    const processos = [
-      ...processosAbertos(banco).flatMap(({ ambiente_id, grupo_processo }) =>
-        grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
-      ),
-      ...gruposDoServico.map((grupo_processo) => ({ ambiente_id: doServico.id, grupo_processo })),
-    ];
+    const processos = processosAbertos(banco).flatMap(({ ambiente_id, grupo_processo }) =>
+      grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
+    );
     // ponytail: o sinal não é esperado; com container o `reconciliarNaSubida` limpa o que sobrar antes de o serviço seguir.
     for (const processo of processos) {
       const ambiente =
@@ -473,7 +463,6 @@ export class CondutorDeTrabalhos {
       const agoraEmMs = () => Date.parse(relogio.agora());
       const { id, sessao } = r.execucao;
       const variaveisDoServico = this.variaveisDoServico(r);
-      const terminaSozinho = r.lancamento.tipo === "simulacao";
       const autonoma = r.execucao.modo === "autonomo";
       const pendentes = new Map<string, Dialogo>();
       const expiracoes = new Map<string, NodeJS.Timeout>();
@@ -665,8 +654,6 @@ export class CondutorDeTrabalhos {
       const ambienteDoPi = r.ambiente ?? ambienteDoServico();
       const pi = this.lancarSemPrenderASessao(sessao, () =>
         this.harness.lancar(ambienteDoPi, r.lancamento, { cwd: r.cwd, log: r.log, variaveisDoServico }, (evento) => {
-          // O `--mode json` não fala o protocolo RPC: o resultado do trabalho é o que ele grava em disco.
-          if (terminaSozinho) return;
           if (agenteTerminou) estaViva.naoGravadas = [];
           agenteTerminou = false;
           this.repassar(sessao, evento, r.log);
@@ -729,10 +716,6 @@ export class CondutorDeTrabalhos {
         r.aoLancar(pi.identificador.grupo_processo, pi.identificador.ambiente_id);
       }
       void pi.saiu.then((codigo) => {
-        if (terminaSozinho) {
-          fim();
-          return;
-        }
         // Sem código, o pi do Ambiente cujos processos morrem com o serviço morreu por sinal: o cgroup do serviço ou um kill
         // externo, que a Fabriquinha trata como reinício. Nos outros o reinício é decidido pela `recuperarNaSubida`.
         fim(

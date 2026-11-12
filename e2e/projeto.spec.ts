@@ -1,6 +1,6 @@
 // Projeto (F7 §4.4): /projects abre o primeiro projeto e depois o último visto; a aba Demandas tem os cards do mês e a
 // lista das demandas do projeto, com a linha do tempo dos estados, as rodadas da execução, a gaveta de tickets, os
-// filtros lembrados e o Arquivar concluídas; o heatmap, a Configuração SDLC e a simulação do projeto abrem; prints a 1440 e 375 px sem
+// filtros lembrados e o Arquivar concluídas; o heatmap e a Configuração SDLC abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
@@ -136,10 +136,7 @@ test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam"
   await expect(i207.locator(".pista-rodada").getByRole("list")).toHaveClass(/cancelada/);
 });
 
-test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a simulação do projeto abrem", async ({
-  pagina,
-  fabriquinha,
-}) => {
+test("/projects volta ao último visto; o heatmap e a Configuração SDLC abrem", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   const banco = abrir(fabriquinha.raiz);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
@@ -178,10 +175,6 @@ test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a sim
   await abas.getByRole("link", { name: "Heatmap" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja/heatmap`);
   await expect(pagina.locator("[data-arvore]")).toBeVisible();
-
-  await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Simulação" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/simulation/loja`);
-  await expect(pagina.getByRole("heading", { name: "Simulação" })).toBeVisible();
 });
 
 test("a página do Projeto mostra as seis Pendências do cenário, cada uma com o mesmo item e o mesmo tipo do Início", async ({

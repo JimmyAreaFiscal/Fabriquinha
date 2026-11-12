@@ -5,7 +5,7 @@ import {
   editarProjetoDoFormulario,
   removerProjeto,
 } from "../../../modulos/projeto/aplicacao/cadastro.ts";
-import { conferirESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
+import { validarESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
 import { eliminarAmbienteDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import {
   consultarEstadoDaConfiguracao,
@@ -41,8 +41,8 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/configuracao",
-    tratar: async ({ banco, agendador, corpo }) => {
-      await conferirESalvarConfiguracao(banco, corpo, conferirModeloNoHarness);
+    tratar: ({ banco, agendador, corpo }) => {
+      validarESalvarConfiguracao(banco, corpo);
       return consultarEstadoDaConfiguracao(banco, () => agendador.proximaBusca());
     },
     resposta: EstadoDaConfiguracao,

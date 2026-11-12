@@ -38,7 +38,6 @@ import {
 } from "./apoio-execucao.ts";
 import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParalelismo } from "./apoio.ts";
 import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 
 const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
   const agregado = demanda(c, id);
@@ -258,7 +257,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarProcesso(criarTrabalho([], sessao), estado.execucoes, execucao),
   }));
-  condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida(c.banco, relogioDoSistema));
+  condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

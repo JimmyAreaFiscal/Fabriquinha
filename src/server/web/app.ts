@@ -7,7 +7,6 @@ import { type Pagina, rotear } from "./caminhos.ts";
 import { definirEtapasDoSdlc } from "./apresentacao/etapas.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./apresentacao/render.ts";
-import { montarAvaliacao, montarAvaliacoes } from "./telas/avaliacoes/avaliacoes-montar.ts";
 import { montarChat } from "./telas/chat/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao/configuracao-montar.ts";
 import { montarDemanda, montarDemandas } from "./telas/demandas/demandas-montar.ts";
@@ -17,7 +16,6 @@ import { contarOQueAguarda, montarInicio } from "./telas/inicio/inicio-montar.ts
 import { montarMetricas } from "./telas/metricas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto/projeto-montar.ts";
 import { montarSdlc } from "./telas/sdlc/sdlc-montar.ts";
-import { montarSimulacao } from "./telas/simulacao/simulacao-montar.ts";
 
 /**
  * Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte.
@@ -34,12 +32,9 @@ const MONTAR: Record<Pagina, Montar> = {
   historico: montarHistorico,
   chat: montarChat,
   configuracao: montarConfiguracao,
-  simulacao: montarSimulacao,
   sdlc: montarSdlc,
   demandas: montarDemandas,
   demanda: montarDemanda,
-  avaliacoes: montarAvaliacoes,
-  avaliacao: montarAvaliacao,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);

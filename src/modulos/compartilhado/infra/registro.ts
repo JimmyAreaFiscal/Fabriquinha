@@ -1,11 +1,11 @@
-// Arquivos de uma execução fora do agregado (F2 §2, F4 §6.1.2, §7): as pastas e o log do processo, a pasta da execução
-// simulada e a linha no log do serviço.
+// Arquivos de uma execução fora do agregado (F2 §2, F4 §6.1.2, §7): as pastas e o log do processo, a pasta histórica da
+// execução simulada e a linha no log do serviço.
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Id } from "../nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../nucleo/relogio.ts";
 
-/** `<raiz>/simulacoes/<n>`: anexos, sessão, log e `saida/` da execução simulada `n` (F8 §4). */
+/** `<raiz>/simulacoes/<n>`: a pasta da execução simulada `n`, da Simulação que saiu (ticket 02); a remoção do projeto a apaga. */
 export const dirDaExecucaoSimulada = (raiz: string, execucao: Id): string => join(raiz, "simulacoes", String(execucao));
 
 /** `<raiz>/execucoes/E-<id>`: a pasta do processo `id` (prompt, `saida/`, `vazio/`) e o `log` dentro dela. */

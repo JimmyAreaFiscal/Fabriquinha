@@ -20,7 +20,6 @@ import {
   gravarProjeto,
   listarProjetos,
   projetoExistente,
-  tarefaComExecucaoSimuladaPendente,
   ticketEmAndamentoDoProjeto,
 } from "./projetos.ts";
 
@@ -267,6 +266,8 @@ test("configuração mínima aplica defaults e trim; opcionais ficam ausentes", 
     gravarProjeto(banco, esperado);
     assert.deepEqual(buscarProjeto(banco, "a"), esperado);
     assert.equal(esperado.verificacoes.fitness[0]?.comando, "npm run f");
+    // A coluna `link_produto` da Simulação, que saiu (ticket 02), fica no banco com o dado antigo e não volta no projeto.
+    banco.exec("UPDATE projeto SET link_produto = 'https://produto.exemplo.com'");
     assert.equal(Object.hasOwn(projetoExistente(banco, "a"), "link_produto"), false);
   });
 });
@@ -317,8 +318,6 @@ test("substituição SDLC remove listas opcionais e mantém etapas e preparaçã
     assert.deepEqual(lida.etapas, canonica.etapas);
     assert.deepEqual(lida.verificacoes.preparacao, canonica.verificacoes.preparacao);
     assert.equal(banco.prepare("SELECT count(*) AS n FROM glob_e2e").get()?.n, 0);
-    gravarProjeto(banco, { ...nova, link_produto: "https://produto.exemplo.com" });
-    assert.deepEqual(buscarProjeto(banco, "a"), { ...nova, link_produto: "https://produto.exemplo.com" });
     gravarProjeto(banco, Projeto.parse(cadastro()));
     assert.deepEqual(buscarProjeto(banco, "a"), Projeto.parse(cadastro()));
   });
@@ -500,11 +499,6 @@ test("execuções pendentes são isoladas por projeto; apagarProjeto devolve ref
     assert.equal(ticketEmAndamentoDoProjeto(banco, "a"), undefined);
     banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'");
     assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
-    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), "1");
-    banco.exec("UPDATE execucao_simulada SET status = 'em_andamento' WHERE id = 1");
-    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), "1");
-    banco.exec("UPDATE execucao_simulada SET status = 'falhou', erro = 'fim' WHERE id = 1");
-    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), undefined);
     assert.deepEqual(
       escrever(banco, () => apagarProjeto(banco, "a")),
       {
@@ -516,7 +510,6 @@ test("execuções pendentes são isoladas por projeto; apagarProjeto devolve ref
     );
     assert.equal(buscarProjeto(banco, "a"), undefined);
     assert.ok(buscarProjeto(banco, "b"));
-    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "b"), "2");
     assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "b") }, { demanda_id: "I-2", ticket_id: 1 });
     for (const tabela of TABELAS.slice(1))
       assert.equal(
@@ -565,6 +558,5 @@ test("listarProjetos vazio e apagarProjeto inexistente não inventam registros",
     assert.deepEqual(listarProjetos(banco), []);
     assert.deepEqual(apagarProjeto(banco, "fantasma"), { execucoes: [], sessoes: [], simuladas: [], orfaos: [] });
     assert.equal(ticketEmAndamentoDoProjeto(banco, "fantasma"), undefined);
-    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "fantasma"), undefined);
   });
 });

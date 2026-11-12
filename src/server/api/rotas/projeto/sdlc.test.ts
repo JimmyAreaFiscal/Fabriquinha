@@ -102,25 +102,21 @@ test("POST grava com o nome do caminho e o GET devolve o gravado", async () => {
   const resposta = (await chamar("POST", URL, valida())) as { configurada: boolean; configuracao: Projeto };
   assert.equal(resposta.configurada, true);
   assert.equal(resposta.configuracao.nome, "loja");
-  const { link_produto, ...semLinkProduto } = resposta.configuracao;
-  assert.equal(link_produto, undefined);
-  assert.deepEqual(await chamar("GET", URL), { configurada: true, configuracao: semLinkProduto });
+  assert.deepEqual(await chamar("GET", URL), { configurada: true, configuracao: resposta.configuracao });
 });
 
-test("POST mantém etapas, preparação e link do produto gravados no cadastro", async () => {
+test("POST mantém etapas e preparação gravadas no cadastro", async () => {
   const cadastrado = {
     ...projetoExistente(banco, "loja"),
     etapas: [{ etapa: "implementar" as const, configuracao_agente: { effort: "low" as const } }],
-    link_produto: "https://loja.exemplo.com",
     verificacoes: { ...projetoExistente(banco, "loja").verificacoes, preparacao: ["echo cadastro", "npm ci"] },
   };
   gravarProjeto(banco, cadastrado);
-  const resposta = await chamar("POST", URL, { ...valida(), link_produto: "https://ignorado.exemplo.com" });
+  const resposta = await chamar("POST", URL, valida());
   const esperado = {
     ...valida(),
     nome: "loja",
     etapas: cadastrado.etapas,
-    link_produto: cadastrado.link_produto,
     verificacoes: { ...valida().verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(resposta, { configurada: true, configuracao: esperado });

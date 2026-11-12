@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { MotivoDeRecusa } from "../../modulos/sdlc/nucleo/despacho/despacho.ts";
 import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { type Relogio, relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { abrir } from "../../modulos/compartilhado/armazenamento/banco.ts";
 import { garantirPacoteDoAgente } from "../../modulos/harness/pi/pacote_do_agente.ts";
@@ -21,9 +21,6 @@ import { servirWeb } from "../api/servidor.ts";
 import { cicloDoDespacho, executarAgora } from "../../modulos/sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
 import { condutor, type RecuperacaoDaSubida } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { falhaPorServicoReiniciado } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import { recolherGruposDasAvaliacoes } from "../../modulos/avaliacao/armazenamento/avaliacoes.ts";
-import { falharPendentes } from "../../modulos/avaliacao/armazenamento/simulacao.ts";
 import { falharTicketDemanda } from "../../modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import {
   montarAmbienteDoServico,
@@ -37,17 +34,10 @@ import type { ConjuntoDeAmbientes } from "../../modulos/sandbox/aplicacao/conjun
 export const harnessDoServico = new HarnessPi();
 
 /**
- * O que a subida recupera além dos processos dos tickets, de quem é dono de cada coisa: a avaliação e a simulação recolhem
- * os grupos do pi delas (a simulação pendente falha), e o motor falha o ticket que ficou sem processo.
+ * O que a subida recupera além dos processos dos tickets: o motor falha o ticket que ficou sem processo.
  * @testes os testes e o e2e recuperam a subida como o serviço, sem subi-lo
  */
-export const recuperacaoDaSubida = (banco: DatabaseSync, relogio: Relogio): RecuperacaoDaSubida => ({
-  gruposDoServico: [
-    ...recolherGruposDasAvaliacoes(banco),
-    ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
-  ],
-  falharTicket: falharTicketDemanda,
-});
+export const recuperacaoDaSubida: RecuperacaoDaSubida = { falharTicket: falharTicketDemanda };
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -131,7 +121,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     const bancoAberto = aberto;
     // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
     montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
-    condutor.recuperarNaSubida(aberto, recuperacaoDaSubida(aberto, relogio));
+    condutor.recuperarNaSubida(aberto, recuperacaoDaSubida);
     web.on(
       "request",
       servirWeb({

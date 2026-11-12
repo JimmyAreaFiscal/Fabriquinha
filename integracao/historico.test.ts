@@ -1,25 +1,15 @@
-// Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25 (cancelamento e avaliação): cancelamento e arquivamento
-// com dependentes e execução em andamento (D08) e a avaliação de melhoria com o achado encaminhado (D12). Banco sempre
-// numa raiz temporária; git real, pi falso.
+// Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25: cancelamento e arquivamento com dependentes e execução
+// em andamento (D08) e a demanda encaminhada de um achado da Avaliação, que saiu (D12, ticket 02). Banco sempre numa raiz
+// temporária; git real, pi falso.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
-import {
-  abrir as abrirAvaliacao,
-  encaminharAchado,
-  estadoDaAvaliacao,
-  iniciarAvaliacao,
-} from "../src/modulos/avaliacao/aplicacao/melhoria/avaliacao.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { consultarDemanda } from "../src/server/api/consultas/demandas/demanda.ts";
+import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { metricasDasEtapas } from "../src/modulos/metricas/aplicacao/registro_das_metricas.ts";
 import { achadoDaDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../src/modulos/sdlc/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
@@ -45,12 +35,6 @@ import {
   registrarExterna,
 } from "./apoio.ts";
 import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
-
-const ler = (b: DatabaseSync, sql: string) =>
-  b
-    .prepare(sql)
-    .all()
-    .map((l) => ({ ...l }));
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
@@ -112,69 +96,44 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.throws(() => gestao.cancelar(c.banco, feita, AUDITOR, CTX), /já terminou/);
 });
 
-// pi falso da avaliação: abre a sessão com o cabeçalho, grava dois achados em achados.jsonl e assenta com o `agent_end`.
-// Sem esse formato, o `iniciarAvaliacao` não resolve.
-const PASSO_DA_AVALIACAO: PassoPi = {
-  cabecalhoDaSessao: true,
-  fimDoAgente: true,
-  anexa: {
-    "achados.jsonl": [1, 2]
-      .map(
-        (n) =>
-          `${JSON.stringify({ titulo: `Achado ${String(n)}`, descricao: `desc ${String(n)}`, evidencia: `ev ${String(n)}` })}\n`,
-      )
-      .join(""),
-  },
-};
-
-test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demanda em registro, ligada a um só achado e sem fan-out", async (t) => {
+test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retirada da Avaliação abre com a origem e segue o SDLC", async (t) => {
   const c = criarCenario(t);
   const origem = await demandaEmExecucao(c, [{ tickets: 1 }]);
-  pi.roteirizar([PASSO_DA_AVALIACAO]);
-  t.after(() => {
-    pi.roteirizar();
-  });
-
-  const id = await iniciarAvaliacao(
+  // O que o encaminhamento do achado gravou quando a Avaliação existia: a avaliação, o achado e a demanda ligada a ele.
+  const avaliacao = "11111111-1111-4111-8111-111111111111";
+  const autor = { tipo: "externo", ferramenta: "avaliacao", sessao: `${avaliacao}#1` } as const;
+  c.banco
+    .prepare(
+      "INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES (?, ?, '2026-01-01', '2026-01-31', '', ?)",
+    )
+    .run(avaliacao, c.projeto, CTX.agora);
+  c.banco
+    .prepare(
+      "INSERT INTO achado_avaliacao (avaliacao_id, achado_id, titulo, descricao, evidencia) VALUES (?, 1, ?, ?, ?)",
+    )
+    .run(avaliacao, "Achado 1", "desc 1", "ev 1");
+  const { demanda: nova } = gestao.registrar(
     c.banco,
-    { projeto: c.projeto, de: "2020-01-01", ate: "2099-12-31" },
-    { ociosidadeMin: 5 },
+    {
+      projeto: c.projeto,
+      titulo: "Achado 1",
+      tipo: "funcionalidade",
+      descricao: `desc 1\n\nEvidência: ev 1\n\nOrigem: avaliação ${avaliacao}, achado 1.`,
+    },
+    autor,
+    CTX,
   );
-  await esperar(() => abrirAvaliacao(c.banco, id).achados.length === 2, "os dois achados importados");
-  const avaliacao = abrirAvaliacao(c.banco, id);
-  // Escopo e matrizes rastreáveis: as demandas avaliadas e as métricas delas, gravadas na pasta da avaliação.
-  assert.deepEqual(avaliacao.demandas, [origem]);
-  const metricas = join(c.raiz, "avaliacoes", id, "demandas", origem, "metricas.json");
-  assert.ok(existsSync(metricas));
-  assert.deepEqual(
-    JSON.parse(readFileSync(metricas, "utf8")),
-    JSON.parse(JSON.stringify(Object.fromEntries(metricasDasEtapas(c.banco, { demandaId: origem })))),
-  );
+  c.banco.prepare("UPDATE achado_avaliacao SET demanda_id = ? WHERE avaliacao_id = ?").run(nova.id, avaliacao);
 
-  // O Auditor encaminha um achado: uma demanda nova, em registro, e o outro achado segue sem demanda.
-  const total = () => ler(c.banco, "SELECT id FROM demanda").length;
-  const antes = total();
-  const { demanda: nova } = encaminharAchado(c.banco, id, 1);
-  assert.equal(total(), antes + 1);
-  assert.deepEqual(
-    [nova.estado, nova.enviada, nova.tipo, nova.projeto],
-    ["entender_e_desenhar", false, "funcionalidade", c.projeto],
-  );
-  assert.deepEqual(nova.criada_por, { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` });
-  assert.match(nova.descricao, /desc 1[\s\S]*ev 1/);
+  // A página da demanda abre com a origem legível, e a demanda de onde o achado veio segue como estava.
+  const pagina = consultarDemanda(c.banco, nova.id, relogioDoSistema);
+  assert.deepEqual(pagina.origem, { avaliacao, achado: 1, titulo: "Achado 1" });
+  assert.deepEqual(pagina.demanda.estado, "entender_e_desenhar");
+  assert.deepEqual(demanda(c, nova.id).demanda.criada_por, autor);
   assert.equal(achadoDaDemanda(c.banco, nova.id)?.achado_id, 1);
-  assert.deepEqual(
-    abrirAvaliacao(c.banco, id).achados.map((a) => [a.achado_id, a.demanda_id]),
-    [
-      [1, nova.id],
-      [2, null],
-    ],
-  );
-  assert.equal(demanda(c, nova.id).rodadas.length, 0);
   assert.equal(demanda(c, origem).demanda.estado, "em_execucao");
 
-  // A demanda resultante segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
-  const autor = { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` } as const;
+  // A demanda segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
     gestao.submeterEvidencia(
       c.banco,
@@ -193,7 +152,4 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
-
-  condutor.encerrar(id);
-  await esperar(() => !condutor.situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");
 });

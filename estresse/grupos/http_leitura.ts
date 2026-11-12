@@ -1,12 +1,10 @@
 // Grupo do estresse das rotas GET de `ROTAS`: uma ação por rota, sobre os dados que `preparar` semeia uma vez no banco do
 // ambiente (leitura não os altera, então a preparação fica fora do tempo medido). O tempo vai do envio do pedido ao fim do
 // corpo; nas rotas de SSE, até o primeiro evento. `semMedicao` confere a cobertura contra a tabela do produto.
-import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
-import { criarAvaliacao } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
 import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
@@ -32,7 +30,6 @@ const SESSAO = "sd-1";
 
 /** Os ids que os caminhos das ações precisam. */
 interface Dados {
-  avaliacao: string;
   sha256: string;
 }
 
@@ -64,8 +61,8 @@ async function semearProjeto(raiz: string, banco: ReturnType<typeof abrir>): Pro
 }
 
 /**
- * A I-1 na sessão de ajustes da R1 (ticket 2, com a sessão `sd-1` e a conversa em disco) e com um anexo no desenho; mais
- * uma avaliação com a pasta e o prompt. Devolve os ids que as ações usam.
+ * A I-1 na sessão de ajustes da R1 (ticket 2, com a sessão `sd-1` e a conversa em disco) e com um anexo no desenho.
+ * Devolve os ids que as ações usam.
  */
 function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
   const ticket = (ticket_id: number, etapa: string, status: string) => ({
@@ -148,20 +145,7 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
     join(raiz, "sessoes", `2026-01-01T00-00-00-000Z_${SESSAO}.jsonl`),
     `${mensagem("user", "ajuste")}\n${mensagem("assistant", "feito")}\n`,
   );
-
-  const avaliacao = randomUUID();
-  criarAvaliacao(banco, {
-    id: avaliacao,
-    projeto: "loja",
-    de: "2026-01-01",
-    ate: "2026-12-31",
-    pedido: "",
-    criada_em: em,
-    demandas: [DEMANDA],
-  });
-  mkdirSync(join(raiz, "avaliacoes", avaliacao), { recursive: true });
-  writeFileSync(join(raiz, "avaliacoes", avaliacao, "prompt.md"), "# Avaliação\n");
-  return { avaliacao, sha256 };
+  return { sha256 };
 }
 
 /** Uma chamada: o tempo até o fim do corpo (ou, no SSE, até o primeiro evento); lança se o status não for 200. */
@@ -200,7 +184,6 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
     orcamento,
     chamar: () => cronometrar(amb, url, sse),
   });
-  const periodo = "projeto=loja&de=2026-01-01&ate=2026-12-31";
   return [
     acao("/api/inicio", "/api/inicio", 151),
     acao("/api/despacho", "/api/despacho", 15),
@@ -217,16 +200,10 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
     acao("/api/sessoes/:sessao", `/api/sessoes/${SESSAO}`, 49),
     acao("/api/sessoes/:sessao/eventos", `/api/sessoes/${SESSAO}/eventos`, 54, true),
     acao("/api/sessoes/:sessao/historico.md", `/api/sessoes/${SESSAO}/historico.md`, 51),
-    acao("/api/avaliacoes", "/api/avaliacoes", 18),
-    acao("/api/avaliacoes/demandas", `/api/avaliacoes/demandas?${periodo}`, 40),
-    acao("/api/avaliacoes/:id", `/api/avaliacoes/${d.avaliacao}`, 26),
-    acao("/api/avaliacoes/:id/eventos", `/api/avaliacoes/${d.avaliacao}/eventos`, 51, true),
     acao("/api/projetos/:nome/demandas", "/api/projetos/loja/demandas", 41),
     acao("/api/projetos/:nome/heatmap", "/api/projetos/loja/heatmap", 614),
     acao("/api/metricas", "/api/metricas", 77),
     acao("/api/metricas/demandas", "/api/metricas/demandas", 20),
-    acao("/api/projetos/:nome/usuarios-simulados", "/api/projetos/loja/usuarios-simulados", 17),
-    acao("/api/projetos/:nome/tarefas", "/api/projetos/loja/tarefas", 20),
   ];
 }
 

@@ -45,7 +45,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     // importou e inicializou (`<caminho> factory`), na ordem de carga.
     const pi = spawnSync(harness.binarioPi(), [...args, "-e", sonda], {
       cwd: dir,
-      env: { ...harness.variaveisDeAmbiente(dir, dir, "ticket"), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+      env: { ...harness.variaveisDeAmbiente(dir), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
       input: "",
       encoding: "utf8",
       timeout: 30_000,

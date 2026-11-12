@@ -72,6 +72,10 @@ const ARQUIVOS_RENOMEADOS: Readonly<Record<string, string>> = {
   "prompts/sessao_em_aberto.txt": "prompts/ajustar_resultado.txt",
   "textos/src/execucao/etapas/sessao_em_aberto.md.txt": "textos/src/execucao/etapas/ajustar_resultado.md.txt",
 };
+/** As fotos da base que deixaram de existir de propósito, com o motivo. */
+const ARQUIVOS_REMOVIDOS: Readonly<Record<string, string>> = {
+  "textos/src/execucao/avaliacao.md.txt": "ticket 02: a Avaliação saiu da Fabriquinha, e o prompt dela com ela",
+};
 const PROMPTS_DA_BASE = [
   "implementar",
   "planejar",
@@ -94,19 +98,6 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     para,
     motivo: "I-270: Tentativas guardam os resultados; o ticket público deixa de imprimir o contador removido",
   })),
-  {
-    arquivo: "textos/src/execucao/avaliacao.md.txt",
-    de: "custo, chamadas, etapas, devoluções e reprovações.",
-    para: "as Métricas de Sucesso de cada Etapa (uso: tokens, modelo e custo; aprovações e reprovações; conformidade com o plano; alterações posteriores; exigências de alteração; bugs nos arquivos revisados; nota humana), cada uma com o rótulo e a fonte de onde deriva.",
-    motivo:
-      "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido; I-284: ele traz as Métricas de Sucesso de cada Etapa",
-  },
-  {
-    arquivo: "textos/src/execucao/avaliacao.md.txt",
-    de: "retrabalho, devoluções, reprovações,",
-    para: "alterações posteriores, exigências de alteração, reprovações,",
-    motivo: "I-284: retrabalho deixa de ser conceito e o vocabulário é o das Métricas de Sucesso",
-  },
   ...PROMPTS_DA_BASE.map((arquivo) => ({
     arquivo,
     de: "(fase desenvolvimento)",
@@ -232,12 +223,6 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de: "decide o destino da issue)",
     para: "decide o destino da demanda)",
     motivo: MOTIVO_NOME_NOVO,
-  },
-  {
-    arquivo: "textos/src/execucao/avaliacao.md.txt",
-    de: "não crie issue, demanda, ticket",
-    para: "não crie demanda, ticket",
-    motivo: `${MOTIVO_NOME_NOVO}; "issue" e "demanda" na mesma lista era redundância`,
   },
   {
     arquivo: "textos/pacote-pi/skills/artefato-impactos-arquitetura/SKILL.md.txt",
@@ -445,7 +430,7 @@ test("a foto atual de prompts e saídas do CLI é a da base anterior com só as 
     { cwd: resolve(import.meta.dirname, ".."), stdio: "pipe" },
   );
 
-  const arquivosDaBase = listarArquivos(PASTA_DA_FOTO_DA_BASE);
+  const arquivosDaBase = listarArquivos(PASTA_DA_FOTO_DA_BASE).filter((arquivo) => !(arquivo in ARQUIVOS_REMOVIDOS));
   const arquivoAtualDe = (arquivo: string) => ARQUIVOS_RENOMEADOS[arquivo] ?? arquivo;
   assert.deepEqual(
     listarArquivos(PASTA_DA_FOTO_ATUAL),
@@ -462,4 +447,5 @@ test("a foto atual de prompts e saídas do CLI é a da base anterior com só as 
 test("toda diferença declarada aponta para uma foto que existe", () => {
   const arquivosDaBase = new Set(listarArquivos(PASTA_DA_FOTO_DA_BASE));
   for (const { arquivo } of DIFERENCAS_INTENCIONAIS) assert.ok(arquivosDaBase.has(arquivo), arquivo);
+  for (const arquivo of Object.keys(ARQUIVOS_REMOVIDOS)) assert.ok(arquivosDaBase.has(arquivo), arquivo);
 });

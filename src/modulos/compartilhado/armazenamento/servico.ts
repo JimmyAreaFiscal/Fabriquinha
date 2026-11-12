@@ -1,14 +1,12 @@
 // Configuração do serviço (F4 §3, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { Modelo } from "../nucleo/primitivos.ts";
 
 export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),
   intervaloMin: z.number().int().min(1).max(1440).default(5),
   timeoutMin: z.number().int().min(10).max(1440).default(120),
   ociosidadeMin: z.number().int().min(5).max(1440).default(30),
-  modeloAuditoria: Modelo.nullable().default(null),
 });
 export type Configuracao = z.infer<typeof Configuracao>;
 
@@ -19,10 +17,6 @@ export function configuracao(banco: DatabaseSync): Configuracao {
     intervaloMin: Number(l.intervalo_min),
     timeoutMin: Number(l.timeout_min),
     ociosidadeMin: Number(l.ociosidade_min),
-    modeloAuditoria:
-      l.auditoria_provedor === null
-        ? null
-        : { provedor: String(l.auditoria_provedor), nome: String(l.auditoria_modelo) },
   };
 }
 
@@ -31,20 +25,10 @@ export const limiteParalelismo = (banco: DatabaseSync): number =>
   (banco.prepare("SELECT limite_paralelismo FROM configuracao").get() as { limite_paralelismo: number })
     .limite_paralelismo;
 
-/** Grava a configuração inteira, já validada pela aplicação. */
+/** Grava a configuração inteira, já validada pela aplicação; as colunas do modelo da Avaliação, que saiu, ficam como estão. */
 export function salvarConfiguracao(banco: DatabaseSync, c: Configuracao): Configuracao {
   banco
-    .prepare(
-      `UPDATE configuracao SET agendador_ativo = ?, intervalo_min = ?, timeout_min = ?, ociosidade_min = ?,
-         auditoria_provedor = ?, auditoria_modelo = ?`,
-    )
-    .run(
-      Number(c.agendadorAtivo),
-      c.intervaloMin,
-      c.timeoutMin,
-      c.ociosidadeMin,
-      c.modeloAuditoria?.provedor ?? null,
-      c.modeloAuditoria?.nome ?? null,
-    );
+    .prepare("UPDATE configuracao SET agendador_ativo = ?, intervalo_min = ?, timeout_min = ?, ociosidade_min = ?")
+    .run(Number(c.agendadorAtivo), c.intervaloMin, c.timeoutMin, c.ociosidadeMin);
   return c;
 }

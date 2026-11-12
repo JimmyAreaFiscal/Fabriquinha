@@ -15,7 +15,6 @@ test("configuração: linha única, agendador desligado por padrão, salva o tip
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
-    modeloAuditoria: null,
   });
 
   const nova = {
@@ -23,7 +22,6 @@ test("configuração: linha única, agendador desligado por padrão, salva o tip
     intervaloMin: 1,
     timeoutMin: 1440,
     ociosidadeMin: 5,
-    modeloAuditoria: { provedor: "anthropic", nome: "claude-opus-5-5" },
   };
   assert.deepEqual(salvarConfiguracao(banco, nova), nova);
   assert.deepEqual(configuracao(banco), nova);
@@ -39,11 +37,10 @@ test("o schema da Configuração completa o que falta com o padrão e recusa o i
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
-    modeloAuditoria: null, // o modelo da Auditoria também volta ao padrão do pi
   });
   for (const errada of [
-    { modeloAuditoria: { provedor: "anthropic" } },
-    { modeloAuditoria: { provedor: "Maiúscula", nome: "m" } },
+    // O modelo da Avaliação saiu com ela (ticket 02).
+    { modeloAuditoria: { provedor: "anthropic", nome: "claude-opus-5-5" } },
     { intervaloMin: 0 },
     { timeoutMin: 9 },
     { ociosidadeMin: 1441 },

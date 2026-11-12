@@ -1,13 +1,11 @@
-// Casos de uso da configuração do agente: a do serviço confere o modelo de auditoria no pi; o modelo e o effort de cada
-// etapa do projeto passam entre o formato do formulário e o cadastro.
+// Casos de uso da configuração do agente: a do serviço é validada e gravada; o modelo e o effort de cada etapa do projeto
+// passam entre o formato do formulário e o cadastro.
 import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
 import type { ConfiguracaoAgente } from "../../compartilhado/nucleo/configuracao_agente.ts";
-import { mensagem } from "../../compartilhado/nucleo/erros.ts";
 import { type Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 import { EtapaTicket } from "../../etapas/catalogo.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
-import { Configuracao, configuracao, salvarConfiguracao } from "../../compartilhado/armazenamento/servico.ts";
+import { Configuracao, salvarConfiguracao } from "../../compartilhado/armazenamento/servico.ts";
 
 /** A conferência do par provedor/modelo pelo harness (F4 §9), que a composição entrega: recusa o que ele não conhece. */
 export type ConferirModeloNoHarness = (modelo: Modelo) => Promise<void>;
@@ -38,21 +36,6 @@ export const etapasComModeloOuEffort = (configuracoes: ConfiguracoesDasEtapas) =
     return configuracao_agente?.modelo || configuracao_agente?.effort ? [{ etapa, configuracao_agente }] : [];
   });
 
-/**
- * F4 §9: o modelo de auditoria novo ou trocado precisa existir no pi; o rejeitado vira erro do campo. O igual ao
- * gravado não chama o pi. Valida a `entrada` e grava a configuração inteira só depois da conferência.
- */
-export async function conferirESalvarConfiguracao(
-  banco: DatabaseSync,
-  entrada: unknown,
-  conferirModeloNoHarness: ConferirModeloNoHarness,
-): Promise<Configuracao> {
-  const nova = Configuracao.parse(entrada);
-  const modelo = nova.modeloAuditoria;
-  if (modelo && parDoModelo(modelo) !== parDoModelo(configuracao(banco).modeloAuditoria)) {
-    await conferirModeloNoHarness(modelo).catch((error_: unknown) => {
-      throw new z.ZodError([{ code: "custom", path: ["modeloAuditoria"], message: mensagem(error_), input: modelo }]);
-    });
-  }
-  return salvarConfiguracao(banco, nova);
-}
+/** Valida a `entrada` e grava a configuração do serviço inteira. */
+export const validarESalvarConfiguracao = (banco: DatabaseSync, entrada: unknown): Configuracao =>
+  salvarConfiguracao(banco, Configuracao.parse(entrada));

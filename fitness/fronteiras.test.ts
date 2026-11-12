@@ -130,7 +130,6 @@ const DOMINIOS = new Set([
   "projeto",
   "verificacao",
   "metricas",
-  "avaliacao",
   "compartilhado",
 ]);
 
@@ -580,7 +579,6 @@ const ARQUIVO_DO_PROCESSO = "modulos/compartilhado/infra/processo.ts";
 const ARQUIVOS_COM_CHILD_PROCESS = new Set([ARQUIVO_DO_PROCESSO, ARQUIVO_DO_HARNESS]);
 // Lista fixa: cada um fala com o `gh`/`az`, o cadastro, o blame, o pdftotext, o sonar-scanner, o pi sem worktree ou a rede do git com credenciais.
 const CHAMADORES_DIRETOS_DO_PROCESSO = [
-  "modulos/avaliacao/aplicacao/simulacao/executor.ts",
   "server/composicao/cli.ts",
   "modulos/harness/pi/harness_pi.ts",
   "modulos/repositorio/infra/git/cadastro.ts",
@@ -733,7 +731,7 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
 // derivado do catálogo de Etapas, 4c os ciclos entre os domínios do motor e etapas/, 5 verificacao/ e metricas/, 6 api/,
 // web/, cli/, cli-agente/ e contrato/ no lugar de entrega/) tolerava aqui, com o passo que a removia, a dependência que
 // fechava ciclo; desde o 6 não resta nenhuma. A ordem, de cima para baixo: api, cli, cli-agente, web, composicao →
-// contrato → etapas, avaliacao → metricas → sdlc → trabalho_agentico → harness, verificacao → projeto → repositorio →
+// contrato → etapas, metricas → sdlc → trabalho_agentico → harness, verificacao → projeto → repositorio →
 // sandbox → etapas/definicao → compartilhado. A aresta tolerada fica fora do grafo; se sumir do código ou deixar de fechar
 // ciclo, a fitness também falha.
 interface DependenciaToleradaEntreDominios {

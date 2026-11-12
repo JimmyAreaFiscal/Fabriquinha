@@ -21,7 +21,7 @@ import {
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { anotar, pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
 import { ConducaoDeImplementar } from "../../../etapas/implementar/conducao_de_implementar.ts";
-import { relogioFixo, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
+import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { gravarCommitDemanda } from "../../../repositorio/armazenamento/commits_demanda.ts";
@@ -575,7 +575,7 @@ test("CA-10, CA-14: reinício mata o grupo gravado e falha as abertas (com ou se
   abrirOrfa(1, "e-com-grupo", filho.pid);
   abrirOrfa(2, "e-sem-grupo");
   const antes = carregarDemanda(banco, "I-1");
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   await morreu;
   for (const t of [1, 2]) {
     const [e] = sessoes(t).execucoes;
@@ -680,7 +680,7 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
   abrirOrfa(1, "e1");
   abrirOrfa(2, "e2");
   interromperExecucaoDemanda(banco, ref(1));
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   assert.equal(motivoDe(banco, 1), "interrompida pelo Auditor");
   assert.equal(motivoDe(banco, 2), "serviço reiniciado");
 });
@@ -694,7 +694,7 @@ test("reinício falha o ticket em execução cuja execução já foi encerrada (
     fechar: () => Promise.resolve(),
   }).fim;
   assert.equal(statusDe(banco, 1)?.estado, "em_execucao");
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
 });
@@ -708,7 +708,7 @@ test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o
       ('I-1', 9, 'encerrar_rodada', 'em_execucao', '${em}', 1),
       ('I-1', 10, 'encerrar_rodada', 'em_execucao', '${em}', 2)`);
   for (const t of [3, 4]) emExecucao(banco, t); // planejar e revisar_demanda
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   assert.deepEqual(
     [3, 4, 8, 9, 10].map((t) => statusDe(banco, t)?.estado),
     ["em_execucao", "falhou", "falhou", "falhou", "em_execucao"],
@@ -725,7 +725,7 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
     const execucao = { id: "p", trabalho_id: sessao.id, inicio: em, falha: false };
     return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   assert.equal(statusDe(banco, 3)?.estado, "falhou");
 });
 
@@ -757,7 +757,7 @@ test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 11, 'encerrar_demanda', 'em_execucao', '${em}'),
       ('I-1', 12, 'resolver_conflito', 'em_execucao', '${em}')`);
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   assert.deepEqual(
     [11, 12].map((t) => statusDe(banco, t)?.estado),
     ["falhou", "falhou"],

@@ -123,34 +123,19 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   }
 });
 
-test("escolhe o modelo das avaliações, salva, recarrega e vê o mesmo; salvar o Agendador não o apaga", async ({
+test("a Configuração não tem mais Avaliações nem o link do produto e os usuários simulados da Simulação (ticket 02)", async ({
   pagina,
   fabriquinha,
 }) => {
+  projeto(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/config?avaliacoes`);
   const menu = pagina.getByRole("navigation", { name: "Configuração" });
-  await expect(menu.getByRole("link", { name: "Avaliações" })).toHaveAttribute("aria-current", "page");
-  const modelo = pagina.getByLabel("Modelo das avaliações");
-  await expect(modelo).toHaveValue("");
-  await expect(modelo).toHaveClass("padrao");
-  await modelo.selectOption("anthropic/claude-sonnet-5-5");
-  await pagina.getByRole("button", { name: "Salvar" }).click();
-  await expect(pagina.getByRole("button", { name: "Salvar" })).toBeEnabled();
-
-  await pagina.reload();
-  await expect(pagina.getByLabel("Modelo das avaliações")).toHaveValue("anthropic/claude-sonnet-5-5");
-  const gravada = await pagina.request.get(`${fabriquinha.base}/api/configuracao`);
-  expect(((await gravada.json()) as { modeloAuditoria: unknown }).modeloAuditoria).toEqual({
-    provedor: "anthropic",
-    nome: "claude-sonnet-5-5",
-  });
-
-  await menu.getByRole("link", { name: "Agendador" }).click();
-  await pagina.getByRole("spinbutton", { name: "Procurar a cada" }).fill("7");
-  await pagina.getByRole("button", { name: "Salvar" }).click();
-  await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("7");
-  await menu.getByRole("link", { name: "Avaliações" }).click();
-  await expect(pagina.getByLabel("Modelo das avaliações")).toHaveValue("anthropic/claude-sonnet-5-5");
+  await expect(menu.getByRole("link", { name: "Agendador" })).toHaveAttribute("aria-current", "page");
+  await expect(menu.getByRole("link", { name: "Avaliações" })).toHaveCount(0);
+  await menu.getByRole("link", { name: "loja" }).click();
+  await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
+  await expect(pagina.getByLabel("Link do produto")).toHaveCount(0);
+  await expect(pagina.getByText("Usuários simulados")).toHaveCount(0);
 });
 
 /** As nove etapas do ticket, na ordem do formulário. */

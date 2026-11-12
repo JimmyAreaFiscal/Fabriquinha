@@ -10,6 +10,7 @@ import { ROTULO_DO_TIPO_DE_PENDENCIA } from "../inicio/inicio.ts";
 
 export type Dados = DadosDoChatDemanda;
 export type Cabecalho = Omit<Dados, "conversa">;
+/** @testes tipo que o teste usa para montar a conversa */
 export type Entrada = Dados["conversa"][number];
 export type Dialogo = Dados["sessao"]["dialogos"][number];
 type ExecucaoDoChat = Dados["execucoes"][number];
@@ -83,7 +84,7 @@ export function etiquetaDoEstado({
 }
 
 /** O modelo da última resposta do agente na conversa, ou o padrão do pi enquanto ele não respondeu. */
-export function modeloDaConversa(conversa: readonly unknown[]): string {
+function modeloDaConversa(conversa: readonly unknown[]): string {
   const resposta = (conversa as Entrada[])
     .map((e) => e.message as MensagemPi | undefined)
     .findLast((m) => m?.role === "assistant");
