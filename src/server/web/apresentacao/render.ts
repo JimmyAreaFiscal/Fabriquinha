@@ -50,7 +50,6 @@ export const escapar = (texto: unknown): string =>
 
 export const caminhoDaDemanda = (demanda: string): string => `/demandas/${encodeURIComponent(demanda)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
-export const caminhoDaAvaliacao = (avaliacao: string): string => `/evaluations/${encodeURIComponent(avaliacao)}`;
 
 /** `anthropic / claude-opus-4-5`. */
 export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.nome}`;
@@ -112,10 +111,8 @@ export function ha(desde: Instante, agora: number | Date): string {
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio", "demanda"]],
   ["/projects", "Projetos", ["projeto", "heatmap", "sdlc", "demandas"]],
-  ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
-  ["/evaluations", "Avaliações", ["avaliacoes", "avaliacao"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -141,12 +138,9 @@ export const TITULOS: Record<Pagina, string> = {
   historico: "Histórico",
   chat: "Chat",
   configuracao: "Configuração",
-  simulacao: "Simulação",
   sdlc: "Configuração SDLC",
   demandas: "Demandas",
   demanda: "Demanda",
-  avaliacoes: "Avaliações",
-  avaliacao: "Avaliação",
 };
 
 export const NAO_ENCONTRADA =

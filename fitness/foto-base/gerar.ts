@@ -53,7 +53,7 @@ function gravarFoto(nome: string, texto: string): void {
   writeFileSync(destino, normalizar(texto));
 }
 
-// 1. Textos fixos: a parte fixa do prompt da avaliação, o modo de trabalhar de cada etapa e as skills.
+// 1. Textos fixos: o modo de trabalhar de cada etapa e as skills.
 function arquivosMarkdown(pasta: string): string[] {
   return readdirSync(join(raizDoCodigo, pasta), { recursive: true, encoding: "utf8" })
     .filter((arquivo) => arquivo.endsWith(".md"))
@@ -62,15 +62,12 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/modulos/avaliacao/aplicacao/melhoria/avaliacao.md",
   ...arquivosMarkdown("src/modulos/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
-  const caminhoNaFotoBase = caminho
-    .replace(/^src\/modulos\/etapas\/[^/]+\//, "src/execucao/etapas/")
-    .replace("src/modulos/avaliacao/aplicacao/melhoria/", "src/execucao/");
+  const caminhoNaFotoBase = caminho.replace(/^src\/modulos\/etapas\/[^/]+\//, "src/execucao/etapas/");
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 

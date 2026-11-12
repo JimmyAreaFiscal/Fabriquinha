@@ -15,7 +15,6 @@ import { rotasDeEvidenciaAdd } from "./agente/evidencia.ts";
 import { erroDaApiDoAgente, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente, rotasDoAgente } from "./agente/rotas.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
-import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacao/avaliacoes.ts";
 import { ROTAS_DO_CHAT } from "./rotas/sessoes/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_ETAPAS } from "./rotas/etapas.ts";
@@ -26,7 +25,6 @@ import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
 import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto/projeto.ts";
 import { ROTAS_DA_CONFIGURACAO_SDLC } from "./rotas/projeto/sdlc.ts";
-import { ROTAS_DA_SIMULACAO } from "./rotas/avaliacao/simulacao.ts";
 
 /** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
 /** @testes o teste do servidor confere a tabela de rotas */
@@ -39,10 +37,8 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DAS_DEMANDAS,
   ...ROTAS_DAS_ACOES_DE_DEMANDA,
   ...ROTAS_DO_CHAT,
-  ...ROTAS_DAS_AVALIACOES,
   ...ROTAS_DO_PROJETO,
   ...ROTAS_DAS_METRICAS,
-  ...ROTAS_DA_SIMULACAO,
 ];
 
 /** As rotas de /api/agente/*: fora de `ROTAS`, porque entram com o token do processo e não com o cookie do navegador. */
@@ -51,7 +47,6 @@ const ROTAS_DO_AGENTE: RotaDoAgente[] = [...rotasDoAgente(), ...rotasDeEvidencia
 const CLIENTE = join(import.meta.dirname, "../web");
 const COOKIE = "fabriquinha";
 const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
-const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
 // Os `dados` da evidência do agente; o anexo vai em pedido próprio, em fluxo (rotas.ts, `corpoEmFluxo`).
 const LIMITE_DO_JSON_DO_AGENTE = { bytes: 5 * 1024 * 1024, texto: "5 MiB" };
 
@@ -84,13 +79,10 @@ const json = (resposta: ServerResponse, status: number, valor: unknown): void =>
 };
 
 /**
- * O corpo da mutação. `application/octet-stream` é o anexo (F8 §2): os bytes, num `Buffer`, até 20 MiB. Qualquer outro
- * é JSON, até 64 KiB; vazio é `undefined`. Corpo grande demais ou JSON inválido é corpo inválido (422).
+ * O corpo da mutação: JSON, até 64 KiB; vazio é `undefined`. Corpo grande demais ou JSON inválido é corpo inválido (422).
  * ponytail: o corpo grande demais é lido até o fim e descartado, para a resposta chegar ao cliente.
  */
-async function lerCorpo(pedido: IncomingMessage, limiteDoJson = LIMITE_DO_JSON): Promise<unknown> {
-  const binario = pedido.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/octet-stream";
-  const limite = binario ? LIMITE_DO_ANEXO : limiteDoJson;
+async function lerCorpo(pedido: IncomingMessage, limite = LIMITE_DO_JSON): Promise<unknown> {
   const partes: Buffer[] = [];
   let tamanho = 0;
   for await (const parte of pedido as AsyncIterable<Buffer>) {
@@ -98,9 +90,7 @@ async function lerCorpo(pedido: IncomingMessage, limiteDoJson = LIMITE_DO_JSON):
     if (tamanho <= limite.bytes) partes.push(parte);
   }
   if (tamanho > limite.bytes) throw new ErroHttp(422, `o corpo passa de ${limite.texto}`);
-  const todo = Buffer.concat(partes);
-  if (binario) return todo;
-  const texto = todo.toString("utf8");
+  const texto = Buffer.concat(partes).toString("utf8");
   if (texto === "") return undefined;
   try {
     return JSON.parse(texto);

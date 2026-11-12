@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  caminhoDaAvaliacao,
   caminhoDaDemanda,
   caminhoDaSessao,
   compacto,
@@ -64,17 +63,12 @@ test("navegação fixa marca a página atual e mostra no Início o que aguarda s
   assert.match(html, /<a href="\/home">Início <span class="contador" title="o que aguarda você">6<\/span><\/a>/);
   assert.deepEqual(
     [...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]),
-    ["/home", "/projects", "/simulation", "/metrics", "/history", "/evaluations", "/config"],
+    ["/home", "/projects", "/metrics", "/history", "/config"],
   );
-  assert.doesNotMatch(html, /Demandas|Auditoria/);
+  assert.doesNotMatch(html, /Demandas|Auditoria|Simulação|Avaliaç/);
   assert.match(navegacao("inicio", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.equal(TITULOS.inicio, "Início");
-  assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
   assert.match(navegacao("demandas", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
-  assert.match(navegacao("avaliacoes", 0), /<a href="\/evaluations" aria-current="page">Avaliações<\/a>/);
-  assert.match(navegacao("avaliacao", 0), /<a href="\/evaluations" aria-current="page">Avaliações<\/a>/);
-  assert.equal(TITULOS.avaliacoes, "Avaliações");
-  assert.equal(caminhoDaAvaliacao("a/b c"), "/evaluations/a%2Fb%20c");
   assert.equal(TITULOS.demandas, "Demandas");
   assert.match(navegacao("demanda", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.equal(TITULOS.demanda, "Demanda");

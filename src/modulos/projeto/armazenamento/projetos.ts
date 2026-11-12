@@ -18,7 +18,7 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
 
-const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto, imagem_do_ambiente";
+const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, imagem_do_ambiente";
 
 /** Monta o projeto da `linha` com as tabelas da sua configuração; quem chama garante o snapshot. */
 function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
@@ -116,10 +116,10 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
   escrever(banco, () => {
     banco
       .prepare(
-        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (nome) DO UPDATE SET raiz_git = excluded.raiz_git, branch_base = excluded.branch_base,
            hospedagem = excluded.hospedagem, chave_sonarqube = excluded.chave_sonarqube,
-           link_produto = excluded.link_produto, imagem_do_ambiente = excluded.imagem_do_ambiente`,
+           imagem_do_ambiente = excluded.imagem_do_ambiente`,
       )
       .run(
         nome,
@@ -127,7 +127,6 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
         projeto.branch_base,
         projeto.hospedagem,
         projeto.chave_sonarqube,
-        projeto.link_produto ?? null,
         projeto.imagem_do_ambiente ?? null,
       );
     for (const tabela of [
@@ -190,17 +189,6 @@ export function ticketEmAndamentoDoProjeto(
        ORDER BY t.rowid LIMIT 1`,
     )
     .get({ p: nome }) as { demanda_id: string; ticket_id: number } | undefined;
-}
-
-/** A primeira tarefa do projeto com execução simulada na fila ou em andamento, se houver. */
-export function tarefaComExecucaoSimuladaPendente(banco: DatabaseSync, nome: string): string | undefined {
-  const pendente = banco
-    .prepare(
-      `SELECT tarefa FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS}) AND status IN ('na_fila', 'em_andamento')
-       LIMIT 1`,
-    )
-    .get({ p: nome });
-  return pendente && String(pendente.tarefa);
 }
 
 /**

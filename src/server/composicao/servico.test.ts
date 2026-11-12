@@ -22,7 +22,6 @@ import { escrever, migrar, novoId } from "../../modulos/compartilhado/armazename
 import { MIGRACOES } from "../../modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
 import { registrarProjeto } from "../../modulos/projeto/aplicacao/cadastro.ts";
 import { Configuracao, salvarConfiguracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
-import { criarUsuarioSimulado } from "../../modulos/avaliacao/armazenamento/simulacao.ts";
 import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
@@ -183,24 +182,38 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
-test("reinício: o pi de uma avaliação da instância anterior é morto pelo grupo_processo dela", async () => {
+test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas históricas delas ficam como estão e nenhum grupo delas é sinalizado", async () => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-  const saiu = once(pi, "exit");
-  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
-      VALUES ('d', '/nao/existe', 'main', 'github', 'k')`);
-  banco
-    .prepare(
-      `INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
-       VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', ?, ?)`,
-    )
-    .run(AGORA, pi.pid ?? null);
-  banco.close();
+  try {
+    projeto(banco, "d", "/nao/existe");
+    banco.exec(`INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'd', 'Dona Maria', 'd');
+      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'd', 't', 1, 'x');
+      INSERT INTO tarefa_usuario VALUES (1, 1)`);
+    banco
+      .prepare(
+        `INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+         VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', ?, ?)`,
+      )
+      .run(AGORA, pi.pid ?? null);
+    banco
+      .prepare("INSERT INTO execucao_simulada (id, tarefa, usuario, status, pgid) VALUES (1, 1, 1, 'em_andamento', ?)")
+      .run(pi.pid ?? null);
+    banco.close();
 
-  const s = await subir(raiz);
-  assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, null);
-  await s.parar();
+    const s = await subir(raiz);
+    assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, pi.pid);
+    assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_simulada").get(), {
+      status: "em_andamento",
+      pgid: pi.pid,
+    });
+    await s.parar();
+    // O SIGKILL da recuperação não é esperado por ela: dá ao sinal o tempo de chegar antes de conferir que não veio.
+    const vivo = await Promise.race([once(pi, "exit"), dormir(300, "vivo")]);
+    assert.equal(vivo, "vivo");
+  } finally {
+    pi.kill("SIGKILL");
+  }
 });
 
 test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async () => {
@@ -237,38 +250,6 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
     motivo: "serviço reiniciado",
   });
   assert.equal(s.banco.prepare("SELECT estado FROM demanda").get()?.estado, "em_execucao");
-  await s.parar();
-});
-
-test("reinício: as execuções simuladas pendentes falham e o pi delas é morto; as terminadas ficam", async () => {
-  const { raiz, banco } = abrirBancoTemporario();
-  projeto(banco, "sim", "/nao/existe");
-  criarUsuarioSimulado(banco, "sim", { nome: "Dona Maria", descricao: "d" });
-  banco.exec(`INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'sim', 't', 1, 'x');
-    INSERT INTO tarefa_usuario VALUES (1, 1)`);
-  const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-  const saiu = once(pi, "exit");
-  banco
-    .prepare(
-      `INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid) VALUES
-         (1, 1, 1, 'em_andamento', NULL, ?), (2, 1, 1, 'na_fila', NULL, NULL), (3, 1, 1, 'concluida', '{}', NULL)`,
-    )
-    .run(pi.pid ?? null);
-  banco.close();
-
-  const s = await subir(raiz);
-  assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.deepEqual(
-    s.banco
-      .prepare("SELECT id, status, erro, pgid FROM execucao_simulada ORDER BY id")
-      .all()
-      .map((l) => ({ ...l })),
-    [
-      { id: 1, status: "falhou", erro: "serviço reiniciado", pgid: null },
-      { id: 2, status: "falhou", erro: "serviço reiniciado", pgid: null },
-      { id: 3, status: "concluida", erro: null, pgid: null },
-    ],
-  );
   await s.parar();
 });
 

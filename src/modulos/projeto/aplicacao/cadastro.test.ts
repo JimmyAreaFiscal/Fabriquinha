@@ -66,18 +66,6 @@ const recusa = (trabalho: () => unknown, mensagem: string) => {
   assert.throws(trabalho, (erro) => erro instanceof ErroDeRegra && erro.message === mensagem);
 };
 
-test("o link do produto é gravado, relido e apagado ao editar com o campo vazio", () => {
-  const banco = novoBanco();
-  const link = "https://demo.exemplo.com";
-  registrarProjeto(banco, { ...exemplo, link_produto: link });
-  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, link);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, link_produto: "isso nao e um link" }), ZodError);
-  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, link);
-  assert.equal(editarProjeto(banco, { ...exemplo, link_produto: "" }).link_produto, undefined);
-  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, undefined);
-  banco.close();
-});
-
 test("a edição não toca a chave do SonarQube, que é da configuração SDLC", () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
@@ -121,12 +109,11 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   banco.close();
 });
 
-test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, link e preparação do cadastro", () => {
+test("gravarConfiguracaoSdlc grava as verificações e preserva etapas e preparação do cadastro", () => {
   const banco = novoBanco();
   const cadastrado = registrarProjeto(banco, {
     ...exemplo,
     etapas: [{ etapa: "implementar", configuracao_agente: { effort: "high" } }],
-    link_produto: "https://produto.exemplo.com",
   });
   const configurado = Projeto.parse({
     ...exemplo,
@@ -135,7 +122,6 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, link e p
     hospedagem: "azure-devops",
     chave_sonarqube: "configurado",
     etapas: [{ etapa: "planejar" }],
-    link_produto: "https://outro.exemplo.com",
     verificacoes: {
       preparacao: ["ignorado"],
       fitness: [{ nome: "fitness", comando: "npm run fitness", descricao: "Arquitetura" }],
@@ -149,7 +135,6 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, link e p
   const esperado = {
     ...configurado,
     etapas: cadastrado.etapas,
-    link_produto: cadastrado.link_produto,
     verificacoes: { ...configurado.verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(gravarConfiguracaoSdlc(banco, configurado), esperado);
@@ -158,14 +143,12 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, link e p
   const editado = editarProjeto(banco, {
     ...exemplo,
     etapas: [{ etapa: "revisar_rodada" }],
-    link_produto: "https://editado.exemplo.com",
     verificacoes: { preparacao: ["npm install"] },
   });
   const cadastroEditado = {
     ...exemplo,
     chave_sonarqube: configurado.chave_sonarqube,
     etapas: [{ etapa: "revisar_rodada" }],
-    link_produto: "https://editado.exemplo.com",
     verificacoes: { ...configurado.verificacoes, preparacao: ["npm install"] },
   };
   assert.deepEqual(editado, cadastroEditado);
@@ -484,24 +467,17 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
   banco.close();
 });
 
-test("removerProjeto recusa execução simulada na fila ou em andamento, sem apagar nada", async () => {
+test("removerProjeto apaga o projeto com execução simulada histórica que ficou na fila: a Simulação saiu (ticket 02)", async () => {
   const banco = novoBanco();
   popular(banco, "demo", "f".repeat(64));
-  const antes = contagens(banco);
   const [id] = simuladas(banco, "demo");
-  for (const status of ["na_fila", "em_andamento"]) {
-    banco.prepare("UPDATE execucao_simulada SET status = ?, erro = NULL").run(status);
-    await assert.rejects(
-      () => removerProjeto(banco, "demo"),
-      (falha) =>
-        falha instanceof ErroDeRegra &&
-        /^o projeto demo tem execução simulada pendente na Tarefa \d+ \(espere ela terminar, e remova de novo\)$/.test(
-          falha.message,
-        ),
-    );
-    assert.deepEqual(contagens(banco), antes);
-    assert.equal(existsSync(dirDaExecucaoSimulada(raizDo(banco), id ?? 0)), true);
-  }
+  banco.prepare("UPDATE execucao_simulada SET status = 'na_fila', erro = NULL").run();
+
+  await removerProjeto(banco, "demo");
+
+  assert.equal(buscarProjeto(banco, "demo"), undefined);
+  assert.deepEqual(simuladas(banco, "demo"), []);
+  assert.equal(existsSync(dirDaExecucaoSimulada(raizDo(banco), id ?? 0)), false);
   banco.close();
 });
 

@@ -4,7 +4,6 @@ import type { Hospedagem, Projeto } from "../../../../modulos/projeto/nucleo/pro
 import type { Effort, Modelo } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
 import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
-import type { UsuarioSimulado } from "../../../contrato/avaliacao/simulacao.ts";
 import { escapar, hora, nomeDoModelo } from "../../apresentacao/render.ts";
 import { etapasDoSdlc } from "../../apresentacao/etapas.ts";
 import type { ConfiguracaoDoAmbiente } from "../../../../modulos/sandbox/nucleo/configuracao_do_ambiente.ts";
@@ -19,7 +18,7 @@ export type ProjetoListado = Projeto;
  * O projeto no formulário, só com o que o cadastro pede; o novo ainda não tem hospedagem (o F5 a deduz do remoto ao
  * salvar).
  */
-export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "link_produto"> &
+export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> &
   ConfiguracoesPorEtapa & { preparacao: string[]; hospedagem?: Hospedagem };
 
 /** O projeto cadastrado como o formulário o edita: a preparação da worktree solta das Verificações. */
@@ -28,7 +27,6 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
-  link_produto,
   verificacoes,
   configuracoes,
 }: ProjetoCadastrado): Rascunho => ({
@@ -36,24 +34,17 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
-  link_produto,
   preparacao: verificacoes.preparacao,
   configuracoes,
 });
 
-/** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?ambiente`, `/config?projeto=<nome>` ou `/config?novo`. */
-type Selecao =
-  | { tipo: "agendador" }
-  | { tipo: "avaliacoes" }
-  | { tipo: "ambiente" }
-  | { tipo: "projeto"; nome: string }
-  | { tipo: "novo" };
+/** O item do menu escolhido, pelo endereço: `/config`, `/config?ambiente`, `/config?projeto=<nome>` ou `/config?novo`. */
+type Selecao = { tipo: "agendador" } | { tipo: "ambiente" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
 
 export function selecao(busca: string): Selecao {
   const q = new URLSearchParams(busca);
   const nome = q.get("projeto");
   if (nome) return { tipo: "projeto", nome };
-  if (q.has("avaliacoes")) return { tipo: "avaliacoes" };
   if (q.has("ambiente")) return { tipo: "ambiente" };
   return q.has("novo") ? { tipo: "novo" } : { tipo: "agendador" };
 }
@@ -63,7 +54,6 @@ export const NOVO: Rascunho = {
   raiz_git: "",
   branch_base: "main",
   preparacao: [],
-  link_produto: "",
   configuracoes: {},
 };
 
@@ -116,7 +106,7 @@ export const etapasDoFormulario = (): [EtapaTicket, string][] =>
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
-/** Menu à esquerda: Geral → Agendador, com a marca, Avaliações e Ambiente; Projetos → um por projeto, com a hospedagem, e o novo. */
+/** Menu à esquerda: Geral → Agendador, com a marca, e Ambiente; Projetos → um por projeto, com a hospedagem, e o novo. */
 export function menu(
   config: Pick<EstadoDaConfiguracao, "agendadorAtivo">,
   projetos: readonly ProjetoListado[],
@@ -129,7 +119,7 @@ export function menu(
     (p) =>
       `<a href="/config?projeto=${encodeURIComponent(p.nome)}"${atual(sel.tipo === "projeto" && sel.nome === p.nome)}>${escapar(p.nome)}<span class="muted hospedagem">${HOSPEDAGEM[p.hospedagem]}</span></a>`,
   );
-  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><a href="/config?avaliacoes"${atual(sel.tipo === "avaliacoes")}>Avaliações</a><a href="/config?ambiente"${atual(sel.tipo === "ambiente")}>Ambiente</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
+  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><a href="/config?ambiente"${atual(sel.tipo === "ambiente")}>Ambiente</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
 }
 
 const NUMEROS = [
@@ -254,12 +244,6 @@ function seletorDeModelo(
   return `<div class="celula${m.classe}"><select id="${idDe(caminho)}" name="${caminho}"${escolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
 }
 
-/** Avaliações (I-240): o modelo que o pi das avaliações do SDLC usa, e Salvar. */
-export function modeloDasAvaliacoes(estado: EstadoDaConfiguracao, modelos: readonly Modelo[], erros: Erros): string {
-  const caminho = "modeloAuditoria";
-  return `<h2>Avaliações</h2><form class="form" data-avaliacoes novalidate><div class="campo"><label for="${idDe(caminho)}">Modelo das avaliações</label>${seletorDeModelo(erros, caminho, estado.modeloAuditoria, modelos)}<span class="ajuda">vazio usa o padrão do pi; vale para as avaliações iniciadas em Avaliações</span></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form>`;
-}
-
 /** Uma linha por etapa: o rótulo, o seletor de modelo e o de effort; vazio usa o padrão do pi. */
 function modelosEEffortsPorEtapa(erros: Erros, p: ConfiguracoesPorEtapa, modelosDoPi: readonly Modelo[]): string {
   const linhas = etapasDoFormulario().map(([etapa, rotulo]) => {
@@ -301,62 +285,10 @@ export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, fal
     ? ""
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
-<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "link_produto", "Link do produto", p.link_produto ?? "", { mono: true, extra: ' placeholder="https://produto.exemplo.com"', ajuda: "opcional; endereço http(s) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa" })}</div></div>
+<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
-<div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>${novo ? "" : '<section class="usuarios-simulados" data-usuarios-simulados aria-label="Usuários simulados"></section>'}`;
-}
-
-export interface OpcoesDosUsuarios {
-  /** O que está nos campos do formulário de novo usuário. */
-  rascunho: { nome: string; descricao: string };
-  /** Os erros do 422 do formulário, por campo (`nome`, `descricao`). */
-  erros: Erros;
-  /** A recusa que não é de um campo (nome repetido, 409), logo abaixo do formulário. */
-  falha?: string;
-  /** A recusa do último anexo de cada usuário, pelo ID dele. */
-  falhasDeAnexo: ReadonlyMap<number, string>;
-}
-
-const FORMATOS_DO_ANEXO = ".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif";
-const tamanho = (bytes: number): string => `${bytes.toLocaleString("pt-BR")} ${bytes === 1 ? "byte" : "bytes"}`;
-
-function cartaoDoUsuario(u: UsuarioSimulado, falha: string | undefined): string {
-  const anexos = u.anexos.map(
-    (a) =>
-      `<li class="anexo-usuario">${escapar(a.nome)} <span class="muted">${tamanho(a.bytes)}</span><button type="button" class="x" data-remover-anexo="${escapar(a.nome)}" title="Remover o anexo" aria-label="Remover o anexo ${escapar(a.nome)}">×</button></li>`,
-  );
-  const aviso = falha ? `<span class="msg-erro" role="alert">${escapar(falha)}</span>` : "";
-  const listaDeAnexos = anexos.length > 0 ? `<ul class="anexos-usuario">${anexos.join("")}</ul>` : "";
-  return `<article class="cartao-usuario" data-usuario="${String(u.id)}"><h4>${escapar(u.nome)}</h4><p class="descricao-usuario">${escapar(u.descricao)}</p>${listaDeAnexos}<div class="anexar"><button type="button" class="link" data-anexar-botao>+ anexar arquivo</button><input type="file" accept="${FORMATOS_DO_ANEXO}" data-anexar hidden aria-label="Anexar arquivo a ${escapar(u.nome)}"></div>${aviso}</article>`;
-}
-
-/** Um campo do formulário de novo usuário: `campo-usuario-nome`, para não colidir com o `campo-nome` do projeto. */
-function campoDoUsuario(erros: Erros, campo: "nome" | "descricao", rotulo: string, valor: string): string {
-  const m = marca(erros, campo, "campo-usuario");
-  const id = idDe(campo, "campo-usuario");
-  const controle =
-    campo === "nome"
-      ? `<input id="${id}" name="nome" value="${escapar(valor)}" placeholder="Dona Maria"${m.aria}>`
-      : `<textarea id="${id}" name="descricao" rows="3" placeholder="Contadora de 60 anos, pouca familiaridade com sistemas web"${m.aria}>${escapar(valor)}</textarea>`;
-  return `<div class="campo${campo === "descricao" ? " largo" : ""}${m.classe}"><label for="${id}">${rotulo}</label>${controle}${m.msg}</div>`;
-}
-
-/**
- * Usuários simulados (F8 §2), abaixo do formulário do projeto salvo: um cartão por usuário, com os anexos e o
- * "+ anexar arquivo", e o formulário de novo usuário.
- */
-export function usuariosSimulados(
-  usuarios: readonly UsuarioSimulado[],
-  { rascunho, erros, falha, falhasDeAnexo }: OpcoesDosUsuarios,
-): string {
-  const cartoes = usuarios.map((u) => cartaoDoUsuario(u, falhasDeAnexo.get(u.id)));
-  const lista =
-    cartoes.length > 0
-      ? `<div class="cartoes-usuario">${cartoes.join("")}</div>`
-      : '<p class="muted">Nenhum usuário simulado neste projeto ainda.</p>';
-  const aviso = falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "";
-  return `<h3>Usuários simulados <span class="nota">· pessoas fictícias que usam o produto na Simulação</span></h3>${lista}<form class="form novo-usuario" data-usuario-simulado novalidate><div class="grade">${campoDoUsuario(erros, "nome", "Nome do usuário", rascunho.nome)}${campoDoUsuario(erros, "descricao", "Descrição do usuário", rascunho.descricao)}</div><span class="ajuda">A descrição e os anexos (manuais em PDF, texto ou imagem, até 20 MiB) vão para a IA.</span>${aviso}<div class="rodape-form"><button type="submit" class="btn btn-primario">Criar usuário simulado</button></div></form>`;
+<div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
 }
 
 /** A confirmação de remover o projeto, que não tem volta: o nome e o que sai junto. */

@@ -70,6 +70,17 @@ test("a página traz os dependentes não terminados com título e estado, e cump
   assert.equal(banco.isTransaction, false);
 });
 
+test("a demanda encaminhada de um achado de avaliação, da Avaliação que saiu (ticket 02), abre com a origem legível", () => {
+  const { banco } = abrirBancoTemporario();
+  cadastrarProjetoLoja(banco);
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-1", "entender_e_desenhar"));
+  banco.exec(`INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('av-1', 'loja', '2026-01-01', '2026-01-31', '', 't');
+    INSERT INTO achado_avaliacao (avaliacao_id, achado_id, titulo, descricao, evidencia, demanda_id) VALUES ('av-1', 1, 'Achado', 'd', 'e', 'I-1')`);
+  const pagina = consultarDemanda(banco, "I-1", relogio, semSessaoViva);
+  assert.deepEqual(pagina.origem, { avaliacao: "av-1", achado: 1, titulo: "Achado" });
+  assert.deepEqual(PaginaDaDemanda.parse(pagina), pagina);
+});
+
 test("o board bloqueia a demanda só pelas predecessoras que não satisfazem a Dependência", () => {
   const { banco } = abrirBancoTemporario();
   cadastrarProjetoLoja(banco);

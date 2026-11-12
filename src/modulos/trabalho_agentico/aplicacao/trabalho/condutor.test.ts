@@ -25,7 +25,7 @@ import {
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import type { Harness } from "../../../harness/harness.ts";
+import type { Harness, LancamentoDoTicket } from "../../../harness/harness.ts";
 import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
 import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import {
@@ -109,6 +109,21 @@ const ferramentaLonga: PassoPi = {
 };
 
 let n = 0;
+/** O lançamento de um ticket na pasta `dir`, sem skills nem modelo: o que o condutor conduz, sem o motor por trás. */
+const lancamentoDeTeste = (
+  dir: string,
+  sessao: string,
+  modo: LancamentoDoTicket["modo"] = "autonomo",
+): LancamentoDoTicket => ({
+  tipo: "ticket",
+  raiz: dir,
+  sessao,
+  dir,
+  skills: [],
+  modelo: undefined,
+  modo,
+  repositorio: dir,
+});
 /** Roda o roteiro no `modo`, com o `limiteMin`; devolve a sessão, o registro e a promessa do fim. */
 function rodar(
   passos: PassoPi[],
@@ -141,8 +156,8 @@ function rodar(
   const fim = condutor.iniciar(
     {
       execucao: { id: sessao, sessao, modo },
-      // A auditoria: o agente sem token, com o FABRIQUINHA_ROOT da pasta do teste.
-      lancamento: { tipo: "auditoria", raiz: dir, sessao, dir },
+      // Sem banco: o agente sem token.
+      lancamento: lancamentoDeTeste(dir, sessao, modo),
       cwd: dir,
       log: join(dir, "log"),
       prompt: "trabalhe",
@@ -511,54 +526,39 @@ function processoEmGrupoProprio() {
   return { pgid: processo.pid ?? 0, morto: once(processo, "exit") };
 }
 
-test("recuperarNaSubida mata numa chamada só os grupos órfãos do ticket, da avaliação e da simulação, e fecha o que dependia deles", async () => {
+test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia dele", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
     const daTicket = processoEmGrupoProprio();
-    const daAvaliacao = processoEmGrupoProprio();
-    const daSimulacao = processoEmGrupoProprio();
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
         VALUES ('d', '/nao/existe', 'main', 'github', 'k');
       INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
-      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)});
-      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
-        VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', 't', ${String(daAvaliacao.pgid)});
-      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'd', 'Dona Maria', 'd');
-      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'd', 't', 1, 'x');
-      INSERT INTO tarefa_usuario VALUES (1, 1);
-      INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid)
-        VALUES (1, 1, 1, 'em_andamento', NULL, ${String(daSimulacao.pgid)})`);
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)})`);
 
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 
-    for (const grupo of [daTicket, daAvaliacao, daSimulacao]) assert.deepEqual(await grupo.morto, [null, "SIGKILL"]);
+    assert.deepEqual(await daTicket.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
-    assert.equal(banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, null);
-    assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM execucao_simulada").get(), {
-      status: "falhou",
-      pgid: null,
-    });
   } finally {
     fechar();
   }
 });
 
-test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chegou a lançar o pi", () => {
+test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
-      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('sem-pi', 'd', '2026-01-01', '2026-01-02', '', 't');
       INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -610,7 +610,7 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
         }),
     );
 
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 
     await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
     const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
@@ -645,7 +645,7 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
               dir_do_harness_do_auditor: dirDoPiDoAuditor(),
             }),
         );
-      condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+      condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
       assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
     } finally {
       montarConjuntoDoServico(() => undefined);
@@ -666,7 +666,7 @@ test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessã
   await assert.rejects(
     condutorQueRecusa.iniciar({
       execucao: { id: "s-recusada", sessao: "s-recusada", modo: "consulta" },
-      lancamento: { tipo: "auditoria", raiz: base, sessao: "s-recusada", dir: base },
+      lancamento: lancamentoDeTeste(base, "s-recusada"),
       cwd: base,
       log: join(base, "log-recusado"),
       prompt: undefined,
@@ -710,7 +710,7 @@ async function lancarPiNoContainer() {
   const fim = condutor.acompanhar(id, () =>
     condutor.iniciar({
       execucao: { id, sessao: id, modo: "autonomo" },
-      lancamento: { tipo: "auditoria", raiz: dir, sessao: id, dir },
+      lancamento: lancamentoDeTeste(dir, id),
       cwd: dir,
       ambiente: ambienteContainer,
       log: join(dir, "log"),

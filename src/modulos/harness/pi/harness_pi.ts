@@ -11,22 +11,11 @@ import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "..
 import { executar } from "../../compartilhado/infra/processo.ts";
 import { anotar } from "../../compartilhado/infra/registro.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
-import type {
-  EventoDoAgente,
-  Harness,
-  Lancamento,
-  LancamentoDeAuditoria,
-  LancamentoDoTicket,
-  ProcessoDoAgente,
-  RespostaDaConsulta,
-} from "../harness.ts";
+import type { EventoDoAgente, Harness, LancamentoDoTicket, ProcessoDoAgente, RespostaDaConsulta } from "../harness.ts";
 import { confianca, PACOTE } from "./pi.ts";
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
-
-/** As ferramentas da extensão `navegador`, as únicas da execução simulada. */
-const FERRAMENTAS_DA_SIMULACAO = "ver_tela,clicar,digitar,tecla,rolar,relatar";
 
 /**
  * Divide o stdout em registros JSONL só em `\n`, tirando um `\r` final (F4 §6.1.2). O `readline` do Node não serve:
@@ -78,8 +67,6 @@ interface LinhaDeComandoDoTicket extends Pick<LancamentoDoTicket, "raiz" | "sess
   confianca: boolean | undefined;
 }
 
-type LinhaDeComandoDaAuditoria = Omit<LancamentoDeAuditoria, "tipo" | "dir">;
-
 /** As skills que existem em `pacote-pi/skills`: o pi ignora em silêncio um `--skill` que não existe (CA-12). */
 const skillsDoPacote = (skills: readonly string[]): string[] =>
   skills.filter((skill) => existsSync(join(PACOTE, "skills", skill)));
@@ -101,11 +88,9 @@ export class HarnessPi implements Harness {
    * que toma o lugar da `ask_user_question` (quebrada no modo RPC; o pi não inicia com duas ferramentas de mesmo nome).
    * A consulta (F4 §6.5) copia a sessão principal para a sessão nova `sessaoPi` e tira só as ferramentas embutidas de
    * escrita; além das três da spec, o `powershell`, que o pi 0.84.4 também embute e que altera arquivos se houver `pwsh`.
-   * A auditoria do Histórico (`LancamentoDeAuditoria`) tira essas mesmas ferramentas e só a guarda, que deixa o
-   * `subagent` chamar apenas o `scout`, vai com ela.
    */
-  argumentos(l: LinhaDeComandoDoTicket | LinhaDeComandoDaAuditoria): string[] {
-    const comum = [
+  argumentos(l: LinhaDeComandoDoTicket): string[] {
+    return [
       "--mode",
       "rpc",
       "--session-dir",
@@ -113,22 +98,10 @@ export class HarnessPi implements Harness {
       "--session-id",
       l.sessao,
       ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.nome] : []),
-    ];
-    const guarda = ["-e", join(PACOTE, "extensions", "guarda.ts")];
-    if (!("skills" in l)) {
-      return [
-        ...comum,
-        ...guarda,
-        ...(l.extensoes ?? []).flatMap((extensao) => ["-e", join(PACOTE, "extensions", extensao)]),
-        "--exclude-tools",
-        "edit,write,bash,powershell",
-      ];
-    }
-    return [
-      ...comum,
       ...(l.effort ? ["--thinking", l.effort] : []),
       ...l.skills.flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
-      ...guarda,
+      "-e",
+      join(PACOTE, "extensions", "guarda.ts"),
       "-e",
       join(PACOTE, "extensions", "pergunta.ts"),
       ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
@@ -137,122 +110,61 @@ export class HarnessPi implements Harness {
     ];
   }
 
-  /**
-   * A linha de comando do `lancamento`. A simulação (F8 §5) é o pi em `--mode json`, só com as ferramentas do
-   * `navegador`, a sessão em `<dir>/sessao`, os anexos como `@arquivo` e o prompt por último.
-   */
-  argumentosDoLancamento(lancamento: Lancamento): string[] {
-    switch (lancamento.tipo) {
-      case "ticket":
-        return this.argumentos({
-          ...lancamento,
-          skills: skillsDoPacote(lancamento.skills),
-          confianca: confianca(lancamento.repositorio),
-        });
-      case "auditoria":
-        return this.argumentos(lancamento);
-      case "simulacao":
-        return [
-          "--mode",
-          "json",
-          "--session-dir",
-          join(lancamento.dir, "sessao"),
-          "--tools",
-          FERRAMENTAS_DA_SIMULACAO,
-          "-e",
-          join(PACOTE, "extensions", "navegador.ts"),
-          ...lancamento.anexos.map((arquivo) => `@${arquivo}`),
-          lancamento.prompt,
-        ];
-    }
+  /** A linha de comando do `lancamento`, com as skills que o pacote tem e a confiança do Auditor no repositório. */
+  argumentosDoLancamento(lancamento: LancamentoDoTicket): string[] {
+    return this.argumentos({
+      ...lancamento,
+      skills: skillsDoPacote(lancamento.skills),
+      confianca: confianca(lancamento.repositorio),
+    });
   }
 
   /**
    * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio de `dir` (a
    * pasta do processo) e as variáveis da Fabriquinha. O agente de um ticket fala com a API pelo cliente
    * empacotado, que vai à frente no PATH, e não recebe `FABRIQUINHA_ROOT` nem `FABRIQUINHA_EXECUCAO`: o condutor soma
-   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`. A auditoria (`<raiz>/avaliacoes/<sessão>`), que não é de
-   * nenhum ticket, o `FABRIQUINHA_ROOT` fica e `FABRIQUINHA_AUDITORIA` liga a regra do `scout` na guarda.
+   * `FABRIQUINHA_API` e `FABRIQUINHA_TOKEN`.
    * No Ambiente que isola as variáveis do serviço o env começa vazio, sem `process.env`: só as chaves de provedor do
    * LLM e as variáveis da Fabriquinha; o `PATH` (com `pacote-pi/bin` à frente) e o `PI_CODING_AGENT_DIR` vêm do próprio
    * Ambiente.
    */
-  variaveisDeAmbiente(
-    raiz: string,
-    dir: string,
-    agente: "ticket" | "auditoria",
-    ambiente?: Pick<Ambiente, "isolaAsVariaveisDoServico">,
-  ): NodeJS.ProcessEnv {
+  variaveisDeAmbiente(dir: string, ambiente?: Pick<Ambiente, "isolaAsVariaveisDoServico">): NodeJS.ProcessEnv {
     if (ambiente?.isolaAsVariaveisDoServico) {
-      return {
-        ...chavesDeProvedorDoLlm(process.env),
-        ...(agente === "auditoria"
-          ? { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
-          : { FABRIQUINHA_SAIDA: join(dir, "saida") }),
-      };
+      return { ...chavesDeProvedorDoLlm(process.env), FABRIQUINHA_SAIDA: join(dir, "saida") };
     }
     const {
       FABRIQUINHA_EXECUCAO: _execucaoHerdada,
       FABRIQUINHA_ROOT: _raizHerdada,
       ...semCredenciais
     } = ambienteSemCredenciais(process.env, join(dir, "vazio"));
-    return agente === "auditoria"
-      ? { ...semCredenciais, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" }
-      : {
-          ...semCredenciais,
-          PATH: [join(PACOTE, "bin"), semCredenciais.PATH].filter(Boolean).join(delimiter),
-          FABRIQUINHA_SAIDA: join(dir, "saida"),
-        };
+    return {
+      ...semCredenciais,
+      PATH: [join(PACOTE, "bin"), semCredenciais.PATH].filter(Boolean).join(delimiter),
+      FABRIQUINHA_SAIDA: join(dir, "saida"),
+    };
   }
 
-  /**
-   * As variáveis do `lancamento` no `ambiente`. A auditoria roda sempre no Ambiente do serviço, com as do
-   * host; a simulação (F8 §5) recebe o produto em `FABRIQUINHA_LINK` e a pasta do relatório em `FABRIQUINHA_SAIDA`.
-   */
-  variaveisDoLancamento(
-    lancamento: Lancamento,
-    ambiente: Pick<Ambiente, "isolaAsVariaveisDoServico">,
-  ): NodeJS.ProcessEnv {
-    switch (lancamento.tipo) {
-      case "ticket":
-        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "ticket", ambiente);
-      case "auditoria":
-        return this.variaveisDeAmbiente(lancamento.raiz, lancamento.dir, "auditoria");
-      case "simulacao":
-        return {
-          ...ambienteSemCredenciais(process.env, join(lancamento.dir, "vazio")),
-          FABRIQUINHA_LINK: lancamento.link,
-          FABRIQUINHA_SAIDA: join(lancamento.dir, "saida"),
-        };
-    }
-  }
-
-  /**
-   * Lança o agente do `lancamento`: a linha de comando vai para o `log` (a da simulação não, que traz o prompt inteiro),
-   * e o stdin da simulação fecha já, porque ela lê o prompt dos argumentos.
-   */
+  /** Lança o agente do `lancamento`, com a linha de comando no `log`. */
   lancar(
     ambiente: Ambiente,
-    lancamento: Lancamento,
+    lancamento: LancamentoDoTicket,
     { cwd, log, variaveisDoServico }: { cwd: string; log: string; variaveisDoServico?: Record<string, string> },
     aoEvento: (evento: EventoDoAgente) => void,
   ): ProcessoDoAgente {
     const args = this.argumentosDoLancamento(lancamento);
-    const simulacao = lancamento.tipo === "simulacao";
-    if (!simulacao) anotar(log, `pi ${args.join(" ")}`);
-    const env = { ...this.variaveisDoLancamento(lancamento, ambiente), ...variaveisDoServico };
-    return this.lancarProcesso(ambiente, args, { cwd, env, log, fecharStdin: simulacao }, aoEvento);
+    anotar(log, `pi ${args.join(" ")}`);
+    const env = { ...this.variaveisDeAmbiente(lancamento.dir, ambiente), ...variaveisDoServico };
+    return this.lancarProcesso(ambiente, args, { cwd, env, log }, aoEvento);
   }
 
   /**
    * Lança o pi, pelo `ambiente`, num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
-   * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
-   * e o modo RPC precisa do stdin aberto.
+   * protocolo vai para o log. O stdin fica aberto: o modo RPC fala por ele.
    */
   lancarProcesso(
     ambiente: Ambiente,
     args: readonly string[],
-    { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
+    { cwd, env, log }: { cwd: string; env: NodeJS.ProcessEnv; log: string },
     aoEvento: (evento: EventoDoAgente) => void,
   ): ProcessoDoAgente {
     const processo = ambiente.lancar({
@@ -268,7 +180,6 @@ export class HarnessPi implements Harness {
     processo.aoFalhar((erro) => {
       anotar(log, `pi: ${erro.message}`);
     });
-    if (fecharStdin) processo.stdin.end();
     processo.stderr.on("data", (parte: Buffer) => {
       appendFileSync(log, parte);
     });

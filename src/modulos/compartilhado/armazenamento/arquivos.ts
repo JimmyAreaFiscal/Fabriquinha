@@ -103,7 +103,8 @@ export function guardarArquivos<O extends { readonly fd: number }, T extends obj
   }
 }
 
-/** Guarda o conteúdo já em memória (o anexo de um Usuário Simulado, F8 §2) do mesmo jeito: por hash, sem sobrescrever. */
+/** Guarda o conteúdo já em memória do mesmo jeito: por hash, sem sobrescrever. */
+/** @testes os testes, o e2e e o estresse semeiam anexos sem passar por um arquivo em disco */
 export function guardarBytes(banco: DatabaseSync, conteudo: Buffer): { sha256: string; bytes: number } {
   const pasta = join(raizDo(banco), "arquivos");
   mkdirSync(pasta, { recursive: true, mode: 0o700 });

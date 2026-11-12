@@ -1,5 +1,5 @@
 // A conversa de uma sessão do agente (F4 §6.1.2): o JSONL que o harness grava, as perguntas que o Auditor respondeu e cada
-// mensagem em Markdown. O chat, a avaliação e a sessão de ajustes a leem.
+// mensagem em Markdown. O chat e a sessão de ajustes a leem.
 import { readFileSync } from "node:fs";
 import { condutor } from "../trabalho/condutor.ts";
 

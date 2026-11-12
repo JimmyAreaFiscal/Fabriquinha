@@ -2,9 +2,9 @@
 // O pi falso único dos testes, roteirizado por JSON. Duas faces no mesmo arquivo:
 // - importado, `instalarPiFalso(dir)` aponta $FABRIQUINHA_PI para este arquivo e grava o roteiro e o registro em `dir`;
 // - executado como o pi (`import.meta.main`), fala o que o pi real fala: `--version`, `--list-models`, `-p` (chamada
-//   única), `--mode json` (a Simulação, que espera o EOF do stdin) e o RPC (JSONL no stdin e no stdout).
+//   única) e o RPC (JSONL no stdin e no stdout).
 // O roteiro é uma lista de `PassoPi` em $FALSO_PI_ROTEIRO (o caminho de um JSON ou o próprio JSON, se começa com `[`),
-// relido a cada chamada. Cada chamada (prompt do RPC, `-p` ou `--mode json`) consome um passo, e o último se repete.
+// relido a cada chamada. Cada chamada (prompt do RPC ou `-p`) consome um passo, e o último se repete.
 // Sem roteiro, vale o passo `{ marcas: true }`: o comportamento do e2e, que depende de uma marca no texto do prompt.
 // Cada início, comando e chamada vai para $FALSO_PI_REGISTRO (JSONL), se definido.
 import { execFileSync, execSync } from "node:child_process";
@@ -67,7 +67,7 @@ export interface PassoPi {
   // --- O que o agente "faz" na pasta de trabalho, antes de responder
   /** Caminho → conteúdo a escrever, ou null para apagar. */
   escreve?: Record<string, string | null>;
-  /** Caminho → conteúdo a acrescentar (o `achados.jsonl` da avaliação). */
+  /** Caminho → conteúdo a acrescentar. */
   anexa?: Record<string, string>;
   /** Comando de shell rodado na pasta (o agente "mexendo" no git). */
   shell?: string;
@@ -85,18 +85,7 @@ export interface PassoPi {
    * `--session-dir` a sessão com a mensagem do assistente (anthropic/claude-opus-5-5), como o pi sem `--no-session`.
    */
   chamadaUnica?: { saida?: string | object; codigo?: number; uso?: { input: number; output: number; custo?: number } };
-  /** `--mode json`: grava o relatório em $FABRIQUINHA_SAIDA depois do EOF do stdin. */
-  simulacao?: {
-    /** Objeto (JSON), texto cru (arquivo inválido) ou null (não entrega). Padrão: um relatório de usabilidade. */
-    relatorio?: object | string | null;
-    /** Espera antes de entregar (padrão 300). */
-    demoraMs?: number;
-    /** Não termina sozinho. */
-    nuncaTermina?: boolean;
-    /** Grava `args.json` na pasta com argumentos, ambiente e conteúdo da pasta. */
-    registraArgs?: boolean;
-  };
-  /** O comportamento do e2e: o texto do prompt escolhe o que fazer ([ao vivo], [longo], eco:, pergunte, # Auditoria...). */
+  /** O comportamento do e2e: o texto do prompt escolhe o que fazer ([ao vivo], [longo], eco:, pergunte...). */
   marcas?: boolean;
 }
 
@@ -109,9 +98,9 @@ interface ComandoRpc {
   cancelled?: boolean;
 }
 
-/** Uma linha do registro: o início do processo, um comando RPC, uma chamada `-p` ou uma de `--mode json`. */
+/** Uma linha do registro: o início do processo, um comando RPC ou uma chamada `-p`. */
 export interface EntradaDoRegistro {
-  evento: "inicio" | "comando" | "chamada_unica" | "simulacao";
+  evento: "inicio" | "comando" | "chamada_unica";
   argv?: string[];
   cwd?: string;
   execucao?: string;
@@ -193,8 +182,7 @@ async function executarPiFalso(): Promise<void> {
     registradasNoProcesso.push(entrada);
     if (caminhoDoRegistro) appendFileSync(caminhoDoRegistro, `${JSON.stringify(entrada)}\n`);
   };
-  const ehChamada = (e: EntradaDoRegistro) =>
-    e.comando?.type === "prompt" || e.evento === "chamada_unica" || e.evento === "simulacao";
+  const ehChamada = (e: EntradaDoRegistro) => e.comando?.type === "prompt" || e.evento === "chamada_unica";
   /** O passo da próxima chamada: o roteiro é relido a cada vez, e o número de chamadas já feitas escolhe o passo. */
   const proximoPasso = (): PassoPi => {
     const valor = process.env.FALSO_PI_ROTEIRO ?? "";
@@ -238,48 +226,7 @@ async function executarPiFalso(): Promise<void> {
     if (saida !== undefined) process.stdout.write(`${typeof saida === "string" ? saida : JSON.stringify(saida)}\n`);
     process.exit(codigo ?? (saida === undefined ? 1 : 0));
   }
-  if (arg("--mode") === "json") {
-    registrar({ evento: "simulacao", argv: argumentos, cwd: process.cwd() });
-    await simular(passoDoInicio.simulacao ?? {}, emitir);
-    return;
-  }
   falarRpc(passoDoInicio, { argumentos, arg, emitir, registrar, proximoPasso });
-}
-
-/** `--mode json`: como o pi real, só começa depois do EOF do stdin. */
-async function simular(
-  { relatorio, demoraMs = 300, nuncaTermina, registraArgs }: NonNullable<PassoPi["simulacao"]>,
-  emitir: (evento: object) => boolean,
-): Promise<void> {
-  emitir({ type: "agent_start" });
-  await new Promise((pronto) => process.stdin.resume().on("end", pronto));
-  const saida = String(process.env.FABRIQUINHA_SAIDA);
-  if (registraArgs) {
-    writeFileSync(
-      "args.json",
-      JSON.stringify({
-        args: process.argv.slice(2),
-        link: process.env.FABRIQUINHA_LINK,
-        saida,
-        token: process.env.GH_TOKEN ?? null,
-        arquivos: readdirSync(".").sort((x, y) => x.localeCompare(y)),
-      }),
-    );
-  }
-  const ordem = process.env.FALSO_PI_ORDEM;
-  if (ordem) appendFileSync(ordem, "ini\n");
-  if (nuncaTermina) {
-    setInterval(() => undefined, 1000);
-    return;
-  }
-  await dormir(demoraMs);
-  if (relatorio !== null) {
-    const padrao = { usabilidade: ["O botão Enviar tem pouco contraste e fica no fim da página"], bugs: [] };
-    const conteudo = relatorio ?? padrao;
-    writeFileSync(join(saida, "relatorio.json"), typeof conteudo === "string" ? conteudo : JSON.stringify(conteudo));
-  }
-  if (ordem) appendFileSync(ordem, "fim\n");
-  process.exit(0);
 }
 
 interface Apoio {
@@ -495,42 +442,6 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
     if (!texto.includes("[sem decidir]")) cliFabriquinha("revisao", "decidir", ticket, "aprovar");
   }
 
-  /** Como o agente da auditoria: três tarefas `scout` em paralelo, o resultado e as seções da resposta. */
-  function auditar(): void {
-    const tasks = ["Oportunidades de melhoria", "Custos", "Qualidade"].map((analise) => ({
-      agent: "scout",
-      task: `${analise}: leia o indice.md e as sessões`,
-    }));
-    mensagem(doAgente([{ type: "toolCall", id: "a1", name: "subagent", arguments: { tasks } }], "toolUse"));
-    mensagem({
-      role: "toolResult",
-      toolCallId: "a1",
-      toolName: "subagent",
-      content: [{ type: "text", text: "3 subagentes (scout) concluídos: melhorias, custos, qualidade." }],
-      isError: false,
-    });
-    responder(
-      [
-        "## Oportunidades de melhoria\n\nO prompt do desenvolvimento repete o desenho inteiro.",
-        "## Custos\n\nO desenvolvimento levou a maior parte do gasto.",
-        "## Qualidade\n\nHouve correções do Auditor no mês.",
-        "## Melhorias propostas\n\n1. Resumo por ticket no prompt do desenvolvimento.",
-      ].join("\n\n"),
-    );
-  }
-
-  /** Como o agente da avaliação: um achado por linha em `achados.jsonl`, como a ferramenta `registrar_achado`. */
-  function avaliar(texto: string): void {
-    const quantos = texto.includes("[20 achados]") ? 20 : 3;
-    const achados = Array.from({ length: quantos }, (_, i) => ({
-      titulo: `Achado ${String(i + 1)}: o prompt repete o desenho`,
-      descricao: `O prompt do desenvolvimento traz o desenho inteiro em cada ticket (${String(i + 1)}).`,
-      evidencia: `sessoes/I-10-s${String(i + 1)}.md: o desenho aparece de novo no começo da sessão`,
-    }));
-    appendFileSync(join(process.cwd(), "achados.jsonl"), achados.map((a) => `${JSON.stringify(a)}\n`).join(""));
-    responder(`Registrei ${String(quantos)} achados.`);
-  }
-
   const dialogo = (method: string) => {
     emitir({ type: "extension_ui_request", id: `d-${method}`, method, ...DIALOGOS[method] });
   };
@@ -549,14 +460,9 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
 
   async function aoPromptPorMarca(texto: string): Promise<void> {
     const pergunta = /pergunte (select|confirm|input|editor|perguntar|multipla)/.exec(texto)?.[1];
-    if (texto.startsWith("# Auditoria")) {
-      auditar();
-    } else if (texto.includes("Modo de trabalhar: revisar ")) {
+    if (texto.includes("Modo de trabalhar: revisar ")) {
       revisar(texto);
       responder("Revisei.");
-    } else if (texto.startsWith("# Avaliação")) {
-      avaliar(texto);
-      emitir({ type: "agent_end" });
     } else if (texto.includes("[ao vivo]")) {
       await aoVivo();
       return;

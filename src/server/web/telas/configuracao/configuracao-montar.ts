@@ -3,7 +3,6 @@
 import type { Effort, Modelo } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
-import type { UsuarioSimulado } from "../../../contrato/avaliacao/simulacao.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../../dom.ts";
 import { modeloDoSeletor } from "../../apresentacao/render.ts";
 import {
@@ -16,16 +15,13 @@ import {
   etapasDoFormulario,
   formularioDeProjeto,
   menu,
-  modeloDasAvaliacoes,
   NOVO,
-  type OpcoesDosUsuarios,
   pagina,
   type ProjetoListado,
   projetoInexistente,
   rascunhoDe,
   type Rascunho,
   selecao,
-  usuariosSimulados,
 } from "./configuracao.ts";
 
 const postar = (corpo: unknown): RequestInit => ({
@@ -71,7 +67,6 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     branch_base: valor(form, '[name="branch_base"]'),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
-    link_produto: valor(form, '[name="link_produto"]'),
     configuracoes,
   };
 }
@@ -96,37 +91,12 @@ function montarAgendador(
   const form = main.querySelector<HTMLFormElement>("[data-agendador]");
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
-    const dados = { ...lerAgendador(form), modeloAuditoria: estado.modeloAuditoria }; // o formulário posta a configuração inteira
+    const dados = lerAgendador(form); // o formulário posta a configuração inteira
     ocupar(form, "Salvando…");
     api("/api/configuracao", postar(dados))
       .then(() => montarConfiguracao(main, {}, signal))
       .catch((error_: unknown) => {
         if (!signal.aborted) montarAgendador(main, signal, menuHtml, { ...estado, ...dados }, errosDe(error_));
-      });
-  });
-}
-
-/** O modelo das avaliações: posta a configuração gravada inteira com o modelo escolhido; o 422 aparece no campo. */
-function montarModeloDasAvaliacoes(
-  main: HTMLElement,
-  signal: AbortSignal,
-  menuHtml: string,
-  estado: EstadoDaConfiguracao,
-  modelos: readonly Modelo[],
-  erros: Erros,
-): void {
-  main.innerHTML = pagina(menuHtml, modeloDasAvaliacoes(estado, modelos, erros));
-  const form = main.querySelector<HTMLFormElement>("[data-avaliacoes]");
-  form?.addEventListener("submit", (evento) => {
-    evento.preventDefault();
-    const { agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin } = estado;
-    const modeloAuditoria = modeloDoSeletor(valor(form, '[name="modeloAuditoria"]'));
-    ocupar(form, "Salvando…");
-    api("/api/configuracao", postar({ agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin, modeloAuditoria }))
-      .then(() => montarConfiguracao(main, {}, signal))
-      .catch((error_: unknown) => {
-        if (!signal.aborted)
-          montarModeloDasAvaliacoes(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
       });
   });
 }
@@ -206,92 +176,6 @@ function montarRemocao(main: HTMLElement, signal: AbortSignal, salvo: ProjetoLis
   });
 }
 
-/**
- * Os usuários simulados do projeto salvo (F8 §2), na seção abaixo do formulário: ela se redesenha sozinha, então
- * criar usuário ou anexar arquivo não toca no que o Auditor digitou no formulário do projeto.
- */
-function montarUsuarios(main: HTMLElement, signal: AbortSignal, projeto: string): void {
-  const secao = main.querySelector<HTMLElement>("[data-usuarios-simulados]");
-  if (!secao) return;
-  const rota = `/api/projetos/${encodeURIComponent(projeto)}/usuarios-simulados`;
-  let usuarios: UsuarioSimulado[] = [];
-  const rascunho = () => ({ nome: valor(secao, '[name="nome"]'), descricao: valor(secao, '[name="descricao"]') });
-  const desenhar = (extra: Partial<OpcoesDosUsuarios> = {}): void => {
-    secao.innerHTML = usuariosSimulados(usuarios, {
-      rascunho: rascunho(),
-      erros: new Map(),
-      falhasDeAnexo: new Map(),
-      ...extra,
-    });
-  };
-  /** Relê a lista e redesenha; o que o Auditor digitou no formulário fica. */
-  const recarregar = (extra?: Partial<OpcoesDosUsuarios>): Promise<void> =>
-    api<UsuarioSimulado[]>(rota, { signal }).then((lista) => {
-      const atual = rascunho();
-      usuarios = lista;
-      desenhar({ rascunho: atual, ...extra });
-    });
-  const falhou = (erro: unknown): void => {
-    if (!signal.aborted) mostrarErro(erro);
-  };
-  /** A recusa do anexo: o 422 do nome leva o caminho `nome`; o resto (tamanho, 404) vai como o servidor mandou. */
-  const recusaDoAnexo = (erro: unknown): string | undefined => {
-    if (!(erro instanceof ErroDaApi) || erro.status === 401) return undefined;
-    return erro.status === 422 ? (errosDoZod(erro.message).get("nome") ?? [erro.message]).join("; ") : erro.message;
-  };
-  const idDoCartao = (alvo: Element | null): number =>
-    Number(alvo?.closest<HTMLElement>("[data-usuario]")?.dataset.usuario);
-
-  secao.addEventListener("click", (evento) => {
-    const alvo = evento.target instanceof Element ? evento.target : null;
-    const cartao = alvo?.closest("[data-usuario]");
-    if (alvo?.closest("[data-anexar-botao]")) {
-      cartao?.querySelector<HTMLInputElement>("[data-anexar]")?.click();
-      return;
-    }
-    const nome = alvo?.closest<HTMLElement>("[data-remover-anexo]")?.dataset.removerAnexo;
-    if (nome === undefined) return;
-    const id = idDoCartao(alvo);
-    api(`/api/usuarios-simulados/${String(id)}/anexos/${encodeURIComponent(nome)}`, { method: "DELETE" })
-      .then(() => recarregar())
-      .catch(falhou);
-  });
-  secao.addEventListener("change", (evento) => {
-    const entrada = evento.target;
-    if (!(entrada instanceof HTMLInputElement) || entrada.type !== "file") return;
-    const arquivo = entrada.files?.[0];
-    if (!arquivo) return;
-    const id = idDoCartao(entrada);
-    api(`/api/usuarios-simulados/${String(id)}/anexos?nome=${encodeURIComponent(arquivo.name)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: arquivo,
-    })
-      .then(() => recarregar())
-      .catch((error_: unknown) => {
-        const recusa = recusaDoAnexo(error_);
-        if (recusa === undefined) falhou(error_);
-        else if (!signal.aborted) desenhar({ falhasDeAnexo: new Map([[id, recusa]]) });
-      });
-  });
-  secao.addEventListener("submit", (evento) => {
-    evento.preventDefault();
-    const dados = rascunho();
-    if (evento.target instanceof HTMLFormElement) ocupar(evento.target, "Criando…");
-    api(rota, postar(dados))
-      .then(() => recarregar({ rascunho: { nome: "", descricao: "" } }))
-      .catch((error_: unknown) => {
-        if (signal.aborted) return;
-        if (error_ instanceof ErroDaApi && error_.status === 422)
-          desenhar({ rascunho: dados, erros: errosDoZod(error_.message) });
-        else if (error_ instanceof ErroDaApi && error_.status !== 401)
-          desenhar({ rascunho: dados, falha: error_.message });
-        else falhou(error_);
-      });
-  });
-  recarregar().catch(falhou);
-}
-
 function montarProjeto(
   main: HTMLElement,
   signal: AbortSignal,
@@ -304,10 +188,7 @@ function montarProjeto(
     main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
-    if (salvo) {
-      montarRemocao(main, signal, salvo);
-      montarUsuarios(main, signal, salvo.nome);
-    }
+    if (salvo) montarRemocao(main, signal, salvo);
     // O "padrão do pi" fica apagado; escolher um modelo ou effort o acende.
     form.addEventListener("change", (evento) => {
       if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
@@ -359,17 +240,6 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
   const menuHtml = menu(estado, projetos, sel);
   if (sel.tipo === "agendador") {
     montarAgendador(main, signal, menuHtml, estado, new Map());
-    return;
-  }
-  if (sel.tipo === "avaliacoes") {
-    montarModeloDasAvaliacoes(
-      main,
-      signal,
-      menuHtml,
-      estado,
-      await api<Modelo[]>("/api/modelos", { signal }),
-      new Map(),
-    );
     return;
   }
   if (sel.tipo === "ambiente") {

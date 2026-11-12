@@ -25,14 +25,14 @@ const CHAVE_DOS_FILTROS = "fabriquinha.projeto.mostrar";
 const gavetas = new Map<string, boolean>();
 
 // O armazenamento do navegador pode faltar (bloqueado, modo privado): a página segue sem lembrar.
-export function ultimoVisto(): string | undefined {
+function ultimoVisto(): string | undefined {
   try {
     return localStorage.getItem(CHAVE) ?? undefined;
   } catch {
     return undefined;
   }
 }
-export function lembrar(nome: string): void {
+function lembrar(nome: string): void {
   try {
     localStorage.setItem(CHAVE, nome);
   } catch {

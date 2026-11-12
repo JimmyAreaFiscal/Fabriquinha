@@ -17,7 +17,6 @@ import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.t
 import { buscarProjeto } from "../../src/modulos/projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
-import { anexar } from "../../src/modulos/avaliacao/armazenamento/simulacao.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
@@ -38,8 +37,6 @@ export interface AcaoMutacao {
 const PISO_ORCAMENTO = 250;
 
 const TRAVA = /SQLITE_BUSY|database is locked/i;
-const DE = "2026-01-01";
-const ATE = "2026-12-31";
 
 /** O que uma chamada envia e o que espera de volta. */
 interface Chamada {
@@ -77,7 +74,6 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   // Cada chamada que fala com o pi deixa um pi falso vivo até a ociosidade: sem isto, o limite global de paralelismo (D04)
   // recusaria o "executar" com 409, e a medição seria a da fila, não a da rota.
   banco.prepare("UPDATE configuracao SET limite_paralelismo = 100000").run();
-  const p = preparo.projeto;
 
   const estados = (id: string) => {
     const ag = carregarDemanda(banco, id);
@@ -405,54 +401,6 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         },
       }),
     ),
-    acao("POST", "/api/projetos/:nome/usuarios-simulados", 50, novo, (n) => ({
-      url: `/api/projetos/${p}/usuarios-simulados`,
-      corpo: { nome: `usuario-${String(n)}`, descricao: "d" },
-      status: 200,
-    })),
-    acao(
-      "POST",
-      "/api/usuarios-simulados/:id/anexos",
-      330,
-      () => preparo.usuarioSimulado(),
-      (id) => ({
-        url: `/api/usuarios-simulados/${String(id)}/anexos?nome=a.txt`,
-        corpo: Buffer.from("x"),
-        status: 200,
-      }),
-    ),
-    acao(
-      "DELETE",
-      "/api/usuarios-simulados/:id/anexos/:nome",
-      50,
-      () => {
-        const id = preparo.usuarioSimulado();
-        anexar(banco, id, "a.txt", Buffer.from("x"));
-        return id;
-      },
-      (id) => ({ url: `/api/usuarios-simulados/${String(id)}/anexos/a.txt`, status: 204 }),
-    ),
-    acao(
-      "POST",
-      "/api/projetos/:nome/tarefas",
-      100,
-      () => preparo.usuarioSimulado(),
-      (usuario) => ({
-        url: `/api/projetos/${p}/tarefas`,
-        corpo: { texto: "t", n: 1, usuarios: [usuario] },
-        status: 200,
-      }),
-    ),
-    acao(
-      "POST",
-      "/api/tarefas/:id/executar",
-      460,
-      () => preparo.tarefa(),
-      (id) => ({
-        url: `/api/tarefas/${String(id)}/executar`,
-        status: 204,
-      }),
-    ),
     acao(
       "POST",
       "/api/sessoes/:sessao/mensagens",
@@ -475,56 +423,6 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         corpo: { confirmado: true },
         status: 409,
         contem: "pi rodando",
-      }),
-    ),
-    // A avaliação precisa de uma demanda com sessão no período: cada chamada avalia a sua, para o pi falso não ler as 800 do banco.
-    acao(
-      "POST",
-      "/api/avaliacoes",
-      1000,
-      async () => {
-        const sessao = await preparo.sessaoParada(false);
-        return (
-          banco.prepare("SELECT demanda_id FROM trabalho_agentico WHERE id = ?").get(sessao) as { demanda_id: string }
-        ).demanda_id;
-      },
-      (demanda) => ({
-        url: "/api/avaliacoes",
-        corpo: { projeto: p, de: DE, ate: ATE, demandas: [demanda] },
-        status: 200,
-      }),
-    ),
-    acao(
-      "POST",
-      "/api/avaliacoes/:id/mensagens",
-      970,
-      () => preparo.avaliacao(),
-      (id) => ({
-        url: `/api/avaliacoes/${id}/mensagens`,
-        corpo: { texto: "oi" },
-        status: 204,
-      }),
-    ),
-    // shortcut: sem pi vivo por chamada, mede o caminho até a recusa 409; upgrade: como o diálogo acima.
-    acao(
-      "POST",
-      "/api/avaliacoes/:id/abortar",
-      30,
-      () => preparo.avaliacao(),
-      (id) => ({
-        url: `/api/avaliacoes/${id}/abortar`,
-        status: 409,
-        contem: "pi rodando",
-      }),
-    ),
-    acao(
-      "POST",
-      "/api/avaliacoes/:id/achados/:n/encaminhar",
-      60,
-      () => preparo.avaliacao(true),
-      (id) => ({
-        url: `/api/avaliacoes/${id}/achados/1/encaminhar`,
-        status: 200,
       }),
     ),
     acao(

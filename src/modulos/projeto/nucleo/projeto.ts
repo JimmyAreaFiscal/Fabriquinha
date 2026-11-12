@@ -10,8 +10,6 @@ import { Hospedagem } from "../../repositorio/nucleo/repositorio_do_projeto.ts";
 
 export { Hospedagem };
 
-const MENSAGEM_LINK = "Informe um link http(s) válido, como https://produto.exemplo.com";
-
 const Comando = z.string().trim().min(1);
 const Texto = z.string().min(1);
 const CaminhoAbsoluto = z.string().refine(isAbsolute, "caminho absoluto");
@@ -99,12 +97,6 @@ const CAMPOS_DO_PROJETO = {
   branch_base: NomeDeBranch,
   hospedagem: Hospedagem,
   chave_sonarqube: Texto,
-  // O formulário manda "" quando o campo está vazio.
-  link_produto: z
-    .union([z.literal("").transform(() => undefined), z.url({ protocol: /^https?$/, error: MENSAGEM_LINK })], {
-      error: MENSAGEM_LINK,
-    })
-    .optional(),
   etapas: Etapas,
   // Dockerfile no repositório ou nome de imagem; sem ela o projeto continua no host local.
   imagem_do_ambiente: Texto.optional(),

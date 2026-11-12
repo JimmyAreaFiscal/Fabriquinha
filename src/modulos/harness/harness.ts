@@ -37,34 +37,6 @@ export interface LancamentoDoTicket {
   repositorio: string;
 }
 
-/** A auditoria do Histórico: sem skills, effort nem confiança herdada; o `modelo` é o da Configuração, ou o padrão do harness. */
-export interface LancamentoDeAuditoria {
-  tipo: "auditoria";
-  raiz: string;
-  sessao: string;
-  /** A pasta da conversa, sob a raiz. */
-  dir: string;
-  modelo?: Modelo | null;
-  /** As extensões a mais da conversa (a `achado.ts` da avaliação), pelo nome do arquivo no pacote. */
-  extensoes?: string[];
-}
-
-/**
- * A execução simulada (F8 §5): o agente imita o Usuário Simulado no produto em `link`, lê o prompt dos argumentos,
- * não fala o protocolo e sai sozinho ao terminar; o resultado é o que ele grava em `<dir>/saida`.
- */
-interface LancamentoDaSimulacao {
-  tipo: "simulacao";
-  /** A pasta da execução: a sessão, a saída e o diretório vazio das credenciais ficam nela. */
-  dir: string;
-  /** Os arquivos que vão junto do prompt. */
-  anexos: string[];
-  prompt: string;
-  link: string;
-}
-
-export type Lancamento = LancamentoDoTicket | LancamentoDeAuditoria | LancamentoDaSimulacao;
-
 /** O processo do agente lançado num Ambiente. */
 export interface ProcessoDoAgente {
   /** O grupo de processos do agente no Ambiente (F4 §7). */
@@ -85,7 +57,7 @@ export interface Harness {
    */
   lancar(
     ambiente: Ambiente,
-    lancamento: Lancamento,
+    lancamento: LancamentoDoTicket,
     opcoes: { cwd: string; log: string; variaveisDoServico?: Record<string, string> },
     aoEvento: (evento: EventoDoAgente) => void,
   ): ProcessoDoAgente;
