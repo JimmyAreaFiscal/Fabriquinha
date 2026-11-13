@@ -31,6 +31,8 @@ import { anotar } from "../../compartilhado/infra/registro.ts";
 import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
 import { condutor } from "../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
+import { concluirDesenvolvimentoNoBanco } from "../../../server/fluxos/conclusao_do_desenvolvimento.ts";
+import { lerPedido } from "../../demandas/publico.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -189,6 +191,15 @@ async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDeman
   ).conduzir(Endereco.doTicket(D, 8));
   return carregarDemanda(banco, D);
 }
+
+test("com o fluxo da conclusão da composição, o pedido fica concluído junto do encerramento do processo", async () => {
+  const c = await cenario();
+  await conduzir(c.banco);
+  execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
+  const ag = await conduzir(c.banco, { concluirDesenvolvimento: concluirDesenvolvimentoNoBanco(c.banco) });
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(lerPedido(c.banco, D).situacao, "concluido");
+});
 
 const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge");
 

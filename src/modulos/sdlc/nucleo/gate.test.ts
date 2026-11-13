@@ -7,7 +7,7 @@ import { type NomeGate } from "../../etapas/catalogo.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
-import { GATES } from "../../etapas/gates.ts";
+import { GATE_DA_DEMANDA, GATES } from "../../etapas/gates.ts";
 import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { comTentativaAberta, motivoDaFalhaDoTicket } from "./tentativa.ts";
 import { falhaQueExigeOAuditor } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
@@ -19,7 +19,7 @@ import {
 } from "./transicoes/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "./transicoes/transicoes_rodada.ts";
 
-type Gate = (typeof GATES)[NomeGate]["regra"];
+type Gate = (typeof GATES)[Exclude<NomeGate, "gate_demanda">]["regra"] | typeof GATE_DA_DEMANDA;
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -55,7 +55,7 @@ const demandaEnviada = (): AgregadoDemanda => {
   return enviarDemanda(comDefinicao, autora, { agora: t1 });
 };
 const demandaEmPlanejamento = (): AgregadoDemanda => {
-  const decisaoAprovando = GATES.gate_demanda.regra.decidir(
+  const decisaoAprovando = GATE_DA_DEMANDA.decidir(
     demandaEnviada(),
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -273,7 +273,7 @@ interface CenarioDoGate {
 
 const CENARIOS: CenarioDoGate[] = [
   {
-    gate: GATES.gate_demanda.regra,
+    gate: GATE_DA_DEMANDA,
     endereco: enderecoDaDemanda,
     decisor: AUDITOR,
     atorSemPermissao: agenteDoTrabalho(1),
@@ -335,7 +335,10 @@ const tentativaDe = (cenario: CenarioDoGate, sobrescrito: Partial<TentativaDeDec
 
 test("cada gate declara o nome, o decisor e a etapa âncora", () => {
   assert.deepEqual(
-    Object.entries(GATES).map(([nome, { regra }]) => [nome, regra.nome, regra.decisor, regra.etapaAncora]),
+    [
+      ["gate_demanda", GATE_DA_DEMANDA] as const,
+      ...Object.entries(GATES).map(([nome, { regra }]) => [nome, regra] as const),
+    ].map(([nome, regra]) => [nome, regra.nome, regra.decisor, regra.etapaAncora]),
     [
       ["gate_demanda", "gate_demanda", "auditor", "entender_e_desenhar"],
       ["gate_planejamento", "gate_planejamento", "auditor", "planejar"],
@@ -690,7 +693,7 @@ test("gate_pr: reprovar grava a decisão sem nota, conclui o gate e abre a sess�
 test("gate_demanda: aprovar grava a decisão, conclui o ticket e abre planejar", () => {
   const agregado = demandaEnviada();
   const agregadoAntes = clonarAgregadoDemanda(agregado);
-  const decidido = GATES.gate_demanda.regra.decidir(
+  const decidido = GATE_DA_DEMANDA.decidir(
     agregado,
     enderecoDaDemanda,
     { resultado: "aprovado", nota: 5 },
@@ -733,7 +736,7 @@ test("gate_demanda: aprovar com o ticket planejar já aberto não abre outro", (
     estado_alterado_em: t0,
     criado_por: FABRIQUINHA,
   };
-  const decidido = GATES.gate_demanda.regra.decidir(
+  const decidido = GATE_DA_DEMANDA.decidir(
     { ...enviada, tickets: [...enviada.tickets, planejarAberto] },
     enderecoDaDemanda,
     { resultado: "aprovado" },
@@ -744,7 +747,7 @@ test("gate_demanda: aprovar com o ticket planejar já aberto não abre outro", (
 });
 
 test("gate_demanda: reprovar grava o motivo, cancela a demanda e o ticket, sem novo ticket", () => {
-  const decidido = GATES.gate_demanda.regra.decidir(
+  const decidido = GATE_DA_DEMANDA.decidir(
     demandaEnviada(),
     enderecoDaDemanda,
     { resultado: "reprovado", motivo: "fora do escopo" },

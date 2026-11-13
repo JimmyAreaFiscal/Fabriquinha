@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
@@ -67,7 +67,7 @@ export interface Preparo {
 
 /** Instala o `gh` falso na frente do PATH do serviço e abre o banco da raiz do ambiente. */
 export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   const log = join(amb.raiz, "execucoes", "preparo.log");
   mkdirSync(join(amb.raiz, "execucoes"), { recursive: true });
   let contador = 1000;

@@ -265,7 +265,7 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
   servico.banco.exec(`
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
-    INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z');
     INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo)

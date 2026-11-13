@@ -22,8 +22,8 @@ const novoBanco = () => {
   const b = abrirBancoTemporario().banco;
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
   return b;
 };
 
@@ -121,7 +121,7 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   submeter(b, [a]);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('q', '/repo/q', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'em_execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-9', 'q', 't', 'problema', 'd', 'em_execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
     INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
   await removerProjeto(b, "q");

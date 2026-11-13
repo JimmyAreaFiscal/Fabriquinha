@@ -8,6 +8,7 @@ import { validarPlano } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_d
 import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { criarDemandaNova } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { alinharSituacaoAoEstadoGravado } from "../src/modulos/demandas/pedidos/armazenamento/migracao_da_situacao.ts";
 import { garantirWorktreeDemanda } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
@@ -270,7 +271,8 @@ export function abrirTrabalhoDoAgente(
 
 /**
  * Grava o agregado pronto com o ID que ele traz e devolve-o. A produção só grava demanda com o ID da sequência; aqui a
- * sequência é posta no ID anterior durante a gravação e volta ao que era, para o próximo ID alocado não mudar.
+ * sequência é posta no ID anterior durante a gravação e volta ao que era, para o próximo ID alocado não mudar. O pedido
+ * fica na situação que o estado montado implica, como os fluxos o deixariam.
  */
 export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda {
   const numero = Number(agregado.demanda.id.replace("I-", ""));
@@ -282,10 +284,12 @@ export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDema
     )
     .run(numero - 1);
   try {
-    return criarDemandaNova(banco, () => ({
+    const gravado = criarDemandaNova(banco, () => ({
       ...agregado,
       pull_requests: (agregado as Partial<AgregadoDemanda>).pull_requests ?? [],
     })); // os cenários prontos não trazem PR
+    alinharSituacaoAoEstadoGravado(banco, gravado.demanda.id);
+    return gravado;
   } finally {
     if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'demanda'").run(anterior.valor);
     else banco.exec("DELETE FROM sequencia WHERE nome = 'demanda'");

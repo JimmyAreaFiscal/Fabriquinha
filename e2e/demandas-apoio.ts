@@ -3,7 +3,7 @@
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -86,7 +86,7 @@ const daDemanda = (tipo: string, dados: object) => ({
  * Auditor lê para decidir: descrição, comportamento, critérios, o desenho com o HTML e o relatório de impactos.
  */
 export function semearGateDaDemanda(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const ag = comTicketDeDemanda("I-214");
   gravarAgregadoPronto(banco, {
     ...ag,
@@ -123,7 +123,7 @@ export function semearGateDaDemanda(raiz: string): void {
  * falho e dependente da I-206. I-208 aguardando a aprovação da demanda.
  */
 export function semearDemandas(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarAgregadoPronto(
     banco,
     demanda("I-206", "em_execucao", {
@@ -169,7 +169,7 @@ export function semearDemandas(raiz: string): void {
 
 /** Faz `demanda_id` depender de `depende_demanda_id`, que ainda não satisfaz a dependência. */
 export function semearDependenciaEntreDemandas(raiz: string, demanda_id: string, depende_demanda_id: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco
     .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
     .run(demanda_id, depende_demanda_id);
@@ -178,7 +178,7 @@ export function semearDependenciaEntreDemandas(raiz: string, demanda_id: string,
 
 /** Uma demanda sem ticket algum: nada em execução. */
 export function semearDemandaOciosa(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarAgregadoPronto(banco, demanda("I-209", "gate_demanda"));
   banco.close();
 }
@@ -193,7 +193,7 @@ const PNG = Buffer.from(
  * reprovado na revisão, o T5 falho, o T6 global e o print do PR anexado. O encerramento final integrou e a limpeza falhou.
  */
 export function semearPaginaDaDemanda(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const { sha256, bytes } = guardarBytes(banco, PNG);
   const decisao = (ticket_id: number, gate: string, resultado: string, resto: object) => ({
     demanda_id: "I-210",
@@ -299,7 +299,7 @@ const comPlano = (id: string): AgregadoDemanda =>
   });
 
 /** O projeto `loja` com a configuração do SDLC, que as decisões que integram exigem. */
-function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void {
+function configurarProjeto(banco: ReturnType<typeof abrirBancoDaFabriquinha>, raiz: string): void {
   gravarProjeto(
     banco,
     Projeto.parse({
@@ -318,7 +318,7 @@ function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void 
 
 /** I-212 e I-213 com o planejamento aguardando aprovação. */
 export function semearPlanejamento(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   configurarProjeto(banco, raiz);
   gravarAgregadoPronto(banco, comPlano("I-212"));
   gravarAgregadoPronto(banco, comPlano("I-213"));
@@ -349,7 +349,7 @@ export function semearPrDaRodada(raiz: string): void {
   );
   // Concluir a sessão restaura a branch da rodada no head do PR, que precisa ser um commit de verdade.
   const head = execFileSync("git", ["rev-parse", "main"], { cwd: join(raiz, "loja"), encoding: "utf8" }).trim();
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   configurarProjeto(banco, raiz);
   gravarAgregadoPronto(
     banco,
@@ -381,7 +381,7 @@ export function semearTicketAberto(raiz: string): void {
   const repo = join(raiz, "loja");
   execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-216", caminho, "main"], { cwd: repo });
   execFileSync("git", ["config", "branch.fabriquinha/I-216.fabriquinha", `demanda:${caminho}`], { cwd: repo });
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   configurarProjeto(banco, raiz);
   gravarAgregadoPronto(
     banco,
@@ -395,14 +395,14 @@ export function semearTicketAberto(raiz: string): void {
 
 /** A I-217 concluída, que o Auditor arquiva. */
 export function semearDemandaConcluida(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarAgregadoPronto(banco, demanda("I-217", "concluida"));
   banco.close();
 }
 
 /** A I-218 em encerramento com o PR final verificado, à espera do merge humano na plataforma. */
 export function semearDemandaAguardandoMerge(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarAgregadoPronto(
     banco,
     demanda("I-218", "encerrar_demanda", {
@@ -429,7 +429,7 @@ export function semearDemandaAguardandoMerge(raiz: string): void {
 
 /** Registra uma correção na sessão de ajustes da rodada, como o agente do ticket da sessão. */
 export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, rodada_id: number): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const sessao = carregarDemanda(banco, demanda_id).tickets.find(
     (t) => t.rodada_id === rodada_id && t.etapa === "ajustar_resultado",
   );
@@ -457,7 +457,7 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
   const repo = join(raiz, "loja");
   execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-230", caminho, "main"], { cwd: repo });
   execFileSync("git", ["config", "branch.fabriquinha/I-230.fabriquinha", `demanda:${caminho}`], { cwd: repo });
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarProjeto(
     banco,
     Projeto.parse({

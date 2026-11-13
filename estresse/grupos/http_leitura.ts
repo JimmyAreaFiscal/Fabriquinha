@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
@@ -34,7 +34,7 @@ interface Dados {
 }
 
 /** O projeto `loja` com um repositório git de verdade e o remoto num bare local (o heatmap lê `origin/main`) e a configuração do SDLC. */
-async function semearProjeto(raiz: string, banco: ReturnType<typeof abrir>): Promise<void> {
+async function semearProjeto(raiz: string, banco: ReturnType<typeof abrirBancoDaFabriquinha>): Promise<void> {
   const repo = join(raiz, "loja");
   mkdirSync(repo);
   const bare = join(raiz, "origin.git");
@@ -64,7 +64,7 @@ async function semearProjeto(raiz: string, banco: ReturnType<typeof abrir>): Pro
  * A I-1 na sessão de ajustes da R1 (ticket 2, com a sessão `sd-1` e a conversa em disco) e com um anexo no desenho.
  * Devolve os ids que as ações usam.
  */
-function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
+function semearDemanda(raiz: string, banco: ReturnType<typeof abrirBancoDaFabriquinha>): Dados {
   const ticket = (ticket_id: number, etapa: string, status: string) => ({
     demanda_id: DEMANDA,
     ticket_id,
@@ -174,7 +174,7 @@ export async function cronometrar(
 
 /** Semeia o ambiente e devolve uma ação por rota GET. O orçamento de cada uma fica ao lado dela. */
 export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   let d: Dados;
   try {
     await semearProjeto(amb.raiz, banco);

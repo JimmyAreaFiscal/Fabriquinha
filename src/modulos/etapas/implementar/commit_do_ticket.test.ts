@@ -41,7 +41,7 @@ function cenario() {
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '${worktree}', 'main', 'github', 'k')`);
   banco.exec(
-    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
   for (const id of [1, 2])
     banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)

@@ -7,7 +7,8 @@ import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporar
 import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../aplicacao/cadastro.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
-import { abrir, escrever } from "../../../../shared/armazenamento/banco.ts";
+import { escrever } from "../../../../shared/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../../sdlc/armazenamento/demandas.ts";
 import { registrarDemanda } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import { iniciarTentativaDoTicket } from "../../../sdlc/nucleo/despacho/reserva_ticket.ts";
@@ -285,7 +286,7 @@ test("imagem_do_ambiente é gravada, lida e removida ao regravar sem ela", () =>
 test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", () => {
   comBanco((banco, raiz) => {
     gravarCompleta(banco);
-    const outro = abrir(raiz);
+    const outro = abrirBancoDaFabriquinha(raiz);
     try {
       assert.deepEqual(
         projetoExistente(outro, "a").verificacoes.linguagens.map((linguagem) => linguagem.linguagem),

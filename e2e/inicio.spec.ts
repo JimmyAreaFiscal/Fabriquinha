@@ -3,7 +3,7 @@
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { fotografar, projeto } from "./apoio.ts";
 import {
   semearDemandaConcluida,
@@ -17,7 +17,7 @@ import { expect, test } from "./apoio.ts";
 
 /** A sessão autônoma do I-206.T3 com a execução aberta e o grupo do pi gravado: o pi roda. */
 function sessaoRodando(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco.exec(`
     INSERT INTO trabalho_agentico VALUES ('s-i206-t3', 'I-206', 3, 'autonomo', 'c1');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES ('x1', 's-i206-t3', '${new Date().toISOString()}', NULL, 0, 4242);
@@ -140,7 +140,7 @@ test("a frase do mês mostra o custo com ≥ e o aviso quando uma sessão não t
   projeto(fabriquinha.raiz);
   semearDemandas(fabriquinha.raiz);
   const agora = new Date().toISOString();
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   banco.exec(`
     INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-206', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-206', 2, 'autonomo', 'c2');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES

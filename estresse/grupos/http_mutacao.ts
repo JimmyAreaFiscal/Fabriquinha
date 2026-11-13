@@ -12,7 +12,7 @@ import {
   liberarAmbiente,
   listarAmbientes,
 } from "../../src/modulos/sandbox/armazenamento/ambientes.ts";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
@@ -70,7 +70,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   const docker = join(amb.raiz, "bin", "docker");
   writeFileSync(docker, `#!/bin/sh\nFALSO_DOCKER_DIR='${dockerDir}' exec '${join(dockerDir, "bin", "docker")}' "$@"\n`);
   chmodSync(docker, 0o755);
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   // Cada chamada que fala com o pi deixa um pi falso vivo até a ociosidade: sem isto, o limite global de paralelismo (D04)
   // recusaria o "executar" com 409, e a medição seria a da fila, não a da rota.
   banco.prepare("UPDATE configuracao SET limite_paralelismo = 100000").run();

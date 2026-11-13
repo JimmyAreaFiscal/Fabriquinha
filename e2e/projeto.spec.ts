@@ -3,7 +3,7 @@
 // filtros lembrados e o Arquivar concluídas; o heatmap e a Configuração SDLC abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
@@ -123,7 +123,7 @@ test("ticket sem título mostra a etapa, Ajustes do PR que não houve não quebr
 test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   semearDemandas(fabriquinha.raiz);
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   banco.exec("UPDATE demanda SET estado = 'cancelada' WHERE id = 'I-207'");
   banco.close();
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
@@ -138,7 +138,7 @@ test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam"
 
 test("/projects volta ao último visto; o heatmap e a Configuração SDLC abrem", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('site', '/nao/existe/site', 'main', 'github', 'site')`);
   banco.close();

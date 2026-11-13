@@ -26,7 +26,8 @@ import {
   iniciarExecucao,
 } from "../../src/modulos/sessoes/publico.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
-import { abrir, raizDo } from "../../src/shared/armazenamento/banco.ts";
+import { raizDo } from "../../src/shared/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
@@ -155,7 +156,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     ],
     previstosNaoTocados: [],
   };
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco
     .prepare(
       `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)

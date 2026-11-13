@@ -10,7 +10,7 @@ import { iniciarRevisaoIntegral } from "../src/modulos/sdlc/aplicacao/revisao_de
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
 import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
@@ -63,7 +63,8 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];
@@ -119,10 +120,10 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
         return;
       case "entender_e_desenhar":
         submeterObrigatorias(c, id);
-        gestao.enviar(c.banco, id, AUTOR, CTX);
+        enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX);
         break;
       case "gate_demanda":
-        await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+        decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
         break;
       case "planejar":
         await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);
@@ -202,7 +203,7 @@ function migrarDoEsquemaAnterior(
     assert.equal(c.banco.prepare("SELECT fase FROM rodada WHERE demanda_id = ?").get(id)?.fase, antes.rodada);
   }
   // O banco antigo fica aberto: a conversa da sessão de ajustes, ainda viva, grava nele o fim da execução; `fechar` o fecha.
-  const banco = abrir(c.raiz);
+  const banco = abrirBancoDaFabriquinha(c.raiz);
   t.after(() => {
     if (banco.isOpen) banco.close();
   });
@@ -286,7 +287,7 @@ test("os cenários de demanda, uma em cada valor antigo de Demanda e de Rodada, 
   }
   banco.close();
 
-  const migrado = abrir(raiz);
+  const migrado = abrirBancoDaFabriquinha(raiz);
   t.after(() => {
     if (migrado.isOpen) migrado.close();
   });

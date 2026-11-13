@@ -4,7 +4,7 @@ import { comEvidencia, comPlanoSubmetido } from "../../../../../apoio-testes/cen
 import { clonarAgregadoDemanda as structuredClone } from "../../../../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
-import { GATES } from "../../../etapas/gates.ts";
+import { GATE_DA_DEMANDA, GATES } from "../../../etapas/gates.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   comTentativaAberta,
@@ -20,7 +20,6 @@ import {
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { Despacho, situacaoDeUmaDemanda } from "../despacho/despacho.ts";
 import {
-  editarDemanda,
   enviarDemanda,
   devolverTicket,
   iniciarRevisaoDemanda,
@@ -60,21 +59,6 @@ test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
   assert.throws(() => registrarDemanda({ ...reg, titulo: "" }, autora, { agora: t0 }));
 });
 
-test("editar: muda só o informado; rejeita vazio, outra sessão e demanda enviada", () => {
-  const ag = registrada();
-  const novo = editarDemanda(ag, { titulo: "novo" }, autora);
-  assert.equal(novo.demanda.titulo, "novo");
-  assert.equal(novo.demanda.descricao, "d");
-  assert.equal(editarDemanda(ag, { tipo: "problema", descricao: "x" }, autora).demanda.titulo, "t");
-  assert.throws(() => editarDemanda(ag, {}, autora));
-  assert.throws(() => editarDemanda(ag, { titulo: "x" }, outra), ErroDeEscopo);
-  assert.equal(ag.demanda.titulo, "t");
-  const env = enviada();
-  const antes = structuredClone(env);
-  assert.throws(() => editarDemanda(env, { titulo: "x" }, autora), ErroDeRegra); // CA-7
-  assert.deepEqual(env, antes);
-});
-
 test("CA-6: outra sessão não envia", () => {
   assert.throws(() => enviarDemanda(completa(), outra, { agora: t1 }), ErroDeEscopo);
 });
@@ -97,18 +81,17 @@ test("CA-3: envio completo congela e vai a gate_demanda; reenvio é reprovado", 
   assert.throws(() => enviarDemanda(env, autora, { agora: t1 }), ErroDeRegra);
 });
 
-test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e envia com sessão preservada", () => {
+test("CA-3: ferramenta exige Slug e o mesmo autor registra, submete e envia com sessão preservada", () => {
   const autor: Ator = { tipo: "externo", ferramenta: "codex", sessao: " sessao-demo-197 " };
   assert.throws(() => registrarDemanda(reg, { ...autor, ferramenta: " codex " }, { agora: t0 }));
   let ag = registrarDemanda(reg, autor, { agora: t0 });
   assert.equal(ag.demanda.criada_por.ferramenta, "codex");
   assert.equal(ag.demanda.criada_por.sessao, " sessao-demo-197 ");
-  ag = editarDemanda(ag, { titulo: "novo" }, autor);
   for (const tipo of ["criterios_aceite", "desenho_solucao"]) {
     ag = comEvidencia(ag, ev(tipo), autor, t0);
   }
+  assert.throws(() => enviarDemanda(ag, { ...autor, sessao: " outra " }, { agora: t1 }), ErroDeEscopo);
   assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
-  assert.throws(() => editarDemanda(ag, { titulo: "x" }, { ...autor, sessao: " outra " }), ErroDeEscopo);
 });
 
 const t2 = "2026-01-03T00:00:00Z";
@@ -154,7 +137,7 @@ const emPlanejamento = (): AgregadoDemanda => {
     (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );
-  const decisaoAprovando = GATES.gate_demanda.regra.decidir(
+  const decisaoAprovando = GATE_DA_DEMANDA.decidir(
     enviarDemanda(definida, autora, { agora: t1 }),
     Endereco.daDemanda("I-1"),
     { resultado: "aprovado" },

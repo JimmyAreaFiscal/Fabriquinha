@@ -14,7 +14,6 @@ import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
-import { registrarDependenciaDemanda } from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
@@ -22,6 +21,7 @@ import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.t
 import { limitarTempoDoPi } from "./limite_do_pi.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
+import { registrarDependencia } from "../src/modulos/demandas/publico.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
@@ -152,7 +152,7 @@ export function cenarioDePlanejamento({
     ],
     ...base,
   } as unknown as AgregadoDemanda);
-  registrarDependenciaDemanda(banco, "I-1", "I-2"); // só antes do envio
+  registrarDependencia(banco, "I-1", "I-2"); // só antes do envio
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-1'");
   const piFalso = instalarPiFalso(c.dir);
   return {

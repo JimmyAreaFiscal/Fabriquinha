@@ -1,6 +1,7 @@
 // Monta o que o CLI não pode abrir sozinho (o banco da raiz, o serviço, o navegador) e roda `principal` com isso.
 import { join } from "node:path";
-import { abrir as abrirBanco, raizPadrao } from "../../modulos/compartilhado/armazenamento/banco.ts";
+import { raizPadrao } from "../../modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { type DepsDoCli } from "../cli/comando.ts";
 import { principal } from "../cli/cli.ts";
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
@@ -26,7 +27,7 @@ export function executarFabriquinha(args: readonly string[], processo: ProcessoD
     raiz,
     relogio: relogioDoSistema,
     async comBanco(usar) {
-      const banco = abrirBanco(raiz);
+      const banco = abrirBancoDaFabriquinha(raiz);
       try {
         return await usar(banco);
       } finally {

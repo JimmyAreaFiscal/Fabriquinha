@@ -1,5 +1,5 @@
 // Regras de fronteira do domínio Demandas (MELHORIAS §12), migrado no ticket 18: src/modulos/demandas/ tem a fachada
-// publico.ts e o subdomínio Projetos; Pedidos e Dependências chegam no ticket 19. O motor (../motor.ts) explica os campos.
+// publico.ts e os subdomínios Projetos (18), Pedidos e Dependências (19). O motor (../motor.ts) explica os campos.
 import type { Excecao, RegrasDoDominio } from "../motor.ts";
 
 // provisório: remover no ticket 22. O contrato da API do agente, que o CLI do agente (pacote-pi) empacota, lê o Projeto
@@ -28,8 +28,10 @@ export const REGRAS_DE_DEMANDAS: RegrasDoDominio = {
     pedidos: ["projetos"],
     dependencias: ["pedidos"],
   },
-  // As tabelas de Demandas ainda são tocadas por SQL de fora: `projeto` pelas Métricas (ticket 17), `demanda` e as dos
-  // Pedidos e das Dependências pelo sdlc e pelo Trabalho Agêntico (19), e a remoção do projeto toca as de Pedidos (19).
+  // As tabelas de Demandas ainda são tocadas por SQL de fora: `projeto` pelas Métricas (ticket 17); `demanda`, cuja linha
+  // guarda também as colunas do processo (estado, branch, enviada), pelo agregado do sdlc e pelas leituras que juntam
+  // domínios (Processo, 22; consultas, 21); `dependencia_demanda` pela leitura das predecessoras com o estado (Despacho,
+  // 20); e a remoção do projeto toca as de Pedidos (22).
   posseDasTabelas: "inventario",
   excecoes: [
     ...EXCECOES_DO_PROJETO_NO_CLI_DO_AGENTE,

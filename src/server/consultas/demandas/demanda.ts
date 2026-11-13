@@ -19,7 +19,6 @@ import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
 import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
 import { motivoDaFalhaDoTicket } from "../../../modulos/sdlc/nucleo/tentativa.ts";
 import { achadoDaDemanda, carregarDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
-import { dependentesNaoConcluidasDaDemanda } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
 import { lerAnexo } from "../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
 import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
 import {
@@ -30,6 +29,7 @@ import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
 import { usoDaDemanda } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
 import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
 import { visaoDaDemanda } from "../../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
+import { dependentesNaoConcluidosDoPedido } from "../../../modulos/demandas/publico.ts";
 
 /** Os endereços públicos das rodadas e dos tickets da demanda. */
 export const enderecosNaDemanda = (demanda_id: string) => ({
@@ -164,7 +164,7 @@ export function consultarDemanda(
       })),
       encerramento: passosDoEncerramento(ag),
       dependencias: predecessoras,
-      dependentes: carregarDemandas(banco, dependentesNaoConcluidasDaDemanda(banco, id)).map(({ demanda: d }) => ({
+      dependentes: carregarDemandas(banco, dependentesNaoConcluidosDoPedido(banco, id)).map(({ demanda: d }) => ({
         demanda_id: d.id,
         titulo: d.titulo,
         estado: d.estado,

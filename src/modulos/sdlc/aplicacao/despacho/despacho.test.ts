@@ -17,7 +17,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { reservarTicket } from "../../nucleo/despacho/reserva_ticket.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarDependenciaDemanda } from "../gestao_demandas.ts";
+import { registrarDependencia } from "../../../demandas/publico.ts";
 import { type Tentativa } from "../../nucleo/tentativa.ts";
 import {
   falhaPorServicoReiniciado,
@@ -279,7 +279,7 @@ test("CA-6 e CA-16: o planejar com predecessora pendente não é despachado nem 
   demanda(banco, 4, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 6, { estado: "planejar", tickets: [{ etapa: "planejar" }] });
   banco.exec("UPDATE demanda SET enviada = 0 WHERE id = 'I-6'"); // a dependência só se registra antes do envio
-  registrarDependenciaDemanda(banco, "I-6", "I-4");
+  registrarDependencia(banco, "I-6", "I-4");
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-6'");
   await Promise.all(cicloDoDespacho(banco, config, deps));
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);

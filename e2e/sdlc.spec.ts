@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { buscarProjeto, gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
@@ -20,7 +20,7 @@ const PLANEJAR_DO_CADASTRO = {
  * `planejar`, gravada pelo cadastro do projeto, tem modelo e effort.
  */
 function configurar(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarProjeto(
     banco,
     Projeto.parse({
@@ -48,7 +48,7 @@ function configurar(raiz: string): void {
 
 /** As etapas gravadas do projeto `loja`. */
 function etapasGravadas(raiz: string): unknown[] {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const etapas = banco
     .prepare(
       "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = 'loja'",
@@ -255,7 +255,7 @@ test("a preparação salva no cadastro do projeto é a que o fluxo da demanda ro
     stdio: "pipe",
   });
   const preparacaoDoFluxo = () => {
-    const banco = abrir(fabriquinha.raiz);
+    const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
     const preparacao = buscarProjeto(banco, "loja")?.verificacoes.preparacao;
     banco.close();
     return preparacao;

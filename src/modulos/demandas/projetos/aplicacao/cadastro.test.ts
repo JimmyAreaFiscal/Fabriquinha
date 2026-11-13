@@ -330,7 +330,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
     const d = `I-${n}`;
     const execucao = execucaoDe(id, i === 0);
     banco.exec(`
-      INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 1, 'b');
+      INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 1, 'b');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
       INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
@@ -566,8 +566,8 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
   const digitos = d.slice(2);
   const [sha1, sha2, sha3] = [digitos.padStart(40, "a"), digitos.padStart(40, "c"), digitos.padStart(64, "9")];
   banco.exec(`
-    INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
-    INSERT INTO demanda VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
     INSERT INTO dependencia_demanda VALUES ('${d}2', '${d}');
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('${d}', 't');
     INSERT INTO rodada VALUES ('${d}', 1, 't', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b');

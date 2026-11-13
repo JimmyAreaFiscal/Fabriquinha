@@ -1,6 +1,6 @@
 // Remover projeto (F7 §4.4, Configuração): confirmar apaga o projeto e tudo dele de todas as telas, cancelar não
 // apaga nada, o outro projeto fica intacto e a execução em andamento recusa a remoção.
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { expect, test } from "./apoio.ts";
 
 /** O agora do navegador, fixo em outubro de 2026; os dados semeados são do mês corrente. */
@@ -13,7 +13,7 @@ const projeto = (nome: string) =>
 
 /** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê; `andamento`, ainda aberta. */
 const demanda = (id: string, nome: string, custo: number, andamento = false) =>
-  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'em_execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
+  `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'em_execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', '${andamento ? "em_execucao" : "aberto"}', '${em}');
     INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', ${andamento ? "NULL" : `'${em}'`}, 0);
@@ -21,7 +21,7 @@ const demanda = (id: string, nome: string, custo: number, andamento = false) =>
 
 /** `demo`: uma demanda de US$ 40; `outro`: uma de US$ 10; `ocupado`: uma com execução em andamento. */
 function semear(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco.exec(`
     ${projeto("demo")} ${projeto("outro")} ${projeto("ocupado")}
     ${demanda("I-91", "demo", 40)} ${demanda("I-92", "outro", 10)} ${demanda("I-93", "ocupado", 0, true)}

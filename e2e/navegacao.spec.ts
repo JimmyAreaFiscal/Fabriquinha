@@ -1,7 +1,7 @@
 // Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7): a página inicial é o Início, em
 // /home, e o menu não tem Demandas nem Auditoria.
 import type { TestInfo } from "@playwright/test";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { expect, fotografar, test } from "./apoio.ts";
 
 const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
@@ -116,11 +116,11 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
  * já concluída, terminou.
  */
 function sessaoDeDemandaAguardando(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco.exec(`
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe', 'main', 'github', 'loja');
-    INSERT INTO demanda VALUES
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
       ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'loja', 'Cache', 'problema', 'd', 'concluida', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-2');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES

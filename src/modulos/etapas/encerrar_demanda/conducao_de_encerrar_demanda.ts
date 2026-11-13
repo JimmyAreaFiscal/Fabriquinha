@@ -42,10 +42,22 @@ import { varrerCommitsHumanos } from "../../projeto/aplicacao/varredura_de_commi
 import { ConducaoDeterministica, type PassoDaEtapa, type ResultadoDoPasso } from "../conducao/conducao_de_etapa.ts";
 import { type DepsDaConducao } from "../../sdlc/aplicacao/despacho/despacho.ts";
 
+/** Grava o encerramento do processo (`gravarEncerramentoDoProcesso`) junto da conclusão do pedido `demandaId`. */
+type ConcluirDesenvolvimento = (demandaId: string, gravarEncerramentoDoProcesso: () => void) => void;
+
 export interface OpcoesDoEncerramentoDaDemanda {
   /** Espera da verificação do PR (limite, intervalo e carência); o padrão é o de produção. */
   verificacao?: OpcoesVerificacao;
+  /**
+   * O fluxo da conclusão, que a composição liga a Demandas; sem ele (nos testes da condução), só o processo é gravado.
+   * provisório: remover no ticket 22, quando a Condução pedir a conclusão ao Processo e a composição sempre o ligar.
+   */
+  concluirDesenvolvimento?: ConcluirDesenvolvimento;
 }
+
+const soOEncerramentoDoProcesso: ConcluirDesenvolvimento = (_demandaId, gravarEncerramentoDoProcesso) => {
+  gravarEncerramentoDoProcesso();
+};
 
 /** As evidências do encerramento não têm anexo: nenhuma origem é lida. */
 const SEM_ORIGEM_DE_ANEXO = { worktree: "", saida: "", fora: "", copie: "" };
@@ -253,9 +265,12 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
         return "parar";
       }
     }
-    this.aplicar(endereco, (a) =>
-      concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, { agora: relogio.agora() }),
-    );
+    const concluirDesenvolvimento = this.opcoes.concluirDesenvolvimento ?? soOEncerramentoDoProcesso;
+    concluirDesenvolvimento(demanda_id, () => {
+      this.aplicar(endereco, (a) =>
+        concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, { agora: relogio.agora() }),
+      );
+    });
     return "seguir";
   }
 

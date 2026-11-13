@@ -125,7 +125,7 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
 test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a demanda", () => {
   const b = bancoDaDemanda();
   b.exec(
-    `INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', '2026-01-01T00:00:00.000Z', 'f', 's', 1, 'b')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', '2026-01-01T00:00:00.000Z', 'f', 's', 1, 'b')`,
   );
   gravarExecucao(b, 2, "e1", 0, [["m1", 1, 1, 1, 1, 1]]);
   gravarUsoDeclarado(b, "a", "I-1", [linhaDeUsoDeclarado(3), linhaDeUsoDeclarado(null)]);

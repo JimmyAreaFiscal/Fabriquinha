@@ -1,7 +1,8 @@
 // Fitness function: teste nenhum conhece a porta 4317 nem a raiz ~/fabriquinha do serviço real. Teste que sobe ou aponta
 // para elas dispara a Fabriquinha de verdade (porta ocupada, banco real migrado). Vale para os `*.test.ts` e `*.spec.ts`
 // de src/ e pacote-pi/ e para todo arquivo de integracao/, e2e/, estresse/ e apoio-testes/, inclusive comentário e nome de teste.
-// Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(`): usa `abrirBancoTemporario()` de apoio-testes/.
+// Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(` ou `abrirBancoDaFabriquinha(`): usa
+// `abrirBancoTemporario()` de apoio-testes/.
 // Nenhum `*.test.ts` é importado por outro arquivo (import estático ou `import()`): o que é compartilhado vive em apoio-testes/.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -55,14 +56,15 @@ function acharArquivosDeTesteQueReferenciamOServicoReal(raiz: string): string[] 
     .sort();
 }
 
-// Mesmo critério do grep do CA-3: `mkdtemp` e `\babrir(` (palavra inteira, qualquer chamada) no mesmo arquivo.
+// Mesmo critério do grep do CA-3: `mkdtemp` e `\babrir(` (palavra inteira, qualquer chamada) no mesmo arquivo; o
+// `abrirBancoDaFabriquinha(` da composição, que abre o mesmo banco com as migrações dos domínios, conta igual.
 function acharArquivosQueMontamBancoProprio(raiz: string): string[] {
   return PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO.flatMap((pasta) => listarArquivos(raiz, pasta))
     .filter((caminho) => caminho.endsWith(".ts"))
     .filter((caminho) => !ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO.includes(caminho))
     .filter((caminho) => {
       const conteudo = readFileSync(join(raiz, caminho), "utf8");
-      return conteudo.includes("mkdtemp") && /\babrir\(/.test(conteudo);
+      return conteudo.includes("mkdtemp") && /\babrir(BancoDaFabriquinha)?\(/.test(conteudo);
     })
     .sort();
 }
@@ -128,6 +130,7 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
     escrever("src/a/proprio.test.ts", "const pasta = mkdtempSync(tmp);\nconst banco = abrir(pasta);\n");
     escrever("e2e/sub/proprio.ts", "mkdtempSync(tmp);\nawait abrir(pasta);\n");
     escrever("estresse/hospedagem.ts", "mkdtempSync(tmp);\ngh.abrir({});\n");
+    escrever("integracao/composto.test.ts", "mkdtempSync(tmp);\nabrirBancoDaFabriquinha(pasta);\n");
     // Fora do alcance da regra: só um dos dois, o método `abrirPr`, as exceções listadas e node_modules.
     escrever("src/a/so_mkdtemp.test.ts", "mkdtempSync(tmp);\n");
     escrever("src/a/so_abrir.test.ts", "abrir(raiz);\n");
@@ -139,6 +142,7 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
     assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), [
       "e2e/sub/proprio.ts",
       "estresse/hospedagem.ts",
+      "integracao/composto.test.ts",
       "src/a/proprio.test.ts",
     ]);
   } finally {

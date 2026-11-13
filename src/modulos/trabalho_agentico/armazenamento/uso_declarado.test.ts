@@ -21,8 +21,8 @@ const novoBanco = () => {
   const b = abrirBancoTemporario().banco;
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
   return b;
 };
 
@@ -55,7 +55,7 @@ test("o Uso declarado do período, no mês do registro da demanda e filtrado por
   const b = novoBanco();
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('q', '/repo/q', 'main', 'github', 'k2');
-    INSERT INTO demanda VALUES ('I-3', 'q', 't', 'problema', 'd', 'em_execucao', '2026-02-01T00:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-3');`);
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-3', 'q', 't', 'problema', 'd', 'em_execucao', '2026-02-01T00:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-3');`);
   gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1)] });
   gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s2", demanda_id: "I-3", linhas: [linha(2)] });
   const janeiro = { inicio: "2026-01-01T00:00:00.000Z", fim: "2026-02-01T00:00:00.000Z", projeto: null };

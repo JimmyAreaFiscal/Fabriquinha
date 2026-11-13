@@ -30,6 +30,9 @@ import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { decidirGate } from "../../src/modulos/etapas/gates.ts";
 import * as gestao from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { concluirSessaoAjustes } from "../../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
@@ -176,9 +179,9 @@ const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando",
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
 
 /** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
-async function demandaAprovada(c: Cenario): Promise<string> {
+function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
-  const id = gestao.registrar(
+  const id = registrarPedidoComProcesso(
     c.banco,
     { projeto: c.projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     AUTOR,
@@ -191,9 +194,9 @@ async function demandaAprovada(c: Cenario): Promise<string> {
     gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  gestao.enviar(c.banco, id, AUTOR, ctx);
-  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
-  return id;
+  enviarAoDesenvolvimento(c.banco, id, AUTOR, ctx);
+  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  return Promise.resolve(id);
 }
 
 /** O planejamento em curso (`fim`) até a aprovação do plano de uma rodada com um ticket: a demanda vai a `execucao`. */

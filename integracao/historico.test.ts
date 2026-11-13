@@ -4,8 +4,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { consultarDemanda } from "../src/server/consultas/demandas/demanda.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
@@ -35,6 +33,9 @@ import {
   registrarExterna,
 } from "./apoio.ts";
 import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
@@ -45,11 +46,11 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   // Dependentes de `a`: uma aberta (registro) e outra que já terminou (concluída), que o cancelamento poupa.
   const aberta = registrarExterna(c, [a]);
   const terminada = registrarExterna(c, [a]);
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(terminada);
+  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(terminada);
   // Dependência de uma demanda que será arquivada.
   const feita = registrarExterna(c);
   const dependeDaFeita = registrarExterna(c, [feita]);
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(feita);
+  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(feita);
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
@@ -61,7 +62,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   const antes = demanda(c, a);
   const execucoesAntes = carregarTrabalhosDoTicket(c.banco, refA).execucoes.length;
 
-  const { canceladas } = gestao.cancelar(c.banco, a, AUDITOR, CTX);
+  const { canceladas } = cancelarDemandaEmCascata(c.banco, a, AUDITOR, CTX);
   assert.deepEqual([...canceladas].sort(), [a, aberta].sort());
   assert.equal(demanda(c, a).demanda.estado, "cancelada");
   assert.equal(demanda(c, aberta).demanda.estado, "cancelada");
@@ -84,7 +85,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.deepEqual(depois.rodadas, antes.rodadas);
   assert.equal(carregarTrabalhosDoTicket(c.banco, refA).sessoes.length > 0, true);
   // A terminada não se cancela de novo.
-  assert.throws(() => gestao.cancelar(c.banco, terminada, AUDITOR, CTX), /já terminou/);
+  assert.throws(() => cancelarDemandaEmCascata(c.banco, terminada, AUDITOR, CTX), /já terminou/);
 
   // Arquivar só vale para concluída, e a arquivada satisfaz a dependência de quem a esperava (D08).
   assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só no estado concluida/);
@@ -93,7 +94,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.equal(demanda(c, feita).demanda.estado, "arquivada");
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
   assert.equal(demanda(c, dependeDaFeita).demanda.estado, "entender_e_desenhar");
-  assert.throws(() => gestao.cancelar(c.banco, feita, AUDITOR, CTX), /já terminou/);
+  assert.throws(() => cancelarDemandaEmCascata(c.banco, feita, AUDITOR, CTX), /já terminou/);
 });
 
 test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retirada da Avaliação abre com a origem e segue o SDLC", async (t) => {
@@ -112,7 +113,7 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
       "INSERT INTO achado_avaliacao (avaliacao_id, achado_id, titulo, descricao, evidencia) VALUES (?, 1, ?, ?, ?)",
     )
     .run(avaliacao, "Achado 1", "desc 1", "ev 1");
-  const { demanda: nova } = gestao.registrar(
+  const { demanda: nova } = registrarPedidoComProcesso(
     c.banco,
     {
       projeto: c.projeto,
@@ -148,8 +149,8 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
     [anexoHtml()],
   );
-  gestao.enviar(c.banco, nova.id, autor, CTX);
+  enviarAoDesenvolvimento(c.banco, nova.id, autor, CTX);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
-  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);
+  decidirGateDaDemanda(c.banco, nova.id, { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 });

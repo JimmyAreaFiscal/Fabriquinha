@@ -14,7 +14,6 @@ import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
 import { conjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/modulos/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
 import { enviarDemanda } from "../src/modulos/etapas/conducao/mensagem_do_auditor.ts";
 import { lerConversa } from "../src/modulos/trabalho_agentico/aplicacao/sessoes/conversa.ts";
@@ -51,6 +50,7 @@ import {
   projetoDeTesteEmContainer,
   raizCompartilhadaComODocker,
 } from "./falsos.ts";
+import { cancelarDemandaEmCascata } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 
 const gh = ghFalso(base);
 await instalarSonarFalso(join(base, "bin"));
@@ -591,7 +591,7 @@ test("CA-3: o cancelamento da demanda mata o pi dentro do container", COM_DOCKER
   const fim = ciclo(c, despachoComVerificacoesReais);
   await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(container)), "o pi vivo no container");
 
-  gestao.cancelar(c.banco, id, AUDITOR, CTX);
+  cancelarDemandaEmCascata(c.banco, id, AUDITOR, CTX);
   await fim;
 
   assert.equal(statusDe(c, ticketDe(c, id, 1)), "cancelado");

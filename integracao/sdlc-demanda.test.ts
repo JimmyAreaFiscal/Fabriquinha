@@ -5,12 +5,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo } from "../src/modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { registrarDependenciaDemanda } from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
@@ -30,6 +27,9 @@ import {
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
+import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
+import { editarPedido, registrarDependencia } from "../src/modulos/demandas/publico.ts";
 
 const pi = instalarPiFalso(base);
 
@@ -44,7 +44,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
   assert.equal(carregarTrabalhosDoTicket(c.banco, ref).execucoes.length, 1);
 }
 
-test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", async (t) => {
+test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", (t) => {
   const c = criarCenario(t);
   const id = registrarExterna(c);
   const submeter = (tipo: string, dados: unknown) =>
@@ -53,26 +53,23 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
 
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.
   assert.throws(
-    () => gestao.enviar(c.banco, id, AUTOR, CTX),
+    () => enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX),
     (e: Error) => e.message.includes("desenho_solucao"),
   );
   assert.equal(demanda(c, id).demanda.enviada, false);
   assert.equal(demanda(c, id).demanda.estado, "entender_e_desenhar");
   assert.equal(demanda(c, id).tickets[0]?.estado, "em_execucao");
-  await assert.rejects(
-    decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR),
-    /não espera decisão/,
-  );
-  assert.equal(gestao.editar(c.banco, id, { titulo: "Corrigido" }, AUTOR).demanda.titulo, "Corrigido");
-  assert.throws(() => gestao.enviar(c.banco, id, OUTRA_SESSAO, CTX), ErroDeEscopo);
+  assert.throws(() => decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR), /não espera decisão/);
+  assert.equal(editarPedido(c.banco, id, { titulo: "Corrigido" }, AUTOR).titulo, "Corrigido");
+  assert.throws(() => enviarAoDesenvolvimento(c.banco, id, OUTRA_SESSAO, CTX), ErroDeEscopo);
 
   // Completo: congela a definição e registra a origem (ferramenta e sessão).
   submeterObrigatorias(c, id);
-  const enviada = gestao.enviar(c.banco, id, AUTOR, CTX).demanda;
+  const enviada = enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX).demanda;
   assert.equal(enviada.estado, "gate_demanda");
   assert.equal(enviada.enviada, true);
   assert.deepEqual(enviada.criada_por, { tipo: "externo", ferramenta: "claude", sessao: "S1" });
-  assert.throws(() => gestao.editar(c.banco, id, { descricao: "Outra" }, AUTOR), /congelado/);
+  assert.throws(() => editarPedido(c.banco, id, { descricao: "Outra" }, AUTOR), /congelado/);
   assert.throws(
     () => submeter("criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
@@ -86,10 +83,9 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
 
   // Reprovação: cancelada, motivo gravado, nenhum ticket novo e nada a despachar.
   const reprovada = demandaEnviada(c);
-  const { demanda: r } = await decidirGate(
+  const { demanda: r } = decidirGateDaDemanda(
     c.banco,
-    "gate_demanda",
-    Endereco.daDemanda(reprovada),
+    reprovada,
     { resultado: "reprovado", motivo: "fora do escopo" },
     AUDITOR,
   );
@@ -104,13 +100,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
   const aprovada = demandaEnviada(c);
-  const { demanda: a } = await decidirGate(
-    c.banco,
-    "gate_demanda",
-    Endereco.daDemanda(aprovada),
-    { resultado: "aprovado" },
-    AUDITOR,
-  );
+  const { demanda: a } = decidirGateDaDemanda(c.banco, aprovada, { resultado: "aprovado" }, AUDITOR);
   assert.equal(a.demanda.estado, "planejar");
   assert.equal(a.decisoes[0]?.resultado, "aprovado");
   assert.deepEqual(
@@ -142,7 +132,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   );
 
   // Controle: com A concluída (o percurso até lá é de outros casos), o mesmo ciclo inicia o planejamento de B.
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(a);
+  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(a);
   await planejamentoIniciaEInterrompe(c, b);
 
   // Autorreferência e ciclo: rejeitados, sem aresta nova.
@@ -151,10 +141,10 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const arestas = () => c.banco.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n;
   const antes = arestas();
   assert.throws(() => {
-    registrarDependenciaDemanda(c.banco, x, x);
+    registrarDependencia(c.banco, x, x);
   }, /não pode depender de si mesma/);
   assert.throws(() => {
-    registrarDependenciaDemanda(c.banco, x, y);
+    registrarDependencia(c.banco, x, y);
   }, /ciclo de dependência/);
   assert.equal(arestas(), antes);
 });

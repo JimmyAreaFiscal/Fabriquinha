@@ -14,13 +14,15 @@ import { ErroDeRegra } from "../src/modulos/compartilhado/nucleo/erros.ts";
 import { submeterEvidencia } from "../src/modulos/sdlc/aplicacao/evidencias/submeter.ts";
 import { cicloDoDespacho, type DepsDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarUsoDeclarado } from "../src/modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
 import { type Configuracao, configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
+import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));
@@ -173,7 +175,7 @@ export function declararUso(c: Cenario, demanda_id: string, sessao: string, cust
 }
 
 export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = c.projeto): string =>
-  gestao.registrar(
+  registrarPedidoComProcesso(
     c.banco,
     { projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc", dependencias },
     AUTOR,
@@ -198,15 +200,15 @@ export function submeterObrigatorias(c: Cenario, id: string): void {
 export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.projeto): string {
   const id = registrarExterna(c, dependencias, projeto);
   submeterObrigatorias(c, id);
-  gestao.enviar(c.banco, id, AUTOR, CTX);
+  enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX);
   return id;
 }
 
 /** Demanda aprovada pelo Auditor: em `planejar`, com o ticket `planejar` aberto. */
-export async function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): Promise<string> {
+export function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): Promise<string> {
   const id = demandaEnviada(c, dependencias, projeto);
-  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
-  return id;
+  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  return Promise.resolve(id);
 }
 
 export const demanda = (c: Cenario, id: string) => carregarDemanda(c.banco, id);

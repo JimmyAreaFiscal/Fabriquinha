@@ -157,7 +157,7 @@ test("o Uso da consulta é somado à execução do ticket que perguntou, e a con
   migrar(banco, MIGRACOES);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/repo/p', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-7', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-7');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-7', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-7');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-7', 3, 'implementar', 'em_execucao', ${T});`);
   const ticket = { demanda_id: "I-7", ticket_id: 3 };

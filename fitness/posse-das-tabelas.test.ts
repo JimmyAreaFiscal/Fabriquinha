@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
-import { abrir } from "../src/shared/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import { REGRAS_DO_AMBIENTE } from "./fronteiras/dominios/ambiente.ts";
 import { PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
@@ -41,7 +41,7 @@ function criarPastaTemporaria(t: TestContext, prefixo: string): string {
 
 // O esquema real: um banco novo, levado pelas migrações à versão atual.
 function listarTabelasDoBancoMigrado(t: TestContext): string[] {
-  const banco = abrir(criarPastaTemporaria(t, "fabriquinha-fitness-posse-banco-"));
+  const banco = abrirBancoDaFabriquinha(criarPastaTemporaria(t, "fabriquinha-fitness-posse-banco-"));
   try {
     return (
       banco

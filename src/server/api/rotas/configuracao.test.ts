@@ -427,7 +427,7 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
 
 /** A demanda I-1 do `loja` com o ticket e a execução da sessão dele, terminada ou ainda em andamento. */
 const demandaComExecucao = (andamento: boolean) => `
-  INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+  INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
   INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
     VALUES ('I-1', 1, 'implementar', '${andamento ? "em_execucao" : "concluido"}', '2026-10-12T14:00:00.000Z');
   INSERT INTO trabalho_agentico VALUES ('s', 'I-1', 1, 'autonomo', 's');

@@ -5,7 +5,8 @@ import { ErroDeRegra } from "../../../../modulos/compartilhado/nucleo/erros.ts";
 import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { RefRodada } from "../../../../modulos/etapas/encerrar_rodada/encerramento_rodada.ts";
 import { decidirGate } from "../../../../modulos/etapas/gates.ts";
-import { arquivar, cancelar, reabrir } from "../../../../modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { arquivar, reabrir } from "../../../../modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../../fluxos/cancelamento_em_cascata.ts";
 import { concluirSessaoAjustes } from "../../../../modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import {
   DecisaoDoPR,
@@ -28,16 +29,8 @@ function refDaRodada({ params }: Pedido): RefRodada {
 }
 
 /** O corpo é a entrada do gate (`resultado`, `nota` e `motivo`): quem valida é o gate. */
-async function decisaoDaDemanda({ banco, params, corpo }: Pedido) {
-  const { demanda, canceladas } = await decidirGate(
-    banco,
-    "gate_demanda",
-    Endereco.daDemanda(String(params.id)),
-    corpo,
-    AUDITOR,
-  );
-  return { demanda, canceladas };
-}
+const decisaoDaDemanda = ({ banco, params, corpo }: Pedido) =>
+  decidirGateDaDemanda(banco, String(params.id), corpo, AUDITOR);
 
 async function decisaoDoPlanejamento({ banco, params, corpo }: Pedido) {
   const { demanda } = await decidirGate(
@@ -91,7 +84,7 @@ async function executar(pedido: Pedido): Promise<unknown> {
 }
 
 const cancelamento = ({ banco, params, relogio }: Pedido) =>
-  cancelar(banco, String(params.id), AUDITOR, { agora: relogio.agora() });
+  cancelarDemandaEmCascata(banco, String(params.id), AUDITOR, { agora: relogio.agora() });
 const arquivamento = ({ banco, params, relogio }: Pedido) => ({
   demanda: arquivar(banco, String(params.id), AUDITOR, { agora: relogio.agora() }),
 });

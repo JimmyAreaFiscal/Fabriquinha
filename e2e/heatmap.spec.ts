@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { expect, test } from "./apoio.ts";
 
@@ -52,7 +52,7 @@ function repositorio(raiz: string, nome: string) {
     git(new Date().toISOString(), "fetch", "-q", bare, "+main:refs/remotes/origin/main");
   };
   const cadastrar = (): void => {
-    const banco = abrir(raiz);
+    const banco = abrirBancoDaFabriquinha(raiz);
     registrarProjeto(banco, {
       nome,
       raiz_git: repo,

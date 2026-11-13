@@ -10,7 +10,7 @@ import type { MotivoDeRecusa } from "../../modulos/sdlc/nucleo/despacho/despacho
 import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { projetosAVarrer, varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
-import { abrir } from "../../modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
@@ -18,6 +18,7 @@ import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.
 import { servirWeb } from "../api/servidor.ts";
 import { cicloDoDespacho, executarAgora } from "../../modulos/sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
+import { concluirDesenvolvimentoNoBanco } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import { condutor, type RecuperacaoDaSubida } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { falharTicketDemanda } from "../../modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import {
@@ -115,7 +116,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   let aberto: DatabaseSync | undefined;
   try {
-    aberto = abrir(raiz);
+    aberto = abrirBancoDaFabriquinha(raiz);
     const bancoAberto = aberto;
     // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
     montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
@@ -138,6 +139,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   }
   const banco = aberto;
   const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
+  // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
+  const despachoDoServico = despachoDasEtapas({ concluirDesenvolvimento: concluirDesenvolvimentoNoBanco(banco) });
 
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
@@ -185,7 +188,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c, despachoDasEtapas(), relogio))
+      for (const fim of cicloDoDespacho(banco, c, despachoDoServico, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -198,7 +201,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), despachoDasEtapas(), relogio);
+      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), despachoDoServico, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

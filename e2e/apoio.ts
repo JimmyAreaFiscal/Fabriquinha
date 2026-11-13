@@ -14,7 +14,7 @@ import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 
 export interface Fabriquinha {
@@ -50,7 +50,7 @@ async function parar(servico: ChildProcess): Promise<void> {
  */
 function matarPi(raiz: string): void {
   condutor.montarHarness(new HarnessPi());
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   banco.close();
 }
@@ -197,7 +197,7 @@ export function projeto(raiz: string, sql = ""): void {
   git(repo, "commit", "-q", "-m", "início");
   git(repo, "remote", "add", "origin", bare);
   git(repo, "push", "-q", "origin", "main");
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   registrarProjeto(banco, {
     nome: "loja",
     raiz_git: realpathSync(repo),

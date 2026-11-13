@@ -1,6 +1,6 @@
 // Métricas (F7 §4.4, §7), lidas das tabelas da demanda: mudar o mês em foco faz a média usar só os meses anteriores a ele; o gráfico mostra a dica
 // e troca o foco no clique; o Início mostra a frase do mês e o Projeto, os 5 cards do mês.
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { expect, SECOES_DE_ETAPA, test } from "./apoio.ts";
 
 /** O agora do navegador, fixo em outubro de 2026: o mês corrente é M0, e o período padrão vai de nov/25 a out/26. */
@@ -12,12 +12,12 @@ const em = (mes: string) => new Date(`${mes}-01T12:00:00`).toISOString();
 
 /** loja: I-1 (problema) com execuções de US$ 10, 20 e 60 nos três últimos meses; site: I-2 (funcionalidade) com US$ 5 no mês corrente. */
 function semear(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const projeto = (nome: string) =>
     `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, tipo: string, mes: string) =>
-    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO trabalho_agentico VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
@@ -106,7 +106,7 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
  * delas reescritas por uma pessoa.
  */
 function semearMetricasDeSucesso(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const sha = (letra: string) => letra.repeat(40);
   const ticket = (n: number, etapa: string, rodada: string) =>
     `('I-1', ${String(n)}, '${etapa}', 'concluido', '${em(M0)}', ${rodada})`;
@@ -225,11 +225,11 @@ test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo tex
   pagina,
   fabriquinha,
 }) => {
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   banco.exec(`
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
-    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'aberto', '${em(M0)}'), ('I-1', 2, 'implementar', 'aberto', '${em(M0)}');
     INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-1', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-1', 2, 'autonomo', 'c2');
@@ -254,13 +254,13 @@ test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo tex
  * alteradas e mais de mil execuções; o mês anterior tem custo, para os cards mostrarem a média e a variação.
  */
 function semearNumerosGrandes(raiz: string): void {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const sha = (letra: string) => letra.repeat(40);
   const execucoes = Array.from({ length: 1_200 }, (_, i) => `('x${String(i)}', 's1', '${em(M0)}', '${em(M0)}', 0)`);
   banco.exec(`
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
-    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');
     INSERT INTO trabalho_agentico VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');

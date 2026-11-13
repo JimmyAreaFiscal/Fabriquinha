@@ -2,7 +2,7 @@
 // Sobe o ambiente de verdade e confere que cada preparo deixa a rota que o usa responder o esperado (CA-2).
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { type Ambiente, subirAmbiente } from "../instancia_descartavel.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";
@@ -36,7 +36,7 @@ async function chamar(metodo: "POST" | "DELETE", caminho: string, corpo?: unknow
 
 /** A estado e os estados das rodadas que o banco guarda agora, lidas por outra conexão. */
 function estados(id: string): string[] {
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   try {
     const ag = carregarDemanda(banco, id);
     return [ag.demanda.estado, ...ag.rodadas.map((r) => r.estado)];

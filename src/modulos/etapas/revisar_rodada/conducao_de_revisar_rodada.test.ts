@@ -6,7 +6,8 @@ import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts"
 import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../../sdlc/nucleo/tentativa.ts";
 import { reabrirTicket } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { abrir, raizDo } from "../../compartilhado/armazenamento/banco.ts";
+import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { carregarDemanda, comDemanda } from "../../sdlc/armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
@@ -51,7 +52,7 @@ test("o pi roda na worktree da rodada, com a fitness gravada antes, e sem decisÃ
 test("o revisor que decide deixa o ticket concluÃ­do, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao();
   // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
-  const { porta } = await servir(abrir(raizDo(banco)));
+  const { porta } = await servir(abrirBancoDaFabriquinha(raizDo(banco)));
   condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
   piFalso.roteirizar([
     {

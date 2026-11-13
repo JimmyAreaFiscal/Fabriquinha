@@ -75,6 +75,7 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
     modulosSoComoTipo: ["contrato", "nucleo", MODULO_DAS_FACHADAS],
     externoPermitido: (alvo) => PACOTES_DO_NAVEGADOR.has(pacoteDe(alvo)),
   },
+  // A composição liga os fluxos às conduções que os pedem (a conclusão do pedido junto do encerramento do processo).
   composicao: {
     modulosPermitidos: [
       "nucleo",
@@ -83,6 +84,7 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
       "aplicacao",
       "api",
       "cli",
+      MODULO_DOS_FLUXOS,
       MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
       "contrato",
       MODULO_CLIENTE_WEB,

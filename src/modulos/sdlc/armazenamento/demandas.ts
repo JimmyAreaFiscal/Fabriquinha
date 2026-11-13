@@ -162,6 +162,12 @@ export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => Ag
         `monte a demanda com o id recebido (${id})`,
       );
     }
+    return gravarDemandaNova(banco, agregado);
+  });
+
+/** Grava o agregado novo, com o ID que o pedido já alocou; o erro na gravação desfaz a transação. */
+export const gravarDemandaNova = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
+  escrever(banco, () => {
     gravarDiferenca(banco, undefined, agregado);
     return agregado;
   });

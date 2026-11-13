@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { falharTicketDemanda } from "../src/modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
 import { comPlanoSubmetido } from "../apoio-testes/cenarios_de_demanda.ts";
 import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
@@ -13,7 +13,7 @@ import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto }
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 
 /** O agente do `planejar` envia o plano: o plano validado entra no agregado da demanda, na mesma transação. */
-const proporPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
+const proporPlanoDoAgente = (banco: ReturnType<typeof abrirBancoDaFabriquinha>, plano: unknown) =>
   comDemanda(banco, "I-230", (ag) =>
     comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, new Date().toISOString()),
   );
@@ -112,7 +112,7 @@ test("abortar a execução em andamento e exportar o histórico em Markdown", as
 test("abortar uma implementação autônoma tira a barra de «rodando» sem recarregar", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   semearTicketAberto(fabriquinha.raiz);
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   banco.prepare("UPDATE demanda SET descricao = '[ao vivo]' WHERE id = 'I-216'").run();
   banco.close();
   await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
@@ -143,7 +143,7 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
   await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
 
   // O agente submete o plano e fica ocioso, à espera do gate.
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   const plano = {
     demanda_id: "I-230",
     criterios: ["CA-1"],
@@ -165,7 +165,7 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
   await expect(conversa.locator(".msg.agente")).toHaveCount(2);
 
   // CA-2: uma única execução na sessão (o despacho não abre outra por cima do pi vivo).
-  const leitura = abrir(fabriquinha.raiz);
+  const leitura = abrirBancoDaFabriquinha(fabriquinha.raiz);
   const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho").get() as { n: number };
   leitura.close();
   expect(n).toBe(1);
@@ -177,7 +177,7 @@ test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", asy
   await abrirOChatDoPlanejamento(pagina, fabriquinha);
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   const plano = {
     demanda_id: "I-230",
     criterios: ["CA-1"],
@@ -193,7 +193,7 @@ test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", asy
 
   // CA-4: a execução ganha o fim e nenhuma fica aberta.
   await expect(() => {
-    const leitura = abrir(fabriquinha.raiz);
+    const leitura = abrirBancoDaFabriquinha(fabriquinha.raiz);
     const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
       n: number;
     };
@@ -212,7 +212,7 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   const chat = pagina.url();
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   const plano = {
     demanda_id: "I-230",
     criterios: ["CA-1"],
@@ -225,14 +225,14 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   // Sem pi vivo, como depois de um reinício: o pi morre e o planejar fica Falhou com o gate aberto.
   matarPiDaRaiz(fabriquinha.raiz);
   await expect(() => {
-    const leitura = abrir(fabriquinha.raiz);
+    const leitura = abrirBancoDaFabriquinha(fabriquinha.raiz);
     const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
       n: number;
     };
     leitura.close();
     expect(n).toBe(0);
   }).toPass();
-  const reinicio = abrir(fabriquinha.raiz);
+  const reinicio = abrirBancoDaFabriquinha(fabriquinha.raiz);
   falharTicketDemanda(
     reinicio,
     { demanda_id: "I-230", ticket_id: 1 },
@@ -253,7 +253,7 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   await pagina.getByRole("button", { name: "Executar agora" }).click();
   await pagina.goto(chat);
   await expect(pagina.locator("[data-conversa] .msg.voce").last()).toContainText("falta o caso de erro");
-  const leitura = abrir(fabriquinha.raiz);
+  const leitura = abrirBancoDaFabriquinha(fabriquinha.raiz);
   const { n } = leitura.prepare("SELECT COUNT(DISTINCT trabalho_id) AS n FROM processo_do_trabalho").get() as {
     n: number;
   };
@@ -269,7 +269,7 @@ const demandaDoItem = (item: string): string => /^I-\d+/.exec(item)?.[0] ?? item
  * é interativa, para o chat dela mostrar o gate; as outras são autônomas e não somam diálogo ao cenário.
  */
 function semearUmaSessaoPorDemanda(raiz: string): Map<string, string> {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   const instante = "2026-10-11T12:00:00.000Z";
   const ticket = banco.prepare(
     `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)

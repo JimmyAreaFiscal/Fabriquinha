@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 
 export interface BancoTemporario {
   raiz: string;
@@ -19,7 +19,7 @@ export interface BancoTemporario {
  */
 export function abrirBancoTemporario(raizExistente?: string): BancoTemporario {
   const raiz = raizExistente ?? mkdtempSync(join(tmpdir(), "fabriquinha-teste-"));
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   let fechado = false;
   return {
     raiz,

@@ -24,6 +24,7 @@ import {
   comEvidencia,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { MIGRACOES_DE_DEMANDAS } from "../../demandas/publico.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const ticket = (ticket_id: number, rodada_id?: number) => ({
@@ -152,7 +153,8 @@ const completo = (): AgregadoDemanda => ({
 const banco = (): DatabaseSync => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  // O histórico e as migrações de Demandas, como a composição abre o banco: a linha da demanda já tem a situação do pedido.
+  migrar(b, [...MIGRACOES, ...MIGRACOES_DE_DEMANDAS.migracoes.map(({ migracao }) => migracao)]);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   return b;

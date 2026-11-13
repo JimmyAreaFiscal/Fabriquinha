@@ -19,7 +19,7 @@ const banco = () => {
 };
 const demanda = (b: DatabaseSync, id: string, estado: string) => {
   b.exec(
-    `INSERT INTO demanda VALUES ('${id}', 'p', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', 1, 'fabriquinha/${id}')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', 'p', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', 1, 'fabriquinha/${id}')`,
   );
 };
 let execucoes = 0;

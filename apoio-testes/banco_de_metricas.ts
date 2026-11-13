@@ -35,7 +35,7 @@ export function bancoDoPeriodo(): DatabaseSync {
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '${nome}')`);
   const demanda = (id: string, projeto: string, estado: string, alterada: string) => {
     b.exec(
-      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${estado}', '${alterada}', 'f', 's', 1, 'b-${id}')`,
+      `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${estado}', '${alterada}', 'f', 's', 1, 'b-${id}')`,
     );
   };
   demanda("I-1", "loja", "em_execucao", em("2026-03"));
@@ -109,7 +109,7 @@ export function bancoDaDemanda(): DatabaseSync {
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   b.exec(
-    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
   for (const r of [1, 2])
     b.exec(

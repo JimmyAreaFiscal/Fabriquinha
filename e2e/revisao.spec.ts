@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
@@ -23,7 +23,7 @@ function semear(raiz: string, descricao: string, integral = false): void {
   const caminho = join(raiz, "worktrees/loja/I-250/demanda");
   execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-250", caminho, "main"], { cwd: repo });
   execFileSync("git", ["config", "branch.fabriquinha/I-250.fabriquinha", `demanda:${caminho}`], { cwd: repo });
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarProjeto(
     banco,
     Projeto.parse({
@@ -100,7 +100,7 @@ function semear(raiz: string, descricao: string, integral = false): void {
 
 /** O estado da I-250 no banco da instância. */
 function estado(raiz: string) {
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   try {
     const ag = carregarDemanda(banco, "I-250");
     const t = ag.tickets.find((x) => x.ticket_id === 2);

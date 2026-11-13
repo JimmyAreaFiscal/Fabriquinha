@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../src/modulos/sandbox/armazenamento/ambientes.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
@@ -76,7 +76,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Effort de Planejar")).toHaveValue("high");
   await expect(pagina.getByLabel("Effort de Implementar")).toHaveValue("");
   await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   expect({ ...banco.prepare("SELECT * FROM projeto WHERE nome = 'loja'").get() }).toEqual({
     nome: "loja",
     raiz_git: expect.any(String),
@@ -214,7 +214,7 @@ test("escolhe o modelo e o effort de cada etapa no cadastro do projeto, salva e 
   await expect(pagina.getByLabel("Planejar", { exact: true })).toHaveValue("anthropic/claude-antigo");
   await expect(pagina.getByLabel("Effort de Revisar rodada")).toHaveValue("high");
   await expect(pagina.getByLabel("Effort de Demanda")).toHaveClass("padrao");
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   expect(
     banco
       .prepare("SELECT * FROM configuracao_etapa_projeto WHERE projeto = 'loja' ORDER BY etapa")
@@ -244,7 +244,7 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     imagem: "node:22",
     rotulos: { "fabriquinha.ambiente": "amb-alocado" },
   });
-  const banco = abrir(fabriquinha.raiz);
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
   inserirAmbienteAlocado(banco, {
     id: "amb-livre",
     container_id: livre.id,

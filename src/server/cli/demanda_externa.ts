@@ -1,6 +1,7 @@
 // Comandos da ferramenta externa (Claude Code, Codex, pi) sobre a demanda, fora de uma execução de agente
 // (comparacao-sdlc-implementacao.md §6 e §9.1): `fabriquinha demanda ...`. Cada comando só converte os argumentos e
-// chama `gestao_demandas.ts`; decidir, cancelar e arquivar são do Auditor e não existem aqui.
+// chama a fachada de Demandas, um fluxo do servidor ou `gestao_demandas.ts`; decidir, cancelar e arquivar são do Auditor
+// e não existem aqui.
 import { readFileSync, realpathSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
@@ -9,13 +10,10 @@ import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
 import type { Ator } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../modulos/etapas/entender_e_desenhar/definicao.ts";
 import { Endereco } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import {
-  declararUso,
-  editar,
-  enviar,
-  registrar,
-  submeterEvidencia,
-} from "../../modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { declararUso, submeterEvidencia } from "../../modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { editarPedido } from "../../modulos/demandas/publico.ts";
+import { registrarPedidoComProcesso } from "../fluxos/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../fluxos/envio_ao_desenvolvimento.ts";
 import { visaoDaDemanda } from "../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
 import {
   type Comando,
@@ -106,7 +104,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
       return deps.comBanco((banco) =>
-        visao(banco, registrar(banco, dados, autor, { agora: deps.relogio.agora() }).demanda.id),
+        visao(banco, registrarPedidoComProcesso(banco, dados, autor, { agora: deps.relogio.agora() }).demanda.id),
       );
     },
   },
@@ -128,7 +126,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         descricao: arquivo === undefined ? undefined : await ler(arquivo, deps.stdin),
       };
       return deps.comBanco((banco) => {
-        editar(banco, id, dados, autor);
+        editarPedido(banco, id, dados, autor);
         return visao(banco, id);
       });
     },
@@ -189,7 +187,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const id = idDe(String(entrada.posicionais[0]));
       const autor = autorDe(entrada, deps);
       return deps.comBanco((banco) => {
-        enviar(banco, id, autor, { agora: deps.relogio.agora() });
+        enviarAoDesenvolvimento(banco, id, autor, { agora: deps.relogio.agora() });
         return visao(banco, id);
       });
     },

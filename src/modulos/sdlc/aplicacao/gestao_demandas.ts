@@ -1,12 +1,12 @@
-// Gestão de Demandas na camada de aplicação (comparacao-sdlc-implementacao.md §6): registrar, editar, dependência,
-// evidência, enviar e arquivar, uma transação por operação. A web e o CLI chamam estas funções; as regras são do domínio.
+// Gestão de Demandas na camada de aplicação (comparacao-sdlc-implementacao.md §6): o lado do processo no registro e no
+// envio do pedido, evidência, arquivar, reabrir e o Uso declarado, uma transação por operação. O registro, a edição, o
+// envio e o cancelamento do pedido são dos Pedidos (Demandas), e os fluxos do servidor os coordenam com estas funções.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { AUDITOR, type Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/demanda/agregado_demanda.ts";
-import { arquivarDemanda, cancelarDemanda } from "../nucleo/ciclo_de_vida/cancelamento_demanda.ts";
+import { arquivarDemanda } from "../nucleo/ciclo_de_vida/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
-import { registrarDependencia } from "../nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../compartilhado/nucleo/erros.ts";
 import { exigirAutoria } from "../nucleo/evidencias/evidencia.ts";
 import { TIPOS_DA_DEMANDA } from "../../etapas/entender_e_desenhar/definicao.ts";
@@ -15,23 +15,16 @@ import type { Relogio } from "../../compartilhado/nucleo/relogio.ts";
 import { CustosRealizados } from "../nucleo/evidencias/schemas.ts";
 import {
   type ContextoDemanda,
-  editarDemanda,
   enviarDemanda,
   reabrirTicket,
   registrarDemanda,
 } from "../nucleo/transicoes/transicoes_demanda.ts";
 import { escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { carregarDemanda, comDemanda, criarDemandaNova, situacaoDasDemandas } from "../armazenamento/demandas.ts";
-import {
-  arestasDeDependencia,
-  demandaParaDependencia,
-  gravarDependenciaDemanda,
-} from "../armazenamento/dependencias_demanda.ts";
+import { carregarDemanda, comDemanda, gravarDemandaNova, situacaoDasDemandas } from "../armazenamento/demandas.ts";
 import { projetoExistente } from "../../projeto/armazenamento/projetos.ts";
 import { gravarUsoDeclarado } from "../../trabalho_agentico/armazenamento/uso_declarado.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencias/submeter.ts";
 import type { Origens } from "./evidencias/submissao.ts";
-import { cancelandoEmCascata } from "./gates/cancelamento_em_cascata.ts";
 
 /** `arquivos` são caminhos: abrir cada um, com a defesa de origem, é de `guardarAnexos`. */
 const EntradaEvidencia = z.object({
@@ -43,55 +36,53 @@ const EntradaEvidencia = z.object({
 /** @testes tipo que o teste usa para montar a entrada */
 export type EntradaEvidencia = z.input<typeof EntradaEvidencia>;
 
-type EntradaRegistro = { dependencias?: string[] } & Record<string, unknown>;
-
 const campos = (issues: readonly z.core.$ZodIssue[], prefixo: string[] = []): string =>
   issues.map((i) => `${[...prefixo, ...i.path.map(String)].join(".")}: ${i.message}`).join("; ");
 
 /** O `ZodError` das entradas vira ErroDeRegra com o campo e a correção (CA-18). */
-function traduzir<T>(trabalho: () => T): T {
+export function comCampoInvalidoComoErroDeRegra<T>(operacaoQueValidaAEntrada: () => T): T {
   try {
-    return trabalho();
+    return operacaoQueValidaAEntrada();
   } catch (erro) {
     if (!(erro instanceof z.ZodError)) throw erro;
     throw new ErroDeRegra(campos(erro.issues), "corrija o campo indicado e tente de novo");
   }
 }
 
-/** Registra `demandaId` como dependente de `dependeId`; as duas precisam existir e a regra recusa envio, repetição e ciclo. */
-export const registrarDependenciaDemanda = (banco: DatabaseSync, demandaId: string, dependeId: string): void => {
-  escrever(banco, () => {
-    const demanda = demandaParaDependencia(banco, demandaId);
-    demandaParaDependencia(banco, dependeId);
-    gravarDependenciaDemanda(banco, registrarDependencia(arestasDeDependencia(banco), demanda, dependeId));
-  });
+/** O conteúdo do pedido e quem o registrou, como o processo o recebe de Demandas. */
+interface PedidoRecebido {
+  readonly id: string;
+  readonly projeto: string;
+  readonly titulo: string;
+  readonly tipo: string;
+  readonly descricao: string;
+  readonly criada_por: Ator;
+}
+
+/**
+ * CA-1: o processo do pedido recém-registrado, no estado da primeira Etapa, com o ticket 1 dela; grava a linha da demanda
+ * com o conteúdo do pedido. Roda na unidade de trabalho do fluxo do registro, que alocou o ID do pedido.
+ */
+export const criarProcessoDoPedido = (
+  banco: DatabaseSync,
+  pedido: PedidoRecebido,
+  ctx: ContextoDemanda,
+): AgregadoDemanda => {
+  const { id, projeto, titulo, tipo, descricao, criada_por } = pedido;
+  return gravarDemandaNova(banco, registrarDemanda({ id, projeto, titulo, tipo, descricao }, criada_por, ctx));
 };
 
-/** CA-1 e CA-2: cria a demanda com o ID da sequência e as dependências; qualquer erro desfaz tudo, ID incluído. */
-export const registrar = (
+/** CA-2 e CA-3: sem as obrigatórias recusa listando todas; completa, o processo vai ao Gate da demanda. */
+export const levarAoGateDaDemanda = (
   banco: DatabaseSync,
-  entrada: EntradaRegistro,
+  id: string,
   autor: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda =>
-  traduzir(() =>
-    escrever(banco, () => {
-      const { dependencias = [], ...dados } = entrada;
-      projetoExistente(banco, String(dados.projeto));
-      const demanda = criarDemandaNova(banco, (id) => registrarDemanda({ ...dados, id }, autor, ctx));
-      for (const dependeId of dependencias) registrarDependenciaDemanda(banco, demanda.demanda.id, dependeId);
-      return demanda;
-    }),
-  );
-
-export const editar = (banco: DatabaseSync, id: string, entrada: unknown, autor: Ator): AgregadoDemanda =>
-  traduzir(() => comDemanda(banco, id, (ag) => editarDemanda(ag, entrada, autor)));
-
-export const enviar = (banco: DatabaseSync, id: string, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
-  traduzir(() => comDemanda(banco, id, (ag) => enviarDemanda(ag, autor, ctx)));
+  comCampoInvalidoComoErroDeRegra(() => comDemanda(banco, id, (ag) => enviarDemanda(ag, autor, ctx)));
 
 export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
-  traduzir(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
+  comCampoInvalidoComoErroDeRegra(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
 
 /** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
 export const arquivarConcluidas = (
@@ -114,7 +105,7 @@ export const reabrir = (
   ator: Ator,
   relogio: Relogio,
 ): TicketDemanda => {
-  const ag = traduzir(() =>
+  const ag = comCampoInvalidoComoErroDeRegra(() =>
     comDemanda(banco, demandaId, (a) => reabrirTicket(a, entrada, ator, { agora: relogio.agora() })),
   );
   return existe(
@@ -123,15 +114,6 @@ export const reabrir = (
     "confira o endereço",
   );
 };
-
-/** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto e as dependentes saem junto (D08). */
-export const cancelar = (
-  banco: DatabaseSync,
-  id: string,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): { demanda: AgregadoDemanda; canceladas: string[] } =>
-  traduzir(() => cancelandoEmCascata(banco, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)));
 
 /**
  * CA-8 a CA-12 e CA-15: a submissão segue o caminho único de evidência (Avaliador, guarda dos anexos e gravação);
@@ -144,7 +126,7 @@ export const submeterEvidencia = (
   autor: Ator,
   origens: Origens,
 ): { demanda: AgregadoDemanda; avisos: string[] } =>
-  traduzir(() => {
+  comCampoInvalidoComoErroDeRegra(() => {
     const { tipo, dados, arquivos, rodada_id } = EntradaEvidencia.parse(entrada);
     const dono = rodada_id === undefined ? Endereco.daDemanda(id) : Endereco.daRodada(id, rodada_id);
     const submissao = { tipo, dono, produtor: autor, dados, anexos: arquivos };

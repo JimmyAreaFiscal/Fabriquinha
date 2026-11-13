@@ -22,13 +22,15 @@ interface OpcoesDasConducoes {
   implementacao?: OpcoesDaImplementacao;
   /** Espera da verificação do PR no `encerrar_demanda`. */
   verificacao?: OpcoesDoEncerramentoDaDemanda["verificacao"];
+  /** O fluxo que grava o encerramento do processo junto da conclusão do pedido; a composição o liga. */
+  concluirDesenvolvimento?: OpcoesDoEncerramentoDaDemanda["concluirDesenvolvimento"];
   /** Substitui conduções nos testes que não sobem pi nem git. */
   conducoesSubstitutas?: (deps: DepsDaConducao) => Partial<Record<EtapaConduzida, ConducaoDeEtapa>>;
 }
 
 export const montarConducoesDasEtapas = (
   deps: DepsDaConducao,
-  { implementacao, verificacao, conducoesSubstitutas }: OpcoesDasConducoes = {},
+  { implementacao, verificacao, concluirDesenvolvimento, conducoesSubstitutas }: OpcoesDasConducoes = {},
 ): Record<EtapaConduzida, ConducaoDeEtapa> => ({
   planejar: new ConducaoDePlanejar(deps),
   implementar: new ConducaoDeImplementar(deps, implementacao),
@@ -36,7 +38,7 @@ export const montarConducoesDasEtapas = (
   revisar_rodada: new ConducaoDeRevisarRodada(deps),
   revisar_demanda: new ConducaoDeRevisarDemanda(deps),
   encerrar_rodada: new ConducaoDeEncerrarRodada(deps),
-  encerrar_demanda: new ConducaoDeEncerrarDemanda(deps, { verificacao }),
+  encerrar_demanda: new ConducaoDeEncerrarDemanda(deps, { verificacao, concluirDesenvolvimento }),
   ajustar_resultado: new ConducaoDeAjustarResultado(deps),
   ...conducoesSubstitutas?.(deps),
 });

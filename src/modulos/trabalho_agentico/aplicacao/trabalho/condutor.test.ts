@@ -548,7 +548,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
     const daTicket = processoEmGrupoProprio();
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
         VALUES ('d', '/nao/existe', 'main', 'github', 'k');
-      INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+      INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
@@ -569,7 +569,7 @@ test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", () =
   try {
     condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
-      INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+      INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
@@ -587,7 +587,7 @@ const EM = "2026-10-11T12:00:00.000Z";
 function ticketComProcessoAberto(banco: DatabaseSync, ambienteId: string, grupoProcesso: number): void {
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${EM}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${EM}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'em_execucao', '${EM}');
     INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1')`);

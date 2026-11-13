@@ -2,7 +2,7 @@
 // cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { processosAbertos } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { projeto } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
@@ -390,7 +390,7 @@ test.describe("I-281 CA-3", () => {
     expect(await resposta.json()).toEqual({ tipo: "limite_de_paralelismo", em_uso: 1, limite: 1 });
     await expect(pagina.locator("[data-aviso]")).toHaveText("Limite de paralelismo cheio: 1 de 1 em uso");
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(1);
-    const banco = abrir(fabriquinha.raiz);
+    const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
     expect(processosAbertos(banco).map(({ demanda_id, ticket_id }) => `${demanda_id}.T${String(ticket_id)}`)).toEqual([
       "I-230.T1",
     ]);

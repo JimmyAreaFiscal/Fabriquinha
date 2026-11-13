@@ -1,4 +1,4 @@
-// decidirGate, o ponto de entrada único dos cinco gates: a entrada reprovada pela regra não muda o banco e o erro é o do ensaio do núcleo.
+// decidirGate, o ponto de entrada único dos gates do motor (todos menos o da demanda): a entrada reprovada pela regra não muda o banco e o erro é o do ensaio do núcleo.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
@@ -24,8 +24,9 @@ import { carregarDemanda } from "../sdlc/armazenamento/demandas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
+// O Gate da demanda decide-se pelo fluxo do cancelamento em cascata, que tem o mesmo caso no teste dele.
 interface CasoDeEntradaReprovada {
-  nome: NomeGate;
+  nome: Exclude<NomeGate, "gate_demanda">;
   agregado: AgregadoDemanda;
   endereco: Endereco;
   entrada: unknown;
@@ -33,13 +34,6 @@ interface CasoDeEntradaReprovada {
 }
 
 const casos: CasoDeEntradaReprovada[] = [
-  {
-    nome: "gate_demanda",
-    agregado: agregadoNoEstado("I-1", "gate_demanda"),
-    endereco: Endereco.daDemanda("I-1"),
-    entrada: { resultado: "reprovado" },
-    ator: () => AUDITOR,
-  },
   {
     nome: "gate_planejamento",
     agregado: agregadoNoEstado("I-1", "gate_planejamento"),

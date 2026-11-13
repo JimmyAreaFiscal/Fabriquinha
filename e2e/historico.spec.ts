@@ -40,7 +40,7 @@ function semear(raiz: string): void {
   const [fim1, fim2] = [instante(5), instante(26 * 60)];
   projeto(
     raiz,
-    `INSERT INTO demanda VALUES
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
        ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'planejar', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-1'),
        ('I-2', 'loja', 'Timeout no checkout', 'problema', 'd', 'planejar', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-2');
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
@@ -130,7 +130,7 @@ test("o endereço do ticket fica inteiro, sem encostar no título, a 1440 e 375 
   const fim = instante(5);
   projeto(
     fabriquinha.raiz,
-    `INSERT INTO demanda VALUES
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
        ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-1'),
        ('I-247', 'loja', 'Remover o fluxo legado de issues, tickets e execuções da Fabriquinha', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-247');
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES

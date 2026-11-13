@@ -1,4 +1,5 @@
-// Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar, submeter o plano e os tickets.
+// Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, enviar, submeter o plano e os tickets; a
+// edição do conteúdo é dos Pedidos (Demandas).
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "../demanda/agregado_demanda.ts";
@@ -53,9 +54,6 @@ const EntradaRegistro = z.strictObject({
   tipo: TipoDemanda,
   descricao: Markdown,
 });
-const EntradaEdicao = z
-  .strictObject({ titulo: Titulo.optional(), tipo: TipoDemanda.optional(), descricao: Markdown.optional() })
-  .refine((e) => (e.titulo ?? e.tipo ?? e.descricao) !== undefined, "informe ao menos um campo para editar");
 
 /** Ticket global falho bloqueia o seu percurso: só `reabrirTicket` (Auditor, com instrução) o libera. */
 export function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): void {
@@ -92,28 +90,6 @@ export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDem
     ],
     decisoes: [],
     evidencias: [],
-  });
-}
-
-/** CA-6 e CA-7: edita título, tipo ou descrição só antes do envio e só pelo Ator externo que a criou (`criada_por`). */
-export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: Ator): AgregadoDemanda {
-  const e = EntradaEdicao.parse(entrada);
-  const { demanda } = ag;
-  if (demanda.enviada) {
-    throw new ErroDeRegra(
-      `a demanda ${demanda.id} já foi enviada e o conteúdo está congelado`,
-      "só custos, decisões e evidências de etapas posteriores entram depois do envio",
-    );
-  }
-  exigirAutoria(demanda, autor, "editar");
-  return AgregadoDemanda.parse({
-    ...ag,
-    demanda: {
-      ...demanda,
-      titulo: e.titulo ?? demanda.titulo,
-      tipo: e.tipo ?? demanda.tipo,
-      descricao: e.descricao ?? demanda.descricao,
-    },
   });
 }
 
