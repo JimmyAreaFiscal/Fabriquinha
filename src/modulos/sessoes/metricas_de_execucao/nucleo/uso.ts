@@ -99,25 +99,3 @@ export class Uso {
     };
   }
 }
-
-// Instanciar o formatador é caro; `toLocaleString` o recriaria a cada chamada.
-const formatadorDeDolares = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const sessoes = (quantas: number): string => `${String(quantas)} ${quantas === 1 ? "sessão" : "sessões"}`;
-
-/**
- * O custo como as telas o mostram: "US$ 4,20"; "≥ US$ 4,20 (2 sessões sem custo)" quando falta custo; e
- * "US$ 4,20 (estimado em 1 sessão)" quando parte dele veio do catálogo de preços. Os avisos ficam entre parênteses,
- * separados por ";".
- */
-export function textoDoCustoDe({ conhecido, trabalhosSemCusto, trabalhosComCustoEstimado }: CustoDoUso): string {
-  const avisos = [
-    ...(trabalhosSemCusto > 0 ? [`${sessoes(trabalhosSemCusto)} sem custo`] : []),
-    ...(trabalhosComCustoEstimado > 0 ? [`estimado em ${sessoes(trabalhosComCustoEstimado)}`] : []),
-  ];
-  const dolares = `${trabalhosSemCusto > 0 ? "≥ " : ""}US$ ${formatadorDeDolares.format(conhecido)}`;
-  return avisos.length === 0 ? dolares : `${dolares} (${avisos.join("; ")})`;
-}
-
-/** O custo de `uso` como as telas o mostram. */
-export const textoDoCusto = (uso: Uso): string => textoDoCustoDe(uso.custo());

@@ -10,16 +10,13 @@ import {
   carregarSessoesDoContexto,
   comSessoesDoContexto,
 } from "../../src/modulos/sessoes/publico.ts";
+import { produtividadeDaRodada, type EtapaTicket, carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import {
+  metricasDasEtapas,
   metricasDosMeses,
-  produtividadeDaRodada,
   usoDaDemanda,
-  type EtapaTicket,
-  carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { metricasDasEtapas } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/registro_das_metricas.ts";
-import type { MetricaDeUso } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/metricas/metrica_de_uso.ts";
-import type { ValorDe } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/calculo_de_metrica.ts";
+} from "../../src/server/consultas/metricas/metricas_do_periodo.ts";
+import { usoPorEtapa } from "../../src/server/consultas/metricas/metrica_de_uso.ts";
 import { mesDoInstante } from "../../src/shared/nucleo/relogio.ts";
 import {
   abrirPortao,
@@ -182,10 +179,11 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   usar(c.banco, refVizinha, "e-vizinha", [["a", 999, 1_000_000]]);
 
   const antes = demanda(c, id);
-  const usoDaEtapa = (etapa: EtapaTicket) =>
-    metricasDasEtapas(origemDe(c.banco), { demandaId: id })
-      .get(etapa)
-      ?.find((m) => m.definicao.tipo === "uso")?.valor as ValorDe<MetricaDeUso>;
+  const usoDaEtapa = (etapa: EtapaTicket) => {
+    const valor = usoPorEtapa(origemDe(c.banco), { demandaId: id }).get(etapa);
+    assert.ok(valor);
+    return valor;
+  };
   const total = usoDaDemanda(origemDe(c.banco), id);
 
   assert.deepEqual(usoDaEtapa("implementar").custo, {

@@ -5,17 +5,17 @@ import {
   bancoDaDemanda,
   bancoDoPeriodo,
   doMes,
+  em,
   gravarExecucao,
   gravarUsoDeclarado,
   linhaDeUsoDeclarado,
   origemDe,
-} from "../../../../../../apoio-testes/banco/banco_de_metricas.ts";
-import { intervalo } from "../../../../../shared/nucleo/periodo.ts";
-import type { Recorte } from "../../nucleo/metrica.ts";
-import type { EtapaTicket } from "../../../etapas/publico.ts";
-import { MetricaDeUso } from "./metrica_de_uso.ts";
+} from "../../../../apoio-testes/banco/banco_de_metricas.ts";
+import { intervalo } from "../../../shared/nucleo/periodo.ts";
+import type { EtapaTicket, Recorte } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { DEFINICAO_DO_USO, textoDoCusto, usoPorEtapa } from "./metrica_de_uso.ts";
 
-const calcularUso = (banco: DatabaseSync, recorte: Recorte) => new MetricaDeUso().calcular(origemDe(banco), recorte);
+const calcularUso = (banco: DatabaseSync, recorte: Recorte) => usoPorEtapa(origemDe(banco), recorte);
 
 const daEtapa = <Valor>(valores: Map<EtapaTicket, Valor>, etapa: EtapaTicket): Valor => {
   const valor = valores.get(etapa);
@@ -42,7 +42,7 @@ const somarTotais = (a: number[], b: number[]) => a.map((n, i) => n + (b[i] ?? 0
 test("o Uso vale para as nove Etapas, com a definição que a tela mostra", () => {
   const valores = calcularUso(bancoDaDemanda(), { demandaId: "I-1" });
   assert.equal(valores.size, 9);
-  assert.deepEqual(new MetricaDeUso().definicao, { tipo: "uso", rotulo: "Uso", fonte: "Uso" });
+  assert.deepEqual(DEFINICAO_DO_USO, { tipo: "uso", rotulo: "Uso", fonte: "Uso" });
 });
 
 test("CA-1 e CA-18: tokens por modelo na demanda e por etapa, com o custo das execuções", () => {
@@ -307,4 +307,32 @@ test("por demanda: a demanda só com Uso declarado no período é linha com 0 ex
     totalDasEtapas(calcularUso(b, { ...doMes("2026-03"), demandaId })),
   );
   assert.deepEqual(dasDemandas.reduce(somarTotais), totalDasEtapas(calcularUso(b, doMes("2026-03"))));
+});
+
+const custo = (conhecido: number, trabalhosSemCusto: number, trabalhosComCustoEstimado: number) => ({
+  conhecido,
+  trabalhosSemCusto,
+  trabalhosComCustoEstimado,
+});
+
+test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso com '≥' e a contagem", () => {
+  assert.equal(textoDoCusto(custo(4.2, 0, 0)), "US$ 4,20");
+  assert.equal(textoDoCusto(custo(4.2, 2, 0)), "≥ US$ 4,20 (2 sessões sem custo)");
+  assert.equal(textoDoCusto(custo(4.2, 1, 0)), "≥ US$ 4,20 (1 sessão sem custo)");
+});
+
+test("textoDoCusto avisa o custo estimado, sozinho ou ao lado das sessões sem custo", () => {
+  assert.equal(textoDoCusto(custo(4.2, 0, 1)), "US$ 4,20 (estimado em 1 sessão)");
+  assert.equal(textoDoCusto(custo(5.2, 0, 2)), "US$ 5,20 (estimado em 2 sessões)");
+  assert.equal(textoDoCusto(custo(4.2, 2, 1)), "≥ US$ 4,20 (2 sessões sem custo; estimado em 1 sessão)");
+});
+
+test("execução sem uso registrado soma zero sem custo incompleto", () => {
+  const b = bancoDoPeriodo();
+  b.prepare(
+    "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x9', 's3', ?, NULL, 0)",
+  ).run(em("2026-04"));
+  const uso = usoPorEtapa(origemDe(b), doMes("2026-04")).get("implementar");
+  assert.equal(uso?.execucoes, 1);
+  assert.deepEqual(uso.custo, { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
 });

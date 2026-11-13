@@ -19,6 +19,9 @@ import {
   commitarTicket,
   commitDoTicketDemanda,
   cursorDaBase,
+  type MetricasDoRepositorio,
+  metricasDosCommits,
+  type PedidoDasMetricasDoRepositorio,
   type PedidoDeCommit,
   varrerBasesVencidas,
   varrerCommitsHumanos,
@@ -158,6 +161,8 @@ export interface RepositorioDoProjeto {
   ): Promise<LimpezaDoEspaco>;
   /** As alterações da base publicada nos 12 meses até `agora`, por arquivo. */
   heatmap(projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "branch_base">, agora: Instante): Promise<Heatmap>;
+  /** As métricas do Repositório das `demandas` no período, lidas em lote; quem agrupa por Etapa, mês ou demanda é quem pede. */
+  metricas(pedido: PedidoDasMetricasDoRepositorio): MetricasDoRepositorio;
   /** Na remoção do projeto, na unidade de trabalho dela: os commits das `demandas` e o cursor da varredura do projeto. */
   esquecer(projeto: string, demandas: readonly string[]): void;
   /** Depois da remoção do projeto: apaga as worktrees dele; cada falha vira um aviso. */
@@ -270,6 +275,7 @@ export function montarRepositorio({ banco, varredura }: MontagemDoRepositorio): 
       return { ...feito, sobras };
     },
     heatmap: (projeto, agora) => heatmapDo(projeto, agora),
+    metricas: (pedido) => metricasDosCommits(banco, pedido),
     esquecer(projeto, demandas) {
       apagarCommitsDasDemandas(banco, demandas);
       apagarVarreduraDoProjeto(banco, projeto);

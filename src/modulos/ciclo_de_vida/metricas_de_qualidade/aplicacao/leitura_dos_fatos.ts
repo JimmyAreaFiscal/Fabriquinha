@@ -4,17 +4,11 @@
 // que mais de uma Métrica pede é feita uma vez por escopo: as Métricas do mesmo pedido recebem o mesmo escopo.
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado, ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
-import { alteracoesDosCommitsEmLote } from "../../../repositorio/publico.ts";
-import {
-  execucoesEmLote,
-  lerUsoDasExecucoes,
-  lerUsoDeclaradoEmLote,
-  type LinhaDeUso,
-} from "../../../sessoes/publico.ts";
+import { montarRepositorio } from "../../../repositorio/publico.ts";
 import { primeiraEvidenciaDasDemandas } from "../../evidencias/publico.ts";
 import { type ResumoDoTicket, ticketsDasDemandas } from "../../planejamento/publico.ts";
 import { decisoesEmLote } from "../../processo/publico.ts";
-import { noPeriodo, type PedidoDasMetricas, type Recorte, registroDoPedido } from "../nucleo/metrica.ts";
+import type { PedidoDasMetricas, Recorte } from "../nucleo/metrica.ts";
 
 /** De onde as Métricas leem: o banco, pelos donos de cada fato, e os pedidos de todas as demandas, como dado. */
 export interface OrigemDosFatos {
@@ -60,12 +54,6 @@ export const primeiraEvidenciaDoEscopo = lidaUmaVezPorEscopo((escopo) =>
   primeiraEvidenciaDasDemandas(escopo.banco, escopo.demandas),
 );
 
-/** O dono de uma linha de métrica: a Etapa do ticket e a rodada dele (`null` em ticket de demanda). */
-interface DonoDaLinha {
-  etapa: string;
-  rodadaId: number | null;
-}
-
 /**
  * O ticket de cada fato, entre os das demandas do escopo. O ticket existe: sessão, Decisão, Tentativa e commit têm chave
  * estrangeira para ele.
@@ -84,53 +72,6 @@ export const ticketsCitados = lidaUmaVezPorEscopo(
   },
 );
 
-const donoDe = (ticket: ResumoDoTicket): DonoDaLinha => ({ etapa: ticket.etapa, rodadaId: ticket.rodada_id });
-
-/** Cada execução vale uma vez, no instante em que começou: a retomada de uma sessão é uma execução nova. */
-export const lerExecucoesDoRecorte = lidaUmaVezPorEscopo((escopo) => {
-  const execucoes = execucoesEmLote(escopo.banco, { demandas: escopo.demandas, periodo: escopo.periodo });
-  const ticketDe = ticketsCitados(escopo);
-  return execucoes.map((execucao) => ({
-    ...execucao,
-    em: execucao.inicio,
-    ...donoDe(ticketDe(execucao.demanda_id, execucao.ticket_id)),
-  }));
-});
-
-/** O Uso medido das execuções do recorte, na ordem em que foi gravado. */
-export const lerUsoDoRecorte = lidaUmaVezPorEscopo((escopo) =>
-  lerUsoDasExecucoes(
-    escopo.banco,
-    lerExecucoesDoRecorte(escopo).map((execucao) => execucao.id),
-  ),
-);
-
-/**
- * O Uso declarado das sessões cuja dona é uma demanda do recorte, no instante do registro dela: a sessão externa não
- * grava data própria.
- * shortcut: o instante é o do registro da demanda; gravar a data da declaração em `uso_declarado` se isso distorcer a série.
- */
-export const lerUsoDeclaradoDoRecorte = lidaUmaVezPorEscopo(
-  (escopo): { demanda_id: string; em: string; linhas: LinhaDeUso[] }[] => {
-    const declarados = lerUsoDeclaradoEmLote(escopo.banco, escopo.demandas);
-    const primeiraEvidencia = primeiraEvidenciaDoEscopo(escopo);
-    const registro = new Map(
-      escopo.pedidos.map((pedido) => [pedido.id, registroDoPedido(pedido, primeiraEvidencia.get(pedido.id))]),
-    );
-    return declarados
-      .map(({ demanda_id, linhas }) => ({
-        demanda_id,
-        em: encontrado(
-          registro.get(demanda_id),
-          `a demanda ${demanda_id} não está entre os pedidos`,
-          "passe os pedidos de todas as demandas do recorte",
-        ),
-        linhas,
-      }))
-      .filter((declarado) => noPeriodo(declarado.em, escopo.periodo));
-  },
-);
-
 /** As Decisões tomadas no recorte, com a Etapa do ticket decidido. */
 export const lerDecisoesDoRecorte = lidaUmaVezPorEscopo((escopo) => {
   const decisoes = decisoesEmLote(escopo.banco, { demandas: escopo.demandas, periodo: escopo.periodo });
@@ -144,15 +85,11 @@ export const lerDecisoesDoRecorte = lidaUmaVezPorEscopo((escopo) => {
   }));
 });
 
-/** Por commit de ticket feito no recorte, a Etapa e a rodada dele, as linhas que ele adicionou e as que uma pessoa alterou depois. */
-export const lerCommitsDoRecorte = lidaUmaVezPorEscopo((escopo) => {
-  const commits = alteracoesDosCommitsEmLote(escopo.banco, { demandas: escopo.demandas, periodo: escopo.periodo });
-  const ticketDe = ticketsCitados(escopo);
-  return commits.map((commit) => ({
-    demanda_id: commit.demanda_id,
-    em: commit.em,
-    ...donoDe(ticketDe(commit.demanda_id, commit.ticket_id)),
-    adicionadas: commit.linhasAdicionadas,
-    alteradasPorHumanos: commit.linhasAlteradasPorHumanos,
-  }));
-});
+/**
+ * Os commits de ticket das demandas do escopo, de qualquer período, com os arquivos, lidos do Repositório: a conformidade
+ * compara a rodada inteira.
+ * ponytail: o Repositório montado por banco; o passo 6 entrega ao Ciclo de Vida o Repositório da composição.
+ */
+export const lerCommitsDoEscopo = lidaUmaVezPorEscopo(
+  (escopo) => montarRepositorio({ banco: escopo.banco }).metricas({ demandas: escopo.demandas, periodo: {} }).commits,
+);

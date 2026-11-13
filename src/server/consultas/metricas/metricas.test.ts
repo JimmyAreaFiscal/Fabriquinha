@@ -4,12 +4,12 @@ process.env.TZ = "America/Sao_Paulo"; // o mês do relógio é o do fuso do serv
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
-import { relogioFixo } from "../../shared/nucleo/relogio.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { consultarMetricasDasDemandas, consultarMetricasDosMeses } from "./metricas.ts";
-import { contarExecucoesSql } from "../../../estresse/referencia/contador_de_execucoes_sql.ts";
-import { semearVolume } from "../../../estresse/referencia/semeadura_dos_volumes.ts";
-import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
+import { contarExecucoesSql } from "../../../../estresse/referencia/contador_de_execucoes_sql.ts";
+import { semearVolume } from "../../../../estresse/referencia/semeadura_dos_volumes.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const relogio = relogioFixo("2026-03-15T12:00:00.000Z");
 

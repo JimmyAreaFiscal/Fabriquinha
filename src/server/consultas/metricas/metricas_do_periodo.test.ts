@@ -2,15 +2,28 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   bancoDoPeriodo,
+  doMes,
   em,
   gravarDecisaoEm,
   gravarTicket,
   gravarUsoDeclarado,
   linhaDeUsoDeclarado,
   origemDe,
-} from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
-import type { TipoMetrica } from "../../etapas/publico.ts";
-import { type MetricasDaEtapa, metricasDasDemandasDoPeriodo, metricasDosMeses, NIVEIS } from "./metricas_do_periodo.ts";
+} from "../../../../apoio-testes/banco/banco_de_metricas.ts";
+import {
+  CATALOGO_DE_ETAPAS,
+  EtapaTicket,
+  type Recorte,
+  type TipoMetrica,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
+import { ErroDeInexistente } from "../../../shared/nucleo/erros.ts";
+import {
+  type MetricasDaEtapa,
+  metricasDasDemandasDoPeriodo,
+  metricasDasEtapas,
+  metricasDosMeses,
+  NIVEIS,
+} from "./metricas_do_periodo.ts";
 
 const [FEV, MAR] = [1, 2];
 const ver = <T>(x: T | undefined): T => {
@@ -219,4 +232,50 @@ test("por demanda: a demanda só com Uso declarado no período é linha com 0 ex
     demandas.reduce((s, d) => s + d.tokens.total, 0),
     total.tokens.total,
   );
+});
+
+const valorDaEtapa = (metricas: ReturnType<typeof metricasDasEtapas>, etapa: EtapaTicket, tipo: string) =>
+  metricas.get(etapa)?.find((m) => m.definicao.tipo === tipo)?.valor;
+
+test("cada Etapa traz as Métricas que o catálogo declara para ela, com rótulo e fonte", () => {
+  const metricas = metricasDasEtapas(origemDe(bancoDoPeriodo()), {});
+  assert.deepEqual([...metricas.keys()], EtapaTicket.options);
+  for (const etapa of EtapaTicket.options) {
+    assert.deepEqual(
+      metricas.get(etapa)?.map((m) => m.definicao.tipo),
+      CATALOGO_DE_ETAPAS[etapa].metricas,
+      etapa,
+    );
+  }
+  assert.ok(metricas.get("planejar")?.every((m) => m.definicao.rotulo !== "" && m.definicao.fonte !== ""));
+});
+
+test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e alterações posteriores", () => {
+  const b = bancoDoPeriodo();
+  gravarTicket(b, "I-1", 7, "revisar_rodada", 1);
+  gravarDecisaoEm(b, ["I-1", 7, 1], ["gate_revisao_rodada", "reprovado", null], em("2026-02"));
+  const [jan, fev, mar] = ["2026-01", "2026-02", "2026-03"].map((mes) => metricasDasEtapas(origemDe(b), doMes(mes)));
+  assert.ok(jan && fev && mar);
+  assert.deepEqual(valorDaEtapa(fev, "encerrar_rodada", "nota_humana"), { soma: 9, quantidade: 2, media: 4.5 });
+  assert.deepEqual(valorDaEtapa(jan, "encerrar_rodada", "nota_humana"), { soma: 0, quantidade: 0, media: null });
+  assert.deepEqual(valorDaEtapa(fev, "revisar_rodada", "exigencias_de_alteracao"), { reprovacoes: 1 });
+  assert.deepEqual(valorDaEtapa(mar, "revisar_rodada", "exigencias_de_alteracao"), { reprovacoes: 0 });
+  assert.deepEqual(valorDaEtapa(fev, "implementar", "alteracoes_posteriores"), {
+    adicionadas: 30,
+    alteradasPorHumanos: 5,
+  });
+  assert.deepEqual(valorDaEtapa(mar, "implementar", "alteracoes_posteriores"), {
+    adicionadas: 0,
+    alteradasPorHumanos: 0,
+  });
+});
+
+test("o recorte de período, de Projeto e de Demanda valem para todas as Métricas", () => {
+  const b = bancoDoPeriodo();
+  const execucoesDeImplementar = (recorte: Recorte) =>
+    (valorDaEtapa(metricasDasEtapas(origemDe(b), recorte), "implementar", "uso") as { execucoes: number }).execucoes;
+  assert.equal(execucoesDeImplementar(doMes("2026-02")), 2);
+  assert.equal(execucoesDeImplementar({ projeto: "site" }), 1);
+  assert.equal(execucoesDeImplementar({ demandaId: "I-1" }), 3);
+  assert.throws(() => metricasDasEtapas(origemDe(b), { demandaId: "I-9" }), ErroDeInexistente);
 });

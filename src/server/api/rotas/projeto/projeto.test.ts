@@ -15,7 +15,7 @@ import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import type { MetricasDoMes } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import type { MetricasDoMes } from "../../../consultas/metricas/metricas_do_periodo.ts";
 import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";

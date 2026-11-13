@@ -1,34 +1,28 @@
-// O registro das Métricas: as de Sucesso, que cada Etapa declara na definição dela, e as do SDLC inteiro, de nenhuma Etapa.
+// O registro das Métricas do processo: as de Sucesso que o Ciclo de Vida mede, que cada Etapa declara na definição dela,
+// e as do SDLC inteiro, de nenhuma Etapa. As de Sessões (`uso`) e do Repositório (`alteracoes_posteriores`,
+// `bugs_nos_arquivos_revisados`) cada módulo mede, e quem pede as junta por Etapa.
 // Métrica nova é um arquivo em metricas/ e uma linha aqui; a de Etapa, também o tipo dela em `TipoMetrica` e na
 // definição de cada Etapa que a mede.
 import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../etapas/publico.ts";
 import type { Recorte } from "../nucleo/metrica.ts";
 import { DEMANDA_DO_FATO, type ParteDoFato, type ValorDaMetrica, type ValoresPorParte } from "./calculo_de_metrica.ts";
 import { type EscopoDosFatos, escopoDoRecorte, type OrigemDosFatos } from "./leitura_dos_fatos.ts";
-import { MetricaDeAlteracoesPosteriores } from "./metricas/metrica_de_alteracoes_posteriores.ts";
 import { MetricaDeAprovacoesEReprovacoes } from "./metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
-import { MetricaDeBugsNosArquivosRevisados } from "./metricas/metrica_de_bugs_nos_arquivos_revisados.ts";
 import { MetricaDeDemandas } from "./metricas/metrica_de_demandas.ts";
 import { MetricaDeConformidade } from "./metricas/metrica_de_conformidade.ts";
 import { MetricaDeExigenciasDeAlteracao } from "./metricas/metrica_de_exigencias_de_alteracao.ts";
 import { MetricaDeNotaHumana } from "./metricas/metrica_de_nota_humana.ts";
 import { MetricaDePrs } from "./metricas/metrica_de_prs.ts";
 import { MetricaDeTickets } from "./metricas/metrica_de_tickets.ts";
-import { MetricaDeUso } from "./metricas/metrica_de_uso.ts";
 
 const METRICAS_POR_ETAPA = [
-  new MetricaDeUso(),
   new MetricaDeAprovacoesEReprovacoes(),
   new MetricaDeConformidade(),
-  new MetricaDeAlteracoesPosteriores(),
   new MetricaDeExigenciasDeAlteracao(),
-  new MetricaDeBugsNosArquivosRevisados(),
   new MetricaDeNotaHumana(),
 ];
 
 const METRICAS_DO_SDLC = [new MetricaDeDemandas(), new MetricaDeTickets(), new MetricaDePrs()];
-
-export type TipoMetricaDoSdlc = (typeof METRICAS_DO_SDLC)[number]["definicao"]["tipo"];
 
 /** De cada valor por parte, o do recorte ou o de uma parte. */
 type ValorEscolhido = <Valor>(valores: ValoresPorParte<Valor>) => Valor;
@@ -36,8 +30,8 @@ type ValorEscolhido = <Valor>(valores: ValoresPorParte<Valor>) => Valor;
 const DO_RECORTE: ValorEscolhido = (valores) => valores.doRecorte();
 
 /**
- * Todas as Etapas, cada uma com os valores das Métricas que o catálogo declara para ela, no escopo e em cada parte dele:
- * cada Métrica lê os fatos dela uma vez.
+ * Todas as Etapas, cada uma com os valores das Métricas do processo que o catálogo declara para ela, no escopo e em cada
+ * parte dele: cada Métrica lê os fatos dela uma vez.
  */
 export function metricasDasEtapasPorParte(
   escopo: EscopoDosFatos,
@@ -74,11 +68,6 @@ export function metricasDoSdlcPorParte(
     calculados.map(({ definicao, valores }) => ({ definicao, valor: escolhido(valores) }));
   return { doRecorte: () => escolher(DO_RECORTE), daParte: (parte) => escolher((valores) => valores.daParte(parte)) };
 }
-
-/** Todas as Etapas, cada uma com os valores das Métricas que o catálogo declara para ela. */
-/** @testes o teste do registro pede um recorte só; a produção pede por parte */
-export const metricasDasEtapas = (origem: OrigemDosFatos, recorte: Recorte): Map<EtapaTicket, ValorDaMetrica[]> =>
-  metricasDasEtapasPorParte(escopoDoRecorte(origem, recorte), DEMANDA_DO_FATO).doRecorte();
 
 /** As Métricas do SDLC inteiro no recorte, na ordem do registro. */
 /** @testes o teste do registro pede um recorte só; a produção pede por parte */

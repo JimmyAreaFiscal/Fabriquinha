@@ -6,7 +6,7 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
-import type { MetricasDoMes, MetricasPorDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { MetricasDoMes, MetricasPorDemanda } from "../../consultas/metricas/metricas_do_periodo.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";

@@ -12,7 +12,6 @@ import {
   formatarRodadaRef,
   formatarTicketRef,
   listarResumosDasDemandas,
-  metricasDosMeses,
   PRIMEIRA_ETAPA_DA_RODADA,
   type TicketDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
@@ -21,6 +20,7 @@ import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../contrato/inicio.ts";
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "../demandas/pedidos_das_metricas.ts";
+import { metricasDosMeses } from "../metricas/metricas_do_periodo.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 import { pendenciasDasDemandas, situacoesDoBanco, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 

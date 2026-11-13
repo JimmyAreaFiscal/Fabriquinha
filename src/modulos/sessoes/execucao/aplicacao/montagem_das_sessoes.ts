@@ -24,6 +24,7 @@ import { pastasDoProcesso } from "../nucleo/pastas_da_execucao.ts";
 import type { ContextoDaSessao, IdDaExecucao, IdDaSessao } from "../nucleo/sessao.ts";
 import { encerrarExecucaoOrfa } from "./encerramento.ts";
 import { MotorDasSessoes, type PedidoDeProcesso, type RespostaAoDialogo } from "./motor_das_sessoes.ts";
+import { type PedidoDasMetricasDeUso, usoDasMetricas, type UsoPorContexto } from "./uso_das_metricas.ts";
 
 /**
  * O motor do serviço: um por processo, com os pi vivos de todas as sessões; toda montagem fala com ele.
@@ -65,6 +66,8 @@ export interface SessoesDeAgente {
   modelos(): Promise<Modelo[]>;
   /** Guarda o Uso que uma sessão externa declara; a sessão já declarada por outra demanda fica com a dona. */
   declararUso(uso: UsoDeclarado): { demandaDona: string };
+  /** A métrica "uso": o Uso de cada execução do período e de cada sessão externa declarada das demandas. */
+  metricas(pedido: PedidoDasMetricasDeUso): UsoPorContexto;
   /** Apaga as sessões das `demandas`, as execuções e o Uso; devolve o que sobra no disco (execuções e conversas). */
   esquecer(demandas: readonly DemandaId[]): { execucoes: IdDaExecucao[]; sessoes: string[] };
   /** A parada do serviço: não lança pi novo, espera as execuções em curso e mata as que passam do limite. */
@@ -111,6 +114,7 @@ function sessoesDoBanco(banco: DatabaseSync, gravacaoDoCatalogo: Promise<void>):
     conversa: (sessao) => motor.lerConversa(raizDo(banco), sessao),
     modelos: () => motor.harness.listarModelos(),
     declararUso: (uso) => gravarUsoDeclarado(banco, uso),
+    metricas: (pedido) => usoDasMetricas(banco, pedido),
     esquecer: (demandas) => apagarSessoesDasDemandas(banco, demandas),
     async parar() {
       motor.marcarParada();

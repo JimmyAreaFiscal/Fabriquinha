@@ -119,7 +119,3 @@ export abstract class MetricaDoSdlc<
   /** A fórmula, pura: o valor que sai dos fatos. */
   abstract formula(fatos: Fatos): Valor;
 }
-
-/** O valor que um cálculo devolve: em cada Etapa que declara a Métrica, ou no SDLC inteiro. */
-export type ValorDe<Calculo extends { calcular(origem: OrigemDosFatos, recorte: Recorte): unknown }> =
-  ReturnType<Calculo["calcular"]> extends Map<EtapaTicket, infer Valor> ? Valor : ReturnType<Calculo["calcular"]>;

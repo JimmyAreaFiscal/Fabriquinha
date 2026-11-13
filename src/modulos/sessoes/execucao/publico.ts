@@ -19,7 +19,6 @@ export {
   escopoDaExecucao,
   execucaoVivaDoToken,
   execucoesAbertas,
-  execucoesEmLote,
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
   type FiltroDeSessoes,
@@ -37,3 +36,4 @@ export {
   type SessoesDeAgente,
   type SubidaDasSessoes,
 } from "./aplicacao/montagem_das_sessoes.ts";
+export type { PedidoDasMetricasDeUso, UsoPorContexto } from "./aplicacao/uso_das_metricas.ts";

@@ -3,11 +3,11 @@
 export { acharCommitComMarca, commitarTicket, type PedidoDeCommit } from "./aplicacao/commit_do_ticket.ts";
 export { varrerBasesVencidas, varrerCommitsHumanos } from "./aplicacao/varredura_de_commits_humanos.ts";
 export {
-  alteracoesDosCommitsEmLote,
   apagarCommitsDasDemandas,
-  arquivosDosCommits,
   commitDoTicketDemanda,
-  commitsDosTicketsEmLote,
+  type MetricasDoRepositorio,
+  metricasDosCommits,
+  type PedidoDasMetricasDoRepositorio,
 } from "./armazenamento/commits_demanda.ts";
 export { apagarVarreduraDoProjeto, cursorDaBase } from "./armazenamento/commits_humanos.ts";
 export { arquivosDe } from "./infra/commit.ts";

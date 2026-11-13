@@ -11,11 +11,13 @@ export {
   type IdDaSessao,
   type MontagemDasSessoesDeAgente,
   montarSessoesDeAgente,
+  type PedidoDasMetricasDeUso,
   type RespostaAoDialogo,
   type ResumoDaSessaoComSituacao as ResumoDaSessao,
   Sessao,
   type SessoesDeAgente,
   type SubidaDasSessoes,
+  type UsoPorContexto,
 } from "./execucao/publico.ts";
 export {
   type EventoDoAgente,
@@ -26,7 +28,8 @@ export {
   type RespostaDaConsulta,
 } from "./harness/publico.ts";
 export { ConfiguracaoDoModelo, Effort, Modelo } from "./modelos/publico.ts";
-export type { UsoDeclarado } from "./metricas_de_execucao/publico.ts";
+export { type CustoDoUso, Uso, type UsoDeclarado } from "./metricas_de_execucao/publico.ts";
+export type { LinhaDeUso } from "./harness/publico.ts";
 export type { Mensagem } from "./historico/publico.ts";
 export type {
   Dialogo,
@@ -37,23 +40,10 @@ export type {
   Situacao,
 } from "./chat/publico.ts";
 
-// ponytail: provisórios do Ciclo de Vida, que ainda conduz a execução por dentro de Sessões. O passo 5 tira os das
-// métricas (com `metricas()`), e o passo 6 os da condução (o motor vira as Sessões montadas entregues ao Ciclo de Vida).
-// Métricas (passo 5):
-export { type LinhaDeUso } from "./harness/publico.ts";
-export {
-  type CustoDoUso,
-  lerUsoDasExecucoes,
-  lerUsoDeclarado,
-  lerUsoDeclaradoEmLote,
-  linhaDeUsoDaExecucao,
-  registrarUso,
-  textoDoCusto,
-  textoDoCustoDe,
-  Uso,
-  UsoDaExecucao,
-} from "./metricas_de_execucao/publico.ts";
-export { execucoesEmLote } from "./execucao/publico.ts";
+// ponytail: provisórios do Ciclo de Vida, que ainda conduz a execução por dentro de Sessões; saem no passo 6 (o motor
+// vira as Sessões montadas entregues ao Ciclo de Vida). O relatório de produtividade e a árvore de custos do
+// encerramento ainda leem o Uso pela condução.
+export { lerUsoDeclarado, linhaDeUsoDaExecucao, registrarUso, UsoDaExecucao } from "./metricas_de_execucao/publico.ts";
 // Condução (passo 6):
 export { PREFIXO_DA_RESPOSTA_AUTOMATICA, atividadeDo } from "./chat/publico.ts";
 export { texto } from "./historico/publico.ts";

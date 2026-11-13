@@ -21,8 +21,8 @@ import {
   prDaDemanda,
   prontosParaExecutarAgora,
   ticketAtualDaEtapa,
-  usoDaDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { usoDaDemanda } from "../metricas/metricas_do_periodo.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
