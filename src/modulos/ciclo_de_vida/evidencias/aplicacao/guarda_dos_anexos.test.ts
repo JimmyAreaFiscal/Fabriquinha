@@ -19,10 +19,10 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo } from "../../../compartilhado/armazenamento/arquivos.ts";
-import { schemaDoTipo } from "../../nucleo/evidencias/evidencia.ts";
+import { schemaDoTipo } from "../nucleo/formatos.ts";
 import { type TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
 import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
-import { type AnexoEnviado, guardarAnexos, guardarAnexosEnviados } from "./submissao.ts";
+import { type AnexoEnviado, guardarAnexos, guardarAnexosEnviados } from "./guarda_dos_anexos.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

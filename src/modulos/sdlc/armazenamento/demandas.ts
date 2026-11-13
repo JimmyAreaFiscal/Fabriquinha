@@ -22,7 +22,10 @@ import {
 import {
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
+  gravarEvidenciasNovasEAlteradas,
   gravarItensNovosEMudados,
+  gravarRetiradaDasEvidencias,
+  lerEvidenciasDaDemanda,
 } from "../../ciclo_de_vida/publico.ts";
 
 /** Um grupo de colunas opcionais que existe por inteiro ou não existe (`integracao`, `falha`, ...). */
@@ -80,8 +83,8 @@ const TABELA_DA_DEMANDA: TabelaDoAgregado<AgregadoDemanda> = {
 
 /**
  * As tabelas do agregado que dependem dos itens de Planejamento, dos pais para os filhos: insere e atualiza nessa ordem
- * e apaga na inversa, porque as FKs são RESTRICT. A evidência não tem `id` aqui: ele nasce no INSERT e a chave da
- * diferença inclui o `em`.
+ * e apaga na inversa, porque as FKs são RESTRICT. As evidências, filhas da rodada e do ticket, são do armazenamento
+ * das Evidências: saem antes e entram depois de todas as tabelas.
  */
 const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>[] = [
   {
@@ -143,21 +146,6 @@ const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>
         motivo: d.motivo ?? null,
       })),
   },
-  {
-    nome: "evidencia_demanda",
-    idNasceNoInsert: true,
-    chave: ["demanda_id", "rodada_id", "ticket_id", "tipo", "em"],
-    linhas: (ag) =>
-      ag.evidencias.map(({ autor, ...e }) => ({
-        ...e,
-        ...colunasDoAtor("autor", autor),
-        autor_ferramenta: autor.tipo === "externo" ? autor.ferramenta : null,
-        autor_sessao: autor.tipo === "externo" ? autor.sessao : null,
-        rodada_id: e.rodada_id ?? null,
-        ticket_id: e.ticket_id ?? null,
-        dados: JSON.stringify(e.dados),
-      })),
-  },
 ];
 
 /**
@@ -165,12 +153,14 @@ const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>
  * Planejamento ficam no meio: dependem só da demanda, e as demais tabelas dependem deles.
  */
 function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined, depois: AgregadoDemanda): void {
+  gravarRetiradaDasEvidencias(banco, antes?.evidencias ?? [], depois.evidencias);
   apagarLinhasQueSumiram(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
   apagarItensQueSumiram(banco, antes, depois);
   apagarLinhasQueSumiram(banco, [TABELA_DA_DEMANDA], antes, depois);
   gravarLinhasNovasEMudadas(banco, [TABELA_DA_DEMANDA], antes, depois);
   gravarItensNovosEMudados(banco, antes, depois);
   gravarLinhasNovasEMudadas(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
+  gravarEvidenciasNovasEAlteradas(banco, antes?.evidencias ?? [], depois.evidencias);
 }
 
 function carregar(
@@ -226,10 +216,7 @@ function carregar(
         ),
       ),
     ),
-    evidencias: filhas("evidencia_demanda").map(({ id: _, dados, ...e }) => ({
-      ...semNulos(agruparColunasDoCampo(e, "autor")),
-      dados: JSON.parse(dados as string) as unknown,
-    })),
+    evidencias: lerEvidenciasDaDemanda(id, preparar),
   });
 }
 

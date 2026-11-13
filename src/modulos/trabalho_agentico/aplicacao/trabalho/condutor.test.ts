@@ -213,12 +213,13 @@ test("interativa: o prompt rejeitado porque o agente já trabalha não deixa a s
 });
 
 test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com tempo limite expira e o respondido segue", async () => {
-  // 0,005 min = 300 ms: o diálogo fica pendente por mais tempo que isso sem a execução estourar o limite.
-  const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.005);
+  // 0,02 min = 1,2 s: o diálogo fica pendente por mais tempo que isso sem a execução estourar o limite. Com 300 ms, a
+  // subida do pi falso sob a carga da suíte inteira já gastava o limite antes do primeiro diálogo.
+  const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.02);
   await ate(() => (condutor.situacao(sessao)?.dialogos.length ?? 0) === 2, "os dois diálogos");
   assert.ok(condutor.situacao(sessao)?.dialogos.find((d) => d.id === "c1")?.expiraEm);
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1, "a expiração do confirm");
-  await dormir(400);
+  await dormir(1500);
   assert.equal(condutor.situacao(sessao)?.dialogos[0]?.id, "s1", "sem estourar o limite com o diálogo pendente");
   condutor.responder(sessao, "s1", { value: "a" });
   assert.throws(() => {

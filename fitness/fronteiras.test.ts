@@ -13,6 +13,7 @@ import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import {
   ARMAZENAMENTO_DE_EVIDENCIA,
   ARQUIVO_DO_CATALOGO,
+  ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA,
   ARQUIVO_QUE_SUBMETE_EVIDENCIA,
   ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA,
   PASTA_DOS_CASOS_DE_USO_DO_AGENTE,
@@ -407,7 +408,8 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
   ]);
 });
 
-// Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada.
+// Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada. O
+// `gravar*` das Evidências se importa do armazenamento delas, da API de Evidências ou da fachada do Ciclo de Vida.
 const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
 
 // shortcut: o padrão de lista é textual, então também acusa o literal dentro de comentário ou string; nenhum existe hoje em src/.
@@ -427,11 +429,13 @@ function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
         achados.push(`${arquivo} monta evidencias a partir da lista atual`);
       for (const declaracao of fonte.statements) {
         if (!ts.isImportDeclaration(declaracao) || !ts.isStringLiteral(declaracao.moduleSpecifier)) continue;
-        if (!declaracao.moduleSpecifier.text.endsWith(ARMAZENAMENTO_DE_EVIDENCIA)) continue;
+        const especificador = declaracao.moduleSpecifier.text;
+        const entrada = ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA.find((caminho) => especificador.endsWith(caminho));
+        if (entrada === undefined) continue;
         const ligacoes = declaracao.importClause?.namedBindings;
         if (!ligacoes || !ts.isNamedImports(ligacoes)) continue;
         for (const nome of ligacoes.elements.map((elemento) => (elemento.propertyName ?? elemento.name).text)) {
-          if (nome.startsWith("gravar")) achados.push(`${arquivo} importa ${nome} de ${ARMAZENAMENTO_DE_EVIDENCIA}`);
+          if (nome.startsWith("gravar")) achados.push(`${arquivo} importa ${nome} de ${entrada}`);
         }
       }
       return achados;
@@ -455,6 +459,8 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
     "modulos/aplicacao/importa_gravar.ts": `import { gravarAnexos as gravar } from "../${ARMAZENAMENTO_DE_EVIDENCIA}";\n`,
     "modulos/aplicacao/le_anexos.ts": `import { anexosDaDemanda } from "../${ARMAZENAMENTO_DE_EVIDENCIA}";\nconst x = { evidencias: [] };\n`,
     "modulos/aplicacao/gravar_de_outro.ts": 'import { gravarAnexos } from "../armazenamento/outro.ts";\n',
+    "modulos/aplicacao/gravar_pela_fachada.ts": 'import { gravarAnexos } from "../ciclo_de_vida/publico.ts";\n',
+    "modulos/aplicacao/le_pela_api.ts": 'import { lerAnexo } from "../ciclo_de_vida/evidencias/publico.ts";\n',
     "modulos/aplicacao/teste_que_grava.test.ts": "const x = { evidencias: [...ag.evidencias] };\n",
     "modulos/aplicacao/montagem_cenario.ts": "const x = { evidencias: [...ag.evidencias] };\n",
   };
@@ -464,6 +470,7 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   }
 
   assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(raiz).sort(), [
+    "modulos/aplicacao/gravar_pela_fachada.ts importa gravarAnexos de ciclo_de_vida/publico.ts",
     `modulos/aplicacao/importa_gravar.ts importa gravarAnexos de ${ARMAZENAMENTO_DE_EVIDENCIA}`,
     "modulos/aplicacao/monta_lista.ts monta evidencias a partir da lista atual",
   ]);

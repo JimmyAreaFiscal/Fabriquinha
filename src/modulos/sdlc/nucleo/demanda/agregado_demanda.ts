@@ -12,7 +12,7 @@ import {
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ProgressoEncerramento } from "../transicoes/encerramento_demanda.ts";
 import { PullRequest, prDoEscopo } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
+import { donoDe, EvidenciaDemanda } from "../../../ciclo_de_vida/publico.ts";
 import { GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
 import { OrigemDaVersao } from "./plano.ts";
 import {
@@ -90,24 +90,6 @@ const VersaoPlano = z.object({
   dados: z.record(z.string(), z.json()),
 });
 
-/** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
-const IdDono = Id.nullish().transform((v) => v ?? undefined);
-
-/** Evidência de qualquer dono: `rodada_id` e `ticket_id` nulos indicam a própria demanda; `dados` segue opaco (F3 valida). */
-export const EvidenciaDemanda = z
-  .object({
-    demanda_id: DemandaId,
-    rodada_id: IdDono,
-    ticket_id: IdDono,
-    tipo: TipoEvidencia,
-    dados: z.record(z.string(), z.json()),
-    autor: Ator,
-    em: Instante,
-  })
-  .refine((e) => e.rodada_id === undefined || e.ticket_id === undefined, {
-    message: "rodada_id e ticket_id não podem estar preenchidos juntos (use só um dono)",
-  });
-
 export const TipoDemanda = z.enum(["funcionalidade", "problema"]);
 
 export const Demanda = z
@@ -128,11 +110,8 @@ export const Demanda = z
     path: ["branch"],
   });
 
-type DonoEvidencia = "demanda" | "rodada" | "ticket";
-
-/** Quem é dono da evidência: a rodada, o ticket ou, com ambos nulos, a própria demanda (CA-11). */
-export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): DonoEvidencia =>
-  e.rodada_id !== undefined ? "rodada" : e.ticket_id !== undefined ? "ticket" : "demanda";
+// provisório: remover no ticket 22 (a Evidência registrada mudou para src/modulos/ciclo_de_vida/evidencias/)
+export { donoDe, EvidenciaDemanda };
 
 /** O PR do Espaço da demanda: o PR final do encerramento. */
 export const prDaDemanda = (ag: Pick<AgregadoDemanda, "pull_requests">): PullRequestDoEspaco | undefined =>
@@ -283,7 +262,6 @@ export const AgregadoDemanda = z
 export type PullRequestDoEspaco = z.infer<typeof PullRequestDoEspaco>;
 export type RodadaDemanda = z.infer<typeof RodadaDemanda>;
 export type TicketDemanda = z.infer<typeof TicketDemanda>;
-export type EvidenciaDemanda = z.infer<typeof EvidenciaDemanda>;
 export type Demanda = z.infer<typeof Demanda>;
 export type TipoDemanda = z.infer<typeof TipoDemanda>;
 export type AgregadoDemanda = z.infer<typeof AgregadoDemanda>;

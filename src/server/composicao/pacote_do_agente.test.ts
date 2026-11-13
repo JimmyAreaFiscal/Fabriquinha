@@ -54,3 +54,20 @@ test("falha do empacotamento: lança o erro do esbuild e não toca no pacote", a
   await assert.rejects(garantirPacoteDoAgente(destino, quebrada), /nao_existe/);
   assert.equal(readFileSync(`${destino}.versao`, "utf8"), versaoAntes);
 });
+
+test("módulo do Node que o código só arrasta, sem usar, fica fora do pacote; o usado fica", async () => {
+  writeFileSync(
+    join(pasta, "banco.ts"),
+    'import { DatabaseSync } from "node:sqlite";\nexport const abrir = () => new DatabaseSync(":memory:");\nexport const nome = "banco";\n',
+  );
+  const entradaQueArrasta = join(pasta, "arrasta.ts");
+  writeFileSync(
+    entradaQueArrasta,
+    'import { join } from "node:path";\nimport { nome } from "./banco.ts";\nconsole.log(join(nome));\n',
+  );
+  const destinoQueArrasta = join(pasta, "bin", "arrasta");
+  assert.equal(await garantirPacoteDoAgente(destinoQueArrasta, entradaQueArrasta), true);
+  const pacote = readFileSync(destinoQueArrasta, "utf8");
+  assert.doesNotMatch(pacote, /node:sqlite/);
+  assert.match(pacote, /from "node:path"/);
+});

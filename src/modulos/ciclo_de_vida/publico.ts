@@ -3,3 +3,4 @@
 // `ConfiguracaoAgente`); os demais subdomínios entram aqui quando migrarem.
 export * from "./etapas/publico.ts";
 export * from "./planejamento/publico.ts";
+export * from "./evidencias/publico.ts";

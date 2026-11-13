@@ -13,8 +13,16 @@ export const PASTAS_QUE_CITAM_NOME_DE_ETAPA = ["modulos/etapas/", "modulos/ciclo
 export const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA: string[] = [];
 /** O único caso de uso que grava em `evidencia_demanda` (além do armazenamento): toda Evidência entra pela submissão. */
 export const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "modulos/sdlc/aplicacao/evidencias/submeter.ts";
-/** O armazenamento das Evidências, pelo fim do caminho (o `gravar*` dele só se importa de `submeter.ts`). */
+/**
+ * O armazenamento das Evidências, pelo fim do caminho, e as entradas que o exportam (a API de Evidências e a fachada):
+ * o `gravar*` dele só se importa de `submeter.ts` e do armazenamento do agregado, por qualquer um desses caminhos.
+ */
 export const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
+export const ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA = [
+  ARMAZENAMENTO_DE_EVIDENCIA,
+  "ciclo_de_vida/evidencias/publico.ts",
+  "ciclo_de_vida/publico.ts",
+];
 /** Os casos de uso do agente, os únicos que a API do agente alcança. */
 export const PASTA_DOS_CASOS_DE_USO_DO_AGENTE = "modulos/etapas/agente/";
 
@@ -25,7 +33,8 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     etapas: [],
     planejamento: ["etapas"],
     processo: ["etapas", "planejamento"],
-    evidencias: ["etapas"],
+    // O formato do `plano` e a escolha do último ticket concluído de uma Etapa são do Planejamento.
+    evidencias: ["etapas", "planejamento"],
     verificacoes: ["etapas"],
     conducao: ["processo", "evidencias", "verificacoes", "etapas"],
     despacho: ["processo", "planejamento", "conducao"],
@@ -45,6 +54,15 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
       arquivo: "modulos/ciclo_de_vida/planejamento/armazenamento/itens_do_planejamento.ts",
       import:
         "../../../compartilhado/armazenamento/configuracao_agente.ts (um domínio migrado não importa o código antigo)",
+      ticket: "22",
+    },
+    // A hospedagem do `pr_aberto` é do Repositório. Vem do caminho antigo, que a lê do núcleo do Git, porque a fachada
+    // do Repositório levaria o banco e o git para o pacote do CLI do agente, que chega a Evidências pela fachada do
+    // Ciclo de Vida; o ticket 22 decide de onde ela vem.
+    {
+      arquivo: "modulos/ciclo_de_vida/evidencias/nucleo/formatos.ts",
+      import:
+        "../../../repositorio/nucleo/repositorio_do_projeto.ts (de fora do domínio repositorio, só pela fachada publico.ts)",
       ticket: "22",
     },
   ],

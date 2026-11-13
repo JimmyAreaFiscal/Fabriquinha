@@ -37,6 +37,16 @@ export async function garantirPacoteDoAgente(
     logLevel: "silent",
     metafile: true,
     write: false,
+    // O CLI chega à fachada do Ciclo de Vida, que traz o armazenamento dos subdomínios: o import de `node:sqlite` dele,
+    // sem nada usado, ficaria no pacote e o Node avisaria do SQLite experimental no stderr de todo comando do agente.
+    plugins: [
+      {
+        name: "modulos-do-node-sem-efeito-colateral",
+        setup(construcao) {
+          construcao.onResolve({ filter: /^node:/ }, ({ path }) => ({ path, external: true, sideEffects: false }));
+        },
+      },
+    ],
   });
   const hash = hashDoCodigoFonte(Object.keys(resultado.metafile.inputs));
   const arquivoDaVersao = `${destino}.versao`;

@@ -11,17 +11,15 @@ import {
   type Avaliacao,
   agregadoDaRodada,
   AvaliadorDeEvidencia,
-  conferirQuantidadeENomes,
   evidenciasPendentes,
   exigirAutoria,
-  SCHEMA_DA_EVIDENCIA,
-  schemaDoTipo,
   type SubmissaoDeEvidencia,
-} from "./evidencia.ts";
+} from "./avaliacao.ts";
+import { conferirQuantidadeENomes, SCHEMA_DA_EVIDENCIA, schemaDoTipo } from "./formatos.ts";
 import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
 import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { validarPlano } from "../transicoes/transicoes_demanda.ts";
+import { validarPlano } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 
 test("todo tipo tem entrada em SCHEMA_DA_EVIDENCIA, inclusive os que n\u00e3o tinham schema", () => {
   for (const tipo of TipoEvidencia.options) {
