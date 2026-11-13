@@ -2,29 +2,25 @@
 // sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora; a
 // navegação conta o que aguarda pela mesma consulta.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, TicketDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { mesDoInstante, type Relogio } from "../../shared/nucleo/relogio.ts";
 import {
+  type AgregadoDemanda,
   CICLO_DO_TICKET,
+  type EstadoDemanda,
   estadoDaRodadaNaEtapa,
-  PRIMEIRA_ETAPA_DA_RODADA,
-} from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import {
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { encontrado } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { mesDoInstante, type Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
-import type { ModoTrabalho } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EstadoDemanda } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { listarDemandas } from "../../modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
-import { ticketsComPiAtivo } from "../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+  listarDemandas,
+  metricasDosMeses,
+  PRIMEIRA_ETAPA_DA_RODADA,
+  type TicketDemanda,
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import type { ModoTrabalho } from "../../modulos/sessoes/publico.ts";
+import { lerEmSnapshot } from "../../shared/armazenamento/snapshot.ts";
 import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../contrato/inicio.ts";
-import { sessoesDeDemanda } from "./sessoes/historico_demanda.ts";
-import { metricasDosMeses } from "../../modulos/ciclo_de_vida/publico.ts";
+import { sessoesDasDemandas, ticketsComPiAtivo } from "./sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "./demandas/pedidos_das_metricas.ts";
-import { bloqueiosDaDemanda } from "./demandas/bloqueios.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./demandas/predecessoras.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./demandas/pendencias.ts";
 
 type TicketDoCartao = NonNullable<CartaoDoBoard["ticket"]>;
@@ -101,8 +97,10 @@ export function consultarInicio(
       DadosDoInicio["mes"],
     ];
     const demandas = listarDemandas(banco, { soNaoTerminadas: true });
-    // Só as sessões das demandas em andamento: calcular o estado de todas as do banco custa segundos.
-    const sessoes = demandas.flatMap((ag) => sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id }));
+    // Só as sessões das demandas em andamento, lidas em lote: calcular o estado de todas as do banco custa segundos. Ficam
+    // na ordem das demandas, e as de cada demanda, da que está assim há mais tempo para a mais recente.
+    const sessoesDaDemanda = Map.groupBy(sessoesDasDemandas(banco, demandas, { escopo: "ativas" }), (s) => s.demanda);
+    const sessoes = demandas.flatMap((ag) => sessoesDaDemanda.get(ag.demanda.id) ?? []);
     const modos = new Map(sessoes.map((s) => [s.ticket, s.modo]));
     const apoio: ApoioDosTickets = { modoDe: (ref) => modos.get(ref), comPiAtivo: ticketsComPiAtivo(banco) };
     const predecessoras = predecessorasDasDemandas(
@@ -123,11 +121,10 @@ export function consultarInicio(
         }),
       quantidadeEmAndamento: demandas.length,
       board: demandas.flatMap((ag) => {
-        const id = ag.demanda.id;
-        const predecessorasDaDemanda = encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue");
+        const bloqueios = bloqueiosDaDemanda(predecessorasDe(predecessoras, ag.demanda.id));
         return cartoesDaDemanda(
           ag,
-          bloqueiosDaDemanda(predecessorasDaDemanda).map((p) => p.demanda_id),
+          bloqueios.map((p) => p.demanda_id),
           apoio,
         );
       }),

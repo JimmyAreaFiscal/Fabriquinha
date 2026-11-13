@@ -9,6 +9,23 @@ export const arestasDeDependencia = (banco: DatabaseSync): DependenciaDemanda[] 
     .all()
     .map((linha) => ({ demanda_id: String(linha.demanda_id), depende_demanda_id: String(linha.depende_demanda_id) }));
 
+/**
+ * As predecessoras diretas de cada pedido de `ids`, na ordem em que as arestas foram gravadas, numa leitura só; o pedido
+ * sem nenhuma vem com a lista vazia.
+ */
+export function predecessorasDosPedidosEmLote(banco: DatabaseSync, ids: readonly string[]): Map<string, string[]> {
+  const predecessorasDoPedido = new Map(ids.map((id): [string, string[]] => [id, []]));
+  const linhas = banco
+    .prepare(
+      `SELECT demanda_id, depende_demanda_id FROM dependencia_demanda
+        WHERE demanda_id IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+    )
+    .all(JSON.stringify(ids));
+  for (const linha of linhas)
+    predecessorasDoPedido.get(String(linha.demanda_id))?.push(String(linha.depende_demanda_id));
+  return predecessorasDoPedido;
+}
+
 export const gravarDependencia = (
   banco: DatabaseSync,
   { demanda_id, depende_demanda_id }: DependenciaDemanda,

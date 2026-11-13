@@ -4,7 +4,10 @@
 import { satisfazDependencia } from "../ciclo_de_vida/cancelamento_demanda.ts";
 import type { EstadoDemanda } from "../ciclo_de_vida/ciclos.ts";
 
-/** CA-9 e CA-10: os ids das predecessoras que ainda não satisfazem a dependência (D08: arquivada satisfaz). */
+/**
+ * CA-9 e CA-10: os ids das predecessoras que ainda não satisfazem a dependência (D08: arquivada satisfaz).
+ * @testes provisório: remover no ticket 22 (as telas e o chat leem os bloqueios pela consulta das predecessoras)
+ */
 export const predecessorasPendentes = (
   predecessoras: readonly { demanda_id: string; estado: EstadoDemanda }[],
 ): string[] => predecessoras.filter((p) => !satisfazDependencia(p.estado)).map((p) => p.demanda_id);

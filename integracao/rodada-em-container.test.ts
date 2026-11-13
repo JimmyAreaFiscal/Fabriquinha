@@ -16,7 +16,6 @@ import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_p
 import { conjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { enviarDemanda } from "../src/modulos/etapas/conducao/mensagem_do_auditor.ts";
-import { lerConversa } from "../src/modulos/trabalho_agentico/aplicacao/sessoes/conversa.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
   carregarTrabalhosDoTicket,
@@ -346,7 +345,7 @@ test(
       readdirSync(join(c.raiz, "sessoes", sessao)).filter((nome) => nome.endsWith(`_${sessao}.jsonl`)).length,
       1,
     );
-    const conversa = lerConversa(c.raiz, sessao).map((entrada) => (entrada as { message?: unknown }).message);
+    const conversa = condutor.lerConversa(c.raiz, sessao).map((entrada) => (entrada as { message?: unknown }).message);
     assert.deepEqual(
       conversa.filter(Boolean).map((m) => `${(m as { role: string }).role}: ${textoDe(m)}`),
       [

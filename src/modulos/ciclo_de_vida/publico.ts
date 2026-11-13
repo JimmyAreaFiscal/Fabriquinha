@@ -7,3 +7,15 @@ export * from "./evidencias/publico.ts";
 export * from "./verificacoes/publico.ts";
 export * from "./processo/publico.ts";
 export * from "./metricas_de_qualidade/publico.ts";
+// provisório: remover no ticket 22, que traz o agregado da demanda e o repositório dele do sdlc para o Processo. O agregado
+// e as leituras dele, em lote, para as consultas das telas; a linha `demanda` ainda mistura as colunas do pedido e as do
+// processo. Ficam no fim da fachada, e não na API do Processo: o agregado importa a fachada, e os subdomínios que importam
+// a API do Processo ainda estariam pela metade quando ele a lesse (TDZ).
+export { type AgregadoDemanda, prDaDemanda, type TicketDemanda } from "../sdlc/nucleo/demanda/agregado_demanda.ts";
+export {
+  andamentoDasDemandasEmLote,
+  carregarDemanda,
+  carregarDemandas,
+  listarDemandas,
+  situacaoDasDemandas,
+} from "../sdlc/armazenamento/demandas.ts";

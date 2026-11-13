@@ -1,7 +1,6 @@
 // A consulta das Etapas do SDLC, que todas as telas leem antes da primeira página: o catálogo como a web o lê, com a
 // ordem do SDLC e os estados de cada ciclo.
-import { CATALOGO_DE_ETAPAS, ORDEM_DO_SDLC } from "../../modulos/etapas/catalogo.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { CATALOGO_DE_ETAPAS, EstadoDemanda, EstadoRodada, ORDEM_DO_SDLC } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { EtapasDoSdlc } from "../contrato/etapas.ts";
 
 /** O que a web precisa de cada Etapa do catálogo; o resto da definição (evidências, verificações, condução) fica no serviço. */

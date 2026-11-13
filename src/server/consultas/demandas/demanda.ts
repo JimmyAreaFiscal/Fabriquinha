@@ -1,36 +1,34 @@
 // A consulta da página de uma demanda, montada no contrato da API (contrato/) a partir de um snapshot só, com as leituras
 // em lote, sem uma consulta por ticket ou por dependente. O board é de board_de_demandas.ts.
 import type { DatabaseSync } from "node:sqlite";
-import { type AgregadoDemanda, prDaDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Relogio } from "../../../shared/nucleo/relogio.ts";
+import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
+  type AgregadoDemanda,
+  anexosDaDemanda,
+  carregarDemanda,
+  carregarDemandas,
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
-  gateQueEsperaGenteNaRodada,
-} from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { predecessorasPendentes } from "../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
-import {
+  EtapaTicket,
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+  gateQueEsperaGenteNaRodada,
+  lerAnexo,
+  motivoDaFalhaDoTicket,
+  prDaDemanda,
+  ticketAtualDaEtapa,
+  usoDaDemanda,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
 import { Despacho, prontosParaExecutarAgora } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
-import { ticketAtualDaEtapa } from "../../../modulos/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
-import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { motivoDaFalhaDoTicket } from "../../../modulos/sdlc/nucleo/tentativa.ts";
-import { achadoDaDemanda, carregarDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
-import { lerAnexo } from "../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import {
-  sessaoDeCadaTicketDaDemanda,
-  ticketsComPiAtivo,
-} from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
+import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
+import { dependentesNaoConcluidosDoPedido, origemDoPedido } from "../../../modulos/demandas/publico.ts";
 import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
-import { usoDaDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "./pedidos_das_metricas.ts";
 import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
-import { visaoDaDemanda } from "../../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
-import { dependentesNaoConcluidosDoPedido } from "../../../modulos/demandas/publico.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 
 /** Os endereços públicos das rodadas e dos tickets da demanda. */
 export const enderecosNaDemanda = (demanda_id: string) => ({
@@ -78,17 +76,21 @@ export function consultarDemanda(
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
 ): PaginaDaDemanda {
   return lerEmSnapshot(banco, () => {
-    const { agregado: ag, predecessoras, evidencias } = visaoDaDemanda(banco, id);
+    const ag = carregarDemanda(banco, id);
     const { demanda } = ag;
+    const predecessoras = predecessorasDe(predecessorasDasDemandas(banco, [id]), id);
+    const anexosDasEvidencias = anexosDaDemanda(banco, id);
     const { ticket, rodada } = enderecosNaDemanda(id);
-    const achado = achadoDaDemanda(banco, id);
-    const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
+    const achado = origemDoPedido(banco, id);
+    const sessoes = new Map(sessaoDeCadaTicketDasDemandas(banco, [id]).get(id));
     const comPiAtivo = ticketsComPiAtivo(banco);
     const { modelos, custo, textoDoCusto } = usoDaDemanda({ banco, pedidos: lerPedidosDasMetricas(banco, [id]) }, id);
     const elegiveis = new Set(
       prontosParaExecutarAgora(
         new Despacho().selecionar({
-          demandas: [{ agregado: ag, predecessoras_pendentes: predecessorasPendentes(predecessoras) }],
+          demandas: [
+            { agregado: ag, predecessoras_pendentes: bloqueiosDaDemanda(predecessoras).map((p) => p.demanda_id) },
+          ],
           vivos: [], // só a retomada do planejamento depende do trabalho vivo, e ela não é do Auditor
         }),
       ).map((t) => t.ticket_id),
@@ -144,24 +146,27 @@ export function consultarDemanda(
         ...d,
         por: por.tipo,
       })),
-      evidencias: evidencias.map(({ evidencia: e, anexos }) => ({
+      evidencias: ag.evidencias.map((e) => ({
         tipo: e.tipo,
         ...(e.rodada_id !== undefined && { rodada: rodada(e.rodada_id) }),
         ...(e.ticket_id !== undefined && { ticket: ticket(e.ticket_id) }),
         em: e.em,
         dados: e.dados,
-        anexos: anexos.map((a) => {
-          const dono = new URLSearchParams({ tipo: a.tipo });
-          if (a.rodada_id !== undefined) dono.set("rodada", String(a.rodada_id));
-          if (a.ticket_id !== undefined) dono.set("ticket", String(a.ticket_id));
-          return {
-            nome: a.nome,
-            classe: classeDoMime(a.mime),
-            mime: a.mime,
-            bytes: a.bytes,
-            link: `/api/demandas/${id}/anexos/${a.sha256}?${dono.toString()}`,
-          };
-        }),
+        // Os anexos da evidência: os do mesmo tipo e do mesmo dono.
+        anexos: anexosDasEvidencias
+          .filter((a) => a.tipo === e.tipo && a.rodada_id === e.rodada_id && a.ticket_id === e.ticket_id)
+          .map((a) => {
+            const dono = new URLSearchParams({ tipo: a.tipo });
+            if (a.rodada_id !== undefined) dono.set("rodada", String(a.rodada_id));
+            if (a.ticket_id !== undefined) dono.set("ticket", String(a.ticket_id));
+            return {
+              nome: a.nome,
+              classe: classeDoMime(a.mime),
+              mime: a.mime,
+              bytes: a.bytes,
+              link: `/api/demandas/${id}/anexos/${a.sha256}?${dono.toString()}`,
+            };
+          }),
       })),
       encerramento: passosDoEncerramento(ag),
       dependencias: predecessoras,

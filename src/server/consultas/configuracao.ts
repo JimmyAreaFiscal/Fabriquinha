@@ -1,11 +1,10 @@
 // As consultas da tela de Configuração (F7 §4.2): cada uma monta o contrato da resposta, lendo num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
 import { configuracao } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
+import { lerEmSnapshot } from "../../shared/armazenamento/snapshot.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
-import { listarAmbientesDoConjunto } from "../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import { listarProjetos, projetoComConfiguracoesDasEtapas, projetoExistente } from "../../modulos/demandas/publico.ts";
-import { configuracaoDoAmbiente } from "../../modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
+import { configuracaoDoAmbiente, listarAmbientesDoConjunto } from "../../modulos/ambiente/publico.ts";
 
 /** A configuração do F4 §3 com a próxima busca do agendador, só ligado. */
 export function consultarEstadoDaConfiguracao(banco: DatabaseSync, proximaBusca: () => Date): EstadoDaConfiguracao {

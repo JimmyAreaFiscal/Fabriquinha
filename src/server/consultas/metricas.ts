@@ -1,8 +1,8 @@
 // As consultas da tela de Métricas: as duas visões do período, lidas num snapshot só. O mês corrente vem do relógio.
 import type { DatabaseSync } from "node:sqlite";
 import { somarMeses } from "../../shared/nucleo/periodo.ts";
-import { mesDoInstante, type Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
-import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
+import { mesDoInstante, type Relogio } from "../../shared/nucleo/relogio.ts";
+import { lerEmSnapshot } from "../../shared/armazenamento/snapshot.ts";
 import type { FiltroDeMetricas } from "../contrato/metricas.ts";
 import { metricasDasDemandasDoPeriodo, metricasDosMeses, Periodo } from "../../modulos/ciclo_de_vida/publico.ts";
 import { lerPedidosDasMetricas } from "./demandas/pedidos_das_metricas.ts";

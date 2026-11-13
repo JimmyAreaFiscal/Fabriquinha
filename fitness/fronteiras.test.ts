@@ -120,9 +120,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "server/api/ok.ts":
       'import { a } from "../../modulos/aplicacao/ok.ts";\nimport { c } from "../web/compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\nimport { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
     "server/cli/ok.ts": 'import { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
-    // A consulta da tela junta os domínios no formato do contrato: lê o banco como a aplicação.
-    "server/consultas/tela.ts":
-      'import { a } from "../../modulos/armazenamento/ok.ts";\nimport { b } from "../../modulos/aplicacao/ok.ts";\nimport type { R } from "../contrato/ok.ts";\n',
+    // A consulta da tela junta os domínios no formato do contrato, pelas fachadas (fronteiras-de-destino.test.ts).
+    "server/consultas/tela.ts": 'import type { R } from "../contrato/ok.ts";\n',
     // O fluxo coordena os domínios pela fachada (no legado, a aplicação).
     "server/fluxos/fluxo.ts":
       'import { a } from "../../modulos/aplicacao/ok.ts";\nimport { n } from "../../modulos/nucleo/ok.ts";\n',
@@ -172,6 +171,9 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "server/api/usa_o_banco.ts": 'import { a } from "../../modulos/armazenamento/ok.ts";\n',
     // A consulta só lê: não chama fluxo. O fluxo não fala o contrato, não lê pela consulta nem pelo banco.
     "server/consultas/usa_o_fluxo.ts": 'import { f } from "../fluxos/fluxo.ts";\n',
+    // A consulta não lê o código antigo, em camada nenhuma: nem o banco, nem a aplicação.
+    "server/consultas/usa_o_banco.ts":
+      'import { a } from "../../modulos/armazenamento/ok.ts";\nimport { b } from "../../modulos/aplicacao/ok.ts";\n',
     "server/fluxos/usa_o_contrato.ts": 'import type { R } from "../contrato/ok.ts";\n',
     "server/fluxos/usa_a_consulta.ts": 'import { t } from "../consultas/tela.ts";\n',
     "server/fluxos/usa_o_banco.ts": 'import { a } from "../../modulos/armazenamento/ok.ts";\n',
@@ -204,6 +206,8 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "modulos/aplicacao/ciclo.ts importa ../../server/api/ciclo.ts",
       "modulos/aplicacao/usa_o_contrato.ts importa ../../server/contrato/ok.ts",
       "server/api/usa_o_banco.ts importa ../../modulos/armazenamento/ok.ts",
+      "server/consultas/usa_o_banco.ts importa ../../modulos/aplicacao/ok.ts",
+      "server/consultas/usa_o_banco.ts importa ../../modulos/armazenamento/ok.ts",
       "server/consultas/usa_o_fluxo.ts importa ../fluxos/fluxo.ts",
       "server/consultas/usa_o_fluxo.ts importa ciclo entre módulos: consultas → fluxos → consultas",
       "server/fluxos/usa_o_contrato.ts importa ../contrato/ok.ts",

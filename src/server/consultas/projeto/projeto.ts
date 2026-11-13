@@ -1,35 +1,30 @@
 // A consulta da página do projeto: as demandas com as rodadas e os tickets, montadas no contrato da API
 // (contrato/) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { encontrado } from "../../../shared/nucleo/erros.ts";
+import type { Relogio } from "../../../shared/nucleo/relogio.ts";
+import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
+  type AgregadoDemanda,
+  carregarDemandas,
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
+  EstadoDemanda,
   estadoDaDemandaNaEtapa,
   etapaDoEstado,
-  PRIMEIRA_ETAPA_DA_DEMANDA,
-  EstadoDemanda,
-} from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import {
+  type EtapaTicket,
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
-import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
-import { type EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
-import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { carregarDemandas, situacaoDasDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import {
-  sessaoDeCadaTicketDasDemandas,
-  ticketsComPiAtivo,
-} from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
-import { sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
+  PRIMEIRA_ETAPA_DA_DEMANDA,
+  resolverConfiguracaoAgente,
+  situacaoDasDemandas,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
+import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
+import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
 import { type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
-import { resolverModeloEffort } from "../../../modulos/sdlc/aplicacao/execucao/modelo_effort.ts";
-import { bloqueiosDaDemanda } from "../demandas/bloqueios.ts";
+import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
+import { sessoesDeDemanda, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
 export const ORIENTACAO_PROJETO_INEXISTENTE = "escolha um projeto cadastrado na Configuração";
@@ -79,9 +74,7 @@ function demandaDoProjeto(ag: AgregadoDemanda, leituras: LeiturasDoProjeto): Dem
     satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(ag.demanda.estado),
     estadoNaLinhaDoTempo: estadoNaLinhaDoTempo(ag),
     estadoAlteradoEm: ag.demanda.estado_alterado_em,
-    bloqueadaPor: bloqueiosDaDemanda(
-      encontrado(leituras.predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue"),
-    ).map((p) => p.demanda_id),
+    bloqueadaPor: bloqueiosDaDemanda(predecessorasDe(leituras.predecessoras, id)).map((p) => p.demanda_id),
     pendencias: leituras.pendencias.filter((p) => p.demanda === id),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoEspaco(ag, r.rodada_id);
@@ -93,7 +86,12 @@ function demandaDoProjeto(ag: AgregadoDemanda, leituras: LeiturasDoProjeto): Dem
       };
     }),
     tickets: ag.tickets.map((t) => {
-      const { modelo } = resolverModeloEffort(t, leituras.etapas);
+      // O modelo do ticket, senão o da Etapa no projeto (D07).
+      const { modelo } = resolverConfiguracaoAgente({
+        ticket: t.configuracao_agente,
+        etapaDoProjeto: leituras.etapas.find((e) => e.etapa === t.etapa)?.configuracao_agente,
+        padrao: {},
+      });
       const sessao = sessoes.get(t.ticket_id);
       const ticketRef = formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id });
       return {

@@ -89,10 +89,19 @@ const IMPORTS_DO_CODIGO_ANTIGO: Record<string, string[]> = {
     "../../../../projeto/armazenamento/projetos.ts",
     "../../../../compartilhado/armazenamento/servico.ts",
   ],
-  "conducao/aplicacao/conducao_de_etapa/mensagem_do_auditor.ts": [
-    "../../../../compartilhado/armazenamento/servico.ts",
-    "../../../../sdlc/aplicacao/sessoes/sessoes_demanda.ts",
+  "conducao/aplicacao/conducao_de_etapa/mensagem_do_auditor.ts": ["../../../../compartilhado/armazenamento/servico.ts"],
+  // O chat do Auditor: o estado da sessão do ticket lê o agregado e a regra das Pendências no sdlc, e as marcas da
+  // conversa, a pasta do processo do compartilhado.
+  "conducao/aplicacao/chat_do_auditor/marcas_da_conversa.ts": ["../../../../compartilhado/infra/registro.ts"],
+  "conducao/aplicacao/chat_do_auditor/sessao_do_ticket.ts": [
+    "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
+    "../../../../sdlc/armazenamento/demandas.ts",
+    "../../../../sdlc/nucleo/demanda/pendencia.ts",
   ],
+  // As APIs que reexportam do sdlc, para as consultas das telas: a fachada, o agregado e as leituras dele (no fim dela,
+  // pelo TDZ); a da Condução, a regra das Pendências.
+  "publico.ts": ["../sdlc/nucleo/demanda/agregado_demanda.ts", "../sdlc/armazenamento/demandas.ts"],
+  "conducao/publico.ts": ["../../sdlc/nucleo/demanda/pendencia.ts"],
   "conducao/aplicacao/encerrar_demanda/conducao_de_encerrar_demanda.ts": [
     "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
     "../../../../sdlc/armazenamento/demandas.ts",
@@ -155,10 +164,6 @@ const IMPORTS_DO_CODIGO_ANTIGO: Record<string, string[]> = {
     "../../../../compartilhado/infra/registro.ts",
   ],
   "conducao/aplicacao/execucao/lancamento_do_ticket.ts": [
-    "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
-    "../../../../projeto/nucleo/projeto.ts",
-  ],
-  "conducao/aplicacao/execucao/modelo_effort.ts": [
     "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
     "../../../../projeto/nucleo/projeto.ts",
   ],
@@ -293,7 +298,9 @@ const CAMINHOS_ANTIGOS_DA_CONDUCAO: [string, string][] = [
     "resolver_conflito/conducao_de_resolver_conflito.ts",
   ].map((arquivo): [string, string] => [`modulos/etapas/${arquivo}`, API_DA_CONDUCAO]),
   ["modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts", ARQUIVO_DAS_TRANSICOES_PEDIDAS],
-  ...["execucao_demanda.ts", "lancamento_do_ticket.ts", "modelo_effort.ts"].map((arquivo): [string, string] => [
+  // As ações do Auditor no chat, que a rota do chat importa pelo caminho antigo.
+  ["modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts", API_DA_CONDUCAO],
+  ...["execucao_demanda.ts", "lancamento_do_ticket.ts"].map((arquivo): [string, string] => [
     `modulos/sdlc/aplicacao/execucao/${arquivo}`,
     `modulos/ciclo_de_vida/conducao/aplicacao/execucao/${arquivo}`,
   ]),
@@ -308,7 +315,7 @@ const CAMINHOS_ANTIGOS_DA_CONDUCAO: [string, string][] = [
 ];
 
 // provisório: remover no ticket 22. A API do Despacho fica fora da fachada pelo mesmo ciclo com o sdlc. Quem a usa por
-// fora do domínio (a composição, as consultas e o fluxo do despacho do servidor) importa a API; a API do servidor, que
+// fora do domínio (a composição e o fluxo do despacho do servidor; as consultas, em ../dominios/server.ts) importa a API; a API do servidor, que
 // não pode ter exceção, segue pelos caminhos antigos, que reexportam do arquivo de origem; e o sdlc lê a seleção e a
 // configuração do serviço direto do arquivo, sem trazer a Condução de volta ao sdlc no meio da carga dele.
 const API_DO_DESPACHO = "modulos/ciclo_de_vida/despacho/publico.ts";
@@ -323,14 +330,10 @@ const CAMINHOS_ANTIGOS_DO_DESPACHO: [string, string][] = [
   ["modulos/compartilhado/armazenamento/servico.ts", `${DESPACHO}armazenamento/configuracao_do_servico.ts`],
   ["modulos/projeto/aplicacao/configuracao_do_agente.ts", `${DESPACHO}aplicacao/configuracao_do_servico.ts`],
   ["modulos/sdlc/nucleo/demanda/pendencia.ts", `${DESPACHO}nucleo/despacho.ts`],
-  ["modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts", `${DESPACHO}armazenamento/configuracao_do_servico.ts`],
-  ...[
-    "composicao/servico.ts",
-    "consultas/configuracao.ts",
-    "consultas/demandas/demanda.ts",
-    "consultas/demandas/pendencias.ts",
-    "fluxos/ciclo_do_servico/despacho_do_trabalho.ts",
-  ].map((arquivo): [string, string] => [`server/${arquivo}`, `modulos/ciclo_de_vida/despacho/publico.ts`]),
+  ...["composicao/servico.ts", "fluxos/ciclo_do_servico/despacho_do_trabalho.ts"].map((arquivo): [string, string] => [
+    `server/${arquivo}`,
+    `modulos/ciclo_de_vida/despacho/publico.ts`,
+  ]),
   // O fluxo do despacho entrega ao Despacho as conduções que a composição monta (o tipo delas é da Condução).
   ["server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts", API_DA_CONDUCAO],
 ];

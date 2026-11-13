@@ -5,7 +5,7 @@ import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { encerrarProcesso, iniciarProcesso, registrarUso } from "../nucleo/trabalho_agentico.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
 import { migrar } from "../../compartilhado/armazenamento/banco.ts";
-import { trabalhosComTituloDaDemanda } from "./historico_demanda.ts";
+import { ticketsComPiAtivo } from "../../../server/consultas/sessoes/historico_demanda.ts";
 import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
 import {
   carregarTrabalhosDaDemanda,
@@ -15,11 +15,8 @@ import {
   gravarTokenDoProcesso,
   processosAbertos,
   processoVivoDoToken,
-  sessaoDeCadaTicketDaDemanda,
   sessaoDeCadaTicketDasDemandas,
   ticketDoTrabalho,
-  ticketsComPiAtivo,
-  trabalhosComTicketDaDemanda,
 } from "./trabalho_agentico.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -226,45 +223,12 @@ test("o Ambiente gravado no processo aberto volta em processosAbertos, para a re
   assert.equal(processosAbertos(b)[0]?.ambiente_id, "amb-9"); // o upsert do processo não o apaga
 });
 
-test("o ticket dono do trabalho e os trabalhos da demanda; id desconhecido volta sem ticket", () => {
+test("o ticket dono do trabalho; id desconhecido volta sem ticket", () => {
   const b = banco();
   gravar(b, [sessao("s1")], [], []);
   gravar(b, [sessao("s2", 2)], [], [], noTicket2);
   assert.deepEqual({ ...ticketDoTrabalho(b, "s2") }, noTicket2);
   assert.equal(ticketDoTrabalho(b, "nao-existe"), undefined);
-  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-1"), [
-    { id: "s1", ...ref },
-    { id: "s2", ...noTicket2 },
-  ]);
-  assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-2"), []);
-});
-
-test("trabalhos do histórico com o título da demanda, filtrados por projeto, demanda e etapa", () => {
-  const b = banco();
-  gravar(b, [sessao("s1")], [], []);
-  assert.deepEqual(trabalhosComTituloDaDemanda(b, {}), [{ id: "s1", titulo: "t" }]);
-  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "p", demanda: "I-1", etapa: "implementar" }).length, 1);
-  assert.equal(trabalhosComTituloDaDemanda(b, { projeto: "outro" }).length, 0);
-  assert.equal(trabalhosComTituloDaDemanda(b, { demanda: "I-2" }).length, 0);
-  assert.equal(trabalhosComTituloDaDemanda(b, { etapa: "planejar" }).length, 0);
-});
-
-test("sessaoDeCadaTicketDaDemanda devolve a sessão de cada ticket e, com mais de uma, a mais recente", () => {
-  const b = banco();
-  const nova = b.prepare(
-    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-1', ?, 'autonomo', 'c')",
-  );
-  nova.run("s-a", 1);
-  nova.run("s-b", 2);
-  nova.run("s-c", 1);
-  assert.deepEqual(
-    sessaoDeCadaTicketDaDemanda(b, "I-1"),
-    new Map([
-      [1, "s-c"],
-      [2, "s-b"],
-    ]),
-  );
-  assert.deepEqual(sessaoDeCadaTicketDaDemanda(b, "I-9"), new Map());
 });
 
 test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {

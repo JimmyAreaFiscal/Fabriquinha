@@ -72,6 +72,14 @@ export const historicoDosPedidosEmLote = (banco: DatabaseSync, ids?: readonly st
       concluidaEm: linha.concluida_em === null ? null : String(linha.concluida_em),
     }));
 
+/** O achado da Avaliação de onde o pedido `id` foi encaminhado, ou `undefined` no pedido que não veio de um. */
+export const origemDoPedido = (
+  banco: DatabaseSync,
+  id: string,
+): { avaliacao_id: string; achado_id: number; titulo: string } | undefined =>
+  banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(id) as
+    { avaliacao_id: string; achado_id: number; titulo: string } | undefined;
+
 export const gravarConteudoDoPedido = (banco: DatabaseSync, { id, titulo, tipo, descricao }: Pedido): void => {
   banco.prepare("UPDATE demanda SET titulo = ?, tipo = ?, descricao = ? WHERE id = ?").run(titulo, tipo, descricao, id);
 };

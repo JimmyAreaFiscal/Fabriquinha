@@ -1,18 +1,14 @@
 // A consulta do board das demandas: as demandas fora das arquivadas e o trabalho global ativo, montados no contrato da
 // API (contrato/) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
-import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { listarDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import { ticketsComPiAtivo } from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { Relogio } from "../../../shared/nucleo/relogio.ts";
+import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
+import { type AgregadoDemanda, CICLO_DA_DEMANDA, listarDemandas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { BoardDeDemandas } from "../../contrato/demanda.ts";
-import { bloqueiosDaDemanda } from "./bloqueios.ts";
+import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 import { enderecosNaDemanda, prDoGateDaRodada } from "./demanda.ts";
-import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
+import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
 
 /** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
 const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>): BoardDeDemandas["trabalho"] =>
@@ -41,7 +37,15 @@ export function consultarBoardDeDemandas(
       banco,
       todas.map((ag) => ag.demanda.id),
     );
-    const agora = relogio.agora();
+    // As Pendências de todas as demandas em andamento numa leitura só; a terminada não espera ninguém.
+    const emAndamento = todas.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
+    const pendencias = pendenciasDasDemandas(
+      banco,
+      emAndamento,
+      sessoesDasDemandas(banco, emAndamento, { escopo: "ativas" }),
+      situacaoDa,
+      relogio.agora(),
+    );
     return {
       demandas: todas.map((ag) => {
         const { id, projeto, titulo, estado } = ag.demanda;
@@ -55,10 +59,8 @@ export function consultarBoardDeDemandas(
             const pr = prDoGateDaRodada(ag, r.rodada_id);
             return { ref: enderecosNaDemanda(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
           }),
-          bloqueios: bloqueiosDaDemanda(
-            encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue"),
-          ),
-          pendencias: pendenciasDeUmaDemanda(banco, ag, situacaoDa, agora),
+          bloqueios: bloqueiosDaDemanda(predecessorasDe(predecessoras, id)),
+          pendencias: pendencias.filter((p) => p.demanda === id),
         };
       }),
       trabalho: todas.flatMap((ag) => emExecucao(ag, comPiAtivo)),

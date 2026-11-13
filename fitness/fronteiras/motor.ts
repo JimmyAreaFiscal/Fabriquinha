@@ -15,6 +15,11 @@ export interface RegraDoModulo {
   externoPermitido: (alvo: string) => boolean;
   /** Módulos de que só se importa tipo (`import type`), apagado na execução; o valor fica fora de `modulosPermitidos`. */
   modulosSoComoTipo?: string[];
+  /**
+   * O módulo não importa o código antigo (src/modulos/ fora dos domínios migrados), nem nas camadas que `modulosPermitidos`
+   * libera: delas, só alcança o shared.
+   */
+  semCodigoAntigo?: boolean;
 }
 
 // Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
@@ -287,6 +292,7 @@ function julgarPelaMatriz(
   regra: RegraDoModulo,
 ): boolean {
   if (lugarDoAlvo === undefined) return regra.externoPermitido(alvo);
+  if (regra.semCodigoAntigo === true && lugarDoAlvo.dominio === undefined) return false;
   const moduloAlvo = lugarDoAlvo.moduloDoAlvo;
   if (moduloAlvo === undefined || moduloAlvo === lugarDoImportador.moduloDoImportador) return true;
   if (regra.modulosPermitidos.includes(moduloAlvo)) return true;

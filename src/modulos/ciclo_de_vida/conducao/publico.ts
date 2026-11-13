@@ -1,6 +1,7 @@
 // A API de Condução (MELHORIAS §11): executa o trabalho de um ticket, da reserva à transição pedida ao Processo, com a
 // política de uso dos agentes (prompt, modelo, capacidades, retomada, triagem do Auditor automático) entregue pronta a
-// Sessões; as conduções de cada Etapa, a decisão dos gates com os efeitos fora do agregado e os casos de uso do agente.
+// Sessões; as conduções de cada Etapa, a decisão dos gates com os efeitos fora do agregado, os casos de uso do agente e o
+// chat do Auditor: o estado da sessão do ticket, a Pendência que a segura, as marcas da conversa e as ações dele.
 export { adicionarEvidenciaComAnexosEnviados } from "./aplicacao/agente/adicionar_evidencia.ts";
 export { verDemanda, verProjeto, verTicket } from "./aplicacao/agente/consultas.ts";
 export { criarTicketCorretivo } from "./aplicacao/agente/criar_ticket_corretivo.ts";
@@ -14,6 +15,21 @@ export {
 } from "./aplicacao/agente/escopo.ts";
 export { tipoDoAgente } from "./aplicacao/agente/tipo_do_agente.ts";
 export { concluirSessaoAjustes } from "./aplicacao/ajustar_resultado/sessao_ajustes.ts";
+export { abortarDemanda, responderDialogoDemanda } from "./aplicacao/chat_do_auditor/acoes_do_auditor_no_chat.ts";
+export { marcadorDaConversa, promptsDaFabriquinha } from "./aplicacao/chat_do_auditor/marcas_da_conversa.ts";
+export {
+  type EstadoDaSessao,
+  estadoEDesdeDaSessao,
+  execucaoDaSessao,
+  pendenciaDaSessao,
+  type PendenciaDoChat,
+  pendenciaDoChat,
+  type SessaoDoTicket,
+  trabalhoVivoDaSessao,
+} from "./aplicacao/chat_do_auditor/sessao_do_ticket.ts";
+// provisório: remover no ticket 22, que traz a regra das Pendências do sdlc para o Ciclo de Vida. A regra única do que
+// aguarda o Auditor, para as consultas das telas.
+export { pendenciasDaDemanda, type TrabalhoVivo } from "../../sdlc/nucleo/demanda/pendencia.ts";
 export { ConducaoAgentica } from "./aplicacao/conducao_de_etapa/conducao_de_etapa.ts";
 export { enviarDemanda } from "./aplicacao/conducao_de_etapa/mensagem_do_auditor.ts";
 export {

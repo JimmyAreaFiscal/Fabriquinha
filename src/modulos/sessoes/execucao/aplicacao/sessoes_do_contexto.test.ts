@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
-import { execucoesEmLote, resumoDaSessao } from "../armazenamento/sessoes_e_execucoes.ts";
+import { execucoesEmLote, resumoDaSessao, resumosDasSessoesEmLote } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type Execucao, type Sessao } from "../nucleo/sessao.ts";
 import { comSessoesDoContexto, usoEmLote } from "./sessoes_do_contexto.ts";
 
@@ -124,4 +124,23 @@ test("o resumo da sessão traz a sessão e as execuções dela, sem a conversa; 
     { ...sessao("s1", 1), execucoes: ["e1", "e2"] },
   );
   assert.equal(resumoDaSessao(banco, "desconhecida"), undefined);
+});
+
+test("os resumos em lote trazem as sessões das demandas pedidas, ou de todas, cada uma com as execuções dela", () => {
+  const banco = bancoComDuasSessoes();
+  comSessoesDoContexto(banco, { demanda_id: "I-1", ticket_id: 2 }, (estado) => ({
+    ...estado,
+    sessoes: [...estado.sessoes, sessao("s3", 2)],
+  }));
+  const execucoesDeCadaSessao = (demandas?: readonly string[]) =>
+    resumosDasSessoesEmLote(banco, demandas).map(({ id, execucoes }) => [id, execucoes.map((e) => e.id)]);
+  const todas = [
+    ["s1", ["e1", "e2"]],
+    ["s2", ["e3"]],
+    ["s3", []],
+  ];
+  assert.deepEqual(execucoesDeCadaSessao(), todas);
+  assert.deepEqual(execucoesDeCadaSessao(["I-1"]), todas);
+  assert.deepEqual(execucoesDeCadaSessao(["I-2"]), []);
+  assert.deepEqual(resumosDasSessoesEmLote(banco, ["I-1"])[0], resumoDaSessao(banco, "s1"));
 });

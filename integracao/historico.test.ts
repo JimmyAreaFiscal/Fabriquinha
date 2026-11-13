@@ -8,7 +8,7 @@ import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_traba
 import { consultarDemanda } from "../src/server/consultas/demandas/demanda.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { achadoDaDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { origemDoPedido } from "../src/modulos/demandas/publico.ts";
 import { predecessorasDaDemanda } from "../src/modulos/sdlc/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
@@ -132,7 +132,7 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
   assert.deepEqual(pagina.origem, { avaliacao, achado: 1, titulo: "Achado 1" });
   assert.deepEqual(pagina.demanda.estado, "entender_e_desenhar");
   assert.deepEqual(demanda(c, nova.id).demanda.criada_por, autor);
-  assert.equal(achadoDaDemanda(c.banco, nova.id)?.achado_id, 1);
+  assert.equal(origemDoPedido(c.banco, nova.id)?.achado_id, 1);
   assert.equal(demanda(c, origem).demanda.estado, "em_execucao");
 
   // A demanda segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.

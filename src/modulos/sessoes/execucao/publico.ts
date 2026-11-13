@@ -21,8 +21,9 @@ export {
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
   resumoDaSessao,
+  type ResumoDaSessao,
+  resumosDasSessoesEmLote,
   sessaoDeCadaTicketDasDemandas,
-  sessoesDaDemanda,
 } from "./armazenamento/sessoes_e_execucoes.ts";
 export {
   carregarSessoesDoContexto,

@@ -14,7 +14,7 @@ import {
   estadoEDesdeDaSessao,
   execucaoDaSessao,
   pendenciaDaSessao,
-} from "../../../../sdlc/aplicacao/sessoes/sessoes_demanda.ts";
+} from "../chat_do_auditor/sessao_do_ticket.ts";
 import { retomarSessaoAjustes } from "../ajustar_resultado/sessao_ajustes.ts";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */

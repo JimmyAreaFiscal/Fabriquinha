@@ -72,12 +72,19 @@ test("a fitness dos domínios migrados acusa o import fora das fachadas, das API
     "modulos/sdlc/nucleo/reexporta_da_fachada.ts": 'export { criar } from "../../ambiente/publico.ts";\n',
     "server/api/rota.ts": 'import { criar } from "../../modulos/ambiente/publico.ts";\n',
     "server/web/tela.ts": 'import type { Rede } from "../../modulos/ambiente/publico.ts";\n',
+    // A consulta da tela lê pelas fachadas, com o núcleo e a leitura num snapshot do shared.
+    "server/consultas/tela.ts":
+      'import { criar } from "../../modulos/ambiente/publico.ts";\nimport { e } from "../../shared/nucleo/erros.ts";\nimport { l } from "../../shared/armazenamento/snapshot.ts";\nimport type { R } from "../contrato/x.ts";\n',
     // Proibidos: de fora do domínio, só a fachada, e o tipo de pasta interna também conta.
     "modulos/sdlc/aplicacao/usa_o_interior.ts": 'import { s } from "../../ambiente/sandboxes/nucleo/sandbox.ts";\n',
     "modulos/sdlc/aplicacao/usa_a_api.ts": 'import { r } from "../../ambiente/redes/publico.ts";\n',
     "server/api/tipo_interno.ts": 'import type { S } from "../../modulos/ambiente/sandboxes/nucleo/sandbox.ts";\n',
     "modulos/sessoes/execucao/aplicacao/tipo_do_ambiente.ts":
       'import type { S } from "../../../ambiente/sandboxes/nucleo/sandbox.ts";\n',
+    // A consulta não lê o interior de um domínio nem o código antigo, em camada nenhuma.
+    "server/consultas/usa_o_interior.ts": 'import { s } from "../../modulos/ambiente/sandboxes/nucleo/sandbox.ts";\n',
+    "server/consultas/usa_o_legado.ts":
+      'import { a } from "../../modulos/sdlc/armazenamento/x.ts";\nimport { n } from "../../modulos/sdlc/nucleo/x.ts";\nimport { b } from "../../modulos/compartilhado/armazenamento/snapshot.ts";\n',
     // A matriz do servidor ainda vale: o navegador só importa tipo da fachada.
     "server/web/fachada_valor.ts": 'import { criar } from "../../modulos/ambiente/publico.ts";\n',
     // O domínio só importa a fachada dos domínios de que depende, nunca o servidor nem o código antigo.
@@ -124,6 +131,10 @@ test("a fitness dos domínios migrados acusa o import fora das fachadas, das API
     "modulos/sessoes/historico/aplicacao/usa_execucao.ts importa ../../execucao/publico.ts (o subdomínio historico não depende de execucao)",
     "modulos/sessoes/publico.ts importa ./execucao/aplicacao/lancar.ts (a fachada importa só o publico.ts dos subdomínios)",
     "server/api/tipo_interno.ts importa ../../modulos/ambiente/sandboxes/nucleo/sandbox.ts (de fora do domínio ambiente, só pela fachada publico.ts)",
+    "server/consultas/usa_o_interior.ts importa ../../modulos/ambiente/sandboxes/nucleo/sandbox.ts (de fora do domínio ambiente, só pela fachada publico.ts)",
+    "server/consultas/usa_o_legado.ts importa ../../modulos/compartilhado/armazenamento/snapshot.ts",
+    "server/consultas/usa_o_legado.ts importa ../../modulos/sdlc/armazenamento/x.ts",
+    "server/consultas/usa_o_legado.ts importa ../../modulos/sdlc/nucleo/x.ts",
     "server/web/fachada_valor.ts importa ../../modulos/ambiente/publico.ts",
     "shared/infra/usa_dominio.ts importa ../../modulos/ambiente/publico.ts (o shared não importa domínio nem o servidor)",
     "shared/infra/usa_o_legado.ts importa ../../modulos/compartilhado/nucleo/erros.ts (o shared não importa domínio nem o servidor)",

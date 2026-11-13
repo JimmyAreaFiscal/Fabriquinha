@@ -10,6 +10,7 @@ import { test, type TestContext } from "node:test";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import { REGRAS_DO_AMBIENTE } from "./fronteiras/dominios/ambiente.ts";
+import { PASTA_DAS_CONSULTAS } from "./fronteiras/dominios/server.ts";
 import { PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
 import {
   acharDonosNaoDeclarados,
@@ -70,6 +71,11 @@ test("toda tabela do banco migrado tem um dono, e todo dono declarado é uma tab
 
 test("todo dono é `shared` ou um subdomínio declarado no arquivo do domínio", () => {
   assert.deepEqual(acharDonosNaoDeclarados(DONO_DE_CADA_TABELA, ARQUITETURA_DE_SRC), []);
+});
+
+test("as consultas das telas não tocam tabela nenhuma: leem pelas fachadas (MELHORIAS §6)", () => {
+  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, [PASTA_DO_HISTORICO_DO_ESQUEMA]);
+  assert.deepEqual(toques.filter(({ arquivo }) => arquivo.startsWith(PASTA_DAS_CONSULTAS)).map(descreverToque), []);
 });
 
 test("inventário: o SQL de src/ que toca tabela fora do armazenamento do dono, reprovado só nos domínios estritos", (t) => {

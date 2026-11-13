@@ -237,8 +237,3 @@ export function carregarEscopoDoProcesso(banco: DatabaseSync, execucao: string):
     }
   );
 }
-
-/** O achado de avaliação que originou a demanda (a avaliação o liga à demanda que ele virou), ou `undefined`. */
-export const achadoDaDemanda = (banco: DatabaseSync, demandaId: string) =>
-  banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(demandaId) as
-    { avaliacao_id: string; achado_id: number; titulo: string } | undefined;

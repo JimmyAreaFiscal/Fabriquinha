@@ -1,20 +1,19 @@
 // As Pendências das demandas como as telas as mostram: o Início, o board, a página da demanda e a do projeto derivam das
 // mesmas, pela regra única do núcleo, com o que cada uma precisa para levar ao chat ou à página da demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { formatarRodadaRef } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { predecessorasPendentes } from "../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
-import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { pendenciasDaDemanda, type TrabalhoVivo } from "../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
-import type { Instante } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EstadoDemanda } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import type { Instante } from "../../../shared/nucleo/primitivos.ts";
+import {
+  type AgregadoDemanda,
+  CICLO_DA_DEMANDA,
+  Endereco,
+  formatarRodadaRef,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { Situacao } from "../../../modulos/sessoes/publico.ts";
+import { condutor, pendenciasDaDemanda, type TrabalhoVivo } from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
 import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
-import { condutor, type Situacao } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { type SessaoDeDemanda, sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
+import { type SessaoDeDemanda, sessoesDasDemandas } from "../sessoes/historico_demanda.ts";
+import { bloqueiosDaDemanda, type Predecessora, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
 export type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
@@ -38,14 +37,14 @@ const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
 /** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
 function pendenciasDoInicio(
   ag: AgregadoDemanda,
-  predecessoras: readonly { demanda_id: string; estado: EstadoDemanda }[],
+  predecessoras: readonly Predecessora[],
   vivos: readonly TrabalhoVivo[],
   sessaoDoTicket: ReadonlyMap<string, string>,
   agendadorLigado: boolean,
   agora: Instante,
 ): PendenciaDoInicio[] {
   const { id: demanda, projeto, titulo } = ag.demanda;
-  const predecessorasSatisfeitas = predecessorasPendentes(predecessoras).length === 0;
+  const predecessorasSatisfeitas = bloqueiosDaDemanda(predecessoras).length === 0;
   return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, { agora, predecessorasSatisfeitas }).map(
     (p) => {
       const item = p.item.toString();
@@ -84,11 +83,16 @@ export function pendenciasDasDemandas(
     demandas.map((ag) => ag.demanda.id),
   );
   return demandas
-    .flatMap((ag) => {
-      const { id } = ag.demanda;
-      const doId = encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue");
-      return pendenciasDoInicio(ag, doId, vivos, sessaoDoTicket, agendadorLigado, agora);
-    })
+    .flatMap((ag) =>
+      pendenciasDoInicio(
+        ag,
+        predecessorasDe(predecessoras, ag.demanda.id),
+        vivos,
+        sessaoDoTicket,
+        agendadorLigado,
+        agora,
+      ),
+    )
     .toSorted((a, b) => a.desde.localeCompare(b.desde));
 }
 
@@ -103,6 +107,6 @@ export function pendenciasDeUmaDemanda(
   agora: Instante,
 ): PendenciaDoInicio[] {
   if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
-  const sessoes = sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id });
+  const sessoes = sessoesDasDemandas(banco, [ag], { escopo: "ativas" });
   return pendenciasDasDemandas(banco, [ag], sessoes, situacaoDa, agora);
 }

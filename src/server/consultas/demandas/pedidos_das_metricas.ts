@@ -3,9 +3,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
-import type { PedidoDasMetricas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { andamentoDasDemandasEmLote, type PedidoDasMetricas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { historicoDosPedidosEmLote } from "../../../modulos/demandas/publico.ts";
-import { andamentoDasDemandasEmLote } from "../../../modulos/sdlc/armazenamento/demandas.ts";
 
 /** Os pedidos das demandas `ids`, ou de todas sem `ids`, na ordem em que foram registrados. */
 export const lerPedidosDasMetricas = (banco: DatabaseSync, ids?: readonly string[]): PedidoDasMetricas[] =>

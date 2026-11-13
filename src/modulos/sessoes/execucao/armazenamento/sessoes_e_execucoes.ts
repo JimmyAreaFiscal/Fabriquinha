@@ -235,12 +235,9 @@ export const contextoDaSessao = (banco: DatabaseSync, sessao: IdDaSessao): Conte
     ContextoDaSessao | undefined;
 
 /** A sessão sem a conversa: o registro e as execuções dela. */
-type ResumoDaSessao = Sessao & { execucoes: Execucao[] };
+export type ResumoDaSessao = Sessao & { execucoes: Execucao[] };
 
-/**
- * O resumo da sessão, lido só do banco (regra 8: sem carregar a conversa), ou `undefined` se o id não é de uma sessão.
- * @testes o consumidor de produção é a visão do chat, que o ticket 21 passa a montar pela fachada
- */
+/** O resumo da sessão, lido só do banco (regra 8: sem carregar a conversa), ou `undefined` se o id não é de uma sessão. */
 export function resumoDaSessao(banco: DatabaseSync, sessao: IdDaSessao): ResumoDaSessao | undefined {
   const registro = banco.prepare("SELECT * FROM trabalho_agentico WHERE id = ?").get(sessao);
   if (!registro) return undefined;
@@ -250,12 +247,25 @@ export function resumoDaSessao(banco: DatabaseSync, sessao: IdDaSessao): ResumoD
   return { ...Sessao.parse(registro), execucoes: z.array(Execucao).parse(execucoes.map(execucaoDaLinha)) };
 }
 
-/** As sessões do contexto da demanda, cada uma com o contexto dela. */
-export const sessoesDaDemanda = (banco: DatabaseSync, demandaId: string): (ContextoDaSessao & { id: IdDaSessao })[] =>
-  banco
-    .prepare("SELECT id, demanda_id, ticket_id FROM trabalho_agentico WHERE demanda_id = ?")
-    .all(demandaId)
-    .map((l) => ({ ...l }) as unknown as ContextoDaSessao & { id: string });
+/**
+ * O resumo de cada sessão das demandas `demandas`, ou de todas sem `demandas`, na ordem em que foram criadas, sem carregar a
+ * conversa (regra 8): numa leitura das sessões e outra das execuções, sem uma por sessão.
+ */
+export function resumosDasSessoesEmLote(banco: DatabaseSync, demandas?: readonly string[]): ResumoDaSessao[] {
+  const filtro = { demandas: demandas === undefined ? null : JSON.stringify(demandas) };
+  const DAS_DEMANDAS = "$demandas IS NULL OR demanda_id IN (SELECT value FROM json_each($demandas))";
+  const sessoes = z
+    .array(Sessao)
+    .parse(banco.prepare(`SELECT * FROM trabalho_agentico WHERE ${DAS_DEMANDAS} ORDER BY rowid`).all(filtro));
+  const execucoes = banco
+    .prepare(
+      `SELECT * FROM processo_do_trabalho
+        WHERE trabalho_id IN (SELECT id FROM trabalho_agentico WHERE ${DAS_DEMANDAS}) ORDER BY rowid`,
+    )
+    .all(filtro);
+  const execucoesDaSessao = Map.groupBy(z.array(Execucao).parse(execucoes.map(execucaoDaLinha)), (e) => e.trabalho_id);
+  return sessoes.map((sessao) => ({ ...sessao, execucoes: execucoesDaSessao.get(sessao.id) ?? [] }));
+}
 
 /** O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente. */
 export function sessaoDeCadaTicketDasDemandas(

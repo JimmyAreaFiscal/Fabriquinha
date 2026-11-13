@@ -4,13 +4,8 @@
 // de `contrato/sessoes/chat.ts`.
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import {
-  abortarDemanda,
-  abrirChatDemanda,
-  type ChatDemanda,
-  exportarHistoricoDemanda,
-  responderDialogoDemanda,
-} from "../../../../modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts";
+import { abortarDemanda, responderDialogoDemanda } from "../../../../modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts";
+import { abrirChatDemanda, type ChatDemanda, exportarHistoricoDemanda } from "../../../consultas/sessoes/chat.ts";
 import { enviarDemanda } from "../../../../modulos/etapas/conducao/mensagem_do_auditor.ts";
 import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../../contrato/sessoes/chat.ts";
 import { SemCorpoEmJson, type Rota } from "../../rotas.ts";

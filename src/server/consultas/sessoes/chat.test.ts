@@ -6,35 +6,50 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { AgregadoDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
-import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { encontrado } from "../../../compartilhado/nucleo/erros.ts";
-import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type {
+  ProcessoDoTrabalho,
+  TrabalhoGerenciado,
+} from "../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { registrarProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { carregarDemanda } from "../../../modulos/sdlc/armazenamento/demandas.ts";
+import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
-} from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
-import { condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+} from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { criarRepositorioDeTeste } from "../../../../apoio-testes/repositorio_de_teste.ts";
+import {
+  interromperExecucaoDemanda,
+  iniciarExecucaoDemanda,
+} from "../../../modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
+import {
+  condutor,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+} from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import {
+  estadoEDesdeDaSessao,
+  type SessaoDoTicket,
+} from "../../../modulos/ciclo_de_vida/conducao/aplicacao/chat_do_auditor/sessao_do_ticket.ts";
 import {
   abortarDemanda,
-  abrirChatDemanda,
-  cabecalhoDaSessao,
-  estadoEDesdeDaSessao,
-  type Carregada,
-  exportarHistoricoDemanda,
   responderDialogoDemanda,
-} from "./sessoes_demanda.ts";
-import { enviarDemanda } from "../../../etapas/conducao/mensagem_do_auditor.ts";
-import { emMarkdown, perguntasRespondidasNaSessao } from "../../../trabalho_agentico/aplicacao/sessoes/conversa.ts";
-import { montarPromptDemanda } from "../../../etapas/prompt/prompt_demanda.ts";
+} from "../../../modulos/ciclo_de_vida/conducao/aplicacao/chat_do_auditor/acoes_do_auditor_no_chat.ts";
+import { abrirChatDemanda, exportarHistoricoDemanda } from "./chat.ts";
+import { enviarDemanda } from "../../../modulos/etapas/conducao/mensagem_do_auditor.ts";
+import {
+  emMarkdown,
+  perguntasRespondidasNaSessao,
+} from "../../../modulos/trabalho_agentico/aplicacao/sessoes/conversa.ts";
+import { montarPromptDemanda } from "../../../modulos/etapas/prompt/prompt_demanda.ts";
+
+/** O cabeçalho da sessão, como o chat o abre; `undefined` se o id não é de uma sessão da demanda. */
+const cabecalhoDaSessao = (banco: DatabaseSync, id: string) => abrirChatDemanda(banco, id)?.cabecalho;
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sessoes-demanda-")));
@@ -230,7 +245,7 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
 
 test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () => {
   const { banco } = cenario();
-  const carregada = (id: string): Carregada => {
+  const carregada = (id: string): SessaoDoTicket => {
     const ref = banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(id) as {
       demanda_id: string;
       ticket_id: number;

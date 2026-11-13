@@ -66,11 +66,12 @@ export {
   type PedidoDeProcesso,
   registrarUsoDaConsulta,
   resumoDaSessao,
+  type ResumoDaSessao,
+  resumosDasSessoesEmLote,
   retomarSessao,
   Sessao,
   sessaoDeCadaTicketDasDemandas,
   SessoesDeAgente,
-  sessoesDaDemanda,
   type SessoesDoContexto,
   usoEmLote,
 } from "./execucao/publico.ts";
