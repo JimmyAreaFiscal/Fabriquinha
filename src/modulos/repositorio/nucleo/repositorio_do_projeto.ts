@@ -1,16 +1,3 @@
-// O que o repositório lê do Projeto (CONCEITOS.md §13): o clone, a base, a hospedagem e a Preparação da worktree. O
-// Projeto inteiro, com o SonarQube, a Configuração do Agente e as Verificações, mora em projeto/.
-import { z } from "zod";
-
-export const Hospedagem = z.enum(["github", "azure-devops"]);
-
-export type Hospedagem = z.infer<typeof Hospedagem>;
-
-export interface RepositorioDoProjeto {
-  nome: string;
-  raiz_git: string;
-  branch_base: string;
-  hospedagem: Hospedagem;
-  /** Os comandos que rodam, em ordem, ao criar a worktree. */
-  verificacoes: { preparacao: string[] };
-}
+// provisório: remover no ticket 22 (o caminho antigo reexporta do Repositório). Direto do núcleo do Git, e não da
+// fachada: o CLI do agente (pacote-pi) empacota o Projeto, e a fachada levaria o banco e o git para dentro do pacote.
+export { Hospedagem } from "../git/nucleo/repositorio_do_projeto.ts";

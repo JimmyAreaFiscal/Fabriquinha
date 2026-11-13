@@ -15,8 +15,9 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { descartarAlteracoes, exigirGit, naFilaDoProjeto, preparar, removerWorktrees } from "./worktree.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
+import { descartarAlteracoes, preparar, removerWorktrees } from "./worktree.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();

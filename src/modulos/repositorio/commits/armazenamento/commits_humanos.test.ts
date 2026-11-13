@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { relogioFixo } from "../../compartilhado/nucleo/relogio.ts";
-import { migrar } from "../../compartilhado/armazenamento/banco.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import { cursorDaBase, gravarVarredura, projetosAVarrer } from "./commits_humanos.ts";
-import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 
 test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em ordem de nome", () => {
   const banco = new DatabaseSync(":memory:");
@@ -25,7 +25,7 @@ test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em o
   varrido("velho", "2026-10-10T11:59:59.999Z");
   varrido("novo", "2026-10-10T12:00:00.000Z");
 
-  assert.deepEqual(projetosAVarrer(banco, relogio), ["loja", "velho"]);
+  assert.deepEqual(projetosAVarrer(banco, ["velho", "novo", "loja"], relogio), ["loja", "velho"]);
   banco.close();
 });
 

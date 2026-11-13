@@ -12,17 +12,17 @@ import {
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
-import { migrar } from "../../../compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { listarAmbientes } from "../../../sandbox/armazenamento/ambientes.ts";
 import { GeradorDeAmbientes } from "../../../sandbox/infra/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
-import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
+import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { espacoDaDemanda, espacoDaRodada } from "../../espaco_de_trabalho/publico.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { AmbienteContainer } from "../../../sandbox/infra/container/ambiente_container.ts";
-import { naFilaDoProjeto } from "../../infra/worktree/worktree.ts";
+import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";

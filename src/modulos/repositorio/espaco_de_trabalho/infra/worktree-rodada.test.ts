@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo as commit,
@@ -16,7 +16,7 @@ import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
-import { naFilaDoProjeto } from "./worktree.ts";
+import { naFilaDoProjeto } from "../../git/publico.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();

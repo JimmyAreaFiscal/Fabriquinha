@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { Ambiente, ComandoNoAmbiente, SaidaDoComando } from "../../../sandbox/infra/ambiente.ts";
-import { exigirGitNoAmbiente, gitNoAmbiente, preparar } from "./worktree.ts";
+import { exigirGitNoAmbiente, gitNoAmbiente } from "./comandos_git.ts";
+import { preparar } from "../../espaco_de_trabalho/infra/worktree.ts";
 
 /** Um Ambiente que registra o comando recebido e responde com a saída dada, para ver o que o git pede ao Ambiente. */
 function ambienteQueResponde(saida: Partial<SaidaDoComando>) {

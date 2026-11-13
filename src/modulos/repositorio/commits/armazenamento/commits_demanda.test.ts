@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { migrar } from "../../compartilhado/armazenamento/banco.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
 import {
   commitDoTicketDemanda,
@@ -10,7 +10,7 @@ import {
   gravarCommitsPosterioresDoTicket,
   gravarCommitHumanoPosterior,
 } from "./commits_demanda.ts";
-import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (c: string) => c.repeat(40);

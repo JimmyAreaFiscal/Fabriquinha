@@ -4,7 +4,7 @@ import type { AmbienteContainer } from "../../../sandbox/infra/container/ambient
 import type { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
 import { ambienteDoServico, montarConjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { type EspacoDeTrabalho, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
+import { type EspacoDeTrabalho, espacoDaRodada } from "../nucleo/espaco_de_trabalho.ts";
 import { ambienteDoEspaco, ocupanteDoAmbiente } from "./ambiente_do_espaco.ts";
 
 test("ocupanteDoAmbiente: o dono por extenso e a pasta das worktrees do projeto, não a da demanda", () => {

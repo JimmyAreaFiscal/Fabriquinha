@@ -1,8 +1,7 @@
 // Git dos commits humanos posteriores (F6 §4): busca da base, log dos commits novos e blame das linhas reescritas.
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { LIMITE_COMANDO_MS } from "../../../sandbox/infra/ambiente.ts";
-import { executar, git } from "../../../compartilhado/infra/processo.ts";
-import { exigirGit } from "../worktree/worktree.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { executar, git, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
+import { exigirGit } from "../../git/publico.ts";
 
 /** Cabeçalho de hunk do `-U0`: `@@ -início[,quantidade] ...`, sem quantidade quando é uma linha só. */
 const HUNK = /^@@ -(\d+)(?:,(\d+))? /gm;
