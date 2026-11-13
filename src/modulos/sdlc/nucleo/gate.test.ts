@@ -7,7 +7,7 @@ import { type NomeGate } from "../../etapas/catalogo.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
-import { GATE_DA_DEMANDA, GATES } from "../../etapas/gates.ts";
+import { GATE_DA_DEMANDA, GATES } from "../../ciclo_de_vida/conducao/publico.ts";
 import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { comTentativaAberta, motivoDaFalhaDoTicket } from "./tentativa.ts";
 import { falhaQueExigeOAuditor } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";

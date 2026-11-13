@@ -19,4 +19,5 @@ export {
   planosDasDemandas,
   type ResumoDoTicket,
   ticketsDasDemandas,
+  ticketsEmExecucaoDasEtapas,
 } from "./armazenamento/itens_do_planejamento.ts";

@@ -4,7 +4,7 @@ import { comEvidencia, comPlanoSubmetido } from "../../../../../apoio-testes/cen
 import { clonarAgregadoDemanda as structuredClone } from "../../../../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
-import { GATE_DA_DEMANDA, GATES } from "../../../etapas/gates.ts";
+import { GATE_DA_DEMANDA, GATES } from "../../../ciclo_de_vida/conducao/publico.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   comTentativaAberta,
