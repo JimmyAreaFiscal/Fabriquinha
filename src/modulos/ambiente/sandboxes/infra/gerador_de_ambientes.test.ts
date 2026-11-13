@@ -15,8 +15,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
-import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../ambiente.ts";
-import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
+import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;

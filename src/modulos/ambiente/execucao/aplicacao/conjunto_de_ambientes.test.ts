@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
-import { listarAmbientes } from "../../armazenamento/ambientes.ts";
-import { migrar } from "../../../compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../compartilhado/armazenamento/migracoes/migracoes.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type EspacoDeTrabalho,
   espacoDaDemanda,
@@ -16,12 +16,12 @@ import {
 } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ocupanteDoAmbiente } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
 import { Projeto } from "../../../projeto/nucleo/projeto.ts";
-import { relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { pastasDoAmbiente } from "../../infra/container/pastas_do_ambiente.ts";
-import { GeradorDeAmbientes } from "../../infra/container/gerador_de_ambientes.ts";
-import { ConjuntoDeAmbientes } from "./conjunto.ts";
+import { relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+import { pastasDoAmbiente } from "../../sandboxes/infra/pastas_do_ambiente.ts";
+import { GeradorDeAmbientes } from "../../sandboxes/infra/gerador_de_ambientes.ts";
+import { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";
 import { PACOTE } from "../../../harness/pi/pi.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao_do_ambiente.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/aplicacao/configuracao_do_ambiente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
 // O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
