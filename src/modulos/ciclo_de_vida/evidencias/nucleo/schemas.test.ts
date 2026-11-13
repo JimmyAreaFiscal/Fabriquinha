@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
-import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { schemaDoTipo } from "./formatos.ts";
 import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";

@@ -412,7 +412,7 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
   ]);
 });
 
-// Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada. O
+// Só a submissão de Evidência do Processo (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada. O
 // `gravar*` das Evidências se importa do armazenamento delas, da API de Evidências ou da fachada do Ciclo de Vida.
 const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
 
@@ -446,7 +446,7 @@ function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
     });
 }
 
-test("só submeter.ts e o armazenamento gravam em evidencia_demanda", () => {
+test("só a submissão do Processo e o armazenamento gravam em evidencia_demanda", () => {
   assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(SRC), []);
 });
 
@@ -653,7 +653,7 @@ test("a fitness de nomes de Etapa acusa literal, chave de objeto e SQL, em .ts e
 // num ciclo de import de valor, senão quem o lê na carga o acha ainda em TDZ, conforme a ordem em que os módulos sobem.
 // As definições e as seções do prompt importam do motor só tipos e funções que não leem o catálogo.
 
-function acharVoltasAoCatalogo(src: string): string[] {
+function acharVoltasPorValor(src: string, arquivoVigiado: string, nomeDoVigiado: string): string[] {
   const importadosPorValor = (arquivo: string): string[] => {
     const caminho = join(src, arquivo);
     const fonte = ts.createSourceFile(caminho, readFileSync(caminho, "utf8"), ts.ScriptTarget.Latest);
@@ -662,17 +662,32 @@ function acharVoltasAoCatalogo(src: string): string[] {
       .filter((alvo) => alvo.startsWith(".") && !soDeTipo.has(alvo))
       .map((alvo) => relative(src, resolve(dirname(caminho), alvo)));
   };
-  const fecho = [ARQUIVO_DO_CATALOGO];
+  const fecho = [arquivoVigiado];
   for (const arquivo of fecho) {
     for (const alvo of importadosPorValor(arquivo)) if (!fecho.includes(alvo)) fecho.push(alvo);
   }
   return fecho
-    .filter((arquivo) => importadosPorValor(arquivo).includes(ARQUIVO_DO_CATALOGO))
-    .map((arquivo) => `${arquivo} importa o catálogo, que o importa por valor`);
+    .filter((arquivo) => importadosPorValor(arquivo).includes(arquivoVigiado))
+    .map((arquivo) => `${arquivo} importa ${nomeDoVigiado}, que o importa por valor`);
 }
+
+const acharVoltasAoCatalogo = (src: string): string[] => acharVoltasPorValor(src, ARQUIVO_DO_CATALOGO, "o catálogo");
 
 test("o catálogo de Etapas não está num ciclo de import de valor", () => {
   assert.deepEqual(acharVoltasAoCatalogo(SRC), []);
+});
+
+// A fachada de um domínio que estivesse num ciclo de import de valor seria lida ainda pela metade (TDZ) por quem sobe antes
+// dela no ciclo, conforme o ponto de entrada: com as APIs de todos os subdomínios na fachada, nenhuma pode estar num ciclo.
+test("a fachada de cada domínio migrado não está num ciclo de import de valor", () => {
+  const fachadas = Object.entries(ARQUITETURA_DE_SRC.dominios)
+    .filter(([dominio, regras]) => regras.migrado && dominio !== "server" && dominio !== "shared")
+    .map(([dominio]) => `modulos/${dominio}/publico.ts`);
+  assert.ok(fachadas.includes("modulos/ciclo_de_vida/publico.ts"));
+  assert.deepEqual(
+    fachadas.flatMap((fachada) => acharVoltasPorValor(SRC, fachada, `a fachada ${fachada}`)),
+    [],
+  );
 });
 
 test("a fitness do catálogo acusa a volta por valor e aceita a de tipo", (t) => {

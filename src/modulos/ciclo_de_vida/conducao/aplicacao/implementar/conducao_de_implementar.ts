@@ -6,35 +6,40 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import {
-  FABRIQUINHA,
-  DEFINICAO_DO_IMPLEMENTAR,
   CATALOGO_ETAPAS,
+  DEFINICAO_DO_IMPLEMENTAR,
+  type DefinicaoDaEtapa,
   Endereco,
+  FABRIQUINHA,
   falhaPorServicoReiniciado,
   rotuloDaCausa,
 } from "../../../etapas/publico.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { concluirTicketDeImplementacao } from "../../../processo/aplicacao/transicoes_pedidas.ts";
-import { espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
-import type { DefinicaoDaEtapa } from "../../../etapas/publico.ts";
-import { evidenciasPendentes } from "../../../evidencias/publico.ts";
-import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
-import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import {
-  HooksDoCommit,
-  montarVerificacoesDaEtapa,
+  type AgregadoDemanda,
+  carregarDemanda,
+  concluirTicketDeImplementacao,
+  submeterEvidencia,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
+import { espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
+import { evidenciasPendentes } from "../../../evidencias/publico.ts";
+import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
+import {
   coletarVerificacoes,
   type Falha,
+  HooksDoCommit,
+  montarVerificacoesDaEtapa,
+  type OpcoesSonar,
   type RegistroDaVerificacao,
 } from "../../../verificacoes/publico.ts";
-import type { OpcoesSonar } from "../../../verificacoes/publico.ts";
 import type { Ambiente } from "../../../../ambiente/publico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
-import { submeterEvidencia } from "../../../../sdlc/aplicacao/evidencias/submeter.ts";
-import { ConducaoAgentica, type ResultadoDaConferencia } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
+import {
+  ConducaoAgentica,
+  type DepsDaConducao,
+  type ResultadoDaConferencia,
+} from "../conducao_de_etapa/conducao_de_etapa.ts";
+import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 /** O que os testes injetam: a coleta das verificações e o limite do commit. */
 export interface OpcoesDaImplementacao {
@@ -120,7 +125,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const { banco } = this.deps;
     const ticket = this.ticketDe(endereco);
     const ag = carregarDemanda(banco, ticket.demanda_id);
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const espaco = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
     const { pasta: worktree } = espaco;
     const ambiente = ambienteDoEspaco(espaco);
@@ -135,14 +140,14 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
         motivo: `o ticket já tem commit, mas faltam as evidências: ${pendentes.join(", ")}`,
       };
     }
-    return this.commitarComHooks(ticket, ag, worktree, ambiente);
+    return this.commitarComHooks(ticket, ag, projeto, worktree, ambiente);
   }
 
   /** Coleta as verificações e grava como evidência as que o Avaliador aceita; devolve o que impede de seguir ao commit. */
   private async verificarEGravarEvidencias(
     ticket: TicketDemanda,
     ag: AgregadoDemanda,
-    projeto: Projeto,
+    projeto: ProjetoConduzido,
     worktree: string,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia | undefined> {
@@ -174,6 +179,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
   private async commitarComHooks(
     ticket: TicketDemanda,
     ag: AgregadoDemanda,
+    projeto: ProjetoConduzido,
     worktree: string,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia> {
@@ -186,6 +192,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
             ticket,
             {
               ambiente,
+              projeto,
               worktree: raiz,
               tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
               titulo: ticket.titulo ?? ag.demanda.titulo,

@@ -2,12 +2,12 @@
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
 import type { Projeto } from "../../../../modulos/demandas/publico.ts";
 import type { Hospedagem } from "../../../../modulos/repositorio/publico.ts";
-import type { Effort, Modelo } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
+import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
+import type { EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
 import { escapar, hora, nomeDoModelo } from "../../apresentacao/render.ts";
 import { etapasDoSdlc } from "../../apresentacao/etapas.ts";
-import type { ConfiguracaoDoAmbiente } from "../../../../modulos/sandbox/nucleo/configuracao_do_ambiente.ts";
+import type { ConfiguracaoDoAmbiente } from "../../../../modulos/ambiente/publico.ts";
 
 /** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
 type ConfiguracoesPorEtapa = Pick<ProjetoCadastrado, "configuracoes">;

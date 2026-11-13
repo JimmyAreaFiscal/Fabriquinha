@@ -7,10 +7,10 @@ import { predecessorasPendentesDosPedidos } from "../../../modulos/demandas/publ
 import {
   cicloDoDespacho,
   type Configuracao,
+  type DepsDespacho,
   executarAgora,
   type MotivoDeRecusa,
-} from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
-import type { DepsDespacho } from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
+} from "../../../modulos/ciclo_de_vida/publico.ts";
 
 /**
  * A liberação dos pedidos pelas Dependências de Demandas, na forma que o Despacho pede.

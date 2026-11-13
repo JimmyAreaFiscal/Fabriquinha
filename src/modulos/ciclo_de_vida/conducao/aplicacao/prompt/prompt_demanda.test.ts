@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
 import { Endereco, EtapaTicket } from "../../../etapas/publico.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../../processo/publico.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";

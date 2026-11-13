@@ -2,9 +2,9 @@
 // na pasta de trabalho e a demanda I-1 com a rodada 1 em `implementar` (ou, com `conflito`, em `encerrar_demanda`).
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { motivoDaFalhaDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
+import { motivoDaFalhaDoTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
 import type { DepsDaConducao } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
 import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
@@ -14,7 +14,10 @@ import {
 } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
-import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import {
+  carregarDemanda,
+  comDemanda,
+} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,

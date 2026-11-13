@@ -16,42 +16,46 @@ import {
   oAgenteDecideOGate,
 } from "../../../etapas/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  commitDoTicketDemanda,
+  abrirTentativaDoTicket,
+  type AgregadoDemanda,
+  carregarDemanda,
+  falharTicketEmExecucao,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
+import {
   ambienteDoEspaco,
   cicloDoEspaco,
+  commitDoTicketDemanda,
+  type EspacoDeTrabalho,
+  espacoDoTicket,
+  varrerCommitsHumanos,
 } from "../../../../repositorio/publico.ts";
-import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
 import { encontrado, existe, mensagem } from "../../../../../shared/nucleo/erros.ts";
 import {
-  criarSessao,
-  iniciarExecucao,
-  retomarSessao,
-  type Execucao,
-  type Sessao,
-  comSessoesDoContexto,
-  gravarAmbienteDaExecucao,
-  encerrarExecucaoComUso,
   carregarSessoesDoContexto,
+  comSessoesDoContexto,
+  criarSessao,
+  encerrarExecucaoComUso,
+  type Execucao,
+  execucoesAbertas,
+  gravarAmbienteDaExecucao,
+  iniciarExecucao,
+  type ModoTrabalho,
+  retomarSessao,
+  type Sessao,
 } from "../../../../sessoes/publico.ts";
-import { varrerCommitsHumanos } from "../../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
 import { anexosDaDemanda } from "../../../evidencias/publico.ts";
 import { anotar, noLog } from "../../../../../shared/infra/registro.ts";
 import { pastasDoProcesso } from "../../../../compartilhado/infra/registro.ts";
-import { abrirTentativaDoTicket, falharTicketEmExecucao } from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { triarPergunta } from "../politica_dos_agentes/auditor_automatico.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { encerrarProcessoOrfao, type TicketRef } from "../politica_dos_agentes/processo_do_ticket.ts";
 import { lancamentoDoTicket } from "./lancamento_do_ticket.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
-import type { ModoTrabalho } from "../../../../sessoes/publico.ts";
+import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 interface OpcoesComunsDaExecucao {
   limiteMin: number;
@@ -82,7 +86,7 @@ interface Conducao {
   ref: TicketRef;
   ag: AgregadoDemanda;
   ticket: TicketDemanda;
-  projeto: Projeto;
+  projeto: ProjetoConduzido;
   sessao: Sessao;
   execucao: Execucao;
   opcoes: OpcoesExecucaoDemanda;
@@ -98,7 +102,7 @@ async function worktreeDoEspacoDoTicket(
   const raiz = raizDo(banco);
   const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
   const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
-  if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  if (buscouBase) await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;
 }
 
@@ -255,7 +259,7 @@ export function iniciarExecucaoDemanda(
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não existe`,
     "confira o endereço do ticket",
   );
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
   const configuracaoAgente = resolverConfiguracaoAgente({
     ticket: ticket.configuracao_agente,
     etapaDoProjeto: projeto.etapas.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,
@@ -320,7 +324,7 @@ export function interromperExecucaoDemanda(
       `o ticket ${formatarTicketRef(ref)} não existe`,
       "use um ticket da demanda",
     );
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const ambiente = ambienteDoEspaco(espacoDoTicket(ag, ticket, projeto, raizDo(banco)));
     // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
     ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
@@ -335,4 +339,13 @@ export function interromperExecucaoDemanda(
     falharTicketEmExecucao,
     relogio,
   );
+}
+
+/** Interrompe, uma vez por ticket, as execuções abertas das demandas `canceladas`; roda depois do commit. */
+export function interromperExecucoesDasDemandas(banco: DatabaseSync, canceladas: readonly string[]): void {
+  const abertas = execucoesAbertas(banco).filter((e) => canceladas.includes(e.demanda_id));
+  const tickets = new Map(
+    abertas.map(({ demanda_id, ticket_id }) => [`${demanda_id}.${String(ticket_id)}`, { demanda_id, ticket_id }]),
+  );
+  for (const ref of tickets.values()) interromperExecucaoDemanda(banco, ref);
 }

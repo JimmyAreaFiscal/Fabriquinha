@@ -4,7 +4,6 @@
 // migrado, a matriz libera as camadas do legado (nucleo, aplicacao...) no lugar da fachada. O ticket que mexe no servidor
 // (05, 21) muda só este arquivo; o motor (../motor.ts) explica os campos.
 import {
-  type Excecao,
   MODULO_DAS_FACHADAS,
   QUALQUER_EXTERNO,
   type RegraDoModulo,
@@ -115,35 +114,13 @@ export const PASTA_DAS_CONSULTAS = "server/consultas/";
 /** A API do agente, que só alcança os casos de uso do agente. */
 export const PASTA_DA_API_DO_AGENTE = "server/api/agente/";
 
-// provisório: remover no ticket 22. As consultas leem só as fachadas, menos as APIs do Despacho (a configuração do
-// serviço e a seleção, para os elegíveis e as Pendências) e da Condução (o condutor, o estado da sessão do ticket, a regra
-// das Pendências e as marcas da conversa): elas ficam fora da fachada do Ciclo de Vida porque o agregado da demanda, no
-// sdlc, importa a fachada, e trazê-las daria TDZ na carga dele. O ticket 22 traz o agregado ao Processo e as duas APIs
-// para a fachada.
-const API_DO_DESPACHO = "../modulos/ciclo_de_vida/despacho/publico.ts";
-const API_DA_CONDUCAO = "../modulos/ciclo_de_vida/conducao/publico.ts";
-const EXCECOES_DAS_CONSULTAS: Excecao[] = (
-  [
-    ["configuracao.ts", API_DO_DESPACHO],
-    ["demandas/demanda.ts", API_DO_DESPACHO],
-    ["demandas/pendencias.ts", API_DO_DESPACHO],
-    ["demandas/pendencias.ts", API_DA_CONDUCAO],
-    ["sessoes/chat.ts", API_DO_DESPACHO],
-    ["sessoes/chat.ts", API_DA_CONDUCAO],
-  ] as const
-).map(([arquivo, api]) => ({
-  arquivo: `${PASTA_DAS_CONSULTAS}${arquivo}`,
-  import: `${"../".repeat(arquivo.split("/").length)}${api} (de fora do domínio ciclo_de_vida, só pela fachada publico.ts)`,
-  ticket: "22",
-}));
-
 // O servidor já está no destino; as partes dele são módulos da matriz, sem subdomínios.
 export const REGRAS_DO_SERVIDOR: RegrasDoDominio = {
   migrado: true,
   dependeDe: ["demandas", "ciclo_de_vida", "sessoes", "repositorio", "ambiente"],
   subdominios: {},
   posseDasTabelas: "inventario",
-  excecoes: EXCECOES_DAS_CONSULTAS,
+  excecoes: [],
   dependenciasToleradas: [],
   processoDoHost: { pastasLiberadas: [], importamChildProcess: [], chamadoresDiretos: ["server/composicao/cli.ts"] },
 };

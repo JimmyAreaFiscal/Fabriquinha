@@ -1,5 +1,6 @@
 // O fluxo do despacho: a liberação de Demandas, pela situação administrativa do pedido, é a mesma que o Despacho lia pelo
-// estado do processo até o ticket 20; e o ciclo e o "Executar agora" a recebem.
+// estado do processo até o ticket 20 (a que as telas ainda mostram, nos bloqueios das predecessoras); e o ciclo e o
+// "Executar agora" a recebem.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
@@ -13,8 +14,7 @@ import { EstadoDemanda } from "../../../modulos/ciclo_de_vida/processo/publico.t
 import type { ConducaoDoTicket, DepsDespacho } from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
 import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { registrarDependencia } from "../../../modulos/demandas/publico.ts";
-import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { predecessorasPendentes } from "../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas } from "../../consultas/demandas/predecessoras.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { despacharAgora, despacharTrabalho, predecessorasPendentesPelasDependencias } from "./despacho_do_trabalho.ts";
 
@@ -48,7 +48,10 @@ test("a liberação de Demandas é a de antes: a predecessora em cada estado do 
   gravarDemandaComPredecessoras(banco, "I-200", "planejar", predecessoras.toReversed());
   const ids = [...dependentes, "I-200", ...predecessoras];
   const liberacaoDeAntes = new Map(
-    [...predecessorasDasDemandas(banco, ids)].map(([id, lidas]) => [id, predecessorasPendentes(lidas)]),
+    [...predecessorasDasDemandas(banco, ids)].map(([id, lidas]) => [
+      id,
+      bloqueiosDaDemanda(lidas).map((predecessora) => predecessora.demanda_id),
+    ]),
   );
   assert.deepEqual(predecessorasPendentesPelasDependencias(banco)(ids), liberacaoDeAntes);
   // A comparação não é vazia: concluída e arquivada liberam, as demais pendem.

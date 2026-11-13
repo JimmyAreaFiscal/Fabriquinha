@@ -2,23 +2,26 @@
 // hospedagem, avançar a demanda local e abrir a sessão de ajustes do PR reprovado. A hospedagem é a fonte da verdade,
 // então repetir a aprovação é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  aprovarPRIntegradoDaRodada,
+  carregarDemanda,
+  decidirGateNaDemanda,
+  type EntradaDoGate,
+} from "../../../../processo/publico.ts";
 import { type Ator, exigirAtor, formatarRodadaRef, Endereco } from "../../../../etapas/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../../shared/nucleo/erros.ts";
 import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../../repositorio/publico.ts";
-import type { EntradaDoGate } from "../../../../processo/publico.ts";
 import { GateDoPR } from "../gate.ts";
-import type { GateComEfeitos } from "../../../../../sdlc/aplicacao/gates/decisao_do_gate.ts";
+import type { GateComEfeitos } from "../../decisao_dos_gates/gate_com_efeitos.ts";
 import type { Relogio } from "../../../../../../shared/nucleo/relogio.ts";
 import { ticketAtualDaEtapa } from "../../../../planejamento/publico.ts";
 import { raizDo } from "../../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../../sdlc/armazenamento/demandas.ts";
-import { aprovarPRIntegradoDaRodada, decidirGateNaDemanda } from "../../../../processo/aplicacao/transicoes_pedidas.ts";
-import { carregarProjeto } from "../../../../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../../../../../shared/infra/registro.ts";
 import { ConducaoDeAjustarResultado } from "../../ajustar_resultado/conducao_de_ajustar_resultado.ts";
 import { guardarMarcoDaSessao, sessaoDaRodada } from "../../ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../politica_dos_agentes/condutor.ts";
+import { projetosCadastrados } from "../../projetos_cadastrados.ts";
 
 const gate = new GateDoPR();
 
@@ -66,7 +69,7 @@ async function aprovarPR(
   }
 
   gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de integrar na hospedagem
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
   const pr = existe(

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../../etapas/publico.ts";
-import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { reservarTicket } from "./reserva_ticket.ts";
 

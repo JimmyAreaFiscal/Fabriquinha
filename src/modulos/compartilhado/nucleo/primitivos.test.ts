@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { z } from "zod";
 import { EstadoTicket } from "./primitivos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { EstadoDemanda, EstadoRodada } from "../../ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
 import { EtapaTicket } from "../../etapas/catalogo.ts";
 
 const aceita = (schema: z.ZodType, ...valores: unknown[]) => {

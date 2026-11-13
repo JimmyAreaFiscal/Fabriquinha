@@ -5,9 +5,9 @@ import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { falharTicketDemanda } from "../src/modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { falharTicketEmExecucao } from "../src/modulos/ciclo_de_vida/processo/aplicacao/transicoes_pedidas.ts";
 import { comPlanoSubmetido } from "../apoio-testes/cenarios_de_demanda.ts";
-import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
@@ -233,7 +233,7 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
     expect(n).toBe(0);
   }).toPass();
   const reinicio = abrirBancoDaFabriquinha(fabriquinha.raiz);
-  falharTicketDemanda(
+  falharTicketEmExecucao(
     reinicio,
     { demanda_id: "I-230", ticket_id: 1 },
     {

@@ -1,7 +1,5 @@
 // Rotas do Início: o painel das demandas em andamento (a consulta monta o contrato) e as recusas do último ciclo do Despacho.
-import type { MotivoDeRecusa } from "../../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { ultimasRecusas } from "../../../modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { Endereco, type MotivoDeRecusa, ultimasRecusas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { consultarInicio } from "../../consultas/inicio.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
 import { DadosDoInicio } from "../../contrato/inicio.ts";

@@ -2,9 +2,7 @@
 // meses anteriores do período, com uma seção por Etapa e as Métricas de Sucesso dela), a frase do mês do Início e os
 // cards do mês do Projeto. O DOM e a rede ficam em metricas-montar.ts. A comparação com a média é feita aqui, sobre a
 // lista de meses lida das tabelas da demanda.
-import type { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
-import type { TipoMetrica } from "../../../../modulos/etapas/definicao/tipos_declaraveis.ts";
+import type { EstadoDemanda, EtapaTicket, TipoMetrica } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { LinhaDeUso } from "../../../../modulos/sessoes/publico.ts";
 import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../../contrato/metricas.ts";
 import { caminhoDaDemanda, compacto, custo, duracao, escapar, plural as pluralDe } from "../../apresentacao/render.ts";

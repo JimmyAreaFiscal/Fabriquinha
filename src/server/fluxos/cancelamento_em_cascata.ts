@@ -3,17 +3,18 @@
 // interrompidas só depois do commit. Cancela assim o Auditor que cancela a demanda e o Gate da demanda que a reprova.
 import type { DatabaseSync } from "node:sqlite";
 import { type Relogio, relogioDoSistema } from "../../shared/nucleo/relogio.ts";
-import { type Ator, Endereco } from "../../modulos/ciclo_de_vida/publico.ts";
-import { cancelarComDependentes } from "../../modulos/demandas/publico.ts";
-import type { AgregadoDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { ContextoDemanda } from "../../modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { cancelarDemanda } from "../../modulos/sdlc/nucleo/ciclo_de_vida/cancelamento_demanda.ts";
-import { comCampoInvalidoComoErroDeRegra } from "../../modulos/sdlc/aplicacao/gestao_demandas.ts";
 import {
+  type AgregadoDemanda,
+  type Ator,
+  cancelarDemanda,
   cancelarProcessosEmCascata,
+  comCampoInvalidoComoErroDeRegra,
+  type ContextoDemanda,
+  Endereco,
+  GATE_DA_DEMANDA,
   interromperExecucoesDasDemandas,
-} from "../../modulos/sdlc/aplicacao/gates/cancelamento_em_cascata.ts";
-import { GATE_DA_DEMANDA } from "../../modulos/etapas/gates.ts";
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import { cancelarComDependentes } from "../../modulos/demandas/publico.ts";
 
 /** A demanda depois da transição e as que ela levou junto (vazia se ela não terminou `cancelada`). */
 interface ResultadoDaCascata {

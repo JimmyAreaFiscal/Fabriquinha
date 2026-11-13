@@ -3,7 +3,10 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 export { caminhoArquivo } from "../src/modulos/compartilhado/armazenamento/arquivos.ts";
-export { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+export {
+  carregarDemanda,
+  comDemanda,
+} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 export { comTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 
 /** Executa o `sql` (insert, update, delete) com os `parametros`. */

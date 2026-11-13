@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
-import { podeTentarEncerramento } from "../../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+import { podeTentarEncerramento } from "../../../processo/nucleo/transicoes/transicoes_encerramento.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
 import {
   type CenarioDeImplementacao,

@@ -1,20 +1,20 @@
 // Commit do ticket da demanda (comparacao-sdlc-implementacao.md §6), idempotente pela marca `[I-n.Tm]` na mensagem.
 import type { DatabaseSync } from "node:sqlite";
-import type { TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { PRIMEIRA_ETAPA_DA_RODADA, type TicketDemanda } from "../../../processo/publico.ts";
 import { formatarTicketRef } from "../../../etapas/publico.ts";
 import { ErroDeReprovacao } from "../../../../../shared/nucleo/erros.ts";
-import { registrarCommitsHumanosDoTicket } from "../../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { noLog } from "../../../../../shared/infra/registro.ts";
-import type { Commit } from "../../../../repositorio/publico.ts";
 import {
-  gravarCommitDemanda,
   arquivosDe,
+  type Commit,
   commitar,
   exigirGitNoAmbiente,
   gitNoAmbiente,
+  gravarCommitDemanda,
+  registrarCommitsHumanosDoTicket,
 } from "../../../../repositorio/publico.ts";
 import { type Ambiente, LIMITE_COMANDO_MS } from "../../../../ambiente/publico.ts";
-import { PRIMEIRA_ETAPA_DA_RODADA } from "../../../processo/publico.ts";
+import type { ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
 
@@ -66,11 +66,19 @@ export async function commitarTicketDemanda(
   ref: Ref,
   {
     ambiente,
+    projeto,
     worktree,
     tipo,
     titulo,
     etapa,
-  }: { ambiente: Ambiente; worktree: string; tipo: "feat" | "fix"; titulo: string; etapa: TicketDemanda["etapa"] },
+  }: {
+    ambiente: Ambiente;
+    projeto: Pick<ProjetoConduzido, "nome" | "raiz_git">;
+    worktree: string;
+    tipo: "feat" | "fix";
+    titulo: string;
+    etapa: TicketDemanda["etapa"];
+  },
   limiteMs = LIMITE_COMANDO_MS,
 ): Promise<Commit> {
   let commit = await acharCommitTicketDemanda(ambiente, worktree, ref);
@@ -97,6 +105,6 @@ export async function commitarTicketDemanda(
   }
   gravarCommitDemanda(banco, ref.demanda_id, ref.ticket_id, commit);
   // Os commits posteriores do commit do ticket (F6 §4.2); a falha só vai para o log.
-  await registrarCommitsHumanosDoTicket(banco, ref.demanda_id, ref.ticket_id, commit.sha).catch(noLog);
+  await registrarCommitsHumanosDoTicket(banco, projeto, ref.demanda_id, ref.ticket_id, commit.sha).catch(noLog);
   return commit;
 }

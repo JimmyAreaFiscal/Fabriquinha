@@ -3,7 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { reservarTicketParaAFabriquinha } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import type { Endereco } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { predecessorasPendentesDosPedidos } from "../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 

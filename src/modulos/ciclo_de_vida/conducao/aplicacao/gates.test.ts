@@ -14,12 +14,11 @@ import {
   REF_GLOBAL,
   REF_RODADA,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { NomeGate } from "../../etapas/publico.ts";
-import { AUDITOR, type Ator, Endereco } from "../../etapas/publico.ts";
+import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
+import { type Ator, AUDITOR, Endereco, type NomeGate } from "../../etapas/publico.ts";
 import { GATES, decidirGate } from "./gates.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
-import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

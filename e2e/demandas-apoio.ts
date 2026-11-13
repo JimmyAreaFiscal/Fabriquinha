@@ -2,17 +2,20 @@
 // abre o chat do planejamento com o pi falso.
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { Page } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { guardarBytes } from "../src/modulos/compartilhado/armazenamento/arquivos.ts";
-import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import {
+  carregarDemanda,
+  comDemanda,
+} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
-import { gravarAnexos } from "../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
+import { gravarAnexos } from "../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import { expect, type Fabriquinha } from "./apoio.ts";
 
 const em = "2026-10-11T12:00:00.000Z";

@@ -1,5 +1,5 @@
 // A definição do `entender_e_desenhar`: a conversa do Auditor com a ferramenta de fora, sem condução (CLI de
-// `gestao_demandas.ts`); as evidências são as da demanda.
+// `gestao_do_processo.ts`); as evidências são as da demanda.
 import { type DefinicaoDaEtapa, evidenciaExigida, SEM_CAPACIDADES } from "../definicao/definicao_da_etapa.ts";
 
 /** Obrigatórias da demanda no envio (CA-SDLC-01). */

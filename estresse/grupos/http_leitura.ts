@@ -3,11 +3,11 @@
 // corpo; nas rotas de SSE, até o primeiro evento. `semMedicao` confere a cobertura contra a tabela do produto.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
+import { criarDemandaNova } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { gravarAnexos } from "../../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";

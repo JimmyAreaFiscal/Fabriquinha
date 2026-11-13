@@ -1,6 +1,17 @@
 // O Gate da revisão da rodada, dono do `revisar_rodada`: o agente revisor aprova a rodada ou a devolve com os corretivos.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Decisao } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  ancoraNaRodada,
+  type Decisao,
+  type EntradaReprovada,
+  Gate,
+  materializar,
+  montarMotivoFalhaDaTerceiraReprovacao,
+  mudarTicket,
+  REPROVACOES_ATE_O_AUDITOR,
+  rodadasComEstadoMudado,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import {
   FABRIQUINHA,
   type Endereco,
@@ -8,16 +19,7 @@ import {
   DEFINICAO_DO_REVISAR_RODADA,
 } from "../../../etapas/publico.ts";
 import { existe } from "../../../../../shared/nucleo/erros.ts";
-import { ancoraNaRodada, Gate } from "../../../../sdlc/nucleo/gate.ts";
-import { type EntradaReprovada } from "../../../processo/publico.ts";
 import { criarTicket, correcaoDosTicketsDaRodada } from "../../../planejamento/publico.ts";
-import { materializar } from "../../../../sdlc/nucleo/demanda/plano.ts";
-import { mudarTicket } from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import {
-  montarMotivoFalhaDaTerceiraReprovacao,
-  REPROVACOES_ATE_O_AUDITOR,
-  rodadasComEstadoMudado,
-} from "../../../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 
 /**
  * CA-2 e CA-3: só o agente do ticket `revisar_rodada` atual. Reprovada, as exigências vão inteiras em `motivo` e as

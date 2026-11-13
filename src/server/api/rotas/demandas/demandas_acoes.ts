@@ -1,13 +1,16 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
-import { AUDITOR } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { RefRodada } from "../../../../modulos/etapas/encerrar_rodada/encerramento_rodada.ts";
-import { decidirGate } from "../../../../modulos/etapas/gates.ts";
-import { arquivar, reabrir } from "../../../../modulos/sdlc/aplicacao/gestao_demandas.ts";
+import {
+  arquivar,
+  AUDITOR,
+  concluirSessaoAjustes,
+  decidirGate,
+  Endereco,
+  reabrir,
+  type RefRodada,
+} from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../../fluxos/cancelamento_em_cascata.ts";
-import { concluirSessaoAjustes } from "../../../../modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import {
   DecisaoDoPR,
   DemandaArquivada,

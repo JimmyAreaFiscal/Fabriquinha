@@ -1,13 +1,20 @@
 // O Gate da revisão da demanda, dono do `revisar_demanda`: o agente revisor aprova a demanda inteira ou abre rodadas corretivas.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Decisao } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  ancoraNaDemanda,
+  CICLO_DA_DEMANDA,
+  CICLO_DO_TICKET,
+  type Decisao,
+  type EntradaReprovada,
+  exigirSemPendencias,
+  Gate,
+  materializar,
+  mudarTicket,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { FABRIQUINHA, type Endereco, DEFINICAO_DO_REVISAR_DEMANDA } from "../../../etapas/publico.ts";
-import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, type EntradaReprovada } from "../../../processo/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { ancoraNaDemanda, Gate } from "../../../../sdlc/nucleo/gate.ts";
 import { criarTicket, correcaoDasRodadasNovas } from "../../../planejamento/publico.ts";
-import { materializar } from "../../../../sdlc/nucleo/demanda/plano.ts";
-import { exigirSemPendencias, mudarTicket } from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 
 /**
  * CA-13 e CA-14: só o agente do `revisar_demanda` atual. Reprovada, as exigências vão em `motivo` e o plano corretivo

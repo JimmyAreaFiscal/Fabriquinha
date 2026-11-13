@@ -6,27 +6,25 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
+import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
 import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
-import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
+import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
-import { configuracao, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
+import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
-import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
 import { concluirDesenvolvimentoNoBanco } from "../fluxos/conclusao_do_desenvolvimento.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
+  AmbienteHostLocal,
+  type ConjuntoDeAmbientes,
+  conjuntoDoTipoConfigurado,
   montarAmbienteDoServico,
   montarConjuntoDoServico,
-} from "../../modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import { AmbienteHostLocal } from "../../modulos/sandbox/infra/host_local/ambiente_host_local.ts";
-import { conjuntoDoTipoConfigurado } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
-import type { ConjuntoDeAmbientes } from "../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
+} from "../../modulos/ambiente/publico.ts";
 
 /** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
 export const harnessDoServico = new HarnessPi();

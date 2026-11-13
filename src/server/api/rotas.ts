@@ -4,9 +4,9 @@
 import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { MotivoDeRecusa } from "../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { Id } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import type { MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Id } from "../../shared/nucleo/primitivos.ts";
+import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import type { Parametros } from "../web/compartilhado/caminhos.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */

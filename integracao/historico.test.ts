@@ -4,13 +4,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import {
+  bloqueiosDaDemanda,
+  predecessorasDasDemandas,
+  predecessorasDe,
+} from "../src/server/consultas/demandas/predecessoras.ts";
 import { consultarDemanda } from "../src/server/consultas/demandas/demanda.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { origemDoPedido } from "../src/modulos/demandas/publico.ts";
-import { predecessorasDaDemanda } from "../src/modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { cicloDoDespacho, configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   abrirPortao,
@@ -32,7 +35,6 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "./apoio.ts";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
@@ -90,10 +92,16 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // Arquivar só vale para concluída, e a arquivada satisfaz a dependência de quem a esperava (D08).
   assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só no estado concluida/);
-  assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
+  assert.deepEqual(
+    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(c.banco, [dependeDaFeita]), dependeDaFeita)),
+    [],
+  );
   gestao.arquivar(c.banco, feita, AUDITOR, CTX);
   assert.equal(demanda(c, feita).demanda.estado, "arquivada");
-  assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
+  assert.deepEqual(
+    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(c.banco, [dependeDaFeita]), dependeDaFeita)),
+    [],
+  );
   assert.equal(demanda(c, dependeDaFeita).demanda.estado, "entender_e_desenhar");
   assert.throws(() => cancelarDemandaEmCascata(c.banco, feita, AUDITOR, CTX), /já terminou/);
 });
@@ -137,7 +145,7 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
 
   // A demanda segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(
+    gestao.submeterEvidenciaDaEntradaExterna(
       c.banco,
       nova.id,
       { tipo, dados, arquivos } as gestao.EntradaEvidencia,

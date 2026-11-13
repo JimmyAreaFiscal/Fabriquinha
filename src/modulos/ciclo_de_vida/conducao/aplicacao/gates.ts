@@ -1,15 +1,11 @@
 // Os Gates do SDLC, um por Etapa que declara Gate: a regra fica no `gate.ts` da Etapa dona dele, e a decisão com os
-// efeitos fora do agregado é a comum do motor (`sdlc/aplicacao/gates/decisao_do_gate.ts`) ou a da pasta da Etapa. O Gate
+// efeitos fora do agregado é a comum (`decisao_dos_gates/gate_com_efeitos.ts`) ou a da pasta da Etapa. O Gate
 // da demanda cancela em cascata pedidos e processos: quem o decide é o fluxo do servidor, com a regra daqui.
 // Acrescentar um Gate é declará-lo na definição da Etapa e pôr uma linha aqui.
 import type { DatabaseSync } from "node:sqlite";
 import type { NomeGate, Ator, Endereco } from "../../etapas/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import {
-  type GateComEfeitos,
-  gateDeRevisao,
-  type ResultadoDoGate,
-} from "../../../sdlc/aplicacao/gates/decisao_do_gate.ts";
+import { type GateComEfeitos, gateDeRevisao, type ResultadoDoGate } from "./decisao_dos_gates/gate_com_efeitos.ts";
 import { GateDaDemanda } from "./entender_e_desenhar/gate.ts";
 import { GATE_DO_PLANEJAMENTO } from "./planejar/decisao_do_gate.ts";
 import { GATE_DO_PR } from "./encerrar_rodada/gate_do_pr/decisao_do_gate.ts";

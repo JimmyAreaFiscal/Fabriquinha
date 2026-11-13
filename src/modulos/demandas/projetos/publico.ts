@@ -14,6 +14,5 @@ export {
   carregarProjeto,
   gravarProjeto,
   listarProjetos,
-  projetoDaDemanda,
   projetoExistente,
 } from "./armazenamento/projetos.ts";

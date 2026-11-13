@@ -2,30 +2,34 @@
 // concluí-lo ou falhá-lo. As etapas agênticas compartilham o ciclo aqui; cada concreta só declara o que difere
 // (preparação, conferência, conclusão).
 import {
+  type DefinicaoDaEtapa,
   Endereco,
   type FalhaDaTentativa,
   falhaDoErro,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
 } from "../../../etapas/publico.ts";
-import type { TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  carregarDemanda,
+  devolverTicketAoAgente,
+  lerTentativasDasDemandas,
+  registrarFalhaDoTicket,
+  retornoAoAgenteDoTicket,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import type { DefinicaoDaEtapa } from "../../../etapas/publico.ts";
 import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../repositorio/publico.ts";
-import { lerTentativasDasDemandas, retornoAoAgenteDoTicket } from "../../../processo/publico.ts";
-import { devolverTicketAoAgente, registrarFalhaDoTicket } from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
 import type { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { configuracao } from "../../../../compartilhado/armazenamento/servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
 import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 /** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
 export interface DepsDaConducao {
@@ -142,7 +146,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   protected prepararEspaco(ticket: TicketDemanda): Promise<EspacoPreparado> | undefined {
     const { banco } = this.deps;
     const ag = carregarDemanda(banco, ticket.demanda_id);
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     const espaco = espacoDoTicket(ag, ticket, projeto, raiz);
     return cicloDoEspaco(espaco, projeto, { raiz, log: `${raiz}/log` }, ambienteDoEspaco(espaco)).criar();

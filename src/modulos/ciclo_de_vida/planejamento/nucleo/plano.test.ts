@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { materializar } from "../../../sdlc/nucleo/demanda/plano.ts";
+import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
+import { materializar } from "../../processo/nucleo/agregado/materializacao_do_plano.ts";
 import { type Ator, Endereco, FABRIQUINHA } from "../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {

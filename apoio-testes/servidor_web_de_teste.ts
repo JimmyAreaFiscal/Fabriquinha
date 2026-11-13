@@ -10,7 +10,7 @@ import type { MotivoDeRecusa } from "../src/modulos/ciclo_de_vida/despacho/publi
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import { guardarBytes } from "../src/modulos/compartilhado/armazenamento/arquivos.ts";
 import { raizDo } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { gravarAnexos } from "../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
+import { gravarAnexos } from "../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import { servirWeb } from "../src/server/api/servidor.ts";
 import { noLog } from "../src/modulos/compartilhado/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";

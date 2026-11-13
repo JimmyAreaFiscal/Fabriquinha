@@ -1,17 +1,18 @@
 // O Despacho (CONCEITOS.md §9): a regra única do que roda agora. Seleciona os prontos, ordena, respeita o limite de
 // paralelismo e diz, para cada item parado, por que não foi despachado. Pura: a aplicação monta a situação e reserva.
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CATALOGO_DE_ETAPAS, Endereco, etapaDoPapel, NomeGate } from "../../etapas/publico.ts";
 import {
+  type AgregadoDemanda,
   etapaDoEstado,
   gateQueEsperaGenteNaRodada,
   motivoDaFalhaDoTicket,
+  podeTentarEncerramento,
   tentativasDoTicket,
+  type TicketDemanda,
 } from "../../processo/publico.ts";
+import { CATALOGO_DE_ETAPAS, Endereco, etapaDoPapel, NomeGate } from "../../etapas/publico.ts";
 import { estaOcupado, GrafoDeDependencias } from "../../planejamento/publico.ts";
 import { Motivo, motivo } from "../../../../shared/nucleo/primitivos.ts";
-import { podeTentarEncerramento } from "../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
 
 const ehEndereco = z.custom<Endereco>((candidato) => candidato instanceof Endereco);
 

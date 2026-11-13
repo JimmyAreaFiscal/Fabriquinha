@@ -17,28 +17,30 @@ import {
 import { basename, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { prDaDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { prDaDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { AUDITOR, type Ator } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { Endereco } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { cicloDoDespacho } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { cicloDoDespacho, configuracao } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
-import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { interromperExecucaoDemanda } from "../../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
 import { decidirGate } from "../../src/modulos/etapas/gates.ts";
-import * as gestao from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { concluirSessaoAjustes } from "../../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { carregarDemanda, comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import {
+  carregarDemanda,
+  comDemanda,
+} from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { configuracao } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { carregarTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { integrarPR } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
@@ -192,7 +194,13 @@ function demandaAprovada(c: Cenario): Promise<string> {
   const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
   writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
+    gestao.submeterEvidenciaDaEntradaExterna(
+      c.banco,
+      id,
+      { tipo, dados, arquivos } as gestao.EntradaEvidencia,
+      AUTOR,
+      origens,
+    );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
   enviarAoDesenvolvimento(c.banco, id, AUTOR, ctx);

@@ -2,9 +2,13 @@
 // leem daqui o rótulo, a ordem, os estados e o papel de cada Etapa, sem citá-las pelo nome. Acrescentar uma Etapa ao
 // catálogo a faz aparecer nas telas sem mexer na web.
 import type { EtapaDoSdlc, EtapasDoSdlc } from "../../contrato/etapas.ts";
-import type { EtapaTicket, NomeGate } from "../../../modulos/etapas/catalogo.ts";
-import type { PapelDaEtapa } from "../../../modulos/etapas/definicao/definicao_da_etapa.ts";
-import type { EstadoDemanda, EstadoRodada } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import type {
+  EstadoDemanda,
+  EstadoRodada,
+  EtapaTicket,
+  NomeGate,
+  PapelDaEtapa,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
 
 let etapasCarregadas: EtapasDoSdlc | undefined;
 

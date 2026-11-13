@@ -8,9 +8,9 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarDemanda, comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { POLITICA_DE_TENTATIVAS } from "../../../sdlc/nucleo/tentativa.ts";
+import { POLITICA_DE_TENTATIVAS } from "../../processo/nucleo/tentativa.ts";
 import {
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,

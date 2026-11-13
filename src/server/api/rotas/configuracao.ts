@@ -1,8 +1,8 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
 import { removerProjeto } from "../../../modulos/demandas/publico.ts";
-import { validarESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
-import { eliminarAmbienteDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
+import { condutor, validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { eliminarAmbienteDoConjunto, validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/ambiente/publico.ts";
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
@@ -20,9 +20,7 @@ import {
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
 import { cadastrarProjetoConferindoOModelo, editarProjetoConferindoOModelo } from "../../fluxos/cadastro_do_projeto.ts";
-import { condutor } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {

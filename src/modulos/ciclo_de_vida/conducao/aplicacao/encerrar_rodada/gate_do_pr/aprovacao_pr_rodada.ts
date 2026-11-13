@@ -1,9 +1,8 @@
 // Aprovação automática do PR da rodada (comparacao-sdlc-implementacao.md §§4 e 6): no projeto que a ligou, a Fabriquinha
 // decide o gate do PR sozinha; a decisão em si é de `decidirGate`.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../../../processo/publico.ts";
 import { FABRIQUINHA, Endereco } from "../../../../etapas/publico.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../../../../sdlc/nucleo/gate.ts";
 import { noLog } from "../../../../../../shared/infra/registro.ts";
 import type { RefRodada } from "../encerramento_rodada.ts";
 import { decidirGate } from "../../gates.ts";

@@ -8,7 +8,7 @@ import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { interromperExecucaoDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
 import { cicloDoDespacho, executarAgora } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";

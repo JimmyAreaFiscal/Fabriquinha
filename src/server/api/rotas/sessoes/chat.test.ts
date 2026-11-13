@@ -19,7 +19,7 @@ import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/de
 import {
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,
-} from "../../../../modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+} from "../../../../modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,

@@ -7,11 +7,16 @@ import { encontrado } from "../../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { Endereco } from "../../../etapas/publico.ts";
-import { CICLO_DA_DEMANDA } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  CICLO_DA_DEMANDA,
+  type Pendencia,
+  pendenciasDoProcesso,
+  type TicketDemanda,
+  type TrabalhoVivo,
+} from "../../../processo/publico.ts";
 import { carregarSessoesDoContexto, type Execucao, type Sessao, type Situacao } from "../../../../sessoes/publico.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { type Pendencia, pendenciasDaDemanda, type TrabalhoVivo } from "../../../../sdlc/nucleo/demanda/pendencia.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
 export type EstadoDaSessao = "rodando" | "aguardando_humano" | "terminada";
@@ -88,7 +93,7 @@ export function estadoEDesdeDaSessao(c: SessaoDoTicket, viva: Situacao | undefin
 }
 
 /**
- * A sessão parada no diálogo (com a pergunta) ou na conversa, que `pendenciasDaDemanda` pede. A do ticket que falhou e a
+ * A sessão parada no diálogo (com a pergunta) ou na conversa, que `pendenciasDoProcesso` pede. A do ticket que falhou e a
  * do gate do plano não são: a Pendência delas é o ticket bloqueado e o gate.
  */
 export function trabalhoVivoDaSessao(
@@ -115,10 +120,8 @@ export function pendenciaDaSessao(
 ): PendenciaDoChat | undefined {
   if (estadoEDesde[0] !== "aguardando_humano") return undefined;
   const vivo = trabalhoVivoDaSessao(c, viva, estadoEDesde);
-  // Agendador ligado: o despacho parado não segura sessão nenhuma.
-  const pendencias = pendenciasDaDemanda(c.ag, vivo ? [vivo] : [], c.ag.pull_requests, true, {
-    agora: relogio.agora(),
-  });
+  // O despacho parado não segura sessão nenhuma: só as Pendências do Processo.
+  const pendencias = pendenciasDoProcesso(c.ag, vivo ? [vivo] : [], c.ag.pull_requests, relogio.agora());
   const daSessao =
     pendencias.find((p) => p.item.ticket_id === c.ticket.ticket_id) ?? pendencias.find((p) => p.tipo === "gate_humano");
   return pendenciaDoChat(encontrado(daSessao, `a sessão ${c.sessao.id} espera sem Pendência`, "confira o banco"));

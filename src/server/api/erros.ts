@@ -1,12 +1,6 @@
 // Tradução de erros para HTTP (F7 §4.2). O corpo de erro é `{ "erro": "<mensagem>" }`, e o cliente a mostra como está.
 import { z } from "zod";
-import {
-  ErroDeEscopo,
-  ErroDeInexistente,
-  ErroDeRegra,
-  ErroExterno,
-  mensagem,
-} from "../../modulos/compartilhado/nucleo/erros.ts";
+import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno, mensagem } from "../../shared/nucleo/erros.ts";
 
 /**
  * Erro com o status já decidido por quem o lança: a guarda (401, 403), a rota inexistente (404), o corpo inválido

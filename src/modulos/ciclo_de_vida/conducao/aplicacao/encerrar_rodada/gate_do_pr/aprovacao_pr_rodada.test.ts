@@ -7,12 +7,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../../../apoio-testes/banco_temporario.ts";
-import type { AgregadoDemanda } from "../../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../../processo/nucleo/agregado/agregado_demanda.ts";
 import { AUDITOR, type Ator, Endereco } from "../../../../etapas/publico.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../../../../sdlc/nucleo/gate.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../../../processo/nucleo/agregado/gate_da_demanda.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../../../../../../shared/nucleo/erros.ts";
 import { registrarProjeto } from "../../../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../../apoio-testes/hospedagem_falsa.ts";
 import {

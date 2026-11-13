@@ -13,10 +13,9 @@ import {
   cicloDoEspaco,
 } from "../../../../repositorio/publico.ts";
 import { escrever, raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, submeterEvidencia } from "../../../processo/publico.ts";
 import { VerificacaoDeFitness, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
-import { submeterEvidencia } from "../../../../sdlc/aplicacao/evidencias/submeter.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 /**
  * `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui).
@@ -39,7 +38,7 @@ export async function prepararRevisaoRodada(
       "use o ticket revisar_rodada de uma rodada da demanda",
     );
   }
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
 
   const raiz = raizDo(banco);
   const espacoDaRodada = espacoDoTicket(ag, { rodada_id }, projeto, raiz);

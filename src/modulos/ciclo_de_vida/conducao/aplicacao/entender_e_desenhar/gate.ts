@@ -1,11 +1,16 @@
 // O Gate da demanda, dono do `entender_e_desenhar`: o Auditor aprova a demanda enviada ou a cancela.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Decisao } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  ancoraNaDemanda,
+  CICLO_DA_DEMANDA,
+  type Decisao,
+  exigirSemFalha,
+  Gate,
+  mudarTicket,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { FABRIQUINHA, type Endereco, DEFINICAO_DO_ENTENDER_E_DESENHAR } from "../../../etapas/publico.ts";
-import { CICLO_DA_DEMANDA } from "../../../processo/publico.ts";
-import { ancoraNaDemanda, Gate } from "../../../../sdlc/nucleo/gate.ts";
 import { criarTicket } from "../../../planejamento/publico.ts";
-import { exigirSemFalha, mudarTicket } from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
 
 /** CA-4 e CA-5: o Auditor aprova (vai a `planejar`) ou reprova com motivo (vai a `cancelada`, sem desenho interno). */
 export class GateDaDemanda extends Gate {

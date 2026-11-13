@@ -12,10 +12,10 @@ import {
 } from "../../../../../../apoio-testes/cenario_de_encerramento_rodada.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { conferirPromptComFoto } from "../../../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarRodada } from "./conducao_de_encerrar_rodada.ts";

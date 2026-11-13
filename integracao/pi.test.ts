@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { HarnessPi, PACOTE } from "../src/modulos/sessoes/publico.ts";
-import { skillsDaEtapaDemanda } from "../src/modulos/sdlc/aplicacao/execucao/lancamento_do_ticket.ts";
+import { skillsDaEtapaDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/lancamento_do_ticket.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 const harness = new HarnessPi();

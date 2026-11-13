@@ -3,31 +3,35 @@
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA, formatarRodadaRef, formatarTicketRef, Endereco } from "../../../etapas/publico.ts";
-import { type AgregadoDemanda, type TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  conferirPRDaRodada,
+  registrarPRDaRodada,
+  submeterEvidencia,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
-import { conferirPRDaRodada, registrarPRDaRodada } from "../../../processo/aplicacao/transicoes_pedidas.ts";
-import { submeterEvidencia } from "../../../../sdlc/aplicacao/evidencias/submeter.ts";
 import {
-  LIMITE_DO_CORPO,
-  commitDoTicketDemanda,
-  publicarPRDe,
-  exigirGit,
-  espacoDoTicket,
   ambienteDoEspaco,
   cicloDoEspaco,
+  commitDoTicketDemanda,
+  espacoDoTicket,
+  exigirGit,
+  LIMITE_DO_CORPO,
+  publicarPRDe,
+  varrerCommitsHumanos,
 } from "../../../../repositorio/publico.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
-import { produtividadeDaRodada } from "../../../../metricas/aplicacao/produtividade_rodada.ts";
-import { varrerCommitsHumanos } from "../../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
+import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { ConferenciaDoPR, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { carregarSessoesDoContexto, registrarUsoDaConsulta } from "../../../../sessoes/publico.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -184,7 +188,7 @@ async function publicarEConferir(
 ): Promise<AgregadoDemanda> {
   const { demanda } = ag;
   const refRodada = formatarRodadaRef(ref);
-  const projeto = carregarProjeto(banco, demanda.projeto);
+  const projeto = projetosCadastrados().carregarProjeto(banco, demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `encerramento-${refRodada}`);
 
@@ -268,7 +272,7 @@ async function publicarEConferir(
   const conhecidos = ag.evidencias
     .filter((e) => e.tipo === "pr_aberto" && anteriores.has(e.ticket_id))
     .map((e) => (e.dados as { id: string }).id);
-  await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
   const publicado = await publicarPRDe(
     raiz,
     projeto,

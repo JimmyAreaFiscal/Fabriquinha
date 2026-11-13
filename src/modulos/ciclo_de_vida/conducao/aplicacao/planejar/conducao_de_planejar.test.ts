@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, falhaPorServicoReiniciado, Endereco } from "../../../etapas/publico.ts";
-import { reabrirTicket } from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { reabrirTicket } from "../../../processo/nucleo/transicoes/transicoes_demanda.ts";
 import { comReaberturaDoAuditor } from "../../../processo/publico.ts";
-import { carregarDemanda, comDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import {
   aprovarGateDoPlanejamento,
   cenarioDePlanejamento,
@@ -15,11 +15,11 @@ import {
   reprovarGateDoPlanejamento,
 } from "../../../../../../apoio-testes/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { falharTicketDemanda } from "../../../../sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { falharTicketEmExecucao } from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
-import { conferirPromptComFoto } from "../../../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 
 test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria a sessão", async () => {
   for (const predecessora of ["concluida", "arquivada"]) {
@@ -99,7 +99,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   await planejar(banco, 0.02);
   const [sessao] = sessoes().sessoes;
   proporPlanoDoAgente(banco, "I-1", plano());
-  falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
+  falharTicketEmExecucao(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
   await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   const ticket = carregarDemanda(banco, "I-1").tickets[0] as { estado: string; instrucao?: string };
   assert.equal(ticket.estado, "aberto");
@@ -176,7 +176,7 @@ test("foto do retorno ao agente no planejamento: devolução pela reprovação",
 test("foto do retorno ao agente no planejamento: reabertura pela instrução do Auditor", async () => {
   const { c, banco, prompts } = cenarioDePlanejamento({ estadoDoTicket: "em_execucao" });
   await planejar(banco, 0.02);
-  falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
+  falharTicketEmExecucao(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
   comDemanda(banco, "I-1", (ag) =>
     reabrirTicket(
       ag,

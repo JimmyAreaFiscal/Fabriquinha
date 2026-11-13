@@ -10,13 +10,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
-import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependencia } from "../../../demandas/publico.ts";
-import { type Tentativa } from "../../../sdlc/nucleo/tentativa.ts";
+import { type Tentativa } from "../../processo/nucleo/tentativa.ts";
 import {
   falhaPorServicoReiniciado,
   type ResultadoDaTentativa,
@@ -29,7 +29,7 @@ import {
 } from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../../../repositorio/infra/worktree/worktree-demanda.ts";
-import { conferirPromptComFoto } from "../../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../../conducao/aplicacao/prompt/fotos_retorno/conferir_foto.ts";
 import { ConducaoDeImplementar } from "../../../etapas/implementar/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "../../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";

@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { formatarRodadaRef, Endereco, CATALOGO_DE_ETAPAS, oAgenteDecideOGate } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../processo/publico.ts";
 import { decidirGate } from "../gates.ts";
 import {
   enderecoDoTicketDoAgente,

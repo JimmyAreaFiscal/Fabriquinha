@@ -1,20 +1,24 @@
 // Comandos da ferramenta externa (Claude Code, Codex, pi) sobre a demanda, fora de uma execução de agente
 // (comparacao-sdlc-implementacao.md §6 e §9.1): `fabriquinha demanda ...`. Cada comando só converte os argumentos e
-// chama a fachada de Demandas, um fluxo do servidor ou `gestao_demandas.ts`; decidir, cancelar e arquivar são do Auditor
+// chama a fachada de Demandas, um fluxo do servidor ou a do Ciclo de Vida; decidir, cancelar e arquivar são do Auditor
 // e não existem aqui.
 import { readFileSync, realpathSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
-import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import type { Ator } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../modulos/etapas/entender_e_desenhar/definicao.ts";
-import { Endereco } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { declararUso, submeterEvidencia } from "../../modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { editarPedido } from "../../modulos/demandas/publico.ts";
+import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import {
+  type Ator,
+  declararUso,
+  Endereco,
+  submeterEvidenciaDaEntradaExterna,
+  type TipoDaDemanda,
+  TIPOS_DA_DEMANDA,
+  visaoDaDemanda,
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import { editarPedido, predecessorasDosPedidosEmLote } from "../../modulos/demandas/publico.ts";
 import { registrarPedidoComProcesso } from "../fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../fluxos/envio_ao_desenvolvimento.ts";
-import { visaoDaDemanda } from "../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
 import {
   type Comando,
   type DepsDoCli,
@@ -55,10 +59,10 @@ const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
 function visao(banco: DatabaseSync, id: string) {
-  const { agregado, predecessoras, evidencias } = visaoDaDemanda(banco, id);
+  const { agregado, evidencias } = visaoDaDemanda(banco, id);
   return {
     ...demandaParaCli(agregado.demanda),
-    dependencias: predecessoras.map((p) => p.demanda_id),
+    dependencias: predecessorasDosPedidosEmLote(banco, [id]).get(id),
     evidencias: evidencias.map(({ evidencia, anexos }) => ({
       tipo: evidencia.tipo,
       em: evidencia.em,
@@ -156,7 +160,7 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       };
       const arquivos = (opcoes.arquivo ?? []) as string[];
       return deps.comBanco((banco) => {
-        const { avisos } = submeterEvidencia(banco, id, { tipo, dados, arquivos }, autor, origens);
+        const { avisos } = submeterEvidenciaDaEntradaExterna(banco, id, { tipo, dados, arquivos }, autor, origens);
         return { ...visao(banco, id), avisos };
       });
     },

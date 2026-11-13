@@ -6,7 +6,7 @@ import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts
 import { ConducaoAgentica } from "../src/modulos/etapas/conducao/conducao_de_etapa.ts";
 import { montarConducoesDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { montarPromptDemanda } from "../src/modulos/etapas/prompt/prompt_demanda.ts";
-import type { ContextoDoPrompt } from "../src/modulos/sdlc/nucleo/contexto_do_prompt.ts";
+import type { ContextoDoPrompt } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/prompt/contexto_do_prompt.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 const CONDUCOES_DO_PROMPT = montarConducoesDasEtapas({

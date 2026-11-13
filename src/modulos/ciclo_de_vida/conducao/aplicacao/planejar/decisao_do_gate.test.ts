@@ -5,7 +5,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import {
   aprovarGateDoPlanejamento,

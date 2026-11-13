@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, Endereco, FABRIQUINHA } from "../../etapas/publico.ts";
-import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
 import {
   Despacho,
   motivoDeRecusaDoItem,
@@ -11,7 +11,7 @@ import {
   situacaoDeUmaDemanda,
 } from "./despacho.ts";
 import { GATES } from "../../conducao/publico.ts";
-import { concluirSessaoRodada, registrarCorrecoesSessao } from "../../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
+import { concluirSessaoRodada, registrarCorrecoesSessao } from "../../processo/nucleo/transicoes/transicoes_rodada.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";

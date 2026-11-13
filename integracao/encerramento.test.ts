@@ -8,14 +8,14 @@ import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { formatarTicketRef } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { relogioFixo } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { reabrirTicket } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { reabrirTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import {
   registrarFalhaEncerramento,
   registrarTentativaEncerramento,
-} from "../src/modulos/sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+} from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import {
   caminhoDaWorktreeDemanda,

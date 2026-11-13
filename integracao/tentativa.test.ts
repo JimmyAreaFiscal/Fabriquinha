@@ -17,7 +17,7 @@ import {
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import type { Tentativa } from "../src/modulos/sdlc/nucleo/tentativa.ts";
+import type { Tentativa } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,

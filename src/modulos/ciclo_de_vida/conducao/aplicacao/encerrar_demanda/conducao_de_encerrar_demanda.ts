@@ -3,50 +3,50 @@
 // (a integração final depende do humano), integração confirmada com SHA, limpeza por posse e evidências. Cada efeito
 // externo é seguido da transição do domínio, que decide se ele se repete (progresso recuperável).
 import {
-  FABRIQUINHA,
   DEFINICAO_DO_ENCERRAR_DEMANDA,
+  type Endereco,
+  FABRIQUINHA,
   type FalhaDaTentativa,
   falhaDoErro,
   falhaQueExigeOAuditor,
 } from "../../../etapas/publico.ts";
-import { type AgregadoDemanda, prDaDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { existe } from "../../../../../shared/nucleo/erros.ts";
 import {
-  espacoDaDemanda,
-  pendenciasDeLimpeza,
-  sobrasDaDemanda,
-  lerPR,
-  type OpcoesVerificacao,
-  ambienteDoEspaco,
-  cicloDoEspaco,
-} from "../../../../repositorio/publico.ts";
-import type { Endereco } from "../../../etapas/publico.ts";
-import {
+  type AgregadoDemanda,
+  carregarDemanda,
   concluirEncerramentoDaDemanda,
+  prDaDemanda,
   registrarConflitoDoEncerramento,
   registrarFalhaDoEncerramento,
   registrarFalhaDoTicket,
   registrarIntegracaoFinal,
   registrarTentativaDoEncerramento,
   solicitarIntegracaoFinal,
-} from "../../../processo/aplicacao/transicoes_pedidas.ts";
+  submeterEvidencia,
+} from "../../../processo/publico.ts";
+import { existe } from "../../../../../shared/nucleo/erros.ts";
+import {
+  ambienteDoEspaco,
+  cicloDoEspaco,
+  espacoDaDemanda,
+  lerPR,
+  type OpcoesVerificacao,
+  pendenciasDeLimpeza,
+  sobrasDaDemanda,
+  varrerCommitsHumanos,
+} from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { carregarSessoesDoContexto, lerUsoDeclarado } from "../../../../sessoes/publico.ts";
 import { logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { ConferenciaDoPR, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "./encerramento_demanda.ts";
-import { submeterEvidencia } from "../../../../sdlc/aplicacao/evidencias/submeter.ts";
 import { publicarPRFinal } from "./publicacao_do_pr_final.ts";
-import { varrerCommitsHumanos } from "../../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
 import {
   ConducaoDeterministica,
+  type DepsDaConducao,
   type PassoDaEtapa,
   type ResultadoDoPasso,
 } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
+import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 /** Grava o encerramento do processo (`gravarEncerramentoDoProcesso`) junto da conclusão do pedido `demandaId`. */
 type ConcluirDesenvolvimento = (demandaId: string, gravarEncerramentoDoProcesso: () => void) => void;
@@ -105,7 +105,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
   }
 
   /** O ciclo do Espaço da demanda, no Ambiente do Espaço, com o log do encerramento. */
-  private cicloDoEspacoDaDemanda(projeto: Projeto, demanda_id: string): ReturnType<typeof cicloDoEspaco> {
+  private cicloDoEspacoDaDemanda(projeto: ProjetoConduzido, demanda_id: string): ReturnType<typeof cicloDoEspaco> {
     const raiz = raizDo(this.deps.banco);
     const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
     const espaco = espacoDaDemanda(projeto, demanda_id, raiz);
@@ -116,12 +116,12 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const { banco, relogio } = this.deps;
     const { demanda_id } = endereco;
     const ag = this.agregadoDe(endereco);
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
     // O erro até a tentativa registrada sobe e a base falha o ticket.
     const ciclo = this.cicloDoEspacoDaDemanda(projeto, demanda_id);
-    await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
     const publicado = await publicarPRFinal(banco, ag, projeto, projeto.branch_base, raiz);
     registrarTentativaDoEncerramento(
       banco,
@@ -168,7 +168,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const { banco, relogio } = this.deps;
     const { demanda_id } = endereco;
     const ag = this.agregadoDe(endereco);
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const pr = existe(prDaDemanda(ag), `a demanda ${demanda_id} não tem PR final`, "registre a tentativa antes");
     const devolverParaEspera = () => {
       solicitarIntegracaoFinal(banco, demanda_id, { demanda_id }, FABRIQUINHA, relogio);
@@ -213,7 +213,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const { banco, relogio } = this.deps;
     const { demanda_id } = endereco;
     const ag = this.agregadoDe(endereco);
-    const projeto = carregarProjeto(banco, ag.demanda.projeto);
+    const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const pendentes = existe(
       ag.encerramento,
       `a demanda ${demanda_id} não tem progresso de encerramento`,

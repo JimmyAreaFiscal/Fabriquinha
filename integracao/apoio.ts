@@ -11,16 +11,15 @@ import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../src/modulos/compartilhado/nucleo/erros.ts";
-import { submeterEvidencia } from "../src/modulos/sdlc/aplicacao/evidencias/submeter.ts";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { submeterEvidencia } from "../src/modulos/ciclo_de_vida/processo/aplicacao/submissao_de_evidencia.ts";
+import { cicloDoDespacho, type Configuracao, configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import type { DepsDespacho } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarUsoDeclarado } from "../src/modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
-import { type Configuracao, configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
@@ -187,7 +186,7 @@ export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = 
 /** Submete as evidências obrigatórias, como a IA externa as enviaria. */
 export function submeterObrigatorias(c: Cenario, id: string): void {
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(
+    gestao.submeterEvidenciaDaEntradaExterna(
       c.banco,
       id,
       { tipo, dados, arquivos } as gestao.EntradaEvidencia,

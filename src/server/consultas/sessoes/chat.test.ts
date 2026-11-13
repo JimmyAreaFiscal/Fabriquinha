@@ -10,14 +10,14 @@ import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import type {
   ProcessoDoTrabalho,
   TrabalhoGerenciado,
 } from "../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
 import { registrarProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../../modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import {
   carregarTrabalhosDoTicket,

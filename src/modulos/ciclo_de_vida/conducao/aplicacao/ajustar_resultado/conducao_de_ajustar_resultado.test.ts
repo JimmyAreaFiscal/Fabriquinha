@@ -8,7 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
 import { GATES } from "../gates.ts";
-import { carregarDemanda, comDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import {
   ate,
@@ -24,7 +24,7 @@ import {
   URL_PR,
 } from "../../../../../../apoio-testes/cenario_de_ajustes.ts";
 import { limitarTempoDoPi } from "../../../../../../apoio-testes/limite_do_pi.ts";
-import { conferirPromptComFoto } from "../../../../sdlc/aplicacao/fotos_retorno/conferir_foto.ts";
+import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "./sessao_ajustes.ts";
 import { enviarDemanda } from "../conducao_de_etapa/mensagem_do_auditor.ts";

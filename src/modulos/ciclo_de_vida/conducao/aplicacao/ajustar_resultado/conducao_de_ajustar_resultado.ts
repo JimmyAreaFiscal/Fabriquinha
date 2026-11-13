@@ -1,7 +1,12 @@
 // A condução do `ajustar_resultado` (comparacao-sdlc-implementacao.md §§4 e 6): o `GateDoPR` reprovado abre a conversa do
 // Auditor com o agente, que só registra tickets corretivos. O ticket nunca sai de `aberto`: o Auditor o conclui com a
 // sessão, e o fim de cada execução devolve as branches da rodada e da demanda aos SHAs gravados ao abrir.
-import type { TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  carregarDemanda,
+  montarRetornoAoAgente,
+  tentativaAnteriorEmMemoria,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import {
   formatarRodadaRef,
   formatarTicketRef,
@@ -9,12 +14,9 @@ import {
   Endereco,
 } from "../../../etapas/publico.ts";
 import { existe } from "../../../../../shared/nucleo/erros.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../../processo/publico.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
 import type { OpcoesExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { espacoComPrPublicado, restaurar } from "./sessao_ajustes.ts";
-import { ConducaoInterativa } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
+import { ConducaoInterativa, type DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
 
 export class ConducaoDeAjustarResultado extends ConducaoInterativa {
   constructor(deps: DepsDaConducao) {

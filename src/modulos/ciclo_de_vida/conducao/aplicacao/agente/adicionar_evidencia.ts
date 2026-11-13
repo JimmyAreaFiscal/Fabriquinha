@@ -2,17 +2,18 @@ import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  submeterEvidencia,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { type EspacoDeTrabalho, espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { agregadoDaRodada } from "../../../evidencias/publico.ts";
+import { agregadoDaRodada, type AnexoEnviado, type Origens } from "../../../evidencias/publico.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { projetoExistente } from "../../../../projeto/armazenamento/projetos.ts";
-import { submeterEvidencia } from "../../../../sdlc/aplicacao/evidencias/submeter.ts";
 import { gerarAula, type Trecho } from "../encerrar_rodada/documentacao_do_pr/aula.ts";
-import type { AnexoEnviado, Origens } from "../../../evidencias/publico.ts";
 import {
   enderecoDoTicketDoAgente,
   type EscopoDoAgente,
@@ -24,6 +25,7 @@ import {
   reconferirExecucao,
 } from "./escopo.ts";
 import { tipoDoAgente } from "./tipo_do_agente.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 /**
  * A evidência que o agente submete ao próprio ticket; `dados` é o valor da opção, que `lerJson` lê, e cada anexo chega
@@ -85,7 +87,7 @@ export async function adicionarEvidenciaComAnexosEnviados(
   const espaco = espacoDoTicket(
     agregadoLido,
     ticket,
-    projetoExistente(banco, agente.projeto),
+    projetosCadastrados().projetoExistente(banco, agente.projeto),
     realpathSync(raizDo(banco)),
   );
   const origens = origensDosAnexos(banco, agente, espaco);

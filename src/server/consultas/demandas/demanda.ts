@@ -10,6 +10,7 @@ import {
   carregarDemandas,
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
+  Despacho,
   EtapaTicket,
   formatarRodadaRef,
   formatarTicketRef,
@@ -17,10 +18,10 @@ import {
   lerAnexo,
   motivoDaFalhaDoTicket,
   prDaDemanda,
+  prontosParaExecutarAgora,
   ticketAtualDaEtapa,
   usoDaDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { Despacho, prontosParaExecutarAgora } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
 import { dependentesNaoConcluidosDoPedido, origemDoPedido } from "../../../modulos/demandas/publico.ts";

@@ -1,27 +1,29 @@
 // Efeitos do gate do planejamento fora do agregado (comparacao-sdlc-implementacao.md §§3 e 6): preparar as worktrees
 // antes de aprovar e falar com o pi vivo da sessão de planejamento. Git e pi ficam fora da transação.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  decidirGateNaDemanda,
+  type EntradaDoGate,
+} from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra, mensagem } from "../../../../../shared/nucleo/erros.ts";
 import {
-  type EspacoDeTrabalho,
-  espacoDoTicket,
   ambienteDoEspaco,
   cicloDoEspaco,
+  type EspacoDeTrabalho,
+  espacoDoTicket,
+  varrerCommitsHumanos,
 } from "../../../../repositorio/publico.ts";
-import type { EntradaDoGate } from "../../../processo/publico.ts";
 import { GateDoPlanejamento } from "./gate.ts";
-import type { GateComEfeitos } from "../../../../sdlc/aplicacao/gates/decisao_do_gate.ts";
+import type { GateComEfeitos } from "../decisao_dos_gates/gate_com_efeitos.ts";
 import { lerPlanoGravado } from "../../../planejamento/publico.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { decidirGateNaDemanda } from "../../../processo/aplicacao/transicoes_pedidas.ts";
-import { carregarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../conducao_de_etapa/pi_vivo.ts";
-import { varrerCommitsHumanos } from "../../../../projeto/aplicacao/varredura_de_commits_humanos.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 const gate = new GateDoPlanejamento();
 
@@ -64,13 +66,13 @@ async function aprovarGateDoPlanejamento(
   gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de tocar o git (estado, falha, plano ausente)
   const { ticket_id } = gate.ancora(ag, endereco);
   const plano = lerPlanoGravado(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
     const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
     const { buscouBase } = await ciclo.criar();
-    if (buscouBase) await varrerCommitsHumanos(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    if (buscouBase) await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [

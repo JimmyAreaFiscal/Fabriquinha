@@ -1,13 +1,13 @@
 // Monta o que o CLI não pode abrir sozinho (o banco da raiz, o serviço, o navegador) e roda `principal` com isso.
 import { join } from "node:path";
-import { raizPadrao } from "../../modulos/compartilhado/armazenamento/banco.ts";
+import { raizPadrao } from "../../shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { type DepsDoCli } from "../cli/comando.ts";
 import { principal } from "../cli/cli.ts";
-import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
 import { PACOTE } from "../../modulos/sessoes/publico.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { lancarSolto } from "../../modulos/compartilhado/infra/processo.ts";
+import { condutor } from "../../modulos/ciclo_de_vida/publico.ts";
+import { lancarSolto } from "../../shared/infra/processo.ts";
 import { harnessDoServico, iniciarServico } from "./servico.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../../../processo/nucleo/agregado/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
 import { marcaDoPRRodada, montarPRRodada, tituloDoPRRodada } from "./pr_rodada.ts";
 import type { ProdutividadeRodada } from "../../../../../metricas/aplicacao/produtividade_rodada.ts";

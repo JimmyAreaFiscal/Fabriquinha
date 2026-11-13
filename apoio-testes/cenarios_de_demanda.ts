@@ -1,13 +1,13 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
+import type { EvidenciaDemanda } from "../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import type { Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { CICLO_DA_DEMANDA } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { validarPlano } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { CICLO_DA_DEMANDA, type EstadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
+import { validarPlano } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { criarDemandaNova } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import { criarDemandaNova } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { alinharSituacaoAoEstadoGravado } from "../src/modulos/demandas/pedidos/armazenamento/migracao_da_situacao.ts";
 import { garantirWorktreeDemanda } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";

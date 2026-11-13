@@ -8,7 +8,10 @@ import { agregadoNoEstado, cadastrarProjetoLoja } from "../../../../../apoio-tes
 import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import { MIGRACOES, VERSAO_LINHA_DE_BASE } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { EstadoDemanda } from "../../../ciclo_de_vida/publico.ts";
-import { carregarDemanda, gravarDemandaNova } from "../../../sdlc/armazenamento/demandas.ts";
+import {
+  carregarDemanda,
+  gravarDemandaNova,
+} from "../../../ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { lerPedido } from "./pedidos.ts";
 import { MIGRACOES_DE_DEMANDAS } from "./migracao_da_situacao.ts";
 

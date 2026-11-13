@@ -1,7 +1,6 @@
 // O contexto do prompt do ticket: o que o motor junta para a montagem do prompt, que é de cada Etapa, quando lança o
 // agente dela. Só dados, sem I/O.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { RetornoAoAgente } from "../../../processo/publico.ts";
+import type { AgregadoDemanda, RetornoAoAgente, TicketDemanda } from "../../../processo/publico.ts";
 
 /** Um anexo de evidência da demanda com o caminho do arquivo no disco, que o agente lê direto. */
 export interface AnexoNoDisco {

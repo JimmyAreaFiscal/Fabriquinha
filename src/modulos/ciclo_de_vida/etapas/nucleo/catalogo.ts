@@ -75,7 +75,7 @@ export const oAgenteDecideOGate = (etapa: EtapaTicket): boolean => CATALOGO_DE_E
 /** As Etapas que a Fabriquinha conduz: todas menos a externa. */
 export type EtapaConduzida = Exclude<EtapaTicket, "entender_e_desenhar">;
 
-/** Só `entender_e_desenhar` não tem condução: é externo (CLI de `gestao_demandas.ts`) e existe só no catálogo. */
+/** Só `entender_e_desenhar` não tem condução: é externo (CLI de `gestao_do_processo.ts`) e existe só no catálogo. */
 export function exigirEtapaConduzida(etapa: EtapaTicket): asserts etapa is EtapaConduzida {
   if (etapa === "entender_e_desenhar") {
     throw new ErroDeRegra(

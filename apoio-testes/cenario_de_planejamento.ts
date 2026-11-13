@@ -6,14 +6,17 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
+import { registrarDependencia, registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
+import {
+  carregarDemanda,
+  comDemanda,
+} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
@@ -21,7 +24,6 @@ import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.t
 import { limitarTempoDoPi } from "./limite_do_pi.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
-import { registrarDependencia } from "../src/modulos/demandas/publico.ts";
 import { reservadoPeloDespacho } from "./reserva_do_despacho.ts";
 
 const em = "2026-01-01T00:00:00.000Z";

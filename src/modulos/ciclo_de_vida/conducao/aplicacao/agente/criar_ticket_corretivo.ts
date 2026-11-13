@@ -3,8 +3,7 @@ import { formatarRodadaRef, formatarTicketRef, Endereco } from "../../../etapas/
 import { ErroDeEscopo, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 import { escrever } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { registrarCorrecoesDaRodada } from "../../../processo/aplicacao/transicoes_pedidas.ts";
+import { carregarDemanda, registrarCorrecoesDaRodada } from "../../../processo/publico.ts";
 import { escopoDoProcessoAberto, exigirTicket, type ProcessoDoAgente, reconferirExecucao } from "./escopo.ts";
 
 /**

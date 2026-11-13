@@ -13,7 +13,7 @@ import {
   listarAmbientes,
 } from "../../src/modulos/sandbox/armazenamento/ambientes.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { configuracao } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";

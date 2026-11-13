@@ -12,7 +12,7 @@ import {
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

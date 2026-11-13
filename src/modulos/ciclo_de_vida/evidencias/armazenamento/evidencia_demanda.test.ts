@@ -6,7 +6,7 @@ import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_te
 import { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
-import { carregarDemanda, comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import {
   anexosDaDemanda,
   evidenciasDoTipoDasDemandas,

@@ -8,7 +8,7 @@ import { after } from "node:test";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { submeterEvidencia } from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { submeterEvidenciaDaEntradaExterna } from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 
 export const INSTANTE_DOS_PEDIDOS = "2026-01-01T00:00:00.000Z";
 export const CONTEXTO_DOS_PEDIDOS = { agora: INSTANTE_DOS_PEDIDOS };
@@ -60,8 +60,14 @@ export function completarDefinicao(banco: DatabaseSync, id: string): void {
   writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
   const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
   const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-  submeterEvidencia(banco, id, { tipo: "criterios_aceite", dados: criterios }, AUTORA_DOS_PEDIDOS, ORIGENS_DOS_ANEXOS);
-  submeterEvidencia(
+  submeterEvidenciaDaEntradaExterna(
+    banco,
+    id,
+    { tipo: "criterios_aceite", dados: criterios },
+    AUTORA_DOS_PEDIDOS,
+    ORIGENS_DOS_ANEXOS,
+  );
+  submeterEvidenciaDaEntradaExterna(
     banco,
     id,
     { tipo: "desenho_solucao", dados: desenho, arquivos: [join(pasta, "d.html")] },

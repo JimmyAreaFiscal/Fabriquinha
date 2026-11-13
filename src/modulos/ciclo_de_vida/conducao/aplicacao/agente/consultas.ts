@@ -2,13 +2,15 @@
 // O ticket sai sem `criado_por` e a decisão com `por` em texto (o tipo do Ator), como antes do Ator único; o motivo do
 // ticket que falhou vem da última Tentativa dele.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  motivoDaFalhaDoTicket,
+  type TicketDemanda,
+  visaoDaDemanda,
+} from "../../../processo/publico.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
 import { schemaDoTipo } from "../../../evidencias/publico.ts";
-import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { visaoDaDemanda } from "../../../../sdlc/aplicacao/consultas/visao_da_demanda.ts";
-import { projetoExistente } from "../../../../projeto/aplicacao/cadastro.ts";
 import {
   escopoDoProcessoAberto,
   exigirDemandaPropria,
@@ -16,6 +18,7 @@ import {
   exigirTicketProprio,
   type ProcessoDoAgente,
 } from "./escopo.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 const ticketParaAgente = (ticket: TicketDemanda, agregado: AgregadoDemanda) => {
   const { demanda_id, ticket_id, rodada_id, criado_por: _, ...resto } = ticket;
@@ -33,7 +36,7 @@ const ticketParaAgente = (ticket: TicketDemanda, agregado: AgregadoDemanda) => {
  */
 export function verProjeto(banco: DatabaseSync, processo: ProcessoDoAgente) {
   const agente = escopoDoProcessoAberto(banco, processo);
-  return projetoExistente(banco, agente.projeto, "confira a execução");
+  return projetosCadastrados().projetoExistente(banco, agente.projeto, "confira a execução");
 }
 
 /**

@@ -7,7 +7,7 @@ import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { schemaDoTipo } from "../../modulos/sdlc/nucleo/evidencias/evidencia.ts";
+import { schemaDoTipo } from "../../modulos/ciclo_de_vida/evidencias/publico.ts";
 import { relogioFixo } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 

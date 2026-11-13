@@ -1,17 +1,19 @@
 // O Gate do planejamento, dono do `planejar`: o Auditor aprova o Plano proposto ou o devolve ao agente.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Decisao } from "../../../processo/publico.ts";
-import { AUDITOR, DEFINICAO_DO_PLANEJAR } from "../../../etapas/publico.ts";
-import { CICLO_DA_DEMANDA, type EntradaReprovada } from "../../../processo/publico.ts";
-import { ancoraNaDemanda, Gate } from "../../../../sdlc/nucleo/gate.ts";
-import type { Endereco } from "../../../etapas/publico.ts";
 import {
+  type AgregadoDemanda,
+  ancoraNaDemanda,
+  CICLO_DA_DEMANDA,
+  type Decisao,
+  type EntradaReprovada,
   exigirSemFalha,
+  Gate,
   materializarPlano,
   planoSubmetido,
   reabrirTicket,
   tentativasAposSair,
-} from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
+import { AUDITOR, DEFINICAO_DO_PLANEJAR, type Endereco } from "../../../etapas/publico.ts";
 
 /** CA-4 a CA-7: o Auditor reprova (volta a `planejar` com o mesmo ticket) ou aprova (materializa o Plano e vai a `em_execucao`). */
 export class GateDoPlanejamento extends Gate {

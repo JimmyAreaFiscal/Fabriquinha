@@ -1,9 +1,8 @@
 // A condução do `resolver_conflito`: o mesmo ciclo do `implementar`, na worktree da demanda; ao concluir, o encerramento
 // da demanda tem o merge resolvido e o agendador o tenta de novo.
-import { FABRIQUINHA, DEFINICAO_DO_RESOLVER_CONFLITO } from "../../../etapas/publico.ts";
+import { DEFINICAO_DO_RESOLVER_CONFLITO, type Endereco, FABRIQUINHA } from "../../../etapas/publico.ts";
 import { encontrado } from "../../../../../shared/nucleo/erros.ts";
-import type { Endereco } from "../../../etapas/publico.ts";
-import { concluirResolucaoDoConflito } from "../../../processo/aplicacao/transicoes_pedidas.ts";
+import { concluirResolucaoDoConflito } from "../../../processo/publico.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
 import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";

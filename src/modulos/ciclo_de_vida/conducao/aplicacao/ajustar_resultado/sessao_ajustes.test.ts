@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { AUDITOR, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
-import { comDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import {
   cenarioDeAjustes,
   DEMANDA,

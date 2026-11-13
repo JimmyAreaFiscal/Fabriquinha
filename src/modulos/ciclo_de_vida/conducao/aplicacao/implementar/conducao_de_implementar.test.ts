@@ -201,6 +201,7 @@ test("CA-16: commit sem as evidências devolve o ticket citando o que falta", as
   const c = await cenarioDeImplementacao();
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
   await commitarTicketDemanda(c.banco, ref(1), {
+    projeto: c.c.projeto,
     ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",

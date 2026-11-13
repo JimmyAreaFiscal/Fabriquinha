@@ -1,12 +1,11 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
-import type { UsoDeclarado, Execucao, Sessao, UsoDaExecucao } from "../../../../sessoes/publico.ts";
-import { type AgregadoDemanda, prDaDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type Execucao, type Sessao, Uso, type UsoDaExecucao, type UsoDeclarado } from "../../../../sessoes/publico.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../../processo/publico.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
 import { prDoEspaco, lista, neutro } from "../../../../repositorio/publico.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../../evidencias/publico.ts";
-import { Uso } from "../../../../sessoes/publico.ts";
-import { produtividadeDaRodada } from "../../../../metricas/aplicacao/produtividade_rodada.ts";
+import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
 
 const situacao = (incompleto: boolean) => (incompleto ? ("incompleto" as const) : ("conhecido" as const));
 

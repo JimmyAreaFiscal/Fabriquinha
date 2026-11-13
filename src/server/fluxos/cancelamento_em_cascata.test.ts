@@ -12,7 +12,7 @@ import {
 } from "../../../apoio-testes/pedidos_de_teste.ts";
 import { AUDITOR, type Ator } from "../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,

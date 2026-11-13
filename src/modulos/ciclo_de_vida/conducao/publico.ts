@@ -27,9 +27,6 @@ export {
   type SessaoDoTicket,
   trabalhoVivoDaSessao,
 } from "./aplicacao/chat_do_auditor/sessao_do_ticket.ts";
-// provisório: remover no ticket 22, que traz a regra das Pendências do sdlc para o Ciclo de Vida. A regra única do que
-// aguarda o Auditor, para as consultas das telas.
-export { pendenciasDaDemanda, type TrabalhoVivo } from "../../sdlc/nucleo/demanda/pendencia.ts";
 export { ConducaoAgentica } from "./aplicacao/conducao_de_etapa/conducao_de_etapa.ts";
 export { enviarDemanda } from "./aplicacao/conducao_de_etapa/mensagem_do_auditor.ts";
 export {
@@ -48,9 +45,15 @@ export { ConducaoDePlanejar } from "./aplicacao/planejar/conducao_de_planejar.ts
 export {
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,
+  interromperExecucoesDasDemandas,
   type OpcoesExecucaoDemanda,
 } from "./aplicacao/execucao/execucao_demanda.ts";
 export { condutor, CondutorDeTrabalhos, type RecuperacaoDaSubida } from "./aplicacao/politica_dos_agentes/condutor.ts";
 export { exigirTrabalhoDoTicket } from "./aplicacao/politica_dos_agentes/trabalho_do_ticket.ts";
 export { montarPromptDemanda } from "./aplicacao/prompt/prompt_demanda.ts";
+export {
+  ligarLeituraDosProjetosCadastrados,
+  type ProjetoConduzido,
+  projetosCadastrados,
+} from "./aplicacao/projetos_cadastrados.ts";
 export { ConducaoDeResolverConflito } from "./aplicacao/resolver_conflito/conducao_de_resolver_conflito.ts";

@@ -1,17 +1,17 @@
 // Publicação do PR final da demanda no `encerrar_demanda`; os passos do encerramento estão em
 // `conducao_de_encerrar_demanda.ts`.
 import type { DatabaseSync } from "node:sqlite";
-import { type AgregadoDemanda, prDaDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../../processo/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import type { Projeto } from "../../../../projeto/nucleo/projeto.ts";
 import { commitDoTicketDemanda, publicarPRDe, exigirGit } from "../../../../repositorio/publico.ts";
 import { corpoDoPRFinal, marcaDoPRFinal, tituloDoPRFinal } from "./encerramento_demanda.ts";
+import type { ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 /** Publica o PR da branch da demanda para a base, reaproveitando o do progresso ou o marcado; só commits de ticket sobem. */
 export function publicarPRFinal(
   banco: DatabaseSync,
   ag: AgregadoDemanda,
-  projeto: Pick<Projeto, "nome" | "raiz_git" | "hospedagem">,
+  projeto: Pick<ProjetoConduzido, "nome" | "raiz_git" | "hospedagem">,
   base: string,
   raiz: string,
 ) {

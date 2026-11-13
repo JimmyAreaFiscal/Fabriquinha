@@ -3,7 +3,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { carregarTrabalhosDaDemanda } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";
 

@@ -2,8 +2,15 @@
 // trabalho pela mesma regra (o agente não escolhe), reserva o ticket na mesma transação e o entrega à Condução da Etapa
 // dele. pi, git e testes ficam fora da transação: rodam em segundo plano, depois dela.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, etapaDoEstado, EstadoDemanda } from "../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  CICLO_DA_DEMANDA,
+  comDemanda,
+  EstadoDemanda,
+  etapaDoEstado,
+  iniciarRevisaoIntegral,
+  type TicketDemanda,
+} from "../../processo/publico.ts";
 import {
   Despacho,
   type DemandaParaDespacho,
@@ -22,14 +29,12 @@ import {
   formatarTicketRef,
 } from "../../etapas/publico.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
-import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { anotar, noLog } from "../../../../shared/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/configuracao_do_servico.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import { iniciarRevisaoIntegral } from "../../../sdlc/aplicacao/revisao_demanda.ts";
 import { condutor, type DepsDaConducao, type DepsDespacho } from "../../conducao/publico.ts";
 
 /**

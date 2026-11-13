@@ -1,6 +1,6 @@
 // As consultas da tela de Configuração (F7 §4.2): cada uma monta o contrato da resposta, lendo num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import { configuracao } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
+import { configuracao } from "../../modulos/ciclo_de_vida/publico.ts";
 import { lerEmSnapshot } from "../../shared/armazenamento/snapshot.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
 import { listarProjetos, projetoComConfiguracoesDasEtapas, projetoExistente } from "../../modulos/demandas/publico.ts";

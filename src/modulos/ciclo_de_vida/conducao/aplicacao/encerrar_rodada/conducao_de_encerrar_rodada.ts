@@ -2,14 +2,16 @@
 // incorpora a ponta da demanda, publica o PR da rodada e o confere. O ticket fica em execução, âncora do gate do PR.
 import { existe } from "../../../../../shared/nucleo/erros.ts";
 import { secaoDoPromptDoEncerrarRodada } from "./secao_do_prompt.ts";
-import { DEFINICAO_DO_ENCERRAR_RODADA, falhaDoErro } from "../../../etapas/publico.ts";
-import type { Endereco } from "../../../etapas/publico.ts";
+import { DEFINICAO_DO_ENCERRAR_RODADA, type Endereco, falhaDoErro } from "../../../etapas/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../../processo/publico.ts";
 import { aprovarPRRodadaSeAutomatico } from "./gate_do_pr/aprovacao_pr_rodada.ts";
 import { conferirEncerramentoRodada, type RefRodada } from "./encerramento_rodada.ts";
-import { ConducaoAgentica, type ResultadoDaConferencia } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
+import {
+  ConducaoAgentica,
+  type DepsDaConducao,
+  type ResultadoDaConferencia,
+} from "../conducao_de_etapa/conducao_de_etapa.ts";
 
 export class ConducaoDeEncerrarRodada extends ConducaoAgentica {
   protected override readonly secaoDoPrompt = secaoDoPromptDoEncerrarRodada;

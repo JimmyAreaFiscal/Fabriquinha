@@ -1,11 +1,11 @@
 // Título, marca e corpo do PR da rodada (branch da rodada → branch da demanda). Só endereços públicos (D09):
 // `I-206`, `I-206.R2`, `I-206.T3`; o id interno do ticket nunca aparece.
-import type { AgregadoDemanda } from "../../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../../processo/publico.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
 import type { Id } from "../../../../../../shared/nucleo/primitivos.ts";
 import { codigo, dolares, inteiro, lista, neutro, plural, tabela } from "../../../../../repositorio/publico.ts";
-import type { ProdutividadeRodada } from "../../../../../metricas/aplicacao/produtividade_rodada.ts";
+import type { ProdutividadeRodada } from "../../../../metricas_de_qualidade/publico.ts";
 
 // Os campos de `mensagem_pr` que o PR da rodada usa (schema do F3).
 interface MensagemPR {

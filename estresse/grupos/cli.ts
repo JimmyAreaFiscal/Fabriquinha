@@ -9,13 +9,13 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
 import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
-import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { submeterEvidencia } from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import { submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { criarDemandaNova } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
@@ -213,7 +213,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
           arquivos: [join(pasta, "desenho.html")],
         },
       ];
-      for (const e of completa) submeterEvidencia(banco, id, e as never, autor, origens);
+      for (const e of completa) submeterEvidenciaDaEntradaExterna(banco, id, e as never, autor, origens);
     }
     leitura = semearAgente(banco, "ajustar_resultado", "ajustar_resultado");
     for (let i = 0; i < CHAMADAS; i++) {

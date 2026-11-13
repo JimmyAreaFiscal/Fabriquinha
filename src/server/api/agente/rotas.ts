@@ -3,20 +3,22 @@
 // antes de chamar o caso de uso de `aplicacao/agente`, que confere de novo; nenhuma regra mora aqui.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { decidirRevisao } from "../../../modulos/etapas/agente/decidir_revisao.ts";
-import { criarTicketCorretivo } from "../../../modulos/etapas/agente/criar_ticket_corretivo.ts";
-import { verDemanda, verProjeto, verTicket } from "../../../modulos/etapas/agente/consultas.ts";
-import { adicionarEvidenciaComAnexosEnviados } from "../../../modulos/etapas/agente/adicionar_evidencia.ts";
 import {
+  adicionarEvidenciaComAnexosEnviados,
+  criarTicketCorretivo,
+  decidirRevisao,
+  Endereco,
   type EscopoDoAgente,
   exigirDemandaPropria,
   exigirTicketProprio,
   type ProcessoDoAgente,
-} from "../../../modulos/etapas/agente/escopo.ts";
-import { tipoDoAgente } from "../../../modulos/etapas/agente/tipo_do_agente.ts";
-import { ErroDeEscopo } from "../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+  tipoDoAgente,
+  verDemanda,
+  verProjeto,
+  verTicket,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
+import { ErroDeEscopo } from "../../../shared/nucleo/erros.ts";
+import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import type { Parametros } from "../../web/compartilhado/caminhos.ts";
 import {
   type ErroDaApiDoAgente,

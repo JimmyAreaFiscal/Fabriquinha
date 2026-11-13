@@ -8,15 +8,14 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
-import { prDaDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
 import { FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
-import type { AgregadoDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import {
   concluirResolucaoConflito,
   podeTentarEncerramento,
-} from "../../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+} from "../../../processo/nucleo/transicoes/transicoes_encerramento.ts";
 import {
   gravarCommitDemanda,
   cursorDaBase,
@@ -25,7 +24,7 @@ import {
   garantirWorktreeRodada,
 } from "../../../../repositorio/publico.ts";
 import { registrarProjeto } from "../../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../apoio-testes/hospedagem_falsa.ts";
 import {

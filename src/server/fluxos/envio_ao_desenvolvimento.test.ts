@@ -12,7 +12,7 @@ import {
   situacaoGravada,
 } from "../../../apoio-testes/pedidos_de_teste.ts";
 import { ErroDeEscopo } from "../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../modulos/sdlc/armazenamento/demandas.ts";
+import { carregarDemanda } from "../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { enviarAoDesenvolvimento } from "./envio_ao_desenvolvimento.ts";
 
 test("CA-14: com as obrigatórias, o processo vai ao Gate da demanda e o pedido fica enviado, com o conteúdo congelado", () => {

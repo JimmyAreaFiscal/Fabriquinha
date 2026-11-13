@@ -3,10 +3,9 @@
 // demanda não existe (404). Cada rota só converte a entrada e chama o F4; as regras ficam lá. A resposta JSON é o tipo
 // de `contrato/sessoes/chat.ts`.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeInexistente } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { abortarDemanda, responderDialogoDemanda } from "../../../../modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
+import { abortarDemanda, enviarDemanda, responderDialogoDemanda } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { abrirChatDemanda, type ChatDemanda, exportarHistoricoDemanda } from "../../../consultas/sessoes/chat.ts";
-import { enviarDemanda } from "../../../../modulos/etapas/conducao/mensagem_do_auditor.ts";
 import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../../contrato/sessoes/chat.ts";
 import { SemCorpoEmJson, type Rota } from "../../rotas.ts";
 import { abrirFluxoSse } from "../../sse.ts";

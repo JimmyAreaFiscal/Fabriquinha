@@ -56,7 +56,6 @@ const EXCECOES_DO_CAMINHO_ANTIGO_DA_HOSPEDAGEM: Excecao[] = [
 // provisório: remover no ticket 22. Quem ainda importa um caminho antigo (cada ticket migra só os próprios imports).
 const CONSUMIDORES_DOS_CAMINHOS_ANTIGOS: Record<string, string[]> = {
   "modulos/projeto/nucleo/projeto.ts": ["../../repositorio/nucleo/repositorio_do_projeto.ts"],
-  "modulos/sdlc/nucleo/demanda/agregado_demanda.ts": ["../../../repositorio/nucleo/espaco_de_trabalho.ts"],
 };
 
 // provisório: remover no ticket 22. O Ambiente segue em src/modulos/sandbox/ até o ticket 06 entrar (o 22 troca para a

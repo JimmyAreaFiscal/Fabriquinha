@@ -6,9 +6,14 @@ import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../../../etapas/publico.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
+import { type Ator, formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
+import {
+  type AgregadoDemanda,
+  carregarDemanda,
+  concluirSessaoDeAjustes,
+  ensaiarConclusaoDaSessaoDeAjustes,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { existe } from "../../../../../shared/nucleo/erros.ts";
 import {
   type EspacoDeTrabalho,
@@ -18,19 +23,14 @@ import {
   ambienteDoEspaco,
 } from "../../../../repositorio/publico.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
-import {
-  concluirSessaoDeAjustes,
-  ensaiarConclusaoDaSessaoDeAjustes,
-} from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { projetoExistente } from "../../../../projeto/armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { encerrarPiVivo } from "../conducao_de_etapa/pi_vivo.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import type { RefRodada } from "../encerrar_rodada/encerramento_rodada.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 interface Ponta {
   branch: string;
@@ -49,7 +49,7 @@ export function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, r
   const espaco = espacoDoTicket(
     ag,
     { rodada_id: ref.rodada_id },
-    projetoExistente(banco, ag.demanda.projeto),
+    projetosCadastrados().projetoExistente(banco, ag.demanda.projeto),
     raizDo(banco),
   );
   const pr = existe(
@@ -72,7 +72,7 @@ export const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDeman
 export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
-  const projeto = projetoExistente(banco, ag.demanda.projeto);
+  const projeto = projetosCadastrados().projetoExistente(banco, ag.demanda.projeto);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
   const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
   const pontas: [Ponta, EspacoDeTrabalho][] = [
@@ -93,7 +93,12 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
  */
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
   const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
-  const espacoDaDemanda = espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco));
+  const espacoDaDemanda = espacoDoTicket(
+    ag,
+    {},
+    projetosCadastrados().projetoExistente(banco, ag.demanda.projeto),
+    raizDo(banco),
+  );
   const demanda = await exigirGitNoAmbiente(
     ambienteDoEspaco(espacoDaDemanda),
     espacoDaDemanda.pasta,

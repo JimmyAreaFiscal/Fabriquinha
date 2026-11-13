@@ -1,6 +1,6 @@
 // As peças de seção do prompt do ticket que mais de uma Etapa usa, sem I/O: a condução de cada Etapa traz as seções que
 // só ela lê, e a montagem (`prompt_demanda.ts`) as junta ao modo de trabalhar.
-import type { AgregadoDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../processo/publico.ts";
 import type { AnexoNoDisco, ContextoDoPrompt } from "./contexto_do_prompt.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
 

@@ -2,17 +2,18 @@
 // ciclo do agendador e para o "Executar agora"; a aplicação a roda na unidade de trabalho que lê o agregado.
 import { z } from "zod";
 import { type Ator, Endereco, exigirAtor, formatarTicketRef } from "../../etapas/publico.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DO_TICKET } from "../../processo/publico.ts";
-import { Despacho, motivoDeRecusaDoItem, type ResultadoDoDespacho, situacaoDeUmaDemanda } from "./despacho.ts";
-import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import { Id } from "../../../../shared/nucleo/primitivos.ts";
 import {
+  type AgregadoDemanda,
+  CICLO_DO_TICKET,
   type ContextoDemanda,
   exigirDemandaEmAndamento,
   mudarTicket,
   ticketDaDemanda,
-} from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+  type TicketDemanda,
+} from "../../processo/publico.ts";
+import { Despacho, motivoDeRecusaDoItem, type ResultadoDoDespacho, situacaoDeUmaDemanda } from "./despacho.ts";
+import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
+import { Id } from "../../../../shared/nucleo/primitivos.ts";
 
 const EntradaReserva = z.strictObject({ ticket_id: Id });
 

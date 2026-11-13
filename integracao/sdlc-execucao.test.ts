@@ -2,22 +2,29 @@
 // entre agendador e "executar agora", implementação sem submissão e falha, timeout e reinício. O cenário é montado pelos
 // serviços e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web. As verificações
 // (testes, fitness e Sonar) são o único ponto injetado: o Sonar não existe aqui.
-import type { MotivoDeRecusa } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import {
+  cicloDoDespacho,
+  configuracao,
+  executarAgora,
+  type MotivoDeRecusa,
+  retomarFalhasDeInfraestrutura,
+} from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
+import {
+  comTentativaAberta,
+  motivoDaFalhaDoTicket,
+  tentativasDoTicket,
+} from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { reabrirTicket } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { reabrirTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { cicloDoDespacho, executarAgora } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
-import { configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,

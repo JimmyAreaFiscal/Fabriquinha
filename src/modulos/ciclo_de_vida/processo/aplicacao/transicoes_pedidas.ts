@@ -1,33 +1,26 @@
 // As transições que a Condução pede ao Processo (MELHORIAS §11, regra 1): cada uma abre a unidade de trabalho da demanda,
 // aplica a transição do agregado no instante do relógio e grava; quem pede só diz qual transição e com que dados.
-// provisório: remover no ticket 22. As transições e o agregado ainda moram no sdlc (o agregado mistura Pedido, Processo,
-// Evidências e PRs), e o sdlc importa a fachada do Ciclo de Vida: por isso este arquivo fica fora da API do Processo,
-// senão a fachada voltaria ao sdlc num ciclo de import (TDZ). O ticket 22 o leva à API quando o agregado se dividir.
 import type { DatabaseSync } from "node:sqlite";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { type Ator, type Endereco, FABRIQUINHA, type FalhaDaTentativa } from "../../etapas/publico.ts";
 import { PRIMEIRA_ETAPA_DA_RODADA } from "../nucleo/ciclos/ciclos.ts";
-import {
-  type AgregadoDemanda,
-  comPrDaRodada,
-  type PullRequestDoEspaco,
-} from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Gate } from "../../../sdlc/nucleo/gate.ts";
-import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
-import { iniciarTentativaDoTicket } from "../../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { type AgregadoDemanda, comPrDaRodada, type PullRequestDoEspaco } from "../nucleo/agregado/agregado_demanda.ts";
+import type { Gate } from "../nucleo/agregado/gate_da_demanda.ts";
+import { comDemanda } from "../armazenamento/agregado_da_demanda.ts";
+import { iniciarTentativaDoTicket } from "../nucleo/transicoes_do_ticket/inicio_da_tentativa.ts";
 import {
   type ContextoDemanda,
   devolverTicket,
   registrarFalhaTicket,
   ticketDaDemanda,
-} from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { concluirTicketImplementar } from "../../../sdlc/nucleo/transicoes/conclusao_ticket.ts";
+} from "../nucleo/transicoes/transicoes_demanda.ts";
+import { concluirTicketImplementar } from "../nucleo/transicoes_do_ticket/conclusao_ticket.ts";
 import {
   concluirImplementacoesRodada,
   concluirSessaoRodada,
   conferirPullRequestRodada,
   registrarCorrecoesSessao,
-} from "../../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
+} from "../nucleo/transicoes/transicoes_rodada.ts";
 import {
   concluirEncerramento,
   concluirResolucaoConflito,
@@ -36,7 +29,7 @@ import {
   registrarIntegracao,
   registrarTentativaEncerramento,
   solicitarIntegracao,
-} from "../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
+} from "../nucleo/transicoes/transicoes_encerramento.ts";
 
 /** O ticket pelo qual a transição é pedida. */
 interface TicketDaTransicao {

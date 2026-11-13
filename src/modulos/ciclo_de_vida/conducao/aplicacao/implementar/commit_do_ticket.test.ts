@@ -65,6 +65,7 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   escreve(worktree, "a.txt", "a\nb\nc\n");
   escreve(worktree, "novo.txt", "x\ny\n");
   const feito = await commitarTicketDemanda(banco, ref(1), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente,
     worktree,
     tipo: "feat",
@@ -89,6 +90,7 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   // queda antes da gravação: o commit existe, o registro não
   banco.exec("DELETE FROM arquivo_commit_demanda; DELETE FROM commit_ticket_demanda");
   const de_novo = await commitarTicketDemanda(banco, ref(1), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "feat",
@@ -104,6 +106,7 @@ test("implementar sem alteração é rejeitado, sem commit", async () => {
   const { worktree, banco } = cenario();
   await assert.rejects(
     commitarTicketDemanda(banco, ref(1), {
+      projeto: { nome: "p", raiz_git: worktree },
       ambiente: new AmbienteHostLocal(),
       worktree,
       tipo: "fix",
@@ -123,6 +126,7 @@ test("resolver_conflito sem alteração commita o merge vazio com dois pais", as
   git(worktree, "checkout", "-q", "main");
   git(worktree, "merge", "--no-ff", "--no-commit", "outra");
   const c = await commitarTicketDemanda(banco, ref(2), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "fix",
@@ -146,6 +150,7 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   git(worktree, "commit", "-qm", "main");
   git(worktree, "merge", "--no-commit", "--no-ff", "outra");
   const c = await commitarTicketDemanda(banco, ref(2), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "fix",
@@ -163,6 +168,7 @@ test("o commit do ticket grava os commits posteriores sobre as linhas do ticket 
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
   await commitarTicketDemanda(banco, ref(1), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "feat",
@@ -171,6 +177,7 @@ test("o commit do ticket grava os commits posteriores sobre as linhas do ticket 
   });
   escreve(worktree, "a.txt", "a\nb\nX\nY\nZ\n");
   await commitarTicketDemanda(banco, ref(2), {
+    projeto: { nome: "p", raiz_git: worktree },
     ambiente: new AmbienteHostLocal(),
     worktree,
     tipo: "feat",

@@ -1,6 +1,14 @@
 // O Gate do PR da rodada, dono do `encerrar_rodada`: o Auditor (ou a aprovação automática) decide o PR publicado.
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Decisao } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  ancoraNaRodada,
+  type Decisao,
+  type EntradaDoGate,
+  Gate,
+  mudarTicket,
+  rodadasComEstadoMudado,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import {
   type Ator,
   exigirAtor,
@@ -9,11 +17,7 @@ import {
   DEFINICAO_DO_ENCERRAR_RODADA,
 } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { ancoraNaRodada, Gate } from "../../../../sdlc/nucleo/gate.ts";
-import { type EntradaDoGate } from "../../../processo/publico.ts";
 import { criarTicket } from "../../../planejamento/publico.ts";
-import { mudarTicket } from "../../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { rodadasComEstadoMudado } from "../../../../sdlc/nucleo/transicoes/transicoes_rodada.ts";
 
 /**
  * CA-6 e CA-7: o Auditor aprova com nota (a rodada vai a `concluida`) ou reprova com motivo (abre `ajustar_resultado`).

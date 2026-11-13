@@ -1,10 +1,8 @@
 // Leituras do Despacho: as demandas que ele avalia e os tickets com trabalho vivo. Só lê; a seleção é do núcleo, e a
 // reserva e a entrega à Condução são da aplicação.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, carregarDemanda, type EstadoDemanda } from "../../processo/publico.ts";
 import { Endereco } from "../../etapas/publico.ts";
-import type { EstadoDemanda } from "../../processo/publico.ts";
-import { carregarDemanda } from "../../../sdlc/armazenamento/demandas.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { execucoesAbertas } from "../../../sessoes/publico.ts";
 

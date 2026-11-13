@@ -2,11 +2,13 @@
 // Etapa) e as dependências do pedido nascem na mesma unidade de trabalho, a do registro do pedido. Qualquer erro desfaz
 // tudo, ID incluído (CA-1, CA-2).
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../../modulos/ciclo_de_vida/publico.ts";
+import {
+  type AgregadoDemanda,
+  type Ator,
+  type ContextoDemanda,
+  criarProcessoDoPedido,
+} from "../../modulos/ciclo_de_vida/publico.ts";
 import { registrarDependencia, registrarPedido } from "../../modulos/demandas/publico.ts";
-import type { AgregadoDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { ContextoDemanda } from "../../modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { criarProcessoDoPedido } from "../../modulos/sdlc/aplicacao/gestao_demandas.ts";
 
 /** O conteúdo do pedido (projeto, título, tipo, descrição) e as demandas de que ele depende. */
 type EntradaDoRegistro = { dependencias?: string[] } & Record<string, unknown>;

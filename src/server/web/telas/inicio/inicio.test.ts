@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasDoMes } from "../../../contrato/metricas.ts";
-import type { TipoPendencia } from "../../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+import type { TipoPendencia } from "../../../../modulos/ciclo_de_vida/processo/nucleo/agregado/pendencia.ts";
 import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../contrato/inicio.ts";
 import type { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";

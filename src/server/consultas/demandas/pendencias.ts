@@ -5,12 +5,14 @@ import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import {
   type AgregadoDemanda,
   CICLO_DA_DEMANDA,
+  condutor,
+  configuracao,
   Endereco,
   formatarRodadaRef,
+  pendenciasDaDemanda,
+  type TrabalhoVivo,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { Situacao } from "../../../modulos/sessoes/publico.ts";
-import { condutor, pendenciasDaDemanda, type TrabalhoVivo } from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
-import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { type SessaoDeDemanda, sessoesDasDemandas } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, type Predecessora, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";

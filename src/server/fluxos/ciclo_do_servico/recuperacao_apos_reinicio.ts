@@ -5,14 +5,13 @@
 // Despacho os retoma). A composição o chama na subida, antes de o web aceitar pedidos e de o agendador ligar.
 import type { DatabaseSync } from "node:sqlite";
 import type { ConjuntoDeAmbientes } from "../../../modulos/ambiente/publico.ts";
-import { condutor, type RecuperacaoDaSubida } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { falharTicketDemanda } from "../../../modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { condutor, falharTicketEmExecucao, type RecuperacaoDaSubida } from "../../../modulos/ciclo_de_vida/publico.ts";
 
 /**
  * O que a subida recupera além dos processos dos tickets: o motor falha o ticket que ficou sem processo.
  * @testes os testes e o e2e recuperam a subida como o serviço, sem subi-lo
  */
-export const recuperacaoDaSubida: RecuperacaoDaSubida = { falharTicket: falharTicketDemanda };
+export const recuperacaoDaSubida: RecuperacaoDaSubida = { falharTicket: falharTicketEmExecucao };
 
 /**
  * A recuperação da subida. O conjunto de sandboxes fora do ar não impede o serviço de subir: o erro vai a

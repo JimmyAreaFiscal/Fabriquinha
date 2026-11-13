@@ -10,10 +10,23 @@ import { type Relogio, relogioDoSistema } from "../../../shared/nucleo/relogio.t
 import {
   type AgregadoDemanda,
   carregarDemanda,
+  condutor,
+  configuracao,
+  type EstadoDaSessao,
+  estadoEDesdeDaSessao,
   type EtapaTicket,
+  execucaoDaSessao,
   formatarRodadaRef,
   formatarTicketRef,
+  marcadorDaConversa,
   motivoDaFalhaDoTicket,
+  pendenciaDaSessao,
+  type PendenciaDoChat,
+  pendenciaDoChat,
+  pendenciasDaDemanda,
+  promptsDaFabriquinha,
+  type SessaoDoTicket,
+  trabalhoVivoDaSessao,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   type Dialogo,
@@ -27,21 +40,6 @@ import {
   resumoDaSessao,
   resumosDasSessoesEmLote,
 } from "../../../modulos/sessoes/publico.ts";
-import {
-  condutor,
-  type EstadoDaSessao,
-  estadoEDesdeDaSessao,
-  execucaoDaSessao,
-  marcadorDaConversa,
-  pendenciaDaSessao,
-  type PendenciaDoChat,
-  pendenciaDoChat,
-  pendenciasDaDemanda,
-  promptsDaFabriquinha,
-  type SessaoDoTicket,
-  trabalhoVivoDaSessao,
-} from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
-import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 
 /** A sessão do ticket da demanda com o estado calculado; `execucao` é o id (uuid) da última execução. */

@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeEscopo } from "../src/modulos/compartilhado/nucleo/erros.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
+import { interromperExecucaoDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
 import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
+import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
@@ -54,7 +54,13 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   const c = criarCenario(t);
   const id = registrarExterna(c);
   const submeter = (tipo: string, dados: unknown) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados } as gestao.EntradaEvidencia, AUTOR, ORIGENS_DOS_ANEXOS);
+    gestao.submeterEvidenciaDaEntradaExterna(
+      c.banco,
+      id,
+      { tipo, dados } as gestao.EntradaEvidencia,
+      AUTOR,
+      ORIGENS_DOS_ANEXOS,
+    );
   submeter("criterios_aceite", { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] });
 
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.

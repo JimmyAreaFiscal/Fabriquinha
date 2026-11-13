@@ -1,15 +1,18 @@
 // A condução do `planejar` (comparacao-sdlc-implementacao.md §§3 e 6): sessão interativa em que o plano chega pelo CLI e
 // o gate do planejamento decide. A falha do pi não falha o ticket: ele segue em execução à espera de uma nova sessão.
 import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
-import type { TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA, montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../../processo/publico.ts";
+import {
+  carregarDemanda,
+  CICLO_DA_DEMANDA,
+  montarRetornoAoAgente,
+  tentativaAnteriorEmMemoria,
+  type TicketDemanda,
+} from "../../../processo/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
 import { secaoDoPromptDoPlanejar } from "./secao_do_prompt.ts";
 import { DEFINICAO_DO_PLANEJAR, Endereco } from "../../../etapas/publico.ts";
-import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
 import type { OpcoesExecucaoDemanda } from "../execucao/execucao_demanda.ts";
-import { ConducaoInterativa } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
+import { ConducaoInterativa, type DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
 
 export class ConducaoDePlanejar extends ConducaoInterativa {
   protected override readonly secaoDoPrompt = secaoDoPromptDoPlanejar;

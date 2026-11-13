@@ -4,14 +4,18 @@
 // escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA, formatarTicketRef, resolverConfiguracaoAgente } from "../../etapas/publico.ts";
-import { desdeAReabertura, POLITICA_DE_TENTATIVAS, tentativasDoTicket } from "../../processo/publico.ts";
-import { retomarTicketFalhoPorInfraestrutura } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { buscarProjeto } from "../../../projeto/armazenamento/projetos.ts";
-import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
+import {
+  comDemanda,
+  desdeAReabertura,
+  POLITICA_DE_TENTATIVAS,
+  retomarTicketFalhoPorInfraestrutura,
+  tentativasDoTicket,
+} from "../../processo/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
 import { agregadosDespachados } from "./despacho.ts";
 import type { Modelo } from "../../../sessoes/publico.ts";
+import { projetosCadastrados } from "../../conducao/publico.ts";
 
 /**
  * Devolve a `aberto` os tickets falhos das demandas em andamento cuja política manda retomar: o do reinício sempre e na
@@ -30,7 +34,9 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relo
       if (Date.parse(agora) - Date.parse(t.estado_alterado_em) < passo.esperaMs) continue;
       let modelo: Modelo | undefined;
       if (passo.trocarProvedor) {
-        const etapa = buscarProjeto(banco, ag.demanda.projeto)?.etapas.find((e) => e.etapa === t.etapa);
+        const etapa = projetosCadastrados()
+          .buscarProjeto(banco, ag.demanda.projeto)
+          ?.etapas.find((e) => e.etapa === t.etapa);
         const { modelo: modeloResolvido } = resolverConfiguracaoAgente({
           ticket: t.configuracao_agente,
           etapaDoProjeto: etapa?.configuracao_agente,

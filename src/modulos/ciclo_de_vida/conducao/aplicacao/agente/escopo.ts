@@ -2,13 +2,10 @@
 // ticket composto e o projeto. Os casos de uso do agente conferem aqui que a execução segue aberta e que o endereço pedido
 // é o do próprio ticket ou da própria demanda; ninguém além do próprio agente lê ou escreve.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../../../etapas/publico.ts";
-import { formatarTicketRef, Endereco } from "../../../etapas/publico.ts";
+import { type AgregadoDemanda, carregarEscopoDoProcesso, type TicketDemanda } from "../../../processo/publico.ts";
+import { type Ator, Endereco, formatarTicketRef } from "../../../etapas/publico.ts";
 import { encontrado, ErroDeEscopo, ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
-import type { Execucao } from "../../../../sessoes/publico.ts";
-import { carregarEscopoDoProcesso } from "../../../../sdlc/armazenamento/demandas.ts";
-import { execucaoVivaDoToken } from "../../../../sessoes/publico.ts";
+import { type Execucao, execucaoVivaDoToken } from "../../../../sessoes/publico.ts";
 import { exigirTrabalhoDoTicket } from "../politica_dos_agentes/trabalho_do_ticket.ts";
 
 /** A identidade do processo que age: o `id` basta, e o `Execucao` inteiro também serve. */

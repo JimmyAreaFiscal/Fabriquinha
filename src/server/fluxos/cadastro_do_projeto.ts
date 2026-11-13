@@ -3,7 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { cadastrarProjetoDoFormulario, editarProjetoDoFormulario } from "../../modulos/demandas/publico.ts";
 import type { Modelo } from "../../modulos/sessoes/publico.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../modulos/ciclo_de_vida/publico.ts";
 
 type FormularioDoProjeto = Parameters<typeof cadastrarProjetoDoFormulario>[1];
 

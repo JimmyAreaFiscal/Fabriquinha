@@ -12,7 +12,7 @@ import {
   montarTicket,
 } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { Endereco } from "../../../etapas/publico.ts";
-import { comDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { verDemanda, verProjeto, verTicket } from "./consultas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
