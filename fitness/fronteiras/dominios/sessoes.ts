@@ -1,5 +1,4 @@
-// Regras de fronteira do domínio Sessões de IA (MELHORIAS §9). Os tickets 08 e 09 mudam só este arquivo; o motor
-// (../motor.ts) explica os campos e como declarar o domínio migrado.
+// Regras de fronteira do domínio Sessões de IA (MELHORIAS §9); o motor (../motor.ts) explica os campos.
 import type { RegrasDoDominio } from "../motor.ts";
 
 /** As sessões de agente: o único que lança o pi e consulta o modelo. */
@@ -8,7 +7,6 @@ export const ARQUIVO_DO_CONDUTOR = "modulos/sessoes/execucao/aplicacao/sessoes_d
 export const ARQUIVO_DO_HARNESS = "modulos/sessoes/harness/infra/pi/harness_pi.ts";
 
 export const REGRAS_DE_SESSOES: RegrasDoDominio = {
-  migrado: true,
   dependeDe: ["ambiente"],
   subdominios: {
     // O harness recebe o modelo e o effort do lançamento e lista os modelos que conhece.
@@ -20,9 +18,6 @@ export const REGRAS_DE_SESSOES: RegrasDoDominio = {
     chat: ["harness"],
     metricas_de_execucao: ["harness", "modelos"],
   },
-  posseDasTabelas: "inventario",
-  excecoes: [],
-  dependenciasToleradas: [],
   // O pi sem worktree fala com o host.
   processoDoHost: {
     pastasLiberadas: [],

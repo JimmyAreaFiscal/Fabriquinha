@@ -1,7 +1,6 @@
 // Fitness function: a posse das tabelas (MELHORIAS §5.1). Cada tabela do banco migrado tem um dono declarado em
-// fitness/fronteiras/posse_das_tabelas.ts, e só o `armazenamento/` do dono fala SQL com ela. Em modo inventário (o padrão
-// de cada domínio), o SQL que toca tabela fora do dono só é listado no relatório do teste; o domínio que declarar
-// `posseDasTabelas: "estrita"` no seu arquivo em fitness/fronteiras/dominios/ reprova (o ticket 22 liga todos).
+// fitness/fronteiras/posse_das_tabelas.ts, e só o `armazenamento/` do dono fala SQL com ela: o SQL que toca tabela fora do
+// dono reprova, em qualquer domínio.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +14,6 @@ import { MIGRACOES_DOS_DOMINIOS, PASTA_DO_HISTORICO_DO_ESQUEMA } from "./frontei
 import {
   acharDonosNaoDeclarados,
   acharToquesForaDoDono,
-  acharToquesNosDominiosEstritos,
   type Arquitetura,
   descreverToque,
 } from "./fronteiras/motor.ts";
@@ -25,20 +23,11 @@ const SRC = resolve(import.meta.dirname, "../src");
 
 const FORA_DA_POSSE = [PASTA_DO_HISTORICO_DO_ESQUEMA, ...MIGRACOES_DOS_DOMINIOS];
 
-// A arquitetura de src/ com o Ambiente sintético e os demais domínios em inventário, para os testes do motor não
-// dependerem dos subdomínios nem da posse declarados hoje.
-const comAmbiente = (posseDasTabelas: "inventario" | "estrita"): Arquitetura => ({
+// A arquitetura de src/ com o Ambiente sintético, para o teste do motor não depender dos subdomínios declarados hoje.
+const COM_AMBIENTE_SINTETICO: Arquitetura = {
   ...ARQUITETURA_DE_SRC,
-  dominios: {
-    ...Object.fromEntries(
-      Object.entries(ARQUITETURA_DE_SRC.dominios).map(([dominio, regras]) => [
-        dominio,
-        { ...regras, posseDasTabelas: "inventario" as const },
-      ]),
-    ),
-    ambiente: { ...REGRAS_DO_AMBIENTE, subdominios: { sandboxes: [] }, posseDasTabelas },
-  },
-});
+  dominios: { ...ARQUITETURA_DE_SRC.dominios, ambiente: { ...REGRAS_DO_AMBIENTE, subdominios: { sandboxes: [] } } },
+};
 
 function criarPastaTemporaria(t: TestContext, prefixo: string): string {
   const raiz = mkdtempSync(join(tmpdir(), prefixo));
@@ -93,14 +82,11 @@ test("as consultas das telas não tocam tabela nenhuma: leem pelas fachadas (MEL
   assert.deepEqual(toques.filter(({ arquivo }) => arquivo.startsWith(PASTA_DAS_CONSULTAS)).map(descreverToque), []);
 });
 
-test("inventário: o SQL de src/ que toca tabela fora do armazenamento do dono, reprovado só nos domínios estritos", (t) => {
-  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, FORA_DA_POSSE);
-  t.diagnostic(`${String(toques.length)} toques de tabela fora do armazenamento do dono (modo inventário):`);
-  for (const toque of toques) t.diagnostic(descreverToque(toque));
-  assert.deepEqual(acharToquesNosDominiosEstritos(toques, ARQUITETURA_DE_SRC).map(descreverToque), []);
+test("nenhum SQL de src/ toca tabela fora do armazenamento do dono", () => {
+  assert.deepEqual(acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, FORA_DA_POSSE).map(descreverToque), []);
 });
 
-test("a fitness da posse acha a tabela no SQL e no nome passado ao montador, e o modo estrito reprova", (t) => {
+test("a fitness da posse acha a tabela no SQL e no nome passado ao montador", (t) => {
   const raiz = criarPastaTemporaria(t, "fabriquinha-fitness-posse-");
   const arquivos: Record<string, string> = {
     // No armazenamento do dono, tudo vale.
@@ -109,16 +95,17 @@ test("a fitness da posse acha a tabela no SQL e no nome passado ao montador, e o
     // O histórico do esquema fica de fora.
     [`${PASTA_DO_HISTORICO_DO_ESQUEMA}migracoes.ts`]: 'banco.exec("CREATE TABLE demanda (id)");\n',
     // Fora do dono: depois de FROM/JOIN/INTO/UPDATE/TABLE/REFERENCES, em literal ou template, de qualquer caixa.
-    "modulos/sdlc/armazenamento/demandas.ts":
+    "modulos/ciclo_de_vida/processo/armazenamento/agregado.ts":
       "banco.prepare(`SELECT d.id FROM demanda d JOIN ambiente a ON a.id = ${x} WHERE d.id IN (SELECT 1 FROM rodada)`);\n" +
       'banco.exec("insert into rodada (x) values (1)");\n',
     // O nome passado a um montador de SQL, num arquivo que fala SQL.
-    "modulos/projeto/armazenamento/projetos.ts":
+    "modulos/demandas/projetos/armazenamento/projetos.ts":
       'const apagar = (tabela) => banco.prepare(`DELETE FROM ${tabela}`).run();\napagar("ambiente");\n',
     // Sem SQL no arquivo, o literal igual ao nome de uma tabela é só um texto; nome desconhecido e coluna não contam.
-    "modulos/metricas/aplicacao/niveis.ts": 'export const NIVEIS = ["rodada", "demanda"];\n',
-    "modulos/sdlc/armazenamento/outra.ts": 'banco.prepare("SELECT rodada_id FROM json_each(?) WHERE demanda = 1");\n',
-    "modulos/sdlc/armazenamento/outra.test.ts": 'banco.prepare("SELECT * FROM demanda");\n',
+    "modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/niveis.ts": 'export const NIVEIS = ["rodada", "demanda"];\n',
+    "modulos/ciclo_de_vida/processo/armazenamento/outra.ts":
+      'banco.prepare("SELECT rodada_id FROM json_each(?) WHERE demanda = 1");\n',
+    "modulos/ciclo_de_vida/processo/armazenamento/outra.test.ts": 'banco.prepare("SELECT * FROM demanda");\n',
     // O shared é dono da sequência em qualquer pasta dele.
     "shared/armazenamento/banco.ts": 'banco.prepare("UPDATE sequencia SET valor = valor + 1");\n',
   };
@@ -135,16 +122,10 @@ test("a fitness da posse acha a tabela no SQL e no nome passado ao montador, e o
 
   const toques = acharToquesForaDoDono(raiz, donos, [PASTA_DO_HISTORICO_DO_ESQUEMA]);
   assert.deepEqual(toques.map(descreverToque), [
-    "modulos/projeto/armazenamento/projetos.ts toca ambiente (dono: ambiente/sandboxes)",
-    "modulos/sdlc/armazenamento/demandas.ts toca ambiente (dono: ambiente/sandboxes)",
-    "modulos/sdlc/armazenamento/demandas.ts toca demanda (dono: demandas/pedidos)",
-    "modulos/sdlc/armazenamento/demandas.ts toca rodada (dono: ciclo_de_vida/planejamento)",
-  ]);
-
-  assert.deepEqual(acharToquesNosDominiosEstritos(toques, comAmbiente("inventario")), []);
-  assert.deepEqual(acharToquesNosDominiosEstritos(toques, comAmbiente("estrita")).map(descreverToque), [
-    "modulos/projeto/armazenamento/projetos.ts toca ambiente (dono: ambiente/sandboxes)",
-    "modulos/sdlc/armazenamento/demandas.ts toca ambiente (dono: ambiente/sandboxes)",
+    "modulos/ciclo_de_vida/processo/armazenamento/agregado.ts toca ambiente (dono: ambiente/sandboxes)",
+    "modulos/ciclo_de_vida/processo/armazenamento/agregado.ts toca demanda (dono: demandas/pedidos)",
+    "modulos/ciclo_de_vida/processo/armazenamento/agregado.ts toca rodada (dono: ciclo_de_vida/planejamento)",
+    "modulos/demandas/projetos/armazenamento/projetos.ts toca ambiente (dono: ambiente/sandboxes)",
   ]);
 });
 
@@ -160,7 +141,7 @@ test("a fitness da posse acusa o dono que não é `shared` nem subdomínio decla
         f: "outro/x",
         g: "ambiente/sandboxes/armazenamento",
       },
-      comAmbiente("inventario"),
+      COM_AMBIENTE_SINTETICO,
     ),
     ["c: ambiente/inexistente", "d: ambiente", "e: server/api", "f: outro/x", "g: ambiente/sandboxes/armazenamento"],
   );

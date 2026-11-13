@@ -1,5 +1,4 @@
-// Regras de fronteira do domínio Ciclo de Vida (MELHORIAS §11). Os tickets 10 a 17 mudam só este arquivo; o motor
-// (../motor.ts) explica os campos e como declarar o domínio migrado.
+// Regras de fronteira do domínio Ciclo de Vida (MELHORIAS §11); o motor (../motor.ts) explica os campos.
 import type { RegrasDoDominio } from "../motor.ts";
 
 /** O catálogo de Etapas, que o motor lê na carga do módulo: fora de qualquer ciclo de import de valor. */
@@ -9,7 +8,7 @@ export const ARQUIVO_DO_CATALOGO = "modulos/ciclo_de_vida/etapas/nucleo/catalogo
  * Etapa). Os demais subdomínios do Ciclo de Vida perguntam ao catálogo.
  */
 export const PASTAS_QUE_CITAM_NOME_DE_ETAPA = ["modulos/ciclo_de_vida/etapas/", "modulos/ciclo_de_vida/conducao/"];
-/** A catraca: arquivos de fora das pastas que ainda citam o nome de uma Etapa. Vazia; o que entrar sai no ticket indicado. */
+/** A catraca: arquivos de fora das pastas que ainda citam o nome de uma Etapa. Vazia, e assim fica. */
 export const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA: string[] = [];
 /** O único caso de uso que grava em `evidencia_demanda` (além do armazenamento): toda Evidência entra pela submissão. */
 export const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "modulos/ciclo_de_vida/processo/aplicacao/submissao_de_evidencia.ts";
@@ -27,7 +26,6 @@ export const ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA = [
 export const PASTA_DOS_CASOS_DE_USO_DO_AGENTE = "modulos/ciclo_de_vida/conducao/aplicacao/agente/";
 
 export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
-  migrado: true,
   dependeDe: ["sessoes", "repositorio", "ambiente"],
   subdominios: {
     etapas: [],
@@ -44,9 +42,6 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     despacho: ["processo", "planejamento", "conducao", "etapas"],
     metricas_de_qualidade: ["etapas", "planejamento", "processo", "evidencias", "verificacoes"],
   },
-  posseDasTabelas: "estrita",
-  excecoes: [],
-  dependenciasToleradas: [],
   // O sonar-scanner fala com o host.
   processoDoHost: {
     pastasLiberadas: [],

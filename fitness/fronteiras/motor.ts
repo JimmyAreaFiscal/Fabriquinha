@@ -1,11 +1,10 @@
-// O motor das fitness de fronteira: classifica cada arquivo de src/, julga cada import pela matriz das camadas e pelas
-// regras dos domínios de destino (MELHORIAS §3 e §4) e acha o SQL que toca tabela fora do armazenamento do dono (§5.1).
-// As regras de cada domínio de destino ficam em fitness/fronteiras/dominios/<domínio>.ts; este arquivo não cita domínio.
+// O motor das fitness de fronteira: classifica cada arquivo de src/, julga cada import pela matriz das camadas e do
+// servidor e pelas regras dos domínios (MELHORIAS §3 e §4) e acha o SQL que toca tabela fora do armazenamento do dono (§5.1).
+// As regras de cada domínio ficam em fitness/fronteiras/dominios/<domínio>.ts; este arquivo não cita domínio.
 //
-// Como um ticket declara o seu domínio migrado: no arquivo do domínio, `migrado: true` (a partir daí src/modulos/<domínio>/
-// segue a organização do §3 e deixa a matriz do legado), ajuste `subdominios` e `dependeDe` ao que o ticket criou, liste em
-// `excecoes` (com o ticket que as remove, até o 22) as violações que ainda ficam e, quando as tabelas do domínio já só forem
-// tocadas pelo armazenamento do dono, `posseDasTabelas: "estrita"`. Nenhum outro arquivo de fitness precisa mudar.
+// Toda pasta de src/modulos/ é um domínio declarado em dominios/, organizado como o §3 manda. Não há exceção nem
+// dependência tolerada: a violação reprova. Quem cria um subdomínio ou uma dependência entre domínios a declara no
+// arquivo do domínio (`subdominios`, `dependeDe`), e as declarações também não podem fechar ciclo.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
@@ -15,11 +14,6 @@ export interface RegraDoModulo {
   externoPermitido: (alvo: string) => boolean;
   /** Módulos de que só se importa tipo (`import type`), apagado na execução; o valor fica fora de `modulosPermitidos`. */
   modulosSoComoTipo?: string[];
-  /**
-   * O módulo não importa o código antigo (src/modulos/ fora dos domínios migrados), nem nas camadas que `modulosPermitidos`
-   * libera: delas, só alcança o shared.
-   */
-  semCodigoAntigo?: boolean;
 }
 
 // Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
@@ -27,7 +21,7 @@ export const QUALQUER_EXTERNO = (): boolean => true;
 export const SO_NODE_SEM_SQLITE = (alvo: string): boolean => alvo.startsWith("node:") && alvo !== "node:sqlite";
 export const SO_ZOD_E_PATH = (alvo: string): boolean => alvo === "zod" || alvo === "node:path";
 
-/** O módulo da matriz que representa a fachada (`src/modulos/<domínio>/publico.ts`) de um domínio migrado. */
+/** O módulo da matriz que representa a fachada (`src/modulos/<domínio>/publico.ts`) de um domínio. */
 export const MODULO_DAS_FACHADAS = "fachada";
 const MODULO_COM_SQL = "armazenamento";
 const CAMADAS_DO_SUBDOMINIO = new Set(["nucleo", "aplicacao", "armazenamento", "infra"]);
@@ -39,33 +33,12 @@ export interface Achado {
   arquivo: string;
   import: string;
 }
-export interface Excecao extends Achado {
-  /** O ticket da refatoração (04 a 22) que remove a violação. */
-  ticket: string;
-}
-
-export interface DependenciaToleradaEntreDominios {
-  de: string;
-  para: string;
-  /** O ticket da refatoração que remove a dependência. */
-  removidaEm: string;
-}
-
-/** "inventario" só lista o SQL que toca tabela do domínio fora do armazenamento do dono; "estrita" reprova. */
-export type ModoDaPosseDasTabelas = "inventario" | "estrita";
 
 export interface RegrasDoDominio {
-  /** Falso enquanto src/modulos/<domínio>/ não existe na organização do §3: os arquivos seguem a matriz do legado. */
-  migrado: boolean;
-  /** Os domínios de destino cuja fachada este domínio pode importar (MELHORIAS §2). */
+  /** Os domínios cuja fachada este domínio pode importar (MELHORIAS §2). */
   dependeDe: string[];
   /** Cada subdomínio (pasta em src/modulos/<domínio>/) e os subdomínios irmãos cuja API ele pode importar. */
   subdominios: Record<string, string[]>;
-  posseDasTabelas: ModoDaPosseDasTabelas;
-  /** Violação que ainda existe, com o ticket que a remove; a exceção que deixou de existir também falha. */
-  excecoes: Excecao[];
-  /** Dependência entre domínios que fecha ciclo e ainda é tolerada; se sumir ou deixar de fechar ciclo, falha. */
-  dependenciasToleradas: DependenciaToleradaEntreDominios[];
   /** A fitness do processo do host: quem fala com o host fora do Ambiente. */
   processoDoHost: {
     /** Pastas inteiras liberadas (o próprio Ambiente). */
@@ -78,24 +51,20 @@ export interface RegrasDoDominio {
 }
 
 export interface Arquitetura {
-  /** A regra de cada módulo: as camadas do legado, as partes do servidor e a fachada. */
+  /** A regra de cada módulo: as camadas, as partes do servidor e a fachada. */
   matriz: Record<string, RegraDoModulo>;
-  /** O módulo da matriz de um arquivo de src/modulos/ fora dos domínios migrados, pelo caminho dentro de modulos/. */
-  moduloDoArquivoDoLegado: (caminhoEmModulos: string) => string;
   /** O módulo da matriz de um arquivo de src/server/, pelo caminho dentro de server/. */
   moduloDoArquivoDoServidor: (caminhoEmServer: string) => string;
   /** O módulo da matriz de um arquivo de src/shared/, pelo caminho dentro de shared/. */
   moduloDoArquivoDoShared: (caminhoEmShared: string) => string;
-  /** O nó de um arquivo de fora dos domínios migrados e do shared no grafo de ciclos entre domínios. */
-  dominioDoArquivoDoLegadoNosCiclos: (caminhoRelativoASrc: string) => string;
-  /** As regras de cada domínio de destino, pelo nome da pasta: os de src/modulos/, `server` e `shared`. */
+  /** As regras de cada domínio, pelo nome da pasta: os de src/modulos/, `server` e `shared`. */
   dominios: Record<string, RegrasDoDominio>;
 }
 
 interface LugarDoArquivo {
-  /** O domínio de destino: um de src/modulos/ já migrado, `server` ou `shared`; `undefined` no legado. */
+  /** O domínio: um de src/modulos/ declarado, `server` ou `shared`; `undefined` fora da organização. */
   dominio?: string;
-  /** O subdomínio, nos domínios migrados de src/modulos/; `undefined` na fachada. */
+  /** O subdomínio, nos domínios de src/modulos/; `undefined` na fachada. */
   subdominio?: string;
   /** A chave da matriz para o que o arquivo importa; `undefined` na fachada e na API do subdomínio, sem matriz. */
   moduloDoImportador?: string;
@@ -103,13 +72,13 @@ interface LugarDoArquivo {
   moduloDoAlvo?: string;
   ehFachada: boolean;
   ehApiDoSubdominio: boolean;
-  /** Por que o arquivo de um domínio migrado está fora da organização do §3. */
+  /** Por que o arquivo de src/modulos/ está fora da organização do §3. */
   foraDaOrganizacao?: string;
 }
 
 const ehDominioDeModulos = (dominio: string): boolean => dominio !== DOMINIO_DO_SERVIDOR && dominio !== DOMINIO_SHARED;
 
-function lugarNoDominioMigrado(dominio: string, regras: RegrasDoDominio, caminhoNoDominio: string[]): LugarDoArquivo {
+function lugarNoDominio(dominio: string, regras: RegrasDoDominio, caminhoNoDominio: string[]): LugarDoArquivo {
   const [subdominio, pastaOuArquivo, ...resto] = caminhoNoDominio;
   const semMatriz = { dominio, ehFachada: false, ehApiDoSubdominio: false };
   if (subdominio === ARQUIVO_DA_API && pastaOuArquivo === undefined)
@@ -140,21 +109,21 @@ function lugarDoArquivo(caminhoRelativoASrc: string, arquitetura: Arquitetura): 
     };
   if (grupo !== "modulos" || primeiro === undefined) return { ...naMatriz(""), ...semPapel };
   const regras = arquitetura.dominios[primeiro];
-  if (regras?.migrado && ehDominioDeModulos(primeiro)) return lugarNoDominioMigrado(primeiro, regras, resto);
-  return { ...naMatriz(arquitetura.moduloDoArquivoDoLegado(caminhoNoGrupo)), ...semPapel };
+  if (regras && ehDominioDeModulos(primeiro)) return lugarNoDominio(primeiro, regras, resto);
+  return { ...semPapel, foraDaOrganizacao: `domínio ${primeiro} não declarado em fitness/fronteiras/dominios/` };
 }
 
 /** O módulo da matriz de um arquivo de src/, pelo caminho relativo a src/ (o que ele pode importar). */
 export const moduloDoArquivo = (caminhoRelativoASrc: string, arquitetura: Arquitetura): string | undefined =>
   lugarDoArquivo(caminhoRelativoASrc, arquitetura).moduloDoImportador;
 
-const ehDominioMigrado = (lugar: LugarDoArquivo): lugar is LugarDoArquivo & { dominio: string } =>
+const ehDominioDeModulosNoLugar = (lugar: LugarDoArquivo): lugar is LugarDoArquivo & { dominio: string } =>
   lugar.dominio !== undefined && ehDominioDeModulos(lugar.dominio);
 
-const PERMITIDO_PELO_DESTINO = Symbol("permitido pelas regras de destino");
+const PERMITIDO_PELO_DESTINO = Symbol("permitido pelas regras dos domínios");
 
 /**
- * A regra dos domínios de destino para um import entre arquivos de src/: o motivo da violação, `PERMITIDO_PELO_DESTINO` quando a
+ * A regra dos domínios para um import entre arquivos de src/: o motivo da violação, `PERMITIDO_PELO_DESTINO` quando a
  * regra libera (a matriz ainda julga as camadas) ou `undefined` quando não tem o que dizer (só a matriz julga).
  * O import de tipo não tem exceção: importar um tipo de pasta interna também é violação (§3.3).
  */
@@ -167,15 +136,15 @@ function julgarPelasRegrasDeDestino(
     return para.dominio === DOMINIO_SHARED ? undefined : "o shared não importa domínio nem o servidor";
   if (para.dominio === DOMINIO_SHARED) return PERMITIDO_PELO_DESTINO;
   const regrasDoImportador = de.dominio === undefined ? undefined : arquitetura.dominios[de.dominio];
-  if (ehDominioMigrado(para) && para.dominio !== de.dominio) {
+  if (ehDominioDeModulosNoLugar(para) && para.dominio !== de.dominio) {
     if (!para.ehFachada) return `de fora do domínio ${para.dominio}, só pela fachada ${ARQUIVO_DA_API}`;
     if (regrasDoImportador && !regrasDoImportador.dependeDe.includes(para.dominio))
       return `o domínio ${String(de.dominio)} não depende de ${para.dominio}`;
     return PERMITIDO_PELO_DESTINO;
   }
-  if (!ehDominioMigrado(de) || !regrasDoImportador) return undefined;
+  if (!ehDominioDeModulosNoLugar(de) || !regrasDoImportador) return undefined;
   if (para.dominio === DOMINIO_DO_SERVIDOR) return "um domínio não importa src/server/";
-  if (para.dominio !== de.dominio) return "um domínio migrado não importa o código antigo";
+  if (para.dominio !== de.dominio) return "um domínio não importa arquivo fora da organização";
   if (para.ehFachada) return `dentro do domínio, use a API do subdomínio, não a fachada`;
   if (de.ehFachada)
     return para.ehApiDoSubdominio ? PERMITIDO_PELO_DESTINO : `a fachada importa só o ${ARQUIVO_DA_API} dos subdomínios`;
@@ -292,7 +261,6 @@ function julgarPelaMatriz(
   regra: RegraDoModulo,
 ): boolean {
   if (lugarDoAlvo === undefined) return regra.externoPermitido(alvo);
-  if (regra.semCodigoAntigo === true && lugarDoAlvo.dominio === undefined) return false;
   const moduloAlvo = lugarDoAlvo.moduloDoAlvo;
   if (moduloAlvo === undefined || moduloAlvo === lugarDoImportador.moduloDoImportador) return true;
   if (regra.modulosPermitidos.includes(moduloAlvo)) return true;
@@ -326,7 +294,7 @@ function acharViolacoesEArestas(
     const moduloAlvo = para?.moduloDoAlvo;
     if (de.moduloDoImportador !== undefined && moduloAlvo !== undefined && moduloAlvo !== de.moduloDoImportador)
       arestas.push({ de: de.moduloDoImportador, para: moduloAlvo, arquivo, achado });
-    if (para && ehDominioMigrado(de) && para.dominio === de.dominio && para.subdominio !== de.subdominio) {
+    if (para && ehDominioDeModulosNoLugar(de) && para.dominio === de.dominio && para.subdominio !== de.subdominio) {
       const noDoSubdominio = (lugar: LugarDoArquivo) =>
         [`modulos/${de.dominio}`, lugar.subdominio].filter(Boolean).join("/");
       arestasEntreSubdominios.push({ de: noDoSubdominio(de), para: noDoSubdominio(para), arquivo, achado });
@@ -364,42 +332,31 @@ export function descrever({ arquivo, import: alvo }: Achado): string {
   return `${arquivo} importa ${alvo}`;
 }
 
-/** As exceções de todos os domínios de destino. */
-export const excecoesDe = (arquitetura: Arquitetura): Excecao[] =>
-  Object.values(arquitetura.dominios).flatMap((regras) => regras.excecoes);
-
-/**
- * As violações da matriz e das regras de destino, os ciclos entre módulos da matriz e os ciclos entre subdomínios.
- * A aresta de uma exceção listada fica fora dos grafos: a dívida já é cobrada pela lista, e o ciclo que sobrar é novo.
- */
-export function acharViolacoes(src: string, arquitetura: Arquitetura, excecoes: Excecao[]): Achado[] {
+/** As violações da matriz e das regras dos domínios, os ciclos entre módulos da matriz e os ciclos entre subdomínios. */
+export function acharViolacoes(src: string, arquitetura: Arquitetura): Achado[] {
   const { violacoes, arestas, arestasEntreSubdominios } = acharViolacoesEArestas(src, arquitetura);
-  const listadas = new Set(excecoes.map(descrever));
-  const foraDasListadas = (aresta: Aresta) => !listadas.has(descrever(aresta.achado));
-  const ciclos = [
-    ...acharCiclosEntreModulos(arestas.filter(foraDasListadas)),
-    ...acharCiclosEntreModulos(arestasEntreSubdominios.filter(foraDasListadas)),
-  ];
+  const ciclos = [...acharCiclosEntreModulos(arestas), ...acharCiclosEntreModulos(arestasEntreSubdominios)];
   return [...new Map([...violacoes, ...ciclos].map((achado) => [descrever(achado), achado])).values()];
 }
 
 const descreverDependencia = ({ de, para }: { de: string; para: string }): string => `${de} → ${para}`;
 
-// O nó de cada arquivo no grafo entre domínios: o shared inteiro, `modulos/<domínio>` ou o que o legado diz.
-function dominioDoArquivoNosCiclos(caminhoRelativoASrc: string, arquitetura: Arquitetura): string {
-  if (caminhoRelativoASrc.split("/")[0] === DOMINIO_SHARED) return DOMINIO_SHARED;
-  return arquitetura.dominioDoArquivoDoLegadoNosCiclos(caminhoRelativoASrc);
-}
+// O nó de cada arquivo no grafo entre domínios: o shared inteiro e, no resto, as duas primeiras pastas
+// (`modulos/<domínio>`, `server/<parte>`).
+const dominioDoArquivoNosCiclos = (caminhoRelativoASrc: string): string =>
+  caminhoRelativoASrc.split("/")[0] === DOMINIO_SHARED
+    ? DOMINIO_SHARED
+    : caminhoRelativoASrc.split("/").slice(0, 2).join("/");
 
 // Uma aresta por par de domínios, com o primeiro arquivo que a cria. De valor ou de tipo, tanto faz.
-function acharDependenciasEntreDominios(src: string, arquitetura: Arquitetura): Aresta[] {
+function acharDependenciasEntreDominios(src: string): Aresta[] {
   const dependencias = new Map<string, Aresta>();
   for (const arquivo of listarArquivosDeProducao(src)) {
     const caminho = join(src, arquivo);
-    const de = dominioDoArquivoNosCiclos(arquivo, arquitetura);
+    const de = dominioDoArquivoNosCiclos(arquivo);
     for (const { fileName: alvo } of ts.preProcessFile(readFileSync(caminho, "utf8"), true, true).importedFiles) {
       if (!alvo.startsWith(".")) continue;
-      const para = dominioDoArquivoNosCiclos(relative(src, resolve(dirname(caminho), alvo)), arquitetura);
+      const para = dominioDoArquivoNosCiclos(relative(src, resolve(dirname(caminho), alvo)));
       const descricao = descreverDependencia({ de, para });
       if (para !== de && !dependencias.has(descricao))
         dependencias.set(descricao, { de, para, arquivo, achado: { arquivo, import: alvo } });
@@ -408,41 +365,9 @@ function acharDependenciasEntreDominios(src: string, arquitetura: Arquitetura): 
   return [...dependencias.values()];
 }
 
-/** As dependências toleradas de todos os domínios de destino. */
-export const dependenciasToleradasDe = (arquitetura: Arquitetura): DependenciaToleradaEntreDominios[] =>
-  Object.values(arquitetura.dominios).flatMap((regras) => regras.dependenciasToleradas);
-
-export function acharCiclosEntreDominios(
-  src: string,
-  arquitetura: Arquitetura,
-  toleradas: DependenciaToleradaEntreDominios[],
-): string[] {
-  const listadas = new Set(toleradas.map(descreverDependencia));
-  const naoToleradas = acharDependenciasEntreDominios(src, arquitetura).filter(
-    (aresta) => !listadas.has(descreverDependencia(aresta)),
-  );
-  return acharCiclosEntreModulos(naoToleradas).map(({ import: ciclo }) => ciclo);
-}
-
-// Vencida: a dependência sumiu, ou já não há caminho de volta de `para` a `de` (deixou de fechar ciclo).
-export function acharToleranciasVencidas(
-  src: string,
-  arquitetura: Arquitetura,
-  toleradas: DependenciaToleradaEntreDominios[],
-): string[] {
-  const dependencias = acharDependenciasEntreDominios(src, arquitetura);
-  const existentes = new Set(dependencias.map(descreverDependencia));
-  const alcanca = (origem: string, destino: string): boolean => {
-    const visitados = [origem];
-    for (const dominio of visitados) {
-      for (const { de, para } of dependencias) if (de === dominio && !visitados.includes(para)) visitados.push(para);
-    }
-    return visitados.includes(destino);
-  };
-  return toleradas
-    .filter((tolerada) => !existentes.has(descreverDependencia(tolerada)) || !alcanca(tolerada.para, tolerada.de))
-    .map(descreverDependencia);
-}
+/** Os ciclos de import entre os domínios de src/, de valor ou de tipo. */
+export const acharCiclosEntreDominios = (src: string): string[] =>
+  acharCiclosEntreModulos(acharDependenciasEntreDominios(src)).map(({ import: ciclo }) => ciclo);
 
 /** Os ciclos das dependências declaradas: entre os domínios (`dependeDe`) e entre os subdomínios de cada domínio. */
 export function acharCiclosDeclarados(arquitetura: Arquitetura): string[] {
@@ -470,8 +395,6 @@ export function acharCiclosDeclarados(arquitetura: Arquitetura): string[] {
 /** O dono de uma tabela: `<domínio>/<subdomínio>` de src/modulos/, ou `shared` (o mecanismo técnico, como a sequência de IDs). */
 export const pastaDoArmazenamentoDoDono = (dono: string): string =>
   dono === DOMINIO_SHARED ? `${DOMINIO_SHARED}/` : `modulos/${dono}/armazenamento/`;
-
-export const dominioDoDono = (dono: string): string => dono.split("/")[0] ?? dono;
 
 export interface ToqueForaDoDono {
   arquivo: string;
@@ -536,10 +459,3 @@ export function acharDonosNaoDeclarados(donoDeCadaTabela: Record<string, string>
     })
     .map(([tabela, dono]) => `${tabela}: ${dono}`);
 }
-
-/** Os toques que reprovam: os das tabelas cujo domínio dono já declarou `posseDasTabelas: "estrita"`. */
-export const acharToquesNosDominiosEstritos = (
-  toques: ToqueForaDoDono[],
-  arquitetura: Arquitetura,
-): ToqueForaDoDono[] =>
-  toques.filter(({ dono }) => arquitetura.dominios[dominioDoDono(dono)]?.posseDasTabelas === "estrita");

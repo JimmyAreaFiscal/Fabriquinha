@@ -1,8 +1,7 @@
 // Regras de fronteira do Servidor, src/server/ (MELHORIAS §6): as partes dele são módulos da matriz, cada uma com o que pode
 // importar. A entrega (api, cli, cli-agente, web, contrato) chama as consultas, os fluxos e as fachadas; as consultas leem
-// as fachadas no formato do contrato; os fluxos coordenam as fachadas; a composição monta tudo. Do domínio ainda não
-// migrado, a matriz libera as camadas do legado (nucleo, aplicacao...) no lugar da fachada. O ticket que mexe no servidor
-// (05, 21) muda só este arquivo; o motor (../motor.ts) explica os campos.
+// as fachadas no formato do contrato; os fluxos coordenam as fachadas; a composição monta tudo. Dos domínios, só a
+// fachada; do shared, a camada do arquivo (nucleo, armazenamento, infra). O motor (../motor.ts) explica os campos.
 import {
   MODULO_DAS_FACHADAS,
   QUALQUER_EXTERNO,
@@ -31,22 +30,20 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
   // (as consultas das telas ficam em consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
   contrato: { modulosPermitidos: ["nucleo", MODULO_DAS_FACHADAS], externoPermitido: (alvo) => alvo === "zod" },
   // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios (MELHORIAS §6): só as
-  // fachadas, o contrato e o shared (o núcleo e a leitura num snapshot); nem o código antigo, nem a entrega, nem os
-  // fluxos. Não falam SQL (o motor cobra o `.prepare(`, e a posse das tabelas, o nome de tabela).
+  // fachadas, o contrato e o shared (o núcleo e a leitura num snapshot); nem a entrega, nem os fluxos. Não falam SQL
+  // (o motor cobra o `.prepare(`, e a posse das tabelas, o nome de tabela).
   [MODULO_DAS_CONSULTAS_DAS_TELAS]: {
     modulosPermitidos: ["nucleo", "armazenamento", "contrato", MODULO_DAS_FACHADAS],
-    semCodigoAntigo: true,
     externoPermitido: QUALQUER_EXTERNO,
   },
-  // Os fluxos que atravessam domínios (MELHORIAS §5.3): só as fachadas (e, no legado, a aplicação e o núcleo); nem o
-  // contrato, nem a entrega, nem as consultas.
+  // Os fluxos que atravessam domínios (MELHORIAS §5.3): só as fachadas e o núcleo do shared; nem o contrato, nem a
+  // entrega, nem as consultas.
   [MODULO_DOS_FLUXOS]: {
-    modulosPermitidos: ["nucleo", "aplicacao", MODULO_DAS_FACHADAS],
+    modulosPermitidos: ["nucleo", MODULO_DAS_FACHADAS],
     externoPermitido: QUALQUER_EXTERNO,
   },
   api: {
     modulosPermitidos: [
-      "aplicacao",
       "nucleo",
       MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
       "contrato",
@@ -57,14 +54,7 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
     externoPermitido: QUALQUER_EXTERNO,
   },
   cli: {
-    modulosPermitidos: [
-      "aplicacao",
-      "nucleo",
-      "contrato",
-      MODULO_DAS_CONSULTAS_DAS_TELAS,
-      MODULO_DOS_FLUXOS,
-      MODULO_DAS_FACHADAS,
-    ],
+    modulosPermitidos: ["nucleo", "contrato", MODULO_DAS_CONSULTAS_DAS_TELAS, MODULO_DOS_FLUXOS, MODULO_DAS_FACHADAS],
     externoPermitido: QUALQUER_EXTERNO,
   },
   // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
@@ -83,15 +73,12 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
       "nucleo",
       "armazenamento",
       "infra",
-      "aplicacao",
       "api",
       "cli",
       MODULO_DOS_FLUXOS,
       MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
       "contrato",
       MODULO_CLIENTE_WEB,
-      "harness",
-      "harness/pi",
       MODULO_DAS_FACHADAS,
     ],
     externoPermitido: QUALQUER_EXTERNO,
@@ -116,11 +103,7 @@ export const PASTA_DA_API_DO_AGENTE = "server/api/agente/";
 
 // O servidor já está no destino; as partes dele são módulos da matriz, sem subdomínios.
 export const REGRAS_DO_SERVIDOR: RegrasDoDominio = {
-  migrado: true,
   dependeDe: ["demandas", "ciclo_de_vida", "sessoes", "repositorio", "ambiente"],
   subdominios: {},
-  posseDasTabelas: "inventario",
-  excecoes: [],
-  dependenciasToleradas: [],
   processoDoHost: { pastasLiberadas: [], importamChildProcess: [], chamadoresDiretos: ["server/composicao/cli.ts"] },
 };

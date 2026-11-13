@@ -1,9 +1,8 @@
-// Regras de fronteira do domínio Repositório (MELHORIAS §10), migrado no ticket 07: src/modulos/repositorio/ tem a
-// fachada publico.ts e os subdomínios abaixo. O motor (../motor.ts) explica os campos.
+// Regras de fronteira do domínio Repositório (MELHORIAS §10): a fachada publico.ts e os subdomínios abaixo. O motor
+// (../motor.ts) explica os campos.
 import type { RegrasDoDominio } from "../motor.ts";
 
 export const REGRAS_DO_REPOSITORIO: RegrasDoDominio = {
-  migrado: true,
   dependeDe: ["ambiente"],
   // Os subdomínios não importam uns aos outros além do Git; só a Coordenação os combina (§10, regra 1).
   subdominios: {
@@ -14,10 +13,6 @@ export const REGRAS_DO_REPOSITORIO: RegrasDoDominio = {
     hospedagem: ["git"],
     coordenacao: ["git", "espaco_de_trabalho", "commits", "historico", "hospedagem"],
   },
-  // As tabelas do Repositório ainda são tocadas por Métricas (ticket 17), Projetos (18) e Processo (12).
-  posseDasTabelas: "inventario",
-  excecoes: [],
-  dependenciasToleradas: [],
   // Cada um fala com o `gh`/`az`, o cadastro, o blame ou a rede do git com as credenciais do serviço.
   processoDoHost: {
     pastasLiberadas: [],

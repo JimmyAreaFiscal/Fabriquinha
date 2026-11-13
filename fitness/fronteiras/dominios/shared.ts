@@ -27,14 +27,10 @@ export const MIGRACOES_DOS_DOMINIOS = [
   "modulos/ambiente/configuracao/armazenamento/migracao_da_configuracao.ts",
 ];
 
-// O shared está no destino desde o ticket 04; não tem subdomínios.
+// O shared não tem subdomínios.
 export const REGRAS_DO_SHARED: RegrasDoDominio = {
-  migrado: true,
   dependeDe: [],
   subdominios: {},
-  posseDasTabelas: "inventario",
-  excecoes: [],
-  dependenciasToleradas: [],
   processoDoHost: {
     pastasLiberadas: [],
     importamChildProcess: [ARQUIVO_DO_PROCESSO],
