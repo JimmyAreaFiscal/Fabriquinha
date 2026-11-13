@@ -3,10 +3,9 @@ import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import type { Projeto } from "../../../../modulos/projeto/nucleo/projeto.ts";
-import { relogioDoSistema } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
-import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../../modulos/projeto/armazenamento/projetos.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { buscarProjeto, gravarProjeto, type Projeto, projetoExistente } from "../../../../modulos/demandas/publico.ts";
+import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
@@ -102,25 +101,21 @@ test("POST grava com o nome do caminho e o GET devolve o gravado", async () => {
   const resposta = (await chamar("POST", URL, valida())) as { configurada: boolean; configuracao: Projeto };
   assert.equal(resposta.configurada, true);
   assert.equal(resposta.configuracao.nome, "loja");
-  const { link_produto, ...semLinkProduto } = resposta.configuracao;
-  assert.equal(link_produto, undefined);
-  assert.deepEqual(await chamar("GET", URL), { configurada: true, configuracao: semLinkProduto });
+  assert.deepEqual(await chamar("GET", URL), { configurada: true, configuracao: resposta.configuracao });
 });
 
-test("POST mantém etapas, preparação e link do produto gravados no cadastro", async () => {
+test("POST mantém etapas e preparação gravadas no cadastro", async () => {
   const cadastrado = {
     ...projetoExistente(banco, "loja"),
     etapas: [{ etapa: "implementar" as const, configuracao_agente: { effort: "low" as const } }],
-    link_produto: "https://loja.exemplo.com",
     verificacoes: { ...projetoExistente(banco, "loja").verificacoes, preparacao: ["echo cadastro", "npm ci"] },
   };
   gravarProjeto(banco, cadastrado);
-  const resposta = await chamar("POST", URL, { ...valida(), link_produto: "https://ignorado.exemplo.com" });
+  const resposta = await chamar("POST", URL, valida());
   const esperado = {
     ...valida(),
     nome: "loja",
     etapas: cadastrado.etapas,
-    link_produto: cadastrado.link_produto,
     verificacoes: { ...valida().verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(resposta, { configurada: true, configuracao: esperado });

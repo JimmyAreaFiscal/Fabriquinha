@@ -1,7 +1,9 @@
 // Peças comuns do cliente (F7 §4.4) como funções puras que devolvem HTML: a navegação fixa, a página não encontrada e
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
-import type { EstadoTicket, Instante, Modelo, ModoTrabalho } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
+import type { EstadoTicket } from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { Instante } from "../../../shared/nucleo/primitivos.ts";
+import type { Modelo, ModoTrabalho } from "../../../modulos/sessoes/publico.ts";
 import type { Pagina } from "../caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */
@@ -50,7 +52,6 @@ export const escapar = (texto: unknown): string =>
 
 export const caminhoDaDemanda = (demanda: string): string => `/demandas/${encodeURIComponent(demanda)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
-export const caminhoDaAvaliacao = (avaliacao: string): string => `/evaluations/${encodeURIComponent(avaliacao)}`;
 
 /** `anthropic / claude-opus-4-5`. */
 export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.nome}`;
@@ -112,10 +113,8 @@ export function ha(desde: Instante, agora: number | Date): string {
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio", "demanda"]],
   ["/projects", "Projetos", ["projeto", "heatmap", "sdlc", "demandas"]],
-  ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
-  ["/evaluations", "Avaliações", ["avaliacoes", "avaliacao"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -141,12 +140,9 @@ export const TITULOS: Record<Pagina, string> = {
   historico: "Histórico",
   chat: "Chat",
   configuracao: "Configuração",
-  simulacao: "Simulação",
   sdlc: "Configuração SDLC",
   demandas: "Demandas",
   demanda: "Demanda",
-  avaliacoes: "Avaliações",
-  avaliacao: "Avaliação",
 };
 
 export const NAO_ENCONTRADA =

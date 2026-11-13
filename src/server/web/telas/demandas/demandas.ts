@@ -7,8 +7,7 @@ import {
   etapaDoPapel,
   rotuloDaEtapa,
 } from "../../apresentacao/etapas.ts";
-import type { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
+import type { EstadoDemanda, EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import { markdown, markdownEmLinha } from "../../apresentacao/markdown.ts";
 import {

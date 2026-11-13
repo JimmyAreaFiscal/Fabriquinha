@@ -16,20 +16,21 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { AgregadoDemanda, TicketDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/modulos/etapas/catalogo.ts";
-import { relogioDoSistema } from "../../src/modulos/compartilhado/nucleo/relogio.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
-import { abrir, raizDo } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { type AgregadoDemanda, type TicketDemanda, EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import {
-  comTrabalhosDoTicket,
-  gravarTokenDoProcesso,
-} from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+  comSessoesDoContexto,
+  criarSessao,
+  gravarTokenDaExecucao,
+  iniciarExecucao,
+} from "../../src/modulos/sessoes/publico.ts";
+import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
+import { raizDo } from "../../src/shared/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
-import { noLog } from "../../src/modulos/compartilhado/infra/registro.ts";
-import { publicarPRDe } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
+import { noLog } from "../../src/shared/infra/registro.ts";
+import { publicarPRDe } from "../../src/modulos/repositorio/publico.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
 
@@ -53,7 +54,7 @@ function gravarFoto(nome: string, texto: string): void {
   writeFileSync(destino, normalizar(texto));
 }
 
-// 1. Textos fixos: a parte fixa do prompt da avaliação, o modo de trabalhar de cada etapa e as skills.
+// 1. Textos fixos: o modo de trabalhar de cada etapa e as skills.
 function arquivosMarkdown(pasta: string): string[] {
   return readdirSync(join(raizDoCodigo, pasta), { recursive: true, encoding: "utf8" })
     .filter((arquivo) => arquivo.endsWith(".md"))
@@ -62,15 +63,15 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/modulos/avaliacao/aplicacao/melhoria/avaliacao.md",
-  ...arquivosMarkdown("src/modulos/etapas"),
+  ...arquivosMarkdown("src/modulos/ciclo_de_vida/etapas/nucleo"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
-  const caminhoNaFotoBase = caminho
-    .replace(/^src\/modulos\/etapas\/[^/]+\//, "src/execucao/etapas/")
-    .replace("src/modulos/avaliacao/aplicacao/melhoria/", "src/execucao/");
+  const caminhoNaFotoBase = caminho.replace(
+    /^src\/modulos\/ciclo_de_vida\/etapas\/nucleo\/[^/]+\//,
+    "src/execucao/etapas/",
+  );
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 
@@ -154,7 +155,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     ],
     previstosNaoTocados: [],
   };
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   banco
     .prepare(
       `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
@@ -229,8 +230,8 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
         : []),
     ],
   } as unknown as AgregadoDemanda);
-  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
-    const sessoes = criarTrabalho(e.sessoes, {
+  comSessoesDoContexto(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
+    const sessoes = criarSessao(e.sessoes, {
       id: "s-exec-7",
       demanda_id: "I-206",
       ticket_id: 7,
@@ -240,7 +241,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     return {
       ...e,
       sessoes,
-      execucoes: iniciarProcesso(sessoes, e.execucoes, {
+      execucoes: iniciarExecucao(sessoes, e.execucoes, {
         id: "exec-7",
         trabalho_id: "s-exec-7",
         inicio: em,
@@ -248,7 +249,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       }),
     };
   });
-  gravarTokenDoProcesso(banco, "exec-7", "token-exec-7");
+  gravarTokenDaExecucao(banco, "exec-7", "token-exec-7");
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");

@@ -65,7 +65,7 @@ export async function subirAmbiente(): Promise<Ambiente> {
         SONAR_HOST_URL: "",
         FABRIQUINHA_ROOT: raiz,
         FABRIQUINHA_PORTA: "0",
-        FABRIQUINHA_PI: join(import.meta.dirname, "../apoio-testes/pi_falso.ts"),
+        FABRIQUINHA_PI: join(import.meta.dirname, "../apoio-testes/falsos/pi_falso.ts"),
         FALSO_PI_ROTEIRO: "",
         PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
         GIT_CONFIG_GLOBAL: gitconfig,

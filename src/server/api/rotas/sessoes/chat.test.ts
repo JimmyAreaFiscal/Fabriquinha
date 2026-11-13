@@ -1,7 +1,13 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
 // falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import {
+  Endereco,
+  condutor,
+  montarPromptDemanda,
+  iniciarExecucaoDemanda,
+  interromperExecucaoDemanda,
+} from "../../../../modulos/ciclo_de_vida/publico.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -11,21 +17,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { condutor } from "../../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
 import {
-  iniciarExecucaoDemanda,
-  interromperExecucaoDemanda,
-} from "../../../../modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
-import {
-  carregarTrabalhosDoTicket,
-  comTrabalhosDoTicket,
-} from "../../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
-import { montarPromptDemanda } from "../../../../modulos/etapas/prompt/prompt_demanda.ts";
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/demandas/publico.ts";
+import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../../../modulos/sessoes/publico.ts";
+import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -160,7 +160,7 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
       ],
     }),
   );
-  comTrabalhosDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
+  comSessoesDoContexto(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
     ...e,
     sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
     execucoes: [
@@ -282,7 +282,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     modo: "interativo",
     fechar: () => Promise.resolve(),
   });
-  const sessao = String(carregarTrabalhosDoTicket(servico.banco, ref).sessoes[0]?.id);
+  const sessao = String(carregarSessoesDoContexto(servico.banco, ref).sessoes[0]?.id);
   const dialogos = () => condutor.situacao(sessao)?.dialogos ?? [];
   await ate(() => dialogos().length === 1, "o diálogo");
   const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });

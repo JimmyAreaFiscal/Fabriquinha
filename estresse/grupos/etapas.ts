@@ -1,7 +1,8 @@
-// Grupo do estresse das etapas do agendador: uma ação por `src/modulos/etapas/<etapa>/<etapa>.md`. Cada execução monta o próprio
-// cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
-// demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
-// despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da abertura da sessão à primeira resposta do pi.
+// Grupo do estresse das etapas do agendador: uma ação por `src/modulos/ciclo_de_vida/etapas/nucleo/<etapa>/<etapa>.md`.
+// Cada execução monta o próprio cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz
+// temporária e leva a demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de
+// integracao/falsos.ts. O tempo vai do despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da
+// abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
 import {
   chmodSync,
@@ -15,29 +16,36 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { prDaDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { AUDITOR, type Ator } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { marcaDoPRFinal } from "../../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
+import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
+import {
+  prDaDemanda,
+  AUDITOR,
+  type Ator,
+  Endereco,
+  marcaDoPRFinal,
+  type RegistroDaVerificacao,
+  despachoDasEtapas,
+  decidirGate,
+  concluirSessaoAjustes,
+  condutor,
+  cicloDoDespacho,
+  configuracao,
+  interromperExecucaoDemanda,
+  carregarDemanda,
+} from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
-import type { RegistroDaVerificacao } from "../../src/modulos/verificacao/aplicacao/coleta_das_verificacoes.ts";
-import { cicloDoDespacho } from "../../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
-import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
-import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
-import { decidirGate } from "../../src/modulos/etapas/gates.ts";
-import * as gestao from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { concluirSessaoAjustes } from "../../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
-import { condutor } from "../../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { carregarDemanda, comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
-import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
-import { carregarTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { integrarPR } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
-import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
-import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
+import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
+import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
+import { carregarSessoesDoContexto, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
+import { integrarPR, exigirGit } from "../../src/modulos/repositorio/publico.ts";
+import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 
@@ -47,14 +55,14 @@ export const SIMULTANEAS = 5;
 
 /** Uma etapa medida: `chamar` faz uma execução e devolve o tempo em ms, ou lança quando o ticket não assenta concluído. */
 export interface AcaoEtapa {
-  /** O nome da etapa, o do `.md` na pasta dela em `src/modulos/etapas/`. */
+  /** O nome da etapa, o do `.md` na pasta dela em `src/modulos/ciclo_de_vida/etapas/nucleo/`. */
   etapa: string;
   /** Orçamento de p95 em ms: 3× o maior p95 de duas medições de 20 execuções com 5 simultâneas nesta máquina (Linux, Node 22, SQLite e git locais), para não virar teste instável. */
   orcamento: number;
   chamar(): Promise<number>;
 }
 
-const PASTA_ETAPAS = join(import.meta.dirname, "../../src/modulos/etapas");
+const PASTA_ETAPAS = join(import.meta.dirname, "../../src/modulos/ciclo_de_vida/etapas/nucleo");
 const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 const agora = () => new Date().toISOString();
 
@@ -126,6 +134,8 @@ function prepararProcesso(amb: Ambiente): void {
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
   piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
+  // As etapas rodam neste processo, sem a composição do serviço: o condutor recebe o harness do pi como ela o monta.
+  condutor.montarHarness(new HarnessPi());
   pastaDosCenarios = join(raiz, "cenarios");
   mkdirSync(pastaDosCenarios);
 }
@@ -175,9 +185,9 @@ const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando",
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
 
 /** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
-async function demandaAprovada(c: Cenario): Promise<string> {
+function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
-  const id = gestao.registrar(
+  const id = registrarPedidoComProcesso(
     c.banco,
     { projeto: c.projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     AUTOR,
@@ -187,12 +197,18 @@ async function demandaAprovada(c: Cenario): Promise<string> {
   const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
   writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
+    gestao.submeterEvidenciaDaEntradaExterna(
+      c.banco,
+      id,
+      { tipo, dados, arquivos } as gestao.EntradaEvidencia,
+      AUTOR,
+      origens,
+    );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  gestao.enviar(c.banco, id, AUTOR, ctx);
-  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
-  return id;
+  enviarAoDesenvolvimento(c.banco, id, AUTOR, ctx);
+  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  return Promise.resolve(id);
 }
 
 /** O planejamento em curso (`fim`) até a aprovação do plano de uma rodada com um ticket: a demanda vai a `execucao`. */
@@ -221,14 +237,14 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -248,7 +264,7 @@ function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [stri
 
 /** O Agente da execução aberta do ticket: o `trabalho_id` é o `processo_do_trabalho.id` dela. */
 function agenteDaExecucaoAberta(c: Cenario, demanda_id: string, ticket_id: number): Ator {
-  const aberta = carregarTrabalhosDoTicket(c.banco, { demanda_id, ticket_id }).execucoes.find((e) => !e.fim);
+  const aberta = carregarSessoesDoContexto(c.banco, { demanda_id, ticket_id }).execucoes.find((e) => !e.fim);
   if (!aberta) throw new Error(`o ticket ${String(ticket_id)} não tem execução aberta`);
   return { tipo: "agente", trabalho_id: aberta.id };
 }
@@ -319,7 +335,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(c.banco, c.config, deps);
+  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };
@@ -443,7 +459,7 @@ const ETAPAS: Record<string, Preparar> = {
         );
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
-          const sessao = carregarTrabalhosDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
+          const sessao = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
           return chamadas(c) > antes && sessao !== undefined && condutor.situacao(sessao.id)?.ocupado === false;
         }, "a primeira resposta do pi");
         respondeu = true;
@@ -562,7 +578,7 @@ export function acoesEtapas(amb: Ambiente): AcaoEtapa[] {
   ];
 }
 
-/** As etapas de `src/modulos/etapas/` com `.md` que nenhuma ação mede; vazio quando a cobertura está completa. */
+/** As etapas com `.md` em `src/modulos/ciclo_de_vida/etapas/nucleo/` que nenhuma ação mede; vazio se todas são medidas. */
 export function semMedicao(acoes: readonly AcaoEtapa[]): string[] {
   const medidas = new Set(acoes.map((a) => a.etapa));
   return readdirSync(PASTA_ETAPAS, { recursive: true, encoding: "utf8" })

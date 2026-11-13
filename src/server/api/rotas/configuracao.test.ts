@@ -9,14 +9,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
-import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
-import { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
-import { relogioDoSistema } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { inserirAmbienteAlocado, liberarAmbiente } from "../../../modulos/sandbox/armazenamento/ambientes.ts";
-import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../modulos/projeto/armazenamento/projetos.ts";
-import { cursorDaBase } from "../../../modulos/repositorio/armazenamento/commits_humanos.ts";
+import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../../apoio-testes/falsos/docker_falso.ts";
+import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/falsos/pi_falso.ts";
+import { buscarProjeto, gravarProjeto, Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
+import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../../../modulos/ambiente/publico.ts";
+import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -142,51 +141,21 @@ test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuçõ
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
-    modeloAuditoria: null,
     proximaBusca: null,
   });
-  const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15, modeloAuditoria: null };
+  const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15 };
   assert.deepEqual(await chamar("POST", "/api/configuracao", salvo), { ...salvo, proximaBusca: PROXIMA.toISOString() });
   assert.deepEqual(await chamar("GET", "/api/configuracao"), { ...salvo, proximaBusca: PROXIMA.toISOString() });
 });
 
-test("modelo das avaliações: o par listado pelo pi grava; o que o pi não lista dá 422 e mantém o anterior; o igual ao gravado não chama o pi", async () => {
-  const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
-  const lido = async () => ((await chamar("GET", "/api/configuracao")) as { modeloAuditoria: unknown }).modeloAuditoria;
-  assert.deepEqual(
-    ((await chamar("POST", "/api/configuracao", { modeloAuditoria: opus })) as { modeloAuditoria: unknown })
-      .modeloAuditoria,
-    opus,
-  );
-  assert.deepEqual(await lido(), opus);
-
-  assert.deepEqual(
-    await chamar("POST", "/api/configuracao", { modeloAuditoria: { provedor: "inexistente", nome: "xyz" } }),
-    [
-      422,
-      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at modeloAuditoria",
-    ],
-  );
-  assert.deepEqual(await lido(), opus, "a recusa não gravou nada");
-
-  // Igual ao gravado: o pi nem é chamado (aqui, quebrado); sem modelo, volta ao padrão.
-  piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
-  try {
-    assert.deepEqual(
-      (
-        (await chamar("POST", "/api/configuracao", { intervaloMin: 7, modeloAuditoria: opus })) as {
-          intervaloMin: number;
-        }
-      ).intervaloMin,
-      7,
-    );
-    assert.equal(
-      ((await chamar("POST", "/api/configuracao", {})) as { modeloAuditoria: unknown }).modeloAuditoria,
-      null,
-    );
-  } finally {
-    piFalso.roteirizar([modelos]);
-  }
+test("o modelo das avaliações saiu com a Avaliação (ticket 02): mandá-lo dá 422 e nada muda", async () => {
+  const antes = await chamar("GET", "/api/configuracao");
+  const [status, erro] = (await chamar("POST", "/api/configuracao", {
+    modeloAuditoria: { provedor: "anthropic", nome: "claude-opus-5-5" },
+  })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(erro, /modeloAuditoria/);
+  assert.deepEqual(await chamar("GET", "/api/configuracao"), antes);
 });
 
 test("configuração inválida dá 422 com o caminho de cada campo, em português, e nada muda", async () => {
@@ -437,17 +406,14 @@ test("campo inválido dá 422 com o caminho, antes de conferir o repositório; n
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 
-test("link do produto: válido é gravado, inválido dá 422 em link_produto e o anterior fica", async () => {
-  const repo = clone();
-  const link = "https://demo.exemplo.com";
-  await chamar("POST", "/api/projetos", { ...formulario(repo), link_produto: link });
-  const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
-    ...formulario(repo),
-    link_produto: "isso nao e um link",
+test("o formulário do projeto não tem mais o link do produto da Simulação (ticket 02): mandá-lo dá 422", async () => {
+  const [status, erro] = (await chamar("POST", "/api/projetos", {
+    ...formulario(clone()),
+    link_produto: "https://demo.exemplo.com",
   })) as [number, string];
   assert.equal(status, 422);
-  assert.match(erro, /✖ Informe um link http\(s\) válido, como https:\/\/produto.exemplo.com\n {2}→ at link_produto/);
-  assert.equal(buscarProjeto(banco, "loja")?.link_produto, link);
+  assert.match(erro, /link_produto/);
+  assert.equal(buscarProjeto(banco, "loja"), undefined);
 });
 
 test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", async () => {
@@ -461,7 +427,8 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
 
 /** A demanda I-1 do `loja` com o ticket e a execução da sessão dele, terminada ou ainda em andamento. */
 const demandaComExecucao = (andamento: boolean) => `
-  INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+  INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
   INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
     VALUES ('I-1', 1, 'implementar', '${andamento ? "em_execucao" : "concluido"}', '2026-10-12T14:00:00.000Z');
   INSERT INTO trabalho_agentico VALUES ('s', 'I-1', 1, 'autonomo', 's');
@@ -495,11 +462,27 @@ test("remover projeto com execução em andamento dá 409 e o projeto continua",
   assert.equal(((await chamar("GET", "/api/projetos")) as unknown[]).length, 1);
 });
 
-const AMBIENTE_PADRAO = { tipo: "host_local", memoria_maxima_mb: 2048, cpus: 2, ociosidade_para_eliminar_min: 60 };
+const AMBIENTE_PADRAO = {
+  tipo: "host_local",
+  memoria_maxima_mb: 2048,
+  cpus: 2,
+  ociosidade_para_eliminar_min: 60,
+  conjunto: "variavel",
+  capacidade_do_conjunto: null,
+  minimo_do_conjunto: 0,
+};
 
 test("ambiente: o padrão é host_local com o conjunto vazio; salvar grava e um valor inválido dá 422 sem mudar nada", async () => {
   assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: AMBIENTE_PADRAO, conjunto: [] });
-  const salvo = { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 15 };
+  const salvo = {
+    tipo: "container",
+    memoria_maxima_mb: 1024,
+    cpus: 1.5,
+    ociosidade_para_eliminar_min: 15,
+    conjunto: "fixo",
+    capacidade_do_conjunto: 3,
+    minimo_do_conjunto: 0,
+  };
   assert.deepEqual(await chamar("POST", "/api/ambiente", salvo), { configuracao: salvo, conjunto: [] });
 
   const [status, erro] = (await chamar("POST", "/api/ambiente", { ...salvo, memoria_maxima_mb: 100 })) as [
@@ -508,6 +491,12 @@ test("ambiente: o padrão é host_local com o conjunto vazio; salvar grava e um 
   ];
   assert.equal(status, 422);
   assert.match(erro, /→ at memoria_maxima_mb/);
+  const [statusDoFixo, erroDoFixo] = (await chamar("POST", "/api/ambiente", {
+    ...salvo,
+    capacidade_do_conjunto: null,
+  })) as [number, string];
+  assert.equal(statusDoFixo, 422);
+  assert.match(erroDoFixo, /✖ o conjunto fixo precisa de uma capacidade\n {2}→ at capacidade_do_conjunto/);
   assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: salvo, conjunto: [] });
 });
 

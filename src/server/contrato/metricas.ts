@@ -1,10 +1,9 @@
 // O contrato da API das Métricas: o filtro de período e o corpo das duas visões (por mês e por demanda).
 // São só tipos e schemas: quem monta o valor é a consulta, quem o valida na saída é o teste de rota.
 import { z } from "zod";
-import { Mes } from "../../modulos/compartilhado/nucleo/periodo.ts";
-import type { TipoMetrica } from "../../modulos/etapas/definicao/tipos_declaraveis.ts";
-import { Slug } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
+import { Mes } from "../../shared/nucleo/periodo.ts";
+import { type TipoMetrica, EtapaTicket } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Slug } from "../../shared/nucleo/primitivos.ts";
 
 /** Sem `projeto`, todos; sem `ate`, o mês corrente; sem `de`, os 11 meses antes de `ate`. */
 export const FiltroDeMetricas = z.object({ projeto: Slug.optional(), de: Mes.optional(), ate: Mes.optional() });
@@ -13,8 +12,11 @@ export type FiltroDeMetricas = z.infer<typeof FiltroDeMetricas>;
 const Texto = z.string();
 const Contagem = z.number().int().nonnegative();
 const Numero = z.number();
-/** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
-const Custo = z.object({ conhecido: Numero, trabalhosSemCusto: Contagem });
+/**
+ * Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado ou estimado, e
+ * `trabalhosComCustoEstimado > 0`, que parte dele foi estimada pelo catálogo de preços.
+ */
+const Custo = z.object({ conhecido: Numero, trabalhosSemCusto: Contagem, trabalhosComCustoEstimado: Contagem });
 
 const LinhaDeUso = z.object({
   modelo: Texto,
@@ -23,6 +25,8 @@ const LinhaDeUso = z.object({
   tokens_cache_leitura: Contagem,
   tokens_cache_escrita: Contagem,
   custo: Numero.nullable(),
+  /** O custo foi estimado pelo catálogo de preços, porque o harness não o informou. */
+  custo_estimado: z.literal(true).optional(),
   chamadas: Contagem,
 });
 

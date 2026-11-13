@@ -1,5 +1,5 @@
 // Falso da suíte de integração do SDLC: a hospedagem (`gh` na frente do PATH, com o estado dos PRs num JSON). O pi falso
-// é o de `apoio-testes/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
+// é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
 import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { once } from "node:events";
@@ -7,19 +7,20 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, type TestContext } from "node:test";
-import { hospedagemFalsa } from "../apoio-testes/hospedagem_falsa.ts";
-import { ConjuntoDeAmbientes } from "../src/modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
-import { montarConjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import { gravarProjeto, projetoExistente } from "../src/modulos/projeto/armazenamento/projetos.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/harness/pi/pi.ts";
-import { GeradorDeAmbientes } from "../src/modulos/sandbox/infra/container/gerador_de_ambientes.ts";
-import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
+import { hospedagemFalsa } from "../apoio-testes/falsos/hospedagem_falsa.ts";
+import {
+  ConjuntoDeAmbientes,
+  montarConjuntoDoServico,
+  GeradorDeAmbientes,
+  salvarConfiguracaoDoAmbiente,
+} from "../src/modulos/ambiente/publico.ts";
+import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
-import { salvarConfiguracaoDoAmbiente } from "../src/modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
-/** O `gh` falso (a hospedagem já testada em `apoio-testes/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
+/** O `gh` falso (a hospedagem já testada em `apoio-testes/falsos/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
 export function ghFalso(dir: string) {
   const h = hospedagemFalsa(dir);
   h.zerar();
@@ -51,7 +52,10 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
   cpSync(join(import.meta.dirname, "projeto-container"), c.repo, { recursive: true });
   const pastaDoPi = join(c.repo, "pi-falso");
   mkdirSync(pastaDoPi);
-  copyFileSync(join(import.meta.dirname, "..", "apoio-testes", "pi_falso.ts"), join(pastaDoPi, "pi_falso.ts"));
+  copyFileSync(
+    join(import.meta.dirname, "..", "apoio-testes", "falsos", "pi_falso.ts"),
+    join(pastaDoPi, "pi_falso.ts"),
+  );
   writeFileSync(join(pastaDoPi, "pi"), PI_DA_IMAGEM, { mode: 0o755 });
   appendFileSync(join(c.repo, "Dockerfile"), "COPY --chmod=755 pi-falso /opt/pi-falso\nENV PATH=/opt/pi-falso:$PATH\n");
   git(c.repo, "add", "-A");
@@ -95,6 +99,9 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
     memoria_maxima_mb: 1024,
     cpus: 1,
     ociosidade_para_eliminar_min: 60,
+    conjunto: "variavel",
+    capacidade_do_conjunto: null,
+    minimo_do_conjunto: 0,
   });
   writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
   // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.

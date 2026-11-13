@@ -10,7 +10,7 @@ import {
   servirApiDoAgente,
   TICKETS_DA_API_DO_AGENTE as TICKETS,
   tokenDoTicket,
-} from "../../../../apoio-testes/cenario_da_api_do_agente.ts";
+} from "../../../../apoio-testes/cenarios/cenario_da_api_do_agente.ts";
 import {
   ErroDaApiDoAgente,
   PedidoRevisaoDecidir,

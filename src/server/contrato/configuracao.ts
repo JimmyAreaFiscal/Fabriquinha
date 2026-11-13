@@ -1,10 +1,10 @@
 // O contrato das rotas da Configuração (F7 §4.2): o que cada resposta e cada formulário carregam. Só tipos e schemas.
 import { z } from "zod";
-import { ConfiguracaoAgente } from "../../modulos/compartilhado/nucleo/configuracao_agente.ts";
-import { Modelo } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
-import { ComandosDePreparacao, Hospedagem, Projeto } from "../../modulos/projeto/nucleo/projeto.ts";
-import { ConfiguracaoDoAmbiente } from "../../modulos/sandbox/nucleo/configuracao_do_ambiente.ts";
+import { ConfiguracaoAgente, EtapaTicket } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Modelo } from "../../modulos/sessoes/publico.ts";
+import { ComandosDePreparacao, Projeto } from "../../modulos/demandas/publico.ts";
+import { Hospedagem } from "../../modulos/repositorio/publico.ts";
+import { ConfiguracaoDoAmbiente } from "../../modulos/ambiente/publico.ts";
 
 /** `GET` e `POST /api/configuracao`: a configuração do F4 §3 e a próxima busca do agendador, só ligado. */
 export const EstadoDaConfiguracao = z.strictObject({
@@ -12,7 +12,6 @@ export const EstadoDaConfiguracao = z.strictObject({
   intervaloMin: z.number(),
   timeoutMin: z.number(),
   ociosidadeMin: z.number(),
-  modeloAuditoria: Modelo.nullable(),
   proximaBusca: z.string().nullable(),
 });
 export type EstadoDaConfiguracao = z.infer<typeof EstadoDaConfiguracao>;
@@ -53,7 +52,6 @@ export const FormularioDoProjeto = Projeto.pick({
   nome: true,
   raiz_git: true,
   branch_base: true,
-  link_produto: true,
 }).extend({
   hospedagem: Hospedagem.optional(),
   preparacao: ComandosDePreparacao,

@@ -758,9 +758,13 @@ textarea:focus {
   outline-offset: 0;
   border-color: transparent;
 }
-input[readonly] {
+input[readonly],
+input:disabled {
   color: var(--muted);
   background: var(--surface-2);
+}
+input:disabled {
+  cursor: not-allowed;
 }
 textarea {
   resize: vertical;
@@ -872,6 +876,10 @@ input.erro {
   flex-wrap: wrap;
   gap: var(--s-3) var(--s-5);
   margin-top: var(--s-3);
+}
+/* Mais largo que os tempos do Agendador: a capacidade vazia mostra "sem limite" inteiro, e os vizinhos a acompanham. */
+.limites-ambiente .num-campo input {
+  width: 104px;
 }
 .conjunto-ambiente {
   margin-top: var(--s-5);
@@ -1087,172 +1095,9 @@ input.erro {
   }
 }
 
-/* Usuários simulados (F8 §2), abaixo do formulário do projeto. */
-.usuarios-simulados {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  margin-top: var(--s-6);
-  padding-top: var(--s-5);
-  border-top: 1px solid var(--line);
-}
-.usuarios-simulados h3 {
-  font-size: var(--fs-xs);
-  font-weight: var(--w-strong);
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.usuarios-simulados h3 .nota {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-.cartoes-usuario {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
-}
-.cartao-usuario {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-}
-.cartao-usuario h4 {
-  font-size: var(--fs-md);
-  font-weight: var(--w-strong);
-}
-.descricao-usuario {
-  font-size: var(--fs-sm);
-  color: var(--muted);
-  white-space: pre-wrap;
-}
-.anexos-usuario {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  list-style: none;
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-}
-.anexo-usuario {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.anexo-usuario .x {
-  margin-left: auto;
-}
-.anexar {
-  align-self: flex-start;
-}
-.novo-usuario .campo textarea {
-  resize: vertical;
-}
-.novo-usuario .rodape-form {
-  justify-content: flex-end;
-}
-
-/* Simulação (F8 §3): abas por projeto, formulário de nova Tarefa e os cartões das Tarefas. */
-.abas-projeto {
-  display: flex;
-  gap: 2px;
-}
-.abas-projeto a {
-  padding: 4px var(--s-3);
-  border-radius: var(--r-md);
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-.abas-projeto a[aria-current="page"] {
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-.form-tarefa {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  padding: var(--s-4);
-  margin-bottom: var(--s-5);
-}
-.form-tarefa h2 {
-  font-size: var(--fs-md);
-}
-.linha-tarefa {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--s-5);
-}
-.linha-tarefa .btn {
-  margin-left: auto;
-}
+/* O campo de minutos com erro, no Agendador e no Ambiente. */
 .num-campo.erro input {
   border-color: var(--danger);
-}
-.alocar {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3);
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-.alocar legend {
-  font-size: var(--fs-sm);
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink);
-}
-.tarefas {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-.tarefa {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  padding: var(--s-4);
-}
-.tarefa-cab {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3);
-}
-.tarefa-texto {
-  white-space: pre-wrap;
-}
-.tarefa-cab .btn {
-  margin-left: auto;
-}
-/* O relatório de uma execução (F8 §5), na caixa. */
-.rel-secao h3 {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin: var(--s-3) 0 var(--s-2);
-}
-.rel-secao ul {
-  margin: 0;
-  padding-left: var(--s-5);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 @media (max-width: 1100px) {
@@ -1262,9 +1107,6 @@ input.erro {
   /* O interruptor com a explicação ocupa a linha inteira: espremido numa coluna, o texto quebra palavra a palavra. */
   .agendador .chave {
     grid-column: 1 / -1;
-  }
-  .cartoes-usuario {
-    grid-template-columns: minmax(0, 1fr);
   }
   .config {
     grid-template-columns: minmax(0, 1fr);
@@ -2520,6 +2362,16 @@ svg.barras :not(.hit) {
 .etapa-metricas .kpi-valor small.sem-custo {
   color: var(--open);
 }
+/* O custo estimado pelo catálogo de preços: informativo, no tom frio, distinto do aviso do custo que falta. */
+.kpis .kpi-valor small.estimado,
+.etapa-metricas .kpi-valor small.estimado,
+.uso-modelo .vals small.estimado {
+  color: var(--claimed);
+}
+.uso-modelo .vals small.estimado {
+  font-weight: 400;
+  margin-left: 4px;
+}
 @media (max-width: 1100px) {
   .etapas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3165,179 +3017,6 @@ svg.barras :not(.hit) {
   border-radius: 2px;
   padding: 1px 4px;
   letter-spacing: 0.04em;
-}
-
-/* Avaliações (D12): formulário de disparo e lista; a 375 px a lista vira blocos, sem rolagem horizontal. */
-.pagina-avaliacoes .disparo {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3);
-  margin-bottom: var(--s-5);
-  padding: var(--s-4);
-}
-.pagina-avaliacoes .disparo label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-.pagina-avaliacoes .disparo :is(select, input[type="date"]) {
-  height: 30px;
-  padding: 0 var(--s-2);
-  font: inherit;
-  font-size: var(--fs-sm);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  color-scheme: dark;
-}
-.pagina-avaliacoes .demandas-do-periodo,
-.pagina-avaliacoes .pedido {
-  flex: 1 1 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.pagina-avaliacoes .demandas-do-periodo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  font-size: var(--fs-sm);
-}
-.pagina-avaliacoes .demandas-do-periodo legend {
-  margin-bottom: var(--s-1);
-  padding: 0;
-  color: var(--muted);
-}
-.pagina-avaliacoes .disparo .pedido {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s-1);
-  text-align: left;
-}
-.pagina-avaliacoes .pedido textarea {
-  align-self: stretch;
-  width: 100%;
-  field-sizing: content;
-  min-height: 2lh;
-  max-height: 12lh;
-}
-.pagina-avaliacoes .lista-avaliacoes {
-  display: flex;
-  flex-direction: column;
-}
-.pagina-avaliacoes .linha-avaliacao {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 120px 100px;
-  gap: var(--s-3);
-  align-items: center;
-  padding: var(--s-2) var(--s-3);
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--line);
-}
-.pagina-avaliacoes .linha-avaliacao:hover {
-  background: var(--surface);
-}
-.pagina-avaliacoes .linha-avaliacao .projeto {
-  overflow-wrap: anywhere;
-}
-.pagina-avaliacoes .linha-avaliacao .num {
-  text-align: right;
-}
-
-@media (max-width: 600px) {
-  .pagina-avaliacoes .linha-avaliacao {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .pagina-avaliacoes .linha-avaliacao .periodo,
-  .pagina-avaliacoes .linha-avaliacao .projeto {
-    grid-column: 1 / -1;
-  }
-  .pagina-avaliacoes .linha-avaliacao .num {
-    text-align: right;
-  }
-}
-
-/* Avaliação (D12): escopo e achados à esquerda, a conversa à direita; abaixo de 1100 px, em coluna, sem rolagem horizontal. */
-.pagina:has(> .pagina-avaliacao) {
-  padding: 0;
-}
-.avaliacao-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--s-5);
-  align-items: start;
-  padding: var(--s-5) var(--s-6);
-}
-.avaliacao-layout [data-conversa-area] {
-  position: sticky;
-  top: 64px;
-  height: calc(100vh - 140px);
-  min-height: 420px;
-}
-.coluna-achados {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  min-width: 0;
-}
-.pagina-avaliacao .escopo {
-  padding: var(--s-3) var(--s-4);
-}
-.pagina-avaliacao .escopo h3 {
-  margin-bottom: var(--s-2);
-  font-size: var(--fs-xs);
-  font-weight: var(--w-strong);
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.pagina-avaliacao .escopo dd {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.pagina-avaliacao .achados {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-.pagina-avaliacao .achado {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  min-width: 0;
-  padding: var(--s-3) var(--s-4);
-  overflow-wrap: anywhere;
-}
-.pagina-avaliacao .achado :is(h3, p) {
-  margin: 0;
-}
-.pagina-avaliacao .achado h3 {
-  font-size: var(--fs-md, 1em);
-}
-.pagina-avaliacao .achado .evidencia {
-  font-size: var(--fs-sm);
-}
-.pagina-avaliacao .rodape-achado {
-  display: flex;
-  justify-content: flex-end;
-}
-
-@media (max-width: 1100px) {
-  .avaliacao-layout {
-    grid-template-columns: minmax(0, 1fr);
-    padding: var(--s-4);
-  }
-  .avaliacao-layout [data-conversa-area] {
-    position: static;
-    height: 70vh;
-  }
 }
 
 /* Demandas: a conversa da sessão de ajustes; sem rolagem horizontal em telas estreitas. */

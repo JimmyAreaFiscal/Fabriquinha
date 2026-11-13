@@ -1,8 +1,7 @@
 // Página do projeto (F7 §4.4) como funções puras: o seletor, as abas, os cards do mês, a barra com a contagem e os
 // filtros, e uma linha por demanda com a linha do tempo dos estados, as rodadas da execução e a gaveta de tickets. O DOM
 // e a rede ficam em projeto-montar.ts.
-import type { EstadoTicket } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EstadoDemanda, EstadoRodada } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import type { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { MetricasDoMes } from "../../../contrato/metricas.ts";
 import type { DemandaDoProjeto, ListaDoProjeto } from "../../../contrato/projeto.ts";
 import {

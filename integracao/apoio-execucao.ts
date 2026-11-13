@@ -3,23 +3,29 @@
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { RegistroDaVerificacao } from "../src/modulos/verificacao/aplicacao/coleta_das_verificacoes.ts";
+import {
+  AUDITOR,
+  type Ator,
+  type RegistroDaVerificacao,
+  Endereco,
+  decidirGate,
+  despachoDasEtapas,
+  ConducaoDePlanejar,
+  condutor,
+  cicloDoDespacho,
+  type DepsDespacho,
+  interromperExecucaoDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { cicloDoDespacho, type DepsDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
-import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
-import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { anotar } from "../src/shared/infra/registro.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
-import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
-import { instalarPiFalso, type PassoPi } from "../apoio-testes/pi_falso.ts";
+import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -118,7 +124,7 @@ export async function planejarDemanda(
     relogio: relogioDoSistema,
     condutor,
     registro: anotar,
-  }).conduzir(Endereco.doTicket(id, 2));
+  }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => piEPortaoEmUso.pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
   if (!passoDoPi.sai) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;
@@ -178,7 +184,7 @@ export const statusDe = (c: Cenario, ref: { demanda_id: string; ticket_id: numbe
   demanda(c, ref.demanda_id).tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado;
 export const rodadaDe = (c: Cenario, id: string, n: number) => demanda(c, id).rodadas.find((r) => r.rodada_id === n);
 export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
-  carregarTrabalhosDoTicket(c.banco, ref).execucoes;
+  carregarSessoesDoContexto(c.banco, ref).execucoes;
 
 export const agora = () => new Date().toISOString();
 
@@ -221,7 +227,7 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
-  const fins = cicloDoDespacho(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();

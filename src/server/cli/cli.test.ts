@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { comandoDoNavegador, executarFabriquinha } from "../composicao/cli.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();

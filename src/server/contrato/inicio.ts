@@ -1,9 +1,8 @@
 // O contrato da API do Início (comparacao-sdlc §9.1, "Board com demanda"): o mês corrente, o que aguarda o Auditor, as
-// sessões que rodam e o board das demandas em andamento. Só tipos e schemas; quem monta o valor é a consulta da tela (api/consultas/).
+// sessões que rodam e o board das demandas em andamento. Só tipos e schemas; quem monta o valor é a consulta da tela (server/consultas/).
 import { z } from "zod";
-import { EstadoTicket, ModoTrabalho } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
+import { EstadoTicket, EstadoDemanda, EstadoRodada, EtapaTicket } from "../../modulos/ciclo_de_vida/publico.ts";
+import { ModoTrabalho } from "../../modulos/sessoes/publico.ts";
 import { PendenciaDoInicio, PiAtivo } from "./demanda.ts";
 import { SessaoDeDemanda } from "./sessoes/historico.ts";
 import { MetricasDoMes } from "./metricas.ts";
@@ -55,3 +54,7 @@ export const DadosDoInicio = z.object({
   board: z.array(CartaoDoBoard),
 });
 export type DadosDoInicio = z.infer<typeof DadosDoInicio>;
+
+/** `GET /api/pendencias/quantidade`: o contador do menu, o mesmo número do `aguarda` do Início. */
+export const QuantidadeDePendencias = z.object({ quantidade: z.number().int().nonnegative() });
+export type QuantidadeDePendencias = z.infer<typeof QuantidadeDePendencias>;

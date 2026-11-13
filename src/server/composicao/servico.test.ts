@@ -10,22 +10,20 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../apoio-testes/falsos/docker_falso.ts";
 import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   listarAmbientes,
-} from "../../modulos/sandbox/armazenamento/ambientes.ts";
-import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { escrever, migrar, novoId } from "../../modulos/compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../../modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
-import { registrarProjeto } from "../../modulos/projeto/aplicacao/cadastro.ts";
-import { Configuracao, salvarConfiguracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
-import { criarUsuarioSimulado } from "../../modulos/avaliacao/armazenamento/simulacao.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+  validarESalvarConfiguracaoDoAmbiente,
+} from "../../modulos/ambiente/publico.ts";
+import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
+import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
+import { registrarProjeto } from "../../modulos/demandas/publico.ts";
+import { Configuracao, salvarConfiguracao, condutor } from "../../modulos/ciclo_de_vida/publico.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 /** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */
@@ -183,24 +181,78 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
-test("reinício: o pi de uma avaliação da instância anterior é morto pelo grupo_processo dela", async () => {
+/** Os preços vigentes do catálogo da `raiz`, lidos depois de o serviço parar. */
+function precosVigentes(raiz: string) {
+  const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
+  try {
+    return banco
+      .prepare(
+        `SELECT modelo_provedor, modelo_nome, usd_por_milhao_entrada, origem FROM preco_do_modelo
+         WHERE vigente_ate IS NULL ORDER BY modelo_nome`,
+      )
+      .all()
+      .map((preco) => ({ ...preco }));
+  } finally {
+    banco.close();
+  }
+}
+
+test("a subida grava no catálogo os preços que o harness informa, e o parar espera a gravação", async () => {
+  const raiz = novaRaiz();
+  await (await subir(raiz)).parar();
+  // O pi falso dos testes declara o preço do opus e do sonnet.
+  assert.deepEqual(precosVigentes(raiz), [
+    { modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", usd_por_milhao_entrada: 4, origem: "pi" },
+    { modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5", usd_por_milhao_entrada: 2, origem: "pi" },
+  ]);
+});
+
+test("o harness que não informa os preços não impede a subida: o erro vai para o log e o catálogo fica como estava", async (t) => {
+  const erros = t.mock.method(console, "error", () => undefined);
+  const pi = process.env.FABRIQUINHA_PI;
+  process.env.FABRIQUINHA_PI = join(tmpdir(), "pi-que-nao-existe");
+  const raiz = novaRaiz();
+  try {
+    await (await subir(raiz)).parar();
+  } finally {
+    process.env.FABRIQUINHA_PI = pi;
+  }
+  assert.deepEqual(precosVigentes(raiz), []);
+  assert.match(String(erros.mock.calls[0]?.arguments[1]), /não foi possível rodar .*pi-que-nao-existe/);
+});
+
+test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas históricas delas ficam como estão e nenhum grupo delas é sinalizado", async () => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-  const saiu = once(pi, "exit");
-  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
-      VALUES ('d', '/nao/existe', 'main', 'github', 'k')`);
-  banco
-    .prepare(
-      `INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
-       VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', ?, ?)`,
-    )
-    .run(AGORA, pi.pid ?? null);
-  banco.close();
+  try {
+    projeto(banco, "d", "/nao/existe");
+    banco.exec(`INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'd', 'Dona Maria', 'd');
+      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'd', 't', 1, 'x');
+      INSERT INTO tarefa_usuario VALUES (1, 1)`);
+    banco
+      .prepare(
+        `INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+         VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', ?, ?)`,
+      )
+      .run(AGORA, pi.pid ?? null);
+    banco
+      .prepare("INSERT INTO execucao_simulada (id, tarefa, usuario, status, pgid) VALUES (1, 1, 1, 'em_andamento', ?)")
+      .run(pi.pid ?? null);
+    banco.close();
 
-  const s = await subir(raiz);
-  assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, null);
-  await s.parar();
+    const s = await subir(raiz);
+    assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, pi.pid);
+    assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_simulada").get(), {
+      status: "em_andamento",
+      pgid: pi.pid,
+    });
+    await s.parar();
+    // O SIGKILL da recuperação não é esperado por ela: dá ao sinal o tempo de chegar antes de conferir que não veio.
+    const vivo = await Promise.race([once(pi, "exit"), dormir(300, "vivo")]);
+    assert.equal(vivo, "vivo");
+  } finally {
+    pi.kill("SIGKILL");
+  }
 });
 
 test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async () => {
@@ -209,7 +261,8 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   const saiu = once(pi, "exit");
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'em_execucao', '${AGORA}');
     INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
@@ -236,46 +289,14 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
     causa: "servico_reiniciado",
     motivo: "serviço reiniciado",
   });
-  assert.equal(s.banco.prepare("SELECT estado FROM demanda").get()?.estado, "em_execucao");
-  await s.parar();
-});
-
-test("reinício: as execuções simuladas pendentes falham e o pi delas é morto; as terminadas ficam", async () => {
-  const { raiz, banco } = abrirBancoTemporario();
-  projeto(banco, "sim", "/nao/existe");
-  criarUsuarioSimulado(banco, "sim", { nome: "Dona Maria", descricao: "d" });
-  banco.exec(`INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'sim', 't', 1, 'x');
-    INSERT INTO tarefa_usuario VALUES (1, 1)`);
-  const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-  const saiu = once(pi, "exit");
-  banco
-    .prepare(
-      `INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid) VALUES
-         (1, 1, 1, 'em_andamento', NULL, ?), (2, 1, 1, 'na_fila', NULL, NULL), (3, 1, 1, 'concluida', '{}', NULL)`,
-    )
-    .run(pi.pid ?? null);
-  banco.close();
-
-  const s = await subir(raiz);
-  assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.deepEqual(
-    s.banco
-      .prepare("SELECT id, status, erro, pgid FROM execucao_simulada ORDER BY id")
-      .all()
-      .map((l) => ({ ...l })),
-    [
-      { id: 1, status: "falhou", erro: "serviço reiniciado", pgid: null },
-      { id: 2, status: "falhou", erro: "serviço reiniciado", pgid: null },
-      { id: 3, status: "concluida", erro: null, pgid: null },
-    ],
-  );
+  assert.equal(s.banco.prepare("SELECT estado FROM processo_demanda").get()?.estado, "em_execucao");
   await s.parar();
 });
 
 /** O banco da `raiz` na versão 36 (a linha de base), com a I-1 registrada. */
 function bancoComDemanda(raiz: string): DatabaseSync {
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO sequencia (nome, valor) VALUES ('demanda', 1);`);
@@ -306,7 +327,8 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
   const legado = bancoComDemanda(raiz);
-  legado.exec(`INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+  legado.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('I-1', '${AGORA}');`);
   legado.close();
   for (const vez of [1, 2]) {
@@ -438,7 +460,8 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
     banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('p', ?, ?)").run("a".repeat(40), AGORA);
   }
   const id = `I-${String(n)}`;
-  banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
+  banco.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('${id}', 1, 'implementar', 'aberto', '${AGORA}', 1)`);

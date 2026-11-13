@@ -6,48 +6,27 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { MotivoDeRecusa } from "../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { type Relogio, relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
-import { varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
-import { abrir } from "../../modulos/compartilhado/armazenamento/banco.ts";
-import { garantirPacoteDoAgente } from "../../modulos/harness/pi/pacote_do_agente.ts";
-import { HarnessPi } from "../../modulos/harness/pi/harness_pi.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../modulos/harness/pi/pi.ts";
-import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
-import { projetosAVarrer } from "../../modulos/repositorio/armazenamento/commits_humanos.ts";
-import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
+import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
+import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
+import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
+import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
+import { dirDoPiDoAuditor, gravarCatalogoDePrecos, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
+import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
-import { cicloDoDespacho, executarAgora } from "../../modulos/sdlc/aplicacao/despacho/despacho.ts";
-import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
-import { condutor, type RecuperacaoDaSubida } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { falhaPorServicoReiniciado } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import { recolherGruposDasAvaliacoes } from "../../modulos/avaliacao/armazenamento/avaliacoes.ts";
-import { falharPendentes } from "../../modulos/avaliacao/armazenamento/simulacao.ts";
-import { falharTicketDemanda } from "../../modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
 import {
+  AmbienteHostLocal,
+  type ConjuntoDeAmbientes,
+  conjuntoDoTipoConfigurado,
   montarAmbienteDoServico,
   montarConjuntoDoServico,
-} from "../../modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import { AmbienteHostLocal } from "../../modulos/sandbox/infra/host_local/ambiente_host_local.ts";
-import { conjuntoDoTipoConfigurado } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
-import type { ConjuntoDeAmbientes } from "../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
+} from "../../modulos/ambiente/publico.ts";
 
 /** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
 export const harnessDoServico = new HarnessPi();
-
-/**
- * O que a subida recupera além dos processos dos tickets, de quem é dono de cada coisa: a avaliação e a simulação recolhem
- * os grupos do pi delas (a simulação pendente falha), e o motor falha o ticket que ficou sem processo.
- * @testes os testes e o e2e recuperam a subida como o serviço, sem subi-lo
- */
-export const recuperacaoDaSubida = (banco: DatabaseSync, relogio: Relogio): RecuperacaoDaSubida => ({
-  gruposDoServico: [
-    ...recolherGruposDasAvaliacoes(banco),
-    ...falharPendentes(banco, falhaPorServicoReiniciado.motivo, relogio.agora()),
-  ],
-  falharTicket: falharTicketDemanda,
-});
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -127,11 +106,11 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   let aberto: DatabaseSync | undefined;
   try {
-    aberto = abrir(raiz);
+    aberto = abrirBancoDaFabriquinha(raiz);
     const bancoAberto = aberto;
     // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
     montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
-    condutor.recuperarNaSubida(aberto, recuperacaoDaSubida(aberto, relogio));
+    await recuperarAposReinicio(aberto, conjuntoDoBanco(aberto), noLogDoServico);
     web.on(
       "request",
       servirWeb({
@@ -149,26 +128,25 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     throw error_;
   }
   const banco = aberto;
+  // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
+  // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
+  // ponytail: o preço que o pi passa a declarar depois da subida só entra na subida seguinte; reler na batida do relógio
+  // se o catálogo do pi mudar com o serviço no ar.
+  const gravacaoDoCatalogo = harnessDoServico
+    .precosDosModelos()
+    .then((precos) => {
+      gravarCatalogoDePrecos(banco, precos, relogio.agora());
+    })
+    .catch(noLogDoServico);
   const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
+  // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
+  const despachoDoServico = despachoDasEtapas();
 
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
-  // O conjunto fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica
-  // para a próxima subida.
-  await conjuntoConfigurado()?.reconciliarNaSubida().catch(noLogDoServico);
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
-
-  /**
-   * F4 §4, passo 1: `varrerCommitsHumanos` em cada projeto sem varredura há 24 horas, um por vez; a falha de um só vai para o log.
-   * ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
-   * em cada; guardar a última tentativa se o log incomodar.
-   */
-  async function varrerVencidos(): Promise<void> {
-    for (const projeto of projetosAVarrer(banco, relogio))
-      await varrerCommitsHumanos(banco, projeto).catch(noLogDoServico);
-  }
 
   /**
    * F4 §4, passos 1 a 4, numa batida do relógio. Nunca lança:
@@ -191,13 +169,15 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
       etapaTerminou = false;
-      varredura ??= varrerVencidos()
+      // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
+      // em cada; guardar a última tentativa se o log incomodar.
+      varredura ??= varrerCommitsHumanosVencidos(banco, relogio, noLogDoServico)
         .catch(noLogDoServico)
         .finally(() => {
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c, despachoDasEtapas(), relogio))
+      for (const fim of despacharTrabalho(banco, c, despachoDoServico, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -210,7 +190,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), despachoDasEtapas(), relogio);
+      const aceitoOuRecusa = despacharAgora(banco, ref, configuracao(banco), despachoDoServico, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
@@ -235,6 +215,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
       await eliminacaoDeOciosos;
+      await gravacaoDoCatalogo;
       await condutor.aguardarTodos(LIMITE_PARADA_MS);
       banco.close();
     },

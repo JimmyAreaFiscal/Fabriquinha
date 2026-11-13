@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { TipoPendencia } from "../../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+import type { TipoPendencia } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import {
   barraDeEstado,
   type Cabecalho,
@@ -22,12 +22,11 @@ import {
   linhaDoDialogo,
   linhasDaExecucao,
   mensagem,
-  modeloDaConversa,
   modeloDe,
   respostaDoDialogo,
   valorDoSelect,
 } from "./chat.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
@@ -109,10 +108,9 @@ test("modelo: o fixado na sessão, senão o da última resposta do agente, senã
   assert.equal(modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "session" }]), "anthropic / opus");
   assert.equal(modeloDe(cabecalho(), [resposta()]), "modelo padrão do pi");
   assert.equal(modeloDe(cabecalho(), []), "modelo padrão do pi");
-  // A mesma leitura serve à avaliação, que não tem cabeçalho de sessão.
-  assert.equal(modeloDaConversa([{ type: "message", message: { role: "user" } }]), "modelo padrão do pi");
+  assert.equal(modeloDe(cabecalho(), [{ type: "message", message: { role: "user" } }]), "modelo padrão do pi");
   assert.equal(
-    modeloDaConversa([resposta("sonnet"), resposta("opus"), { type: "message", message: { role: "toolResult" } }]),
+    modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "message", message: { role: "toolResult" } }]),
     "anthropic / opus",
   );
 });

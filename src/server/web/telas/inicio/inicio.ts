@@ -1,10 +1,9 @@
 // Início (F7 §4.4; comparacao-sdlc §9.1) como funções puras: a frase do mês, o que aguarda o Auditor, o que roda e o
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
+import type { EtapaTicket, TipoPendencia } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../contrato/inicio.ts";
 import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
-import type { TipoPendencia } from "../../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
 import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../../contrato/despacho.ts";
 import {
   caminhoDaDemanda,

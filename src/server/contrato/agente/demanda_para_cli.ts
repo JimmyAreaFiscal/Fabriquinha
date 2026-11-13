@@ -1,4 +1,4 @@
-import type { Demanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Demanda } from "../../../modulos/ciclo_de_vida/publico.ts";
 
 /** A demanda como o CLI a mostra: `criada_por` segue como `origem_ferramenta` e `origem_sessao`, no mesmo lugar do JSON. */
 export const demandaParaCli = (demanda: Demanda): Record<string, unknown> =>

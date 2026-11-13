@@ -1,8 +1,8 @@
 // As Etapas que a API serve, como as telas as leem: os rótulos, os estados, as colunas do andamento e as fases.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { descreverEtapasDoSdlc } from "../../api/rotas/etapas.ts";
-import { EstadoDemanda, EstadoRodada } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { descreverEtapasDoSdlc } from "../../consultas/etapas.ts";
+import { EstadoDemanda, EstadoRodada } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   aparenciaDoEstado,
   colunasDoAndamento,

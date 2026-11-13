@@ -9,15 +9,13 @@ import {
   errosDoZod,
   formularioDeProjeto,
   menu,
-  modeloDasAvaliacoes,
   NOVO,
   pagina,
   projetoInexistente,
   rascunhoDe,
   selecao,
-  usuariosSimulados,
 } from "./configuracao.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
@@ -37,17 +35,14 @@ const LOJA: ProjetoCadastrado = {
 };
 
 test("rascunhoDe mantém os campos editáveis e solta apenas a preparação das verificações", () => {
-  const cadastrado = { ...LOJA, link_produto: "https://loja.exemplo.com" };
-  assert.deepEqual(rascunhoDe(cadastrado), {
+  assert.deepEqual(rascunhoDe(LOJA), {
     nome: "loja",
     raiz_git: "/code/loja",
     branch_base: "main",
     hospedagem: "github",
-    link_produto: "https://loja.exemplo.com",
     preparacao: ["npm ci"],
     configuracoes: {},
   });
-  assert.equal(rascunhoDe(LOJA).link_produto, undefined);
 });
 
 const MODELOS = [
@@ -60,7 +55,8 @@ test("selecao: o item do menu pelo endereço", () => {
   assert.deepEqual(selecao("?projeto=loja%20x"), { tipo: "projeto", nome: "loja x" });
   assert.deepEqual(selecao("?projeto="), { tipo: "agendador" });
   assert.deepEqual(selecao("?novo"), { tipo: "novo" });
-  assert.deepEqual(selecao("?avaliacoes"), { tipo: "avaliacoes" });
+  // As Avaliações saíram do menu (ticket 02): o endereço antigo cai no Agendador.
+  assert.deepEqual(selecao("?avaliacoes"), { tipo: "agendador" });
   assert.deepEqual(selecao("?ambiente"), { tipo: "ambiente" });
 });
 
@@ -80,7 +76,7 @@ test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na rai
 });
 
 test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo; o escolhido marcado", () => {
-  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30, modeloAuditoria: null };
+  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30 };
   const azure = { ...LOJA, nome: "site<x>", hospedagem: "azure-devops" as const };
   const html = menu(ligado, [LOJA, azure], { tipo: "projeto", nome: "loja" });
   assert.match(html, /<a href="\/config">Agendador <span class="pill pill-ok">ligado<\/span><\/a>/);
@@ -93,13 +89,7 @@ test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo
 
   const desligado = menu({ ...ligado, agendadorAtivo: false }, [], { tipo: "agendador" });
   assert.match(desligado, /<a href="\/config" aria-current="page">Agendador <span class="pill pill-neutro">desligado/);
-  assert.match(html, /<a href="\/config\?avaliacoes">Avaliações<\/a>/);
-  assert.doesNotMatch(html, /Auditoria/);
-  assert.match(
-    menu(ligado, [], { tipo: "avaliacoes" }),
-    /<a href="\/config\?avaliacoes" aria-current="page">Avaliações<\/a>/,
-  );
-  assert.doesNotMatch(menu(ligado, [], { tipo: "avaliacoes" }), /<a href="\/config" aria-current/);
+  assert.doesNotMatch(html, /Auditoria|Avaliaç/);
   assert.match(html, /<a href="\/config\?ambiente">Ambiente<\/a>/);
   assert.match(
     menu(ligado, [], { tipo: "ambiente" }),
@@ -113,7 +103,6 @@ const ESTADO: EstadoDaConfiguracao = {
   intervaloMin: 5,
   timeoutMin: 120,
   ociosidadeMin: 30,
-  modeloAuditoria: null,
   proximaBusca: "2026-10-12T17:35:00.000Z",
 };
 
@@ -138,41 +127,6 @@ test("agendador: interruptor, os três tempos e a próxima busca no fuso local; 
   assert.match(
     parado,
     /<div class="num-campo erro">.*aria-invalid="true" aria-describedby="campo-intervaloMin-erro"> min<\/span><span class="msg-erro" id="campo-intervaloMin-erro">Pequeno demais: esperava que o número fosse &#62;= 1<\/span><\/div>/,
-  );
-});
-
-test("avaliações: o seletor do modelo em padrão do pi, com o escolhido, com o gravado fora da lista e com o erro", () => {
-  const sem = modeloDasAvaliacoes(ESTADO, MODELOS, new Map());
-  assert.match(sem, /<h2>Avaliações<\/h2><form class="form" data-avaliacoes novalidate>/);
-  assert.match(sem, /<label for="campo-modeloAuditoria">Modelo das avaliações<\/label>/);
-  assert.match(sem, /vale para as avaliações iniciadas em Avaliações/);
-  assert.match(
-    sem,
-    /<select id="campo-modeloAuditoria" name="modeloAuditoria" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">/,
-  );
-  assert.match(sem, /<button type="submit" class="btn btn-primario">Salvar<\/button>/);
-
-  const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
-  const escolhido = modeloDasAvaliacoes({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
-  assert.match(escolhido, /<select id="campo-modeloAuditoria" name="modeloAuditoria"><option value="">/);
-  assert.match(escolhido, /<option value="anthropic\/claude-opus-5-5" selected>/);
-
-  const fora = modeloDasAvaliacoes(
-    { ...ESTADO, modeloAuditoria: { provedor: "llamacpp", nome: "qwen" } },
-    MODELOS,
-    new Map(),
-  );
-  assert.match(fora, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
-
-  const erro = modeloDasAvaliacoes(
-    ESTADO,
-    MODELOS,
-    errosDoZod("✖ o modelo inexistente/xyz não existe no pi\n  → at modeloAuditoria"),
-  );
-  assert.match(erro, /aria-invalid="true" aria-describedby="campo-modeloAuditoria-erro"/);
-  assert.match(
-    erro,
-    /<span class="msg-erro" id="campo-modeloAuditoria-erro">o modelo inexistente\/xyz não existe no pi/,
   );
 });
 
@@ -260,94 +214,14 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   assert.match(erro, /2 campos com erro/);
 });
 
-test("link do produto: no grupo Repositório ao lado da hospedagem, com a ajuda, o valor e o erro do campo", () => {
-  const html = formularioDeProjeto(
-    { ...rascunhoDe(LOJA), link_produto: "https://demo.exemplo.com" },
-    { novo: false, modelosDoPi: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at link_produto") },
-  );
-  assert.match(
-    html,
-    /id="campo-hospedagem".*<div class="campo erro"><label for="campo-link_produto">Link do produto<\/label><input class="mono" id="campo-link_produto" name="link_produto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-link_produto-erro"><span class="msg-erro" id="campo-link_produto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
-  );
-  assert.match(
-    formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
-    /name="link_produto" value=""/,
-  );
-});
-
-test("o bloco dos usuários simulados só existe no projeto salvo, depois do formulário", () => {
-  assert.match(
+test("o formulário do projeto não tem o link do produto nem os usuários simulados, que eram da Simulação (ticket 02)", () => {
+  for (const html of [
     formularioDeProjeto(rascunhoDe(LOJA), { novo: false, modelosDoPi: MODELOS, erros: new Map() }),
-    /<\/form><section class="usuarios-simulados" data-usuarios-simulados [^>]*><\/section>$/,
-  );
-  assert.doesNotMatch(
     formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
-    /data-usuarios-simulados/,
-  );
-});
-
-const VAZIO = { rascunho: { nome: "", descricao: "" }, erros: new Map(), falhasDeAnexo: new Map<number, string>() };
-const MARIA = {
-  id: 7,
-  projeto: "loja",
-  nome: "Dona <Maria>",
-  descricao: "Contadora de 60 anos",
-  anexos: [
-    { nome: "manual.pdf", sha256: "a".repeat(64), bytes: 248731 },
-    { nome: "nota.txt", sha256: "b".repeat(64), bytes: 1 },
-  ],
-};
-
-test("usuários simulados: o cartão tem nome, descrição, anexos com o tamanho e o ×, e o + anexar arquivo (CA-3, CA-5)", () => {
-  const html = usuariosSimulados([MARIA], VAZIO);
-  assert.match(html, /<article class="cartao-usuario" data-usuario="7"><h4>Dona &#60;Maria&#62;<\/h4>/);
-  assert.match(html, /<p class="descricao-usuario">Contadora de 60 anos<\/p>/);
-  assert.match(
-    html,
-    /<li class="anexo-usuario">manual.pdf <span class="muted">248.731 bytes<\/span><button type="button" class="x" data-remover-anexo="manual.pdf" [^>]*aria-label="Remover o anexo manual.pdf">×<\/button><\/li>/,
-  );
-  assert.match(html, /<li class="anexo-usuario">nota.txt <span class="muted">1 byte<\/span>/);
-  assert.match(
-    html,
-    /<button type="button" class="link" data-anexar-botao>\+ anexar arquivo<\/button><input type="file" accept="\.pdf,[^"]*\.gif" data-anexar hidden/,
-  );
-  assert.doesNotMatch(usuariosSimulados([{ ...MARIA, anexos: [] }], VAZIO), /class="anexos-usuario"/);
-});
-
-test("usuários simulados: sem usuário, a nota; o formulário tem Nome e Descrição com o rascunho", () => {
-  const html = usuariosSimulados([], { ...VAZIO, rascunho: { nome: 'Seu "João"', descricao: "Gerente" } });
-  assert.match(html, /Nenhum usuário simulado neste projeto ainda\./);
-  assert.doesNotMatch(html, /cartao-usuario/);
-  assert.match(html, /<form class="form novo-usuario" data-usuario-simulado novalidate>/);
-  assert.match(
-    html,
-    /<label for="campo-usuario-nome">Nome do usuário<\/label><input id="campo-usuario-nome" name="nome" value="Seu &#34;João&#34;"/,
-  );
-  assert.match(
-    html,
-    /<label for="campo-usuario-descricao">Descrição do usuário<\/label><textarea id="campo-usuario-descricao" name="descricao"[^>]*>Gerente<\/textarea>/,
-  );
-  assert.match(html, /<button type="submit" class="btn btn-primario">Criar usuário simulado<\/button>/);
-});
-
-test("usuários simulados: o erro de cada campo fica abaixo dele, a recusa do servidor abaixo do formulário e a do anexo no cartão (CA-4)", () => {
-  const erros = errosDoZod("✖ Descrição obrigatória\n  → at descricao");
-  const html = usuariosSimulados([MARIA], {
-    ...VAZIO,
-    erros,
-    falha: "já existe o Usuário Simulado Seu João",
-    falhasDeAnexo: new Map([[7, "formato não suportado: envie PDF, texto ou imagem"]]),
-  });
-  assert.match(
-    html,
-    /<textarea id="campo-usuario-descricao"[^>]*aria-invalid="true" aria-describedby="campo-usuario-descricao-erro"><\/textarea><span class="msg-erro" id="campo-usuario-descricao-erro">Descrição obrigatória<\/span>/,
-  );
-  assert.doesNotMatch(html, /campo-usuario-nome-erro/);
-  assert.match(html, /<span class="msg-erro falha" role="alert">já existe o Usuário Simulado Seu João<\/span>/);
-  assert.match(
-    html,
-    /<span class="msg-erro" role="alert">formato não suportado: envie PDF, texto ou imagem<\/span><\/article>/,
-  );
+  ]) {
+    assert.doesNotMatch(html, /link_produto|Link do produto|usuarios-simulados|Simulação/);
+    assert.match(html, /<\/form>$/);
+  }
 });
 
 test("o botão Remover só existe no projeto salvo", () => {
@@ -433,7 +307,15 @@ test("página: cabeçalho, menu e painel; projeto do endereço que não existe",
 });
 
 const AMBIENTE: EstadoDoAmbiente = {
-  configuracao: { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 30 },
+  configuracao: {
+    tipo: "container",
+    memoria_maxima_mb: 1024,
+    cpus: 1.5,
+    ociosidade_para_eliminar_min: 30,
+    conjunto: "variavel",
+    capacidade_do_conjunto: 4,
+    minimo_do_conjunto: 1,
+  },
   conjunto: [
     {
       id: "a-livre",
@@ -471,7 +353,14 @@ test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para
   assert.match(html, /<option value="host_local">Host local<\/option><option value="container" selected>Container</);
   assert.match(html, /name="memoria_maxima_mb" value="1024" min="512" step="1"> MB/);
   assert.match(html, /name="cpus" value="1.5" min="0.1" step="any"> CPUs/);
-  assert.match(html, /name="ociosidade_para_eliminar_min" value="30" min="5" step="1"> min/);
+  assert.match(html, /name="ociosidade_para_eliminar_min" value="30" min="5" step="1" data-so-no-variavel> min/);
+  assert.match(html, /<option value="fixo">Fixo<\/option><option value="variavel" selected>Variável<\/option>/);
+  assert.match(
+    html,
+    /<label for="campo-capacidade_do_conjunto">Capacidade do conjunto<\/label><span class="com-unidade"><input type="number" id="campo-capacidade_do_conjunto" name="capacidade_do_conjunto" value="4" min="1" step="1" placeholder="sem limite"> containers/,
+  );
+  assert.match(html, /name="minimo_do_conjunto" value="1" min="0" step="1" data-so-no-variavel> containers/);
+  assert.doesNotMatch(html, /data-so-no-variavel disabled/);
   assert.match(
     html,
     /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
@@ -485,6 +374,23 @@ test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para
     /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
   );
   assert.equal(html.match(/ disabled>/g)?.length, 1);
+});
+
+test("ambiente: o fixo desativa o mínimo e a ociosidade, e o variável sem capacidade fica sem limite", () => {
+  const fixo = ambiente({ ...AMBIENTE, configuracao: { ...AMBIENTE.configuracao, conjunto: "fixo" } }, new Map());
+  assert.match(fixo, /<option value="fixo" selected>Fixo<\/option>/);
+  assert.match(fixo, /name="minimo_do_conjunto" value="1" min="0" step="1" data-so-no-variavel disabled> containers/);
+  assert.match(
+    fixo,
+    /name="ociosidade_para_eliminar_min" value="30" min="5" step="1" data-so-no-variavel disabled> min/,
+  );
+  assert.equal(fixo.match(/data-so-no-variavel disabled/g)?.length, 2);
+
+  const semLimite = ambiente(
+    { ...AMBIENTE, configuracao: { ...AMBIENTE.configuracao, capacidade_do_conjunto: null } },
+    new Map(),
+  );
+  assert.match(semLimite, /name="capacidade_do_conjunto" value="" min="1" step="1" placeholder="sem limite">/);
 });
 
 test("ambiente: conjunto vazio e o erro de um limite ao lado do campo", () => {

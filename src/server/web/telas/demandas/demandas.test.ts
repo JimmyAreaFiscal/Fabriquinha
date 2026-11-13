@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import { pagina, quadro } from "./demandas.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
@@ -124,7 +124,7 @@ test("o texto do servidor é escapado", () => {
 });
 
 const EM = "2026-01-01T00:00:00.000Z";
-const USO = { modelos: [], custo: { conhecido: 0, trabalhosSemCusto: 0 } };
+const USO = { modelos: [], custo: { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 } };
 
 const dadosDaPagina = (resto: Partial<PaginaDaDemanda> = {}): PaginaDaDemanda => ({
   pendencias: [],

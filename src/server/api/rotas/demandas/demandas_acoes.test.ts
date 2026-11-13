@@ -4,26 +4,24 @@ import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { condutor } from "../../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { registrarCorrecoesSessao } from "../../../../modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { gravarConfiguracaoSdlc } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
+import { condutor, Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import { gravarConfiguracaoSdlc } from "../../../../modulos/demandas/publico.ts";
+import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import {
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo,
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../../../modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import type { MotivoDeRecusa } from "../../../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../modulos/repositorio/publico.ts";
 import { servir } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import {
   DecisaoDoPR,
@@ -33,7 +31,7 @@ import {
   TicketReaberto,
 } from "../../../contrato/demanda.ts";
 import { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
-import { AmbienteHostLocal } from "../../../../modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../../modulos/ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -586,7 +584,7 @@ test("CA-34 e CA-35: arquivar só a concluída", async () => {
   assert.equal(recusa.status, 409);
   assert.match(erro(recusa), /só no estado concluida/);
   assert.equal(estado(), "gate_demanda");
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(r.status, 200);
   assert.equal(DemandaArquivada.parse(r.json()).demanda.demanda.estado, "arquivada");

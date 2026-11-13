@@ -2,10 +2,8 @@
 // meses anteriores do período, com uma seção por Etapa e as Métricas de Sucesso dela), a frase do mês do Início e os
 // cards do mês do Projeto. O DOM e a rede ficam em metricas-montar.ts. A comparação com a média é feita aqui, sobre a
 // lista de meses lida das tabelas da demanda.
-import type { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
-import type { TipoMetrica } from "../../../../modulos/etapas/definicao/tipos_declaraveis.ts";
-import type { LinhaDeUso } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { EstadoDemanda, EtapaTicket, TipoMetrica } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import type { CustoDoUso, LinhaDeUso } from "../../../../modulos/sessoes/publico.ts";
 import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../../contrato/metricas.ts";
 import { caminhoDaDemanda, compacto, custo, duracao, escapar, plural as pluralDe } from "../../apresentacao/render.ts";
 import { aparenciaDoEstado, etapaDoSdlc, etapasNaOrdemDoFluxo } from "../../apresentacao/etapas.ts";
@@ -275,10 +273,14 @@ function regua(meses: readonly MetricasMes[], foco: string): string {
 
 // ——— cards ———
 
-/** O custo do jeito que o servidor o escreve, com o aviso de sessões sem custo (`≥ US$ 4,20 (1 sessão sem custo)`) em destaque. */
-function custoEmDestaque(texto: string): string {
+/**
+ * O custo do jeito que o servidor o escreve, com o aviso em destaque: o das sessões sem custo
+ * (`≥ US$ 4,20 (1 sessão sem custo)`) num tom, e o do custo só estimado (`US$ 4,20 (estimado em 1 sessão)`) em outro.
+ */
+function custoEmDestaque(texto: string, { trabalhosSemCusto }: CustoDoUso): string {
   const corte = texto.indexOf(" (");
-  return corte < 0 ? texto : `${texto.slice(0, corte)} <small class="sem-custo">${texto.slice(corte + 1)}</small>`;
+  const classe = trabalhosSemCusto > 0 ? "sem-custo" : "estimado";
+  return corte < 0 ? texto : `${texto.slice(0, corte)} <small class="${classe}">${texto.slice(corte + 1)}</small>`;
 }
 
 function cards(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
@@ -290,7 +292,7 @@ function cards(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
     const fmt = (v: number | null) => (v === null ? "—" : def.formato(v));
     const comparacao = anteriores.length === 0 ? "sem meses anteriores" : `média ${fmt(med)}`;
     return `<button type="button" class="kpi" data-metrica="${chave}" aria-pressed="${String(e.metrica === chave)}">
-      <span class="rotulo">${def.nome}</span><span class="kpi-valor">${chave === "custo" ? custoEmDestaque(atual.total.textoDoCusto) : fmt(valor)}${def.extra(atual)}</span>
+      <span class="rotulo">${def.nome}</span><span class="kpi-valor">${chave === "custo" ? custoEmDestaque(atual.total.textoDoCusto, atual.total.custo) : fmt(valor)}${def.extra(atual)}</span>
       <span class="kpi-media">${comparacao}${variacao(valor, med)}</span></button>`;
   };
   return `<div class="kpis">${(Object.keys(METRICAS) as Metrica[]).map(card).join("")}</div>`;
@@ -509,6 +511,12 @@ function metricaDeSucesso(
         <span class="fonte">${escapar(definicao.fonte)}</span></div>`;
 }
 
+/** O custo de um modelo: "sem custo" quando desconhecido, e o valor com a marca "estimado" quando veio do catálogo de preços. */
+const custoDoModelo = (x: LinhaDeUso): string => {
+  if (x.custo === null) return "sem custo";
+  return x.custo_estimado ? `${custo(x.custo)} <small class="estimado">estimado</small>` : custo(x.custo);
+};
+
 /** Uma linha de modelo do Uso: o nome, o provedor, o custo, os tokens e a trilha por tipo, na largura relativa ao maior. */
 function linhaDoModelo(x: LinhaDeUso, maximo: number): string {
   const [provedor = "", ...nome] = x.modelo.split("/");
@@ -525,7 +533,7 @@ function linhaDoModelo(x: LinhaDeUso, maximo: number): string {
         `<i style="flex:${String(v)};background:${cor}" title="${nomeDoTipo} ${compacto(v)}"></i>`,
     )
     .join("");
-  return `<div class="uso-modelo"><span class="nome">${rotulo}</span><span class="vals"><b>${x.custo === null ? "sem custo" : custo(x.custo)}</b><small>${compacto(tokensDoModelo(x))}</small></span>
+  return `<div class="uso-modelo"><span class="nome">${rotulo}</span><span class="vals"><b>${custoDoModelo(x)}</b><small>${compacto(tokensDoModelo(x))}</small></span>
       <div class="trilha" style="width:${((tokensDoModelo(x) / maximo) * 100).toFixed(1)}%">${trilha}</div></div>`;
 }
 
@@ -557,7 +565,7 @@ function usoDaSecao(
           .join("")
       : `<p class="muted" style="margin:0">Nenhum modelo usado em ${rotuloDoMes}.</p>`;
   return `<div class="uso-etapa"><span class="rotulo">${escapar(definicao.rotulo)}</span>
-      <span class="kpi-valor">${custoEmDestaque(uso.textoDoCusto)}</span>
+      <span class="kpi-valor">${custoEmDestaque(uso.textoDoCusto, uso.custo)}</span>
       <span class="kpi-media">${comparacaoComAMedia(uso.custo.conhecido, dosAnteriores, custo)}</span>
       <span class="fonte">${partes.join(" · ")}</span>
       <div class="modelos-etapa">${modelos}</div></div>`;
@@ -606,11 +614,20 @@ function porNivel(m: MetricasMes): string {
     (n) => `<tr><td>${NOME_DO_NIVEL[n.nivel]}</td><td class="num">${qtd(n.grupos)}</td>
       <td class="num">${qtd(n.total.execucoes)}</td><td class="num">${compacto(n.total.tokens.total)}</td><td class="num">${n.total.textoDoCusto}</td></tr>`,
   );
-  const semCusto = m.total.custo.trabalhosSemCusto;
-  const aviso =
-    semCusto > 0
-      ? `\n    <p class="muted">≥: ${plural(semCusto, "sessão sem custo informado", "sessões sem custo informado")}; o custo delas fica fora da soma.</p>`
-      : "";
+  const { trabalhosSemCusto: semCusto, trabalhosComCustoEstimado: estimados } = m.total.custo;
+  const avisos = [
+    ...(semCusto > 0
+      ? [
+          `≥: ${plural(semCusto, "sessão sem custo informado", "sessões sem custo informado")}; o custo delas fica fora da soma.`,
+        ]
+      : []),
+    ...(estimados > 0
+      ? [
+          `estimado: o pi não informou o custo de ${plural(estimados, "sessão", "sessões")}; ele foi estimado pelo preço do catálogo de modelos.`,
+        ]
+      : []),
+  ];
+  const aviso = avisos.map((linha) => `\n    <p class="muted">${linha}</p>`).join("");
   return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">execução → sessão → ticket → rodada → demanda → projeto: a soma de cada nível é o total do mês</span></div>
     <div class="rola"><table class="tabela"><thead><tr><th>Nível</th><th class="num">Grupos</th><th class="num">Execuções</th><th class="num">Tokens</th><th class="num">Custo</th></tr></thead>
     <tbody>${linhas.join("")}</tbody></table></div>${aviso}</section>`;
@@ -623,7 +640,7 @@ function porModelo(m: MetricasMes): string {
   const modelos = modelosPorCusto(m.total.modelos);
   const maximo = Math.max(...modelos.map(tokensDoModelo)) || 1;
   const itens = modelos.map((x) => linhaDoModelo(x, maximo));
-  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">tokens por tipo e custo como o pi calculou</span></div>
+  return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">tokens por tipo e custo como o pi calculou${modelos.some((x) => x.custo_estimado) ? " ou, marcado, estimado pelo preço do catálogo" : ""}</span></div>
     ${
       itens.length > 0
         ? `<div class="legenda modelos-legenda"><span><i style="background:var(--serie-3)"></i>cache</span><span><i style="background:var(--serie-1)"></i>entrada</span><span><i style="background:var(--serie-2)"></i>saída</span></div><div class="modelos">${itens.join("")}</div>`

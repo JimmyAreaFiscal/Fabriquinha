@@ -1,9 +1,13 @@
 // O contrato de `GET /api/etapas`: as Etapas do SDLC como a web as lê, para desenhá-las sem citá-las pelo nome. Só tipos
 // e schemas.
 import { z } from "zod";
-import { EtapaTicket, NomeGate } from "../../modulos/etapas/catalogo.ts";
-import { ExibicaoDaEtapa } from "../../modulos/etapas/definicao/exibicao_da_etapa.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import {
+  EtapaTicket,
+  NomeGate,
+  ExibicaoDaEtapa,
+  EstadoDemanda,
+  EstadoRodada,
+} from "../../modulos/ciclo_de_vida/publico.ts";
 
 /** Uma Etapa do catálogo: o escopo, o papel que ela cumpre nas regras do motor, os textos das telas e o Gate dela. */
 const EtapaDoSdlc = z.object({

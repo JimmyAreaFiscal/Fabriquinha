@@ -1,0 +1,376 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { once } from "node:events";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
+import { after, beforeEach, test } from "node:test";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
+import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { analisarSonar, arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "./sonar.ts";
+
+const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sonar-")));
+
+// git sem a configuração do usuário da máquina.
+writeFileSync(join(base, "gitconfig"), "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+process.env.GIT_CONFIG_GLOBAL = join(base, "gitconfig");
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+
+// sonar-scanner falso no PATH: grava os argumentos, a pasta e o ambiente que recebeu e imita o scanner conforme
+// SCANNER_FALSO.
+const bin = join(base, "bin");
+const ARGS = join(base, "scanner.args");
+mkdirSync(bin);
+writeFileSync(
+  join(bin, "sonar-scanner"),
+  `#!/bin/sh
+printf '%s\\n' "$@" > "${ARGS}"
+pwd > "${ARGS}.cwd"
+printf '%s' "$SONAR_HOST_URL" > "${ARGS}.host"
+printf '%s' "$SONAR_TOKEN" > "${ARGS}.token"
+for a; do case $a in -Dsonar.working.directory=*) w=\${a#*=};; -Dproject.settings=*) c=\${a#*=};; esac; done
+cat "$c" > "${ARGS}.settings"
+case $SCANNER_FALSO in
+  falha) echo "INFO: Scanner"; echo "ERROR: Not authorized" >&2; exit 3;;
+  dorme) exec sleep 5;;
+  sem-tarefa) echo "serverUrl=http://sonar" > "$w/report-task.txt";;
+  sem-relatorio) echo "INFO: EXECUTION SUCCESS";;
+  *) printf 'ceTaskId=AX1\\n' > "$w/report-task.txt";;
+esac
+`,
+);
+chmodSync(join(bin, "sonar-scanner"), 0o755);
+process.env.PATH = `${bin}${delimiter}${String(process.env.PATH)}`;
+
+// SonarQube falso: responde conforme `sonar` e registra os pedidos.
+interface Sonar {
+  status: string;
+  /** Respostas de ce/task em ordem; a última se repete. */
+  tarefas: { status: string; errorMessage?: string }[];
+  issues: { component: string; line?: number; rule: string; severity: string; message: string }[];
+  /** Por caminho (`/api/ce/task`): código HTTP de erro ou corpo cru no lugar da resposta normal. */
+  erros: Record<string, number>;
+  crus: Record<string, string>;
+}
+let sonar: Sonar;
+let pedidos: { caminho: string; params: Record<string, string>; autorizacao: string | undefined }[];
+const servidor = createServer((req, res) => {
+  const url = new URL(req.url ?? "", "http://sonar");
+  pedidos.push({
+    caminho: url.pathname,
+    params: Object.fromEntries(url.searchParams),
+    autorizacao: req.headers.authorization,
+  });
+  const erro = sonar.erros[url.pathname];
+  if (erro) {
+    res.writeHead(erro).end("Insufficient privileges");
+    return;
+  }
+  const cru = sonar.crus[url.pathname];
+  if (cru !== undefined) {
+    res.writeHead(200).end(cru);
+    return;
+  }
+  let corpo: unknown;
+  if (url.pathname === "/api/system/status") corpo = { status: sonar.status };
+  if (url.pathname === "/api/ce/task") {
+    corpo = { task: sonar.tarefas.length > 1 ? sonar.tarefas.shift() : sonar.tarefas[0] };
+  }
+  if (url.pathname === "/api/issues/search") {
+    const p = Number(url.searchParams.get("p"));
+    const ps = Number(url.searchParams.get("ps"));
+    corpo = { paging: { total: sonar.issues.length }, issues: sonar.issues.slice((p - 1) * ps, p * ps) };
+  }
+  res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(corpo));
+});
+servidor.listen(0, "127.0.0.1");
+await once(servidor, "listening");
+const HOST = `http://127.0.0.1:${String((servidor.address() as AddressInfo).port)}`;
+
+after(() => {
+  servidor.close();
+  rmSync(base, { recursive: true, force: true });
+});
+
+beforeEach(() => {
+  sonar = { status: "UP", tarefas: [{ status: "SUCCESS" }], issues: [], erros: {}, crus: {} };
+  pedidos = [];
+  process.env.SONAR_HOST_URL = HOST;
+  process.env.SONAR_TOKEN = "segredo";
+  delete process.env.SCANNER_FALSO;
+});
+
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
+
+let n = 0;
+/** A worktree do projeto de chave `loja-key`: `a.ts` alterado, `b.ts` intocado, `c.ts` novo e `x.log` ignorado. */
+function cenario(): string {
+  const worktree = join(base, `raiz${String(++n)}`, "worktree");
+  mkdirSync(worktree, { recursive: true });
+  git(worktree, "init", "-q");
+  for (const [nome, conteudo] of [
+    [".gitignore", "*.log\n"],
+    ["a.ts", "1\n"],
+    ["b.ts", "2\n"],
+  ] as const) {
+    writeFileSync(join(worktree, nome), conteudo);
+  }
+  git(worktree, "add", ".");
+  git(worktree, "commit", "-q", "-m", "inicial");
+  writeFileSync(join(worktree, "a.ts"), "11\n");
+  writeFileSync(join(worktree, "c.ts"), "3\n");
+  writeFileSync(join(worktree, "x.log"), "log\n");
+  return worktree;
+}
+
+/** A análise da worktree como a revisão a pede: os arquivos alterados vêm do git dela. */
+const analisar = (worktree: string, opcoes: OpcoesSonar = {}) =>
+  analisarSonar("loja-key", worktree, () => arquivosAlterados(new AmbienteHostLocal(), worktree), opcoes);
+
+const issue = (arquivo: string, line?: number) => ({
+  component: `loja-key:${arquivo}`,
+  ...(line !== undefined && { line }),
+  rule: "typescript:S1",
+  severity: "MAJOR",
+  message: `problema em ${arquivo}`,
+});
+/** Nenhuma pasta de trabalho do scanner sobrou ao lado da worktree. */
+const semSobra = (worktree: string) => readdirSync(dirname(worktree)).filter((nome) => nome.startsWith(".sonar-"));
+
+test("analisa a worktree, espera o Compute Engine e devolve as issues dos arquivos alterados, página por página", async () => {
+  const worktree = cenario();
+  sonar.tarefas = [{ status: "PENDING" }, { status: "IN_PROGRESS" }, { status: "SUCCESS" }];
+  // Página 1: uma issue em a.ts e 499 no intocado b.ts; página 2: uma em c.ts, sem linha.
+  sonar.issues = [issue("a.ts", 3), ...Array.from({ length: 499 }, () => issue("b.ts", 1)), issue("c.ts")];
+
+  assert.deepEqual(await analisar(worktree, { intervaloMs: 1 }), {
+    ceTaskId: "AX1",
+    arquivos: ["a.ts", "c.ts"],
+    issues: [
+      { arquivo: "a.ts", linha: 3, regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em a.ts" },
+      { arquivo: "c.ts", regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em c.ts" },
+    ],
+  });
+
+  assert.deepEqual(
+    pedidos.map((p) => [p.caminho, p.params]),
+    [
+      ["/api/system/status", {}],
+      ["/api/ce/task", { id: "AX1" }],
+      ["/api/ce/task", { id: "AX1" }],
+      ["/api/ce/task", { id: "AX1" }],
+      ["/api/issues/search", { components: "loja-key", resolved: "false", ps: "500", p: "1" }],
+      ["/api/issues/search", { components: "loja-key", resolved: "false", ps: "500", p: "2" }],
+    ],
+  );
+  const basic = `Basic ${Buffer.from("segredo:").toString("base64")}`;
+  assert.deepEqual(new Set(pedidos.map((p) => p.autorizacao)), new Set([basic]));
+
+  // O scanner roda na worktree, no host (nenhum docker); o host e o token vão pelo ambiente, nunca na linha de comando.
+  const args = readFileSync(ARGS, "utf8").trimEnd().split("\n");
+  const trabalho = args.find((a) => a.startsWith("-Dsonar.working.directory="))?.split("=")[1] ?? "";
+  assert.equal(dirname(trabalho), dirname(worktree));
+  assert.deepEqual(args, [
+    ["-Dsonar.project", "Key=loja-key"].join(""),
+    `-Dsonar.working.directory=${trabalho}`,
+    `-Dproject.settings=${join(trabalho, "vazio.properties")}`,
+  ]);
+  assert.equal(realpathSync(readFileSync(`${ARGS}.cwd`, "utf8").trimEnd()), realpathSync(worktree));
+  assert.equal(readFileSync(`${ARGS}.host`, "utf8"), HOST);
+  // O sonar-project.properties da worktree, que o agente edita, não vale: o scanner lê um arquivo vazio.
+  assert.equal(readFileSync(`${ARGS}.settings`, "utf8"), "");
+  assert.equal(readFileSync(`${ARGS}.token`, "utf8"), "segredo");
+  assert.deepEqual(semSobra(worktree), []);
+});
+
+test("sem issue nos arquivos alterados: nenhuma; a barra no fim do SONAR_HOST_URL não atrapalha", async () => {
+  const worktree = cenario();
+  process.env.SONAR_HOST_URL = `${HOST}/`;
+  sonar.issues = [issue("b.ts", 1)];
+
+  assert.deepEqual((await analisar(worktree)).issues, []);
+  assert.equal(pedidos[0]?.caminho, "/api/system/status");
+});
+
+test("100 mil `/` seguidas no SONAR_HOST_URL: as do meio não travam a leitura, e as do fim saem", async () => {
+  const worktree = cenario();
+  const barras = "/".repeat(100_000);
+  // Barras seguidas de outra coisa: `\/+$` voltaria atrás a cada barra. Sem token, falha antes de consultar.
+  delete process.env.SONAR_TOKEN;
+  process.env.SONAR_HOST_URL = `${HOST}${barras}x`;
+  const inicio = Date.now();
+  await falha(worktree, /^SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente/);
+  assert.ok(Date.now() - inicio < 1000);
+
+  process.env.SONAR_TOKEN = "segredo";
+  process.env.SONAR_HOST_URL = `${HOST}${barras}`;
+  assert.deepEqual((await analisar(worktree)).issues, []);
+  assert.equal(pedidos[0]?.caminho, "/api/system/status");
+});
+
+/** Falha com a mensagem exata. */
+async function falha(worktree: string, mensagem: string | RegExp, opcoes = {}) {
+  await assert.rejects(analisar(worktree, opcoes), (e) => {
+    assert.ok(e instanceof ErroDeRegra);
+    if (typeof mensagem === "string") assert.equal(e.message, mensagem);
+    else assert.match(e.message, mensagem);
+    return true;
+  });
+}
+
+const SUBIR = "docker compose -f ~/Documents/Projetos/SonarQube/docker-compose.yml up -d";
+
+test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar o scanner", async () => {
+  const worktree = cenario();
+  rmSync(ARGS, { force: true });
+  sonar.status = "STARTING";
+  await falha(worktree, `o SonarQube em ${HOST} está STARTING (suba com: ${SUBIR})`);
+
+  const servidorFechado = createServer();
+  servidorFechado.listen(0, "127.0.0.1");
+  await once(servidorFechado, "listening");
+  const porta = (servidorFechado.address() as AddressInfo).port;
+  servidorFechado.close();
+  process.env.SONAR_HOST_URL = `http://127.0.0.1:${String(porta)}`;
+  await falha(
+    worktree,
+    `o SonarQube em http://127.0.0.1:${String(porta)} está inacessível: TypeError: fetch failed (suba com: ${SUBIR})`,
+  );
+
+  process.env.SONAR_HOST_URL = HOST;
+  sonar.erros = { "/api/system/status": 503 };
+  await falha(
+    worktree,
+    `o SonarQube respondeu HTTP 503 em api/system/status: Insufficient privileges (confira o SONAR_TOKEN; se o servidor estiver fora do ar, suba com: ${SUBIR})`,
+  );
+  assert.equal(existsSync(ARGS), false);
+});
+
+test("scanner falhando ou passando do limite: falha com a saída e o comando para subir o servidor", async () => {
+  const worktree = cenario();
+  process.env.SCANNER_FALSO = "falha";
+  await falha(
+    worktree,
+    `o sonar-scanner saiu com código 3: INFO: Scanner\nERROR: Not authorized (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+  );
+  process.env.SCANNER_FALSO = "dorme";
+  await falha(
+    worktree,
+    `o sonar-scanner passou do tempo limite (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+    {
+      limiteMs: 200,
+    },
+  );
+  process.env.SCANNER_FALSO = "sem-tarefa";
+  const semTarefa =
+    "o sonar-scanner terminou sem informar a tarefa do Compute Engine, report-task.txt ausente ou sem ceTaskId";
+  await falha(worktree, `${semTarefa} (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
+  process.env.SCANNER_FALSO = "sem-relatorio";
+  await falha(
+    worktree,
+    `${semTarefa}: INFO: EXECUTION SUCCESS (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+  );
+  assert.deepEqual(semSobra(worktree), []);
+});
+
+test("Compute Engine falhando, cancelado, parado na fila ou recusando o token: falha sem registrar", async () => {
+  const worktree = cenario();
+  const dica = `(veja a tarefa AX1 em ${HOST}/admin/background_tasks e execute o ticket de novo)`;
+  sonar.tarefas = [{ status: "FAILED", errorMessage: "Unsupported language" }];
+  await falha(worktree, `o SonarQube não processou a análise: Unsupported language ${dica}`);
+  sonar.tarefas = [{ status: "CANCELED" }];
+  await falha(worktree, `o SonarQube não processou a análise: CANCELED ${dica}`);
+  sonar.tarefas = [{ status: "PENDING" }];
+  // O limite vale também para o scanner: folga para o scanner falso terminar antes dele numa máquina carregada.
+  await falha(worktree, `a análise passou do tempo limite na fila do SonarQube ${dica}`, {
+    limiteMs: 1000,
+    intervaloMs: 5,
+  });
+  sonar.erros = { "/api/ce/task": 403 };
+  await falha(
+    worktree,
+    `o SonarQube respondeu HTTP 403 em api/ce/task: Insufficient privileges (confira o SONAR_TOKEN; se o servidor estiver fora do ar, suba com: ${SUBIR})`,
+  );
+});
+
+test("resposta que não é JSON ou fora do formato esperado: falha sem registrar, apontando o SONAR_HOST_URL", async () => {
+  const worktree = cenario();
+  const dica = "(confira se SONAR_HOST_URL aponta para o SonarQube)";
+  sonar.crus = { "/api/system/status": "<html>outro serviço</html>" };
+  await falha(worktree, `a resposta de ${HOST}/api/system/status não é a esperada do SonarQube ${dica}`);
+  sonar.crus = { "/api/issues/search": JSON.stringify({ issues: [] }) };
+  await falha(worktree, `a resposta de ${HOST}/api/issues/search não é a esperada do SonarQube ${dica}`);
+});
+
+test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente: falha antes de consultar", async () => {
+  const worktree = cenario();
+  const ambiente =
+    "SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente da Fabriquinha (defina os dois em <raiz>/ambiente e " +
+    "reinicie o serviço)";
+  delete process.env.SONAR_TOKEN;
+  await falha(worktree, ambiente);
+  process.env.SONAR_TOKEN = "segredo";
+  process.env.SONAR_HOST_URL = "";
+  await falha(worktree, ambiente);
+  assert.deepEqual(pedidos, []);
+});
+
+const verificacaoSonar = (worktree: string) =>
+  new VerificacaoSonar("loja-key", ["a.ts"], { intervaloMs: 1 }).executar({
+    ambiente: new AmbienteHostLocal(),
+    worktree,
+  });
+
+test("VerificacaoSonar: sem issue nos arquivos alterados passa, com o relatório da análise", async () => {
+  const worktree = cenario();
+  sonar.issues = [{ component: "loja-key:b.ts", rule: "typescript:S1", severity: "MAJOR", message: "fora" }];
+
+  const resultado = await verificacaoSonar(worktree);
+
+  assert.deepEqual(resultado, {
+    tipo: "passou",
+    relatorio: {
+      dados: { chave_sonarqube: "loja-key", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] },
+      logs: [],
+    },
+  });
+});
+
+test("VerificacaoSonar: issue aberta em arquivo alterado reprova, com a lista de issues no motivo", async () => {
+  const worktree = cenario();
+  sonar.issues = [
+    { component: "loja-key:a.ts", line: 3, rule: "typescript:S1", severity: "MAJOR", message: "problema" },
+    { component: "loja-key:a.ts", rule: "typescript:S2", severity: "MINOR", message: "outro" },
+  ];
+
+  assert.deepEqual(await verificacaoSonar(worktree), {
+    tipo: "reprovacao",
+    motivo:
+      "2 issue(s) aberta(s) em arquivos alterados; corrija cada uma:" +
+      "\n  - a.ts:3 typescript:S1 (MAJOR): problema\n  - a.ts typescript:S2 (MINOR): outro",
+    log: "",
+  });
+});
+
+test("VerificacaoSonar: SonarQube fora do ar é falha de infraestrutura, não reprovação", async () => {
+  const worktree = cenario();
+  sonar.status = "DOWN";
+
+  const resultado = await verificacaoSonar(worktree);
+
+  assert.equal(resultado.tipo, "falha_infraestrutura");
+  assert.equal(resultado.causa, "servico_externo_inacessivel");
+  assert.match(resultado.motivo, /está DOWN/);
+});

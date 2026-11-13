@@ -1,14 +1,13 @@
 // Rotas de leitura das demandas (CA-1 a CA-12 e CA-37) contra o servidor web de verdade.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { guardarBytes } from "../../../../modulos/compartilhado/armazenamento/arquivos.ts";
-import { comDemanda } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
-import { gravarAnexos } from "../../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
-import { gravarUsoDeclarado } from "../../../../modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
-import { metricasDasDemandasDoPeriodo } from "../../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { Endereco, metricasDasDemandasDoPeriodo, gravarAnexos } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { guardarBytes } from "../../../../shared/armazenamento/arquivos.ts";
+import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { gravarUsoDeclarado } from "../../../../modulos/sessoes/publico.ts";
 import { cenarioDemandas } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
+import { origemDe } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 
 interface Anexo {
   nome: string;
@@ -115,7 +114,7 @@ test("CA-4: a I-207 aparece com o bloqueio da I-206 e o estado dela; integrada, 
   const { pedir, banco } = await cenarioDemandas();
   const i207 = () => pedir("/api/demandas").then((r) => r.json<Board>().demandas[1]);
   assert.deepEqual((await i207())?.bloqueios, [{ demanda_id: "I-206", estado: "em_execucao" }]);
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   assert.deepEqual((await i207())?.bloqueios, []);
 });
 
@@ -147,7 +146,7 @@ test("o trabalho ativo e a página marcam `pi_ativo` só quando o pi subiu, não
 
 test("o board não mostra a demanda arquivada", async () => {
   const { pedir, banco } = await cenarioDemandas();
-  banco.exec("UPDATE demanda SET estado = 'arquivada' WHERE id = 'I-207'");
+  banco.exec("UPDATE processo_demanda SET estado = 'arquivada' WHERE demanda_id = 'I-207'");
   const ids = (await pedir("/api/demandas")).json<Board>().demandas.map((d: { id: string }) => d.id);
   assert.deepEqual(ids, ["I-206"]);
 });
@@ -224,7 +223,7 @@ test("a página traz o Uso da demanda já somado e o texto do custo, com ≥ qua
   const agoraIso = new Date().toISOString();
   banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-uso', 'I-206', 1, 'autonomo', 'conv');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-uso', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
   const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(
     uso.modelos.map((m) => [m.modelo, m.tokens_entrada]),
@@ -246,7 +245,7 @@ test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sess�
     ["xu3", "NULL"],
   ] as const)
     banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', 's-uso', '${agoraIso}', '${agoraIso}', 0);
-      INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 10, 1, 0, 0, ${custo})`);
+      INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${execucao}', 'p', 'm', 10, 1, 0, 0, ${custo})`);
   gravarUsoDeclarado(banco, {
     ferramenta: "claude",
     sessao: "externa",
@@ -265,9 +264,10 @@ test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sess�
   });
   const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   // O Uso declarado entra no mês do registro da demanda, que o cenário fixa no passado.
-  const linha = metricasDasDemandasDoPeriodo(banco, { de: "2000-01", ate: agoraIso.slice(0, 7) }).demandas.find(
-    (d) => d.demanda === "I-206",
-  );
+  const linha = metricasDasDemandasDoPeriodo(origemDe(banco), {
+    de: "2000-01",
+    ate: agoraIso.slice(0, 7),
+  }).demandas.find((d) => d.demanda === "I-206");
   assert.equal(uso.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");
   assert.equal(linha?.textoDoCusto, uso.textoDoCusto);
 });
@@ -343,7 +343,7 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
     ],
   }));
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", false]]);
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", true]]);
 });
 

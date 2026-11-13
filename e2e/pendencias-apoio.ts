@@ -1,9 +1,8 @@
 // Apoio dos e2e das Pendências (CONCEITOS.md §11): um Projeto com uma Pendência de cada tipo, com o agendador desligado
 // (o padrão), e a lista esperada na ordem de `desde`. Início, board, Projeto e chat leem este mesmo cenário.
-import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import type { TipoPendencia } from "../src/modulos/sdlc/nucleo/demanda/pendencia.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
+import type { AgregadoDemanda, TipoPendencia } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { gravarAgregadoPronto } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { projeto } from "./apoio.ts";
 
 /** Uma Pendência esperada: o endereço do item e o tipo. */
@@ -84,7 +83,7 @@ function demandaParada(id: string, estado: string, minuto: number, resto: object
  */
 export function semearPendencias(raiz: string): void {
   projeto(raiz);
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   gravarAgregadoPronto(banco, demandaParada("I-301", "gate_planejamento", 1));
   gravarAgregadoPronto(
     banco,

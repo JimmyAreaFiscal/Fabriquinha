@@ -1,6 +1,6 @@
 // Chat no DOM (F7 §4.4): assina o SSE da sessão do ticket da demanda, desenha o retrato e acrescenta o que chega ao
 // vivo, com a rolagem automática que pausa quando o Auditor sobe, e liga à API o envio, os diálogos e o aborto. O HTML
-// vem de chat.ts; os testes de ponta a ponta (e2e/chat*.spec.ts) o exercitam no navegador.
+// vem de chat.ts; os testes de ponta a ponta (e2e/demandas/chat*.spec.ts) o exercitam no navegador.
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { abrirCaixa, api, avisar, mostrarErro } from "../../dom.ts";
@@ -34,7 +34,7 @@ const ESQUELETO =
 
 type Evento = Record<string, unknown> & { type?: string };
 
-export const postar = (caminho: string, corpo: unknown = {}) =>
+const postar = (caminho: string, corpo: unknown = {}) =>
   api<undefined>(caminho, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

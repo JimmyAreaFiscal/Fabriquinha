@@ -1,18 +1,13 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
-import {
-  cadastrarProjetoDoFormulario,
-  editarProjetoDoFormulario,
-  removerProjeto,
-} from "../../../modulos/projeto/aplicacao/cadastro.ts";
-import { conferirESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
-import { eliminarAmbienteDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
+import { condutor, validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { eliminarAmbienteDoConjunto, validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/ambiente/publico.ts";
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
-} from "../consultas/configuracao.ts";
+} from "../../consultas/configuracao.ts";
 import {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -23,13 +18,12 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
-import { condutor } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import type { Modelo } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
+import {
+  cadastrarProjetoConferindoOModelo,
+  editarProjetoConferindoOModelo,
+} from "../../fluxos/projeto/cadastro_do_projeto.ts";
+import { removerProjetoComOQueDependeDele } from "../../fluxos/projeto/remocao_do_projeto.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
-
-/** O harness do serviço confere o modelo novo ou trocado (F4 §9). */
-const conferirModeloNoHarness = (modelo: Modelo): Promise<void> => condutor.harness.conferirModelo(modelo);
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
@@ -41,8 +35,8 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/configuracao",
-    tratar: async ({ banco, agendador, corpo }) => {
-      await conferirESalvarConfiguracao(banco, corpo, conferirModeloNoHarness);
+    tratar: ({ banco, agendador, corpo }) => {
+      validarESalvarConfiguracao(banco, corpo);
       return consultarEstadoDaConfiguracao(banco, () => agendador.proximaBusca());
     },
     resposta: EstadoDaConfiguracao,
@@ -84,26 +78,21 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/projetos",
-    tratar: ({ banco, corpo }) =>
-      cadastrarProjetoDoFormulario(banco, FormularioDoProjeto.parse(corpo), conferirModeloNoHarness),
+    tratar: ({ banco, corpo }) => cadastrarProjetoConferindoOModelo(banco, FormularioDoProjeto.parse(corpo)),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params, corpo }) =>
-      editarProjetoDoFormulario(
-        banco,
-        { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) },
-        conferirModeloNoHarness,
-      ),
+      editarProjetoConferindoOModelo(banco, { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) }),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "DELETE",
     caminho: "/api/projetos/:nome",
     tratar: async ({ banco, params }) => {
-      const { avisos } = await removerProjeto(banco, String(params.nome));
+      const { avisos } = await removerProjetoComOQueDependeDele(banco, String(params.nome));
       return { avisos };
     },
     resposta: ProjetoRemovido,

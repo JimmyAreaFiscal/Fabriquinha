@@ -1,11 +1,9 @@
 // Rotas da página do projeto (F7 §4.2): as demandas do projeto com as rodadas e os tickets, o arquivamento das
 // concluídas e o heatmap do projeto.
-import { arquivarConcluidas } from "../../../../modulos/sdlc/aplicacao/gestao_demandas.ts";
-import {
-  consultarHeatmapDoProjeto,
-  consultarProjeto,
-  ORIENTACAO_PROJETO_INEXISTENTE,
-} from "../../consultas/projeto/projeto.ts";
+import { arquivarConcluidas } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { pedidosDoProjeto, projetoExistente } from "../../../../modulos/demandas/publico.ts";
+import { consultarHeatmapDoProjeto } from "../../../consultas/projeto/heatmap.ts";
+import { consultarProjeto, ORIENTACAO_PROJETO_INEXISTENTE } from "../../../consultas/projeto/projeto.ts";
 import { DemandasArquivadas, FiltroDoProjeto, Heatmap, ListaDoProjeto } from "../../../contrato/projeto.ts";
 import type { Rota } from "../../rotas.ts";
 
@@ -20,8 +18,10 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome/arquivar",
-    tratar: ({ banco, params, relogio }) =>
-      arquivarConcluidas(banco, String(params.nome), relogio, ORIENTACAO_PROJETO_INEXISTENTE),
+    tratar: ({ banco, params, relogio }) => {
+      const { nome } = projetoExistente(banco, String(params.nome), ORIENTACAO_PROJETO_INEXISTENTE);
+      return arquivarConcluidas(banco, pedidosDoProjeto(banco, nome), relogio);
+    },
     resposta: DemandasArquivadas,
   },
   {

@@ -1,4 +1,4 @@
-// O fluxo SSE único da API (F4 §5.4, D12): o chat da demanda e a avaliação o usam. Primeiro vai o retrato lido logo
+// O fluxo SSE único da API (F4 §5.4): o chat da demanda o usa. Primeiro vai o retrato lido logo
 // antes de assinar, sem nada no meio; depois, cada evento que a assinatura entrega. Quem reconecta recebe o retrato de novo.
 import type { ServerResponse } from "node:http";
 

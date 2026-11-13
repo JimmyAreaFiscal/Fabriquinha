@@ -8,10 +8,10 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
-import { caminhoArquivo, lerLinhas } from "../../../apoio-testes/acesso_ao_banco.ts";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { caminhoArquivo, lerLinhas } from "../../../apoio-testes/banco/acesso_ao_banco.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { mensagem } from "../../shared/nucleo/erros.ts";
+import { Endereco } from "../../modulos/ciclo_de_vida/publico.ts";
 import { executarFabriquinha } from "../composicao/cli.ts";
 import { ErroDeUso } from "./comando.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "./demanda_externa.ts";
@@ -373,7 +373,9 @@ test("uso: falta --dados, JSON inválido, outra sessão antes do envio e demanda
   await completar(env, id);
   json(await cli(env, ["demanda", "enviar", id]));
   json(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"])); // depois do envio, qualquer sessão
-  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.exec(`UPDATE demanda SET estado = 'concluida' WHERE id = '${id}'`);
+  bancoDaRaiz
+    .get(env.FABRIQUINHA_ROOT)
+    ?.exec(`UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = '${id}'`);
   falha(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"]), 1, /já terminou \(concluida\)/);
 });
 

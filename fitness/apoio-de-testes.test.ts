@@ -1,7 +1,8 @@
 // Fitness function: teste nenhum conhece a porta 4317 nem a raiz ~/fabriquinha do serviço real. Teste que sobe ou aponta
 // para elas dispara a Fabriquinha de verdade (porta ocupada, banco real migrado). Vale para os `*.test.ts` e `*.spec.ts`
 // de src/ e pacote-pi/ e para todo arquivo de integracao/, e2e/, estresse/ e apoio-testes/, inclusive comentário e nome de teste.
-// Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(`): usa `abrirBancoTemporario()` de apoio-testes/.
+// Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(` ou `abrirBancoDaFabriquinha(`): usa
+// `abrirBancoTemporario()` de apoio-testes/.
 // Nenhum `*.test.ts` é importado por outro arquivo (import estático ou `import()`): o que é compartilhado vive em apoio-testes/.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,14 +16,14 @@ const REFERENCIA_AO_SERVICO_REAL = /4317|~\/fabriquinha|homedir\(\)[^;]*["'/]fab
 // Estes dois testes fixam os padrões de produção (porta do serviço, raiz de `abrir()`) sem subir o serviço nem tocar o banco real.
 const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = [
   "src/server/composicao/servico.test.ts",
-  "src/modulos/compartilhado/armazenamento/banco.test.ts",
+  "src/shared/armazenamento/banco.test.ts",
 ];
 
 const PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO = ["src", "pacote-pi", "integracao", "e2e", "estresse"];
 // Estes dois testam o próprio `banco.ts` e a linha de base de migração: precisam abrir o banco numa raiz que eles controlam.
 const ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO = [
-  "src/modulos/compartilhado/armazenamento/banco.test.ts",
-  "src/modulos/compartilhado/armazenamento/migracoes/migracao_linha_de_base.test.ts",
+  "src/shared/armazenamento/banco.test.ts",
+  "src/shared/armazenamento/migracoes/migracao_linha_de_base.test.ts",
 ];
 
 const PASTAS_QUE_NAO_IMPORTAM_TESTE = ["src", "pacote-pi", "integracao", "e2e", "apoio-testes", "fitness", "estresse"];
@@ -55,14 +56,15 @@ function acharArquivosDeTesteQueReferenciamOServicoReal(raiz: string): string[] 
     .sort();
 }
 
-// Mesmo critério do grep do CA-3: `mkdtemp` e `\babrir(` (palavra inteira, qualquer chamada) no mesmo arquivo.
+// Mesmo critério do grep do CA-3: `mkdtemp` e `\babrir(` (palavra inteira, qualquer chamada) no mesmo arquivo; o
+// `abrirBancoDaFabriquinha(` da composição, que abre o mesmo banco com as migrações dos domínios, conta igual.
 function acharArquivosQueMontamBancoProprio(raiz: string): string[] {
   return PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO.flatMap((pasta) => listarArquivos(raiz, pasta))
     .filter((caminho) => caminho.endsWith(".ts"))
     .filter((caminho) => !ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO.includes(caminho))
     .filter((caminho) => {
       const conteudo = readFileSync(join(raiz, caminho), "utf8");
-      return conteudo.includes("mkdtemp") && /\babrir\(/.test(conteudo);
+      return conteudo.includes("mkdtemp") && /\babrir(BancoDaFabriquinha)?\(/.test(conteudo);
     })
     .sort();
 }
@@ -96,7 +98,7 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
     // Fora do alcance da regra: código de produção, teste sem sufixo em src/ e as exceções listadas.
     escrever("src/a/producao.ts", "const PORTA = 4317;\n");
     escrever("src/server/composicao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
-    escrever("src/modulos/compartilhado/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
+    escrever("src/shared/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
     escrever("e2e/node_modules/x/index.ts", "4317\n");
     escrever("estresse/resultados/medicao.json", '{"url":"http://127.0.0.1:4317/"}\n');
 
@@ -128,20 +130,19 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
     escrever("src/a/proprio.test.ts", "const pasta = mkdtempSync(tmp);\nconst banco = abrir(pasta);\n");
     escrever("e2e/sub/proprio.ts", "mkdtempSync(tmp);\nawait abrir(pasta);\n");
     escrever("estresse/hospedagem.ts", "mkdtempSync(tmp);\ngh.abrir({});\n");
+    escrever("integracao/composto.test.ts", "mkdtempSync(tmp);\nabrirBancoDaFabriquinha(pasta);\n");
     // Fora do alcance da regra: só um dos dois, o método `abrirPr`, as exceções listadas e node_modules.
     escrever("src/a/so_mkdtemp.test.ts", "mkdtempSync(tmp);\n");
     escrever("src/a/so_abrir.test.ts", "abrir(raiz);\n");
     escrever("src/a/pr.test.ts", "mkdtempSync(tmp);\nhospedagem.abrirPr({});\n");
-    escrever("src/modulos/compartilhado/armazenamento/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
-    escrever(
-      "src/modulos/compartilhado/armazenamento/migracoes/migracao_linha_de_base.test.ts",
-      "mkdtempSync(tmp);\nabrir(raiz);\n",
-    );
+    escrever("src/shared/armazenamento/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("src/shared/armazenamento/migracoes/migracao_linha_de_base.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
     escrever("e2e/node_modules/x/index.ts", "mkdtemp abrir(\n");
 
     assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), [
       "e2e/sub/proprio.ts",
       "estresse/hospedagem.ts",
+      "integracao/composto.test.ts",
       "src/a/proprio.test.ts",
     ]);
   } finally {

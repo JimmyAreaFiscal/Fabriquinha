@@ -1,17 +1,20 @@
 // O contrato das rotas das demandas na API: o board, a página de uma demanda e a reabertura de um ticket. Só tipos e
-// schemas; quem monta cada resposta é a consulta da tela (api/consultas/), e o cliente web depende só destes tipos.
+// schemas; quem monta cada resposta é a consulta da tela (server/consultas/), e o cliente web depende só destes tipos.
 import { z } from "zod";
 import {
   Decisao,
-  Demanda,
   RodadaDemanda,
   TicketDemanda,
+  EstadoTicket,
+  EstadoDemanda,
+  EstadoRodada,
+  EtapaTicket,
+  type AcaoEsperada,
+  type TipoPendencia,
+  Demanda,
   TipoDemanda,
-} from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EstadoTicket, Instante } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
-import type { AcaoEsperada, TipoPendencia } from "../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import { Instante } from "../../shared/nucleo/primitivos.ts";
 
 const TIPOS_DE_PENDENCIA = [
   "gate_humano",
@@ -81,6 +84,8 @@ const LinhaDeUso = z.object({
   tokens_cache_leitura: z.number(),
   tokens_cache_escrita: z.number(),
   custo: z.number().nullable(),
+  /** O custo foi estimado pelo catálogo de preços, porque o harness não o informou. */
+  custo_estimado: z.literal(true).optional(),
   chamadas: z.number(),
 });
 
@@ -108,10 +113,10 @@ export const PaginaDaDemanda = z.object({
     terminal: z.boolean(),
     arquivavel: z.boolean(),
   }),
-  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo. */
+  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo ou ele foi estimado. */
   uso: z.object({
     modelos: z.array(LinhaDeUso),
-    custo: z.object({ conhecido: z.number(), trabalhosSemCusto: z.number() }),
+    custo: z.object({ conhecido: z.number(), trabalhosSemCusto: z.number(), trabalhosComCustoEstimado: z.number() }),
     textoDoCusto: z.string(),
   }),
   rodadas: z.array(

@@ -2,10 +2,9 @@
 // Sobe o ambiente de verdade e confere que cada preparo deixa a rota que o usa responder o esperado (CA-2).
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
-import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { type Ambiente, subirAmbiente } from "../instancia_descartavel.ts";
-import { acoesHttpLeitura } from "./http_leitura.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";
 
 let amb: Ambiente;
@@ -37,7 +36,7 @@ async function chamar(metodo: "POST" | "DELETE", caminho: string, corpo?: unknow
 
 /** A estado e os estados das rodadas que o banco guarda agora, lidas por outra conexão. */
 function estados(id: string): string[] {
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   try {
     const ag = carregarDemanda(banco, id);
     return [ag.demanda.estado, ...ag.rodadas.map((r) => r.estado)];
@@ -99,32 +98,6 @@ test("as sessões de conversa recebem mensagem e a rodando é abortada", async (
   await chamar("POST", `/api/sessoes/${rodando}/abortar`);
 });
 
-test("projeto, simulação e avaliação preparados são aceitos pelas rotas", async () => {
+test("o projeto próprio preparado é aceito pela rota", async () => {
   await chamar("DELETE", `/api/projetos/${await p.projetoProprio()}`);
-  const usuario = String(p.usuarioSimulado());
-  await chamar("POST", `/api/usuarios-simulados/${usuario}/anexos?nome=a.txt`, Buffer.from("x"));
-  await chamar("DELETE", `/api/usuarios-simulados/${usuario}/anexos/a.txt`);
-  await chamar("POST", `/api/tarefas/${String(p.tarefa())}/executar`);
-  const avaliacao = p.avaliacao(true);
-  await chamar("POST", `/api/avaliacoes/${avaliacao}/achados/1/encaminhar`);
-  await chamar("POST", `/api/avaliacoes/${p.avaliacao()}/mensagens`, { texto: "oi" });
-});
-
-test("o encaminhar funciona depois que o grupo de leitura semeia a I-1 (a sequência `issue` fica à frente)", async () => {
-  const outro = await subirAmbiente();
-  try {
-    await acoesHttpLeitura(outro);
-    const preparo = await criarPreparo(outro);
-    try {
-      const r = await fetch(`${outro.base}/api/avaliacoes/${preparo.avaliacao(true)}/achados/1/encaminhar`, {
-        method: "POST",
-        headers: { cookie: outro.cookie, "sec-fetch-site": "same-origin" },
-      });
-      assert.equal(r.status, 200, await r.text());
-    } finally {
-      preparo.fechar();
-    }
-  } finally {
-    await outro.encerrar();
-  }
 });

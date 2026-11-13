@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import { mensagem } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { relogioDoSistema } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { mensagem } from "../../../../shared/nucleo/erros.ts";
+import { Endereco } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
@@ -29,9 +29,10 @@ beforeEach(() => {
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES
       ('loja', '/r/loja', 'main', 'github', 'loja'),
       ('site', '/r/site', 'main', 'github', 'site');
-    INSERT INTO demanda VALUES
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
       ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'em_execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejar', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO rodada VALUES ('I-1', 1, 'Leitura', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${T0}', 1),

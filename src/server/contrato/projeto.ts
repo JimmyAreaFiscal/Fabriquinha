@@ -1,10 +1,14 @@
 // O contrato das rotas da página do projeto na API: as demandas com as rodadas e os tickets, o arquivamento das
-// concluídas e o heatmap. Só tipos e schemas; quem monta cada resposta é a consulta da tela (api/consultas/).
+// concluídas e o heatmap. Só tipos e schemas; quem monta cada resposta é a consulta da tela (server/consultas/).
 import { z } from "zod";
-import { TipoDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EstadoTicket, Instante } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
+import {
+  TipoDemanda,
+  EstadoTicket,
+  EstadoDemanda,
+  EstadoRodada,
+  EtapaTicket,
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import { Instante } from "../../shared/nucleo/primitivos.ts";
 import { PendenciaDoInicio } from "./demanda.ts";
 
 /** `GET /api/projetos/:nome/demandas?…`: as em andamento sempre; os demais estados só quando pedidos. */

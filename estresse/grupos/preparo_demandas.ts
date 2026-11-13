@@ -3,27 +3,19 @@
 // grupo prepara as chamadas de uma ação de uma vez e só então dispara. O pi é o falso do ambiente ($FABRIQUINHA_PI)
 // e o `gh` é o de `integracao/falsos.ts`, com o estado de cada PR no arquivo dele.
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
-import { randomUUID } from "node:crypto";
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { criarAvaliacao } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
-import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
-import { comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { importarAchados } from "../../src/modulos/avaliacao/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
-import { criarTarefa, criarUsuarioSimulado } from "../../src/modulos/avaliacao/armazenamento/simulacao.ts";
-import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
+import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada, exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -57,7 +49,7 @@ export interface Preparo {
   ticketAberto(): Promise<string>;
   /**
    * Sessão interativa parada (conversa): mensagem, com a rodada pronta para o pi falso. Sem `comWorktree`, para as rotas
-   * que não chegam ao git (diálogo e avaliação): as worktrees de cada chamada eram o grosso do tempo do estresse.
+   * que não chegam ao git (diálogo): as worktrees de cada chamada eram o grosso do tempo do estresse.
    */
   sessaoParada(comWorktree?: boolean): Promise<string>;
   /** Sessão com a execução aberta e sem pi vivo, sem worktree (abortar não chega ao git): abortar. */
@@ -66,18 +58,12 @@ export interface Preparo {
   projetoProprio(): Promise<string>;
   /** Um repositório git novo (com remoto), para cadastrar um projeto. */
   repositorioNovo(): Promise<string>;
-  /** Um Usuário Simulado sem anexos, do projeto principal. */
-  usuarioSimulado(): number;
-  /** Uma Tarefa com um usuário, do projeto principal (que tem o link do produto, então o Executar a aceita). */
-  tarefa(): number;
-  /** Uma avaliação em disco, sem pi vivo; com `achado`, com o achado 1 por encaminhar. */
-  avaliacao(achado?: boolean): string;
   fechar(): void;
 }
 
 /** Instala o `gh` falso na frente do PATH do serviço e abre o banco da raiz do ambiente. */
 export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   const log = join(amb.raiz, "execucoes", "preparo.log");
   mkdirSync(join(amb.raiz, "execucoes"), { recursive: true });
   let contador = 1000;
@@ -148,8 +134,6 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   }
 
   const principal = await cadastrar("estresse");
-  // O Executar da Tarefa recusa o projeto sem o link do produto (F8): o pi falso não o abre.
-  banco.prepare("UPDATE projeto SET link_produto = ? WHERE nome = ?").run("http://127.0.0.1:9", principal.nome);
 
   const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: string, extra: object = {}) => ({
     demanda_id,
@@ -229,7 +213,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
   function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
     const sessao = `sd-${String(proximo())}`;
-    comTrabalhosDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
+    comSessoesDoContexto(banco, { demanda_id, ticket_id }, (e) => ({
       ...e,
       sessoes: [{ demanda_id, ticket_id, id: sessao, modo: "interativo", conversa_referencia: sessao }],
       execucoes: [
@@ -371,32 +355,6 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     projetoProprio: async () => (await cadastrar(`proprio-${String(proximo())}`)).nome,
 
     repositorioNovo: async () => (await repositorio("novo")).repo,
-
-    usuarioSimulado: () =>
-      criarUsuarioSimulado(banco, principal.nome, { nome: `u${String(proximo())}`, descricao: "d" }).id,
-
-    tarefa() {
-      const usuario = criarUsuarioSimulado(banco, principal.nome, { nome: `u${String(proximo())}`, descricao: "d" }).id;
-      return criarTarefa(banco, principal.nome, { texto: "t", n: 1, usuarios: [usuario] }).id;
-    },
-
-    avaliacao(achado = false) {
-      const id = randomUUID();
-      criarAvaliacao(banco, {
-        id,
-        projeto: principal.nome,
-        de: "2026-01-01",
-        ate: "2026-12-31",
-        pedido: "",
-        criada_em: em,
-        demandas: [],
-      });
-      if (achado) importarAchados(banco, id, [{ achado_id: 1, titulo: "t", descricao: "d", evidencia: "e" }]);
-      const dir = join(amb.raiz, "avaliacoes", id);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, "prompt.md"), "# Avaliação\n");
-      return id;
-    },
 
     fechar: () => {
       banco.close();

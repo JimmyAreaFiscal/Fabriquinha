@@ -7,11 +7,11 @@ import { execFile } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { gravarTokenDoProcesso } from "../../../apoio-testes/cenario_da_api_do_agente.ts";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarTokenDaExecucao } from "../../../apoio-testes/cenarios/cenario_da_api_do_agente.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
-import type { AgregadoDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -84,7 +84,7 @@ async function cenario(estado: string, rodadas: object[], tickets: object[]) {
     ],
   } as unknown as AgregadoDemanda);
   abrirExecucao(banco, "exec-9", 9);
-  gravarTokenDoProcesso(banco, "exec-9", "token-exec-9");
+  gravarTokenDaExecucao(banco, "exec-9", "token-exec-9");
   const { porta } = await servir(banco);
   return { raiz, banco, env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-9" } };
 }

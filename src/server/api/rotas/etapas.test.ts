@@ -1,9 +1,9 @@
 // A rota das Etapas do SDLC, com o corpo conferido pelo contrato.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { CATALOGO_DE_ETAPAS } from "../../../modulos/etapas/catalogo.ts";
+import { CATALOGO_DE_ETAPAS } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { EtapasDoSdlc } from "../../contrato/etapas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

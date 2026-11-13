@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../modulos/compartilhado/nucleo/erros.ts";
+import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../shared/nucleo/erros.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 
 test("mapa de erros do F7 §4.2", () => {

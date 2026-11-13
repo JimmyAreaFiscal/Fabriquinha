@@ -6,11 +6,10 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
-import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { buscarProjeto, gravarProjeto } from "../src/modulos/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import type { Ator } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
+import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
+import { buscarProjeto, gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import {
   AUTOR,
   base,
@@ -21,7 +20,7 @@ import {
   proporPlanoDoAgente,
   registrarExterna,
 } from "./apoio.ts";
-import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
+import { instalarPiFalso } from "../apoio-testes/falsos/pi_falso.ts";
 
 const pi = instalarPiFalso(base);
 const harness = new HarnessPi();
@@ -34,7 +33,7 @@ test("CA-SDLC-18: a nova evidência do mesmo tipo e dono substitui só a anterio
   const c = criarCenario(t);
   const id = registrarExterna(c);
   const submeterCriterio = (criterio: string) =>
-    gestao.submeterEvidencia(
+    gestao.submeterEvidenciaDaEntradaExterna(
       c.banco,
       id,
       { tipo: "criterios_aceite", dados: { criterios: [{ id: criterio, dado: "d", quando: "q", entao: "e" }] } },

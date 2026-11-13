@@ -1,7 +1,7 @@
 // Histórico (F7 §4.4; F4 §5.3) como funções puras que devolvem HTML: os filtros com a contagem, as sessões terminadas
 // agrupadas por dia e a prévia da escolhida, com o fim da conversa e as ações. O texto que vem do servidor passa
 // sempre por `escapar`; o das mensagens, pelo `markdown-it` sem HTML.
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
+import type { EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
 import type { Resultado, SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
 import { markdown } from "../../apresentacao/markdown.ts";

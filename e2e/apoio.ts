@@ -1,22 +1,21 @@
 // Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, a porta livre que ela
-// mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/pi_falso.ts), e recebe o
+// mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/falsos/pi_falso.ts), e recebe o
 // navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`. O docker falso
-// (apoio-testes/docker_falso.ts) vai à frente no PATH, e o registro dele diz se o serviço chamou o docker.
+// (apoio-testes/falsos/docker_falso.ts) vai à frente no PATH, e o registro dele diz se o serviço chamou o docker.
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
-import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
-import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
-import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
+import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/docker_falso.ts";
+import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
+import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { recuperacaoDaSubida } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -35,9 +34,9 @@ export interface Fabriquinha {
   reiniciar(): Promise<{ base: string; link: string }>;
 }
 
-/** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. */
+/** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. O que o teste já derrubou por sinal já saiu. */
 async function parar(servico: ChildProcess): Promise<void> {
-  if (servico.exitCode !== null) return;
+  if (servico.exitCode !== null || servico.signalCode !== null) return;
   const saiu = once(servico, "exit");
   servico.kill("SIGTERM");
   if (await Promise.race([saiu.then(() => true), dormir(5000).then(() => false)])) return;
@@ -49,10 +48,10 @@ async function parar(servico: ChildProcess): Promise<void> {
  * F4 §7: o serviço parado deixa o pi rodando, e quem o mata é a subida seguinte, que no teste não vem. Sem isso, o pi
  * ainda escreve na raiz enquanto ela é apagada.
  */
-function matarPi(raiz: string): void {
+async function matarPi(raiz: string): Promise<void> {
   condutor.montarHarness(new HarnessPi());
-  const banco = abrir(raiz);
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida(banco, relogioDoSistema));
+  const banco = abrirBancoDaFabriquinha(raiz);
+  await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   banco.close();
 }
 
@@ -63,7 +62,7 @@ export const test = base.extend<{
   roteiroDoPi: PassoPi[] | undefined;
 }>({
   /** O binário do pi que a Fabriquinha usa (`FABRIQUINHA_PI`); o falso, a menos que o teste troque com `test.use`. */
-  pi: [join(import.meta.dirname, "../apoio-testes/pi_falso.ts"), { option: true }],
+  pi: [join(import.meta.dirname, "../apoio-testes/falsos/pi_falso.ts"), { option: true }],
   /** O roteiro do pi falso (`FALSO_PI_ROTEIRO`); sem ele vale o comportamento do e2e, escolhido pelo texto do prompt. */
   roteiroDoPi: [undefined, { option: true }],
   fabriquinha: async ({ pi, roteiroDoPi }, use) => {
@@ -144,7 +143,7 @@ export const test = base.extend<{
       });
     } finally {
       for (const { servico } of atuais) await parar(servico);
-      matarPi(raiz);
+      await matarPi(raiz);
       const log = atuais.map((a) => a.stderr()).join("");
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
       fechar();
@@ -198,7 +197,7 @@ export function projeto(raiz: string, sql = ""): void {
   git(repo, "commit", "-q", "-m", "início");
   git(repo, "remote", "add", "origin", bare);
   git(repo, "push", "-q", "origin", "main");
-  const banco = abrir(raiz);
+  const banco = abrirBancoDaFabriquinha(raiz);
   registrarProjeto(banco, {
     nome: "loja",
     raiz_git: realpathSync(repo),

@@ -13,7 +13,6 @@
     "@assistant-ui/react": "^0.15.28",
     "esbuild": "^0.28.2",
     "markdown-it": "^15.0.2",
-    "playwright": "1.61.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.6"
@@ -30,16 +29,17 @@
     "typescript-eslint": "^8.71.1"
   },
   "scripts": {
-    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/modulos/harness/pi/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
+    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/server/composicao/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
     "types": "tsc",
     "lint": "eslint --max-warnings=0 .",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "test": "npm run empacotar-cli-agente && mkdir -p coverage && node --disable-warning=ExperimentalWarning --import ./apoio-testes/harness_do_teste.ts --test --experimental-test-coverage --test-coverage-exclude=\"**/*.test.ts\" --test-coverage-exclude=\"e2e/**\" --test-coverage-exclude=\"apoio-testes/**\" --test-coverage-exclude=\"pacote-pi/bin/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"src/**/*.test.ts\" \"pacote-pi/**/*.test.ts\"",
-    "fitness": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --test \"fitness/*.test.ts\" \"apoio-testes/*.test.ts\"",
-    "integracao": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --import ./apoio-testes/harness_do_teste.ts --test \"integracao/*.test.ts\"",
+    "test": "npm run empacotar-cli-agente && mkdir -p coverage && node --disable-warning=ExperimentalWarning --import ./apoio-testes/harness_do_teste.ts --test --experimental-test-coverage --test-coverage-exclude=\"**/*.test.ts\" --test-coverage-exclude=\"e2e/**\" --test-coverage-exclude=\"apoio-testes/**\" --test-coverage-exclude=\"pacote-pi/bin/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"src/**/*.test.ts\" \"pacote-pi/**/*.test.ts\" \"estresse/referencia/*.test.ts\"",
+    "fitness": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --test \"fitness/*.test.ts\" \"apoio-testes/**/*.test.ts\"",
+    "integracao": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning --import ./apoio-testes/harness_do_teste.ts --test \"integracao/*.test.ts\" \"integracao/sdlc/*.test.ts\" \"integracao/ambiente/*.test.ts\" \"integracao/agente/*.test.ts\" \"integracao/uso/*.test.ts\"",
     "check": "npm run types && npm run lint && npm run format:check && npm test && npm run fitness",
     "e2e": "npm run empacotar-cli-agente && NODE_OPTIONS=--disable-warning=ExperimentalWarning playwright test",
-    "estresse": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning estresse/estresse.ts"
+    "estresse": "npm run empacotar-cli-agente && node --disable-warning=ExperimentalWarning estresse/estresse.ts",
+    "estresse:referencia": "node --disable-warning=ExperimentalWarning estresse/referencia/ensaio_de_desempenho.ts"
   }
 }

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasDoMes } from "../../../contrato/metricas.ts";
-import type { TipoPendencia } from "../../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+import type { TipoPendencia } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../contrato/inicio.ts";
 import type { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
 import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
@@ -20,7 +20,7 @@ const mes = {
     falhas: 0,
     duracaoMs: 0,
     tokens: { entrada: 0, saida: 0, cacheLeitura: 0, cacheEscrita: 0, total: 0 },
-    custo: { conhecido: 0, trabalhosSemCusto: 0 },
+    custo: { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 },
     textoDoCusto: "US$ 0,00",
     modelos: [],
   },

@@ -1,10 +1,10 @@
-// Rotas do Início: o painel das demandas em andamento (a consulta monta o contrato) e as recusas do último ciclo do Despacho.
-import type { MotivoDeRecusa } from "../../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { ultimasRecusas } from "../../../modulos/sdlc/aplicacao/despacho/despacho.ts";
-import { consultarInicio } from "../consultas/inicio.ts";
+// Rotas do Início: o painel das demandas em andamento (a consulta monta o contrato), o contador de pendências do menu,
+// numa consulta leve própria, e as recusas do último ciclo do Despacho.
+import { Endereco, type MotivoDeRecusa, ultimasRecusas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { consultarInicio } from "../../consultas/inicio/inicio.ts";
+import { consultarQuantidadeDePendencias } from "../../consultas/inicio/quantidade_de_pendencias.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
-import { DadosDoInicio } from "../../contrato/inicio.ts";
+import { DadosDoInicio, QuantidadeDePendencias } from "../../contrato/inicio.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Um motivo de recusa como JSON: os Endereços saem pelo texto público (`I-1.T2`). */
@@ -24,6 +24,12 @@ export const ROTAS_DO_INICIO: Rota[] = [
     caminho: "/api/inicio",
     tratar: ({ banco, relogio }) => consultarInicio(banco, relogio),
     resposta: DadosDoInicio,
+  },
+  {
+    metodo: "GET",
+    caminho: "/api/pendencias/quantidade",
+    tratar: ({ banco, relogio }) => consultarQuantidadeDePendencias(banco, relogio),
+    resposta: QuantidadeDePendencias,
   },
   { metodo: "GET", caminho: "/api/despacho", tratar: recusasDoDespacho, resposta: RecusasDoDespacho },
 ];

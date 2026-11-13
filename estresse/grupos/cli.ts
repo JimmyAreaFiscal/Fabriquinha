@@ -9,15 +9,17 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
 import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
-import type { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { registrar, submeterEvidencia } from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
-import { abrir, escrever, novoId } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
+import { type AgregadoDemanda, submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import {
-  comTrabalhosDoTicket,
-  gravarTokenDoProcesso,
-} from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+  criarSessao,
+  iniciarExecucao,
+  comSessoesDoContexto,
+  gravarTokenDaExecucao,
+} from "../../src/modulos/sessoes/publico.ts";
+import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
+import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 
@@ -133,8 +135,8 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
   ).demanda.id;
   const execucao = `ex-${demanda}`;
   const token = `token-${execucao}`;
-  comTrabalhosDoTicket(banco, { demanda_id: demanda, ticket_id: 2 }, (e) => {
-    const sessoes = criarTrabalho(e.sessoes, {
+  comSessoesDoContexto(banco, { demanda_id: demanda, ticket_id: 2 }, (e) => {
+    const sessoes = criarSessao(e.sessoes, {
       id: `s-${execucao}`,
       demanda_id: demanda,
       ticket_id: 2,
@@ -144,7 +146,7 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
     return {
       ...e,
       sessoes,
-      execucoes: iniciarProcesso(sessoes, e.execucoes, {
+      execucoes: iniciarExecucao(sessoes, e.execucoes, {
         id: execucao,
         trabalho_id: `s-${execucao}`,
         inicio: em,
@@ -152,7 +154,7 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
       }),
     };
   });
-  gravarTokenDoProcesso(banco, execucao, token);
+  gravarTokenDaExecucao(banco, execucao, token);
   return { demanda, execucao, token, ticket: `${demanda}.T2`, rodada: `${demanda}.R1` };
 }
 
@@ -183,7 +185,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
   const criar: Agente[] = [];
   const decidir: Agente[] = [];
   let leitura: Agente;
-  const banco = abrir(amb.raiz);
+  const banco = abrirBancoDaFabriquinha(amb.raiz);
   try {
     banco
       .prepare(
@@ -198,7 +200,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
-      rascunhos.push(registrar(banco, entrada, autor, { agora: em }).demanda.id);
+      rascunhos.push(registrarPedidoComProcesso(banco, entrada, autor, { agora: em }).demanda.id);
     }
     // `enviar` exige as duas evidências de quem registra; o rascunho de cada chamada nasce com elas.
     for (const id of rascunhos.slice(2 * CHAMADAS)) {
@@ -211,7 +213,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
           arquivos: [join(pasta, "desenho.html")],
         },
       ];
-      for (const e of completa) submeterEvidencia(banco, id, e as never, autor, origens);
+      for (const e of completa) submeterEvidenciaDaEntradaExterna(banco, id, e as never, autor, origens);
     }
     leitura = semearAgente(banco, "ajustar_resultado", "ajustar_resultado");
     for (let i = 0; i < CHAMADAS; i++) {
