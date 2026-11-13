@@ -1,10 +1,6 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
-import {
-  cadastrarProjetoDoFormulario,
-  editarProjetoDoFormulario,
-  removerProjeto,
-} from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { removerProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
 import { validarESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
 import { eliminarAmbienteDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import {
@@ -12,7 +8,7 @@ import {
   consultarEstadoDoAmbiente,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
-} from "../consultas/configuracao.ts";
+} from "../../consultas/configuracao.ts";
 import {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -23,13 +19,10 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
+import { cadastrarProjetoConferindoOModelo, editarProjetoConferindoOModelo } from "../../fluxos/cadastro_do_projeto.ts";
 import { condutor } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import type { Modelo } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
-
-/** O harness do serviço confere o modelo novo ou trocado (F4 §9). */
-const conferirModeloNoHarness = (modelo: Modelo): Promise<void> => condutor.harness.conferirModelo(modelo);
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
@@ -84,19 +77,14 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/projetos",
-    tratar: ({ banco, corpo }) =>
-      cadastrarProjetoDoFormulario(banco, FormularioDoProjeto.parse(corpo), conferirModeloNoHarness),
+    tratar: ({ banco, corpo }) => cadastrarProjetoConferindoOModelo(banco, FormularioDoProjeto.parse(corpo)),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params, corpo }) =>
-      editarProjetoDoFormulario(
-        banco,
-        { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) },
-        conferirModeloNoHarness,
-      ),
+      editarProjetoConferindoOModelo(banco, { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) }),
     resposta: ProjetoCadastrado,
   },
   {

@@ -1,8 +1,8 @@
 // A consulta do Histórico: o filtro de demanda é o endereço de uma demanda e a leitura não deixa transação aberta.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { ErroDeRegra } from "../../../../modulos/compartilhado/nucleo/erros.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { ErroDeRegra } from "../../../modulos/compartilhado/nucleo/erros.ts";
 import { consultarHistorico } from "./historico.ts";
 
 const T0 = "2026-10-11T12:00:00.000Z";

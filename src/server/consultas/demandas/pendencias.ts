@@ -1,19 +1,19 @@
 // As Pendências das demandas como as telas as mostram: o Início, o board, a página da demanda e a do projeto derivam das
 // mesmas, pela regra única do núcleo, com o que cada uma precisa para levar ao chat ou à página da demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { CICLO_DA_DEMANDA } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { formatarRodadaRef } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { predecessorasPendentes } from "../../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
-import { encontrado } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { pendenciasDaDemanda, type TrabalhoVivo } from "../../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
-import type { Instante } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { configuracao } from "../../../../modulos/compartilhado/armazenamento/servico.ts";
-import { predecessorasDasDemandas } from "../../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
-import { condutor, type Situacao } from "../../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { formatarRodadaRef } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { predecessorasPendentes } from "../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
+import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { pendenciasDaDemanda, type TrabalhoVivo } from "../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+import type { Instante } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { configuracao } from "../../../modulos/compartilhado/armazenamento/servico.ts";
+import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
+import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
+import { condutor, type Situacao } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */

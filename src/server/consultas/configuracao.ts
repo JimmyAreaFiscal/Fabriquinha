@@ -1,12 +1,12 @@
 // As consultas da tela de Configuração (F7 §4.2): cada uma monta o contrato da resposta, lendo num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import { configuracao } from "../../../modulos/compartilhado/armazenamento/servico.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../contrato/configuracao.ts";
-import { listarAmbientesDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
-import { projetoComConfiguracoesDasEtapas } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
-import { listarProjetos, projetoExistente } from "../../../modulos/projeto/aplicacao/cadastro.ts";
-import { configuracaoDoAmbiente } from "../../../modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
+import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
+import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
+import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
+import { listarAmbientesDoConjunto } from "../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
+import { projetoComConfiguracoesDasEtapas } from "../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
+import { listarProjetos, projetoExistente } from "../../modulos/projeto/aplicacao/cadastro.ts";
+import { configuracaoDoAmbiente } from "../../modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 /** A configuração do F4 §3 com a próxima busca do agendador, só ligado. */
 export function consultarEstadoDaConfiguracao(banco: DatabaseSync, proximaBusca: () => Date): EstadoDaConfiguracao {

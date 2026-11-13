@@ -1,11 +1,8 @@
 // Rotas de leitura das demandas (comparacao-sdlc §9.1): o board e a página de uma demanda, com o endereço público
 // (D09) dos tickets e das rodadas, e os anexos das evidências. As ações do Auditor ficam em demandas_acoes.ts.
 import { z } from "zod";
-import {
-  consultarAnexoDaDemanda,
-  consultarBoardDeDemandas,
-  consultarDemanda,
-} from "../../consultas/demandas/demanda.ts";
+import { consultarBoardDeDemandas } from "../../../consultas/demandas/board_de_demandas.ts";
+import { consultarAnexoDaDemanda, consultarDemanda } from "../../../consultas/demandas/demanda.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
 import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../../rotas.ts";
 

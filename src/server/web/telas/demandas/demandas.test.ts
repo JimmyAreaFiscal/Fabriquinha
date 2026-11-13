@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import { pagina, quadro } from "./demandas.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());

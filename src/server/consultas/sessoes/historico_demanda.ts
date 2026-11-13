@@ -1,12 +1,12 @@
 // Sessões dos tickets da demanda para o Histórico e para o contador da navegação (comparacao-sdlc-implementacao.md
 // §9.1): lê `sessao` e o estado que o chat calcula; as sessões migradas pelo backfill entram como as novas.
 import type { DatabaseSync } from "node:sqlite";
-import type { ProcessoDoTrabalho } from "../../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
-import { encontrado } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import type { Resultado, SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
-import { trabalhosComTituloDaDemanda } from "../../../../modulos/trabalho_agentico/armazenamento/historico_demanda.ts";
-import { cabecalhoDaSessao } from "../../../../modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts";
+import type { ProcessoDoTrabalho } from "../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import type { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
+import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import type { Resultado, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
+import { trabalhosComTituloDaDemanda } from "../../../modulos/trabalho_agentico/armazenamento/historico_demanda.ts";
+import { cabecalhoDaSessao } from "../../../modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts";
 
 export type { Resultado, SessaoDeDemanda };
 

@@ -2,27 +2,27 @@
 // sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora; a
 // navegação conta o que aguarda pela mesma consulta.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda, TicketDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   CICLO_DO_TICKET,
   estadoDaRodadaNaEtapa,
   PRIMEIRA_ETAPA_DA_RODADA,
-} from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+} from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import {
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
-import { mesDoInstante, type Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import type { ModoTrabalho } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
-import type { EstadoDemanda } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { listarDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import { ticketsComPiAtivo } from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../contrato/inicio.ts";
+} from "../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { encontrado } from "../../modulos/compartilhado/nucleo/erros.ts";
+import { mesDoInstante, type Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import type { ModoTrabalho } from "../../modulos/compartilhado/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { listarDemandas } from "../../modulos/sdlc/armazenamento/demandas.ts";
+import { predecessorasDasDemandas } from "../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
+import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
+import { ticketsComPiAtivo } from "../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../contrato/inicio.ts";
 import { sessoesDeDemanda } from "./sessoes/historico_demanda.ts";
-import { metricasDosMeses } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { metricasDosMeses } from "../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
 import { bloqueiosDaDemanda } from "./demandas/bloqueios.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./demandas/pendencias.ts";
 

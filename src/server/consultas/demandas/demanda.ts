@@ -1,104 +1,48 @@
-// As consultas das telas das demandas: o board e a página de uma demanda, montados no contrato da API (contrato/)
-// a partir de um snapshot só, com as leituras em lote, sem uma consulta por ticket ou por dependente.
+// A consulta da página de uma demanda, montada no contrato da API (contrato/) a partir de um snapshot só, com as leituras
+// em lote, sem uma consulta por ticket ou por dependente. O board é de board_de_demandas.ts.
 import type { DatabaseSync } from "node:sqlite";
-import { type AgregadoDemanda, prDaDemanda } from "../../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
   gateQueEsperaGenteNaRodada,
-} from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { predecessorasPendentes } from "../../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
+} from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { predecessorasPendentes } from "../../../modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import {
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { Despacho, prontosParaExecutarAgora } from "../../../../modulos/sdlc/nucleo/despacho/despacho.ts";
-import { encontrado } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { prDoEspaco } from "../../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
-import { ticketAtualDaEtapa } from "../../../../modulos/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
-import { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
-import type { Relogio } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
-import { motivoDaFalhaDoTicket } from "../../../../modulos/sdlc/nucleo/tentativa.ts";
-import { achadoDaDemanda, carregarDemandas, listarDemandas } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
-import {
-  dependentesNaoConcluidasDaDemanda,
-  predecessorasDasDemandas,
-} from "../../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerAnexo } from "../../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
-import { lerEmSnapshot } from "../../../../modulos/compartilhado/armazenamento/snapshot.ts";
+} from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { Despacho, prontosParaExecutarAgora } from "../../../modulos/sdlc/nucleo/despacho/despacho.ts";
+import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
+import { ticketAtualDaEtapa } from "../../../modulos/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
+import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
+import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+import { motivoDaFalhaDoTicket } from "../../../modulos/sdlc/nucleo/tentativa.ts";
+import { achadoDaDemanda, carregarDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
+import { dependentesNaoConcluidasDaDemanda } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
+import { lerAnexo } from "../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
+import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
 import {
   sessaoDeCadaTicketDaDemanda,
   ticketsComPiAtivo,
-} from "../../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import type { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
-import { usoDaDemanda } from "../../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
-import { bloqueiosDaDemanda } from "./bloqueios.ts";
+} from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
+import { usoDaDemanda } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
 import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
-import { visaoDaDemanda } from "../../../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
+import { visaoDaDemanda } from "../../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
 
-const ref = (demanda_id: string) => ({
+/** Os endereços públicos das rodadas e dos tickets da demanda. */
+export const enderecosNaDemanda = (demanda_id: string) => ({
   rodada: (rodada_id: number) => formatarRodadaRef({ demanda_id, rodada_id }),
   ticket: (ticket_id: number) => formatarTicketRef({ demanda_id, ticket_id }),
 });
 
 /** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados em que o Gate do PR espera gente. */
-function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+export function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const estado = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.estado;
   if (estado === undefined || gateQueEsperaGenteNaRodada(estado) === undefined) return undefined;
   const pr = prDoEspaco(ag, rodada_id);
   return pr && { id: String(pr.numero), url: pr.url };
-}
-
-/** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
-const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>): BoardDeDemandas["trabalho"] =>
-  ag.tickets
-    .filter((t) => t.estado === "em_execucao")
-    .map((t) => {
-      const ticketRef = ref(ag.demanda.id).ticket(t.ticket_id);
-      return {
-        ref: ticketRef,
-        etapa: t.etapa,
-        ...(t.rodada_id !== undefined && { rodada: ref(ag.demanda.id).rodada(t.rodada_id) }),
-        ...(comPiAtivo.has(ticketRef) && { pi_ativo: true as const }),
-      };
-    });
-
-/** O board: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
-export function consultarBoardDeDemandas(
-  banco: DatabaseSync,
-  relogio: Relogio,
-  situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
-): BoardDeDemandas {
-  return lerEmSnapshot(banco, () => {
-    const todas = listarDemandas(banco);
-    const comPiAtivo = ticketsComPiAtivo(banco);
-    const predecessoras = predecessorasDasDemandas(
-      banco,
-      todas.map((ag) => ag.demanda.id),
-    );
-    const agora = relogio.agora();
-    return {
-      demandas: todas.map((ag) => {
-        const { id, projeto, titulo, estado } = ag.demanda;
-        return {
-          id,
-          projeto,
-          titulo,
-          estado,
-          terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
-          rodadas: ag.rodadas.map((r) => {
-            const pr = prDoGateDaRodada(ag, r.rodada_id);
-            return { ref: ref(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
-          }),
-          bloqueios: bloqueiosDaDemanda(
-            encontrado(predecessoras.get(id), `a demanda ${id} não foi lida`, "recarregue"),
-          ),
-          pendencias: pendenciasDeUmaDemanda(banco, ag, situacaoDa, agora),
-        };
-      }),
-      trabalho: todas.flatMap((ag) => emExecucao(ag, comPiAtivo)),
-    };
-  });
 }
 
 /** A classe do anexo pelo mime, para a tela escolher como mostrar. */
@@ -135,7 +79,7 @@ export function consultarDemanda(
   return lerEmSnapshot(banco, () => {
     const { agregado: ag, predecessoras, evidencias } = visaoDaDemanda(banco, id);
     const { demanda } = ag;
-    const { ticket, rodada } = ref(id);
+    const { ticket, rodada } = enderecosNaDemanda(id);
     const achado = achadoDaDemanda(banco, id);
     const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
     const comPiAtivo = ticketsComPiAtivo(banco);

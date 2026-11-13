@@ -15,7 +15,7 @@ import {
   rascunhoDe,
   selecao,
 } from "./configuracao.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());

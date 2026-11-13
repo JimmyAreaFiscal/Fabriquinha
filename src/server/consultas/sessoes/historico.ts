@@ -1,10 +1,10 @@
 // A consulta do Histórico e da navegação: as sessões de demanda do escopo, lidas num snapshot só e no formato do
 // contrato da API.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { lerEmSnapshot } from "../../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import type { FiltroDeSessoes, SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
+import { ErroDeRegra } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
+import type { FiltroDeSessoes, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
 import { sessoesDeDemanda } from "./historico_demanda.ts";
 
 /** O id da demanda do filtro, que só pode ser o endereço de uma demanda (`I-12` ou `12`). */
