@@ -15,7 +15,7 @@ import {
   type SituacaoDoDespacho,
 } from "../../nucleo/despacho/despacho.ts";
 import { ErroDeRegra, existe } from "../../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS, type EtapaConduzida, exigirEtapaConduzida } from "../../../etapas/catalogo.ts";
+import { CATALOGO_DE_ETAPAS, exigirEtapaConduzida } from "../../../etapas/catalogo.ts";
 import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { reservarTicket } from "../../nucleo/despacho/reserva_ticket.ts";
 import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
@@ -30,27 +30,12 @@ import { type Configuracao, limiteParalelismo } from "../../../compartilhado/arm
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { iniciarRevisaoIntegral } from "../revisao_demanda.ts";
-import { condutor, type CondutorDeTrabalhos } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import type { ConducaoDoTicket, DepsDaConducao, DepsDespacho } from "../../../etapas/conducoes.ts";
 
-/** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
-export interface DepsDaConducao {
-  banco: DatabaseSync;
-  relogio: Relogio;
-  condutor: CondutorDeTrabalhos;
-  registro: typeof anotar;
-  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
-  limiteMin?: number;
-}
-
-/** O que a Etapa faz com o ticket que o despacho reservou para ela, até concluí-lo ou falhá-lo. */
-export interface ConducaoDoTicket {
-  conduzir(ticket: Endereco): Promise<void>;
-}
-
-/** O despacho não conhece as Etapas: quem o chama (a composição, cada teste) entrega as conduções delas. */
-export interface DepsDespacho {
-  montarConducoes(deps: DepsDaConducao): Readonly<Record<EtapaConduzida, ConducaoDoTicket>>;
-}
+// provisório: remover no ticket 22 (os contratos entre o despacho e as conduções mudaram para a Condução, em
+// src/modulos/ciclo_de_vida/conducao/aplicacao/conducoes.ts)
+export type { ConducaoDoTicket, DepsDaConducao, DepsDespacho };
 
 const ehDaEtapaExterna = (estado: EstadoDemanda): boolean => {
   const etapa = etapaDoEstado(estado);
