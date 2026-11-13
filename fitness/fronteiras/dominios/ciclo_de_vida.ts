@@ -39,6 +39,14 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
       import: "../../../compartilhado/nucleo/primitivos.ts (um domínio migrado não importa o código antigo)",
       ticket: "22",
     },
+    // O mapeador das colunas da configuração do agente ainda mora no compartilhado (Sessões e Projetos também o usam);
+    // o ticket 22 o traz para o Ciclo de Vida.
+    {
+      arquivo: "modulos/ciclo_de_vida/planejamento/armazenamento/itens_do_planejamento.ts",
+      import:
+        "../../../compartilhado/armazenamento/configuracao_agente.ts (um domínio migrado não importa o código antigo)",
+      ticket: "22",
+    },
   ],
   // O compartilhado reexporta o vocabulário e a configuração do agente da fachada, e a configuração do agente lê dele
   // `Modelo` e `Effort`: os dois somem no ticket 22.

@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "./agregado_demanda.ts";
-import { type Ator, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { materializar } from "../../../sdlc/nucleo/demanda/plano.ts";
+import { type Ator, Endereco, FABRIQUINHA } from "../../etapas/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   CorrecaoDoPlano,
   correcaoDasRodadasNovas,
   correcaoDosTicketsDaRodada,
   lerPlanoGravado,
-  materializar,
   Plano,
   PlanoProposto,
 } from "./plano.ts";

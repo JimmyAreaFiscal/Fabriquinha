@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { OrigemDaVersao } from "../../../modulos/sdlc/nucleo/demanda/plano.ts";
+import { OrigemDaVersao } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 

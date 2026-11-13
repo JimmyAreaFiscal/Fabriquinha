@@ -27,7 +27,8 @@ import { ErroDeEscopo, ErroDeRegra, existe } from "../../../compartilhado/nucleo
 import { exigirAutoria } from "../evidencias/evidencia.ts";
 import { pendentesDeEnvio } from "../evidencias/evidencia_demanda.ts";
 import { criarTicket, ticketAtualDaEtapa } from "../item_de_trabalho/item_de_trabalho.ts";
-import { lerPlanoGravado, materializar, PlanoProposto } from "../demanda/plano.ts";
+import { criteriosDaDefinicaoCongelada, lerPlanoGravado, materializar, type PlanoProposto } from "../demanda/plano.ts";
+import { validarPlanoDaDemanda } from "../../../ciclo_de_vida/publico.ts";
 import { Id, type Instante, Markdown, Modelo, Slug, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
 import {
   comReaberturaDoAuditor,
@@ -134,9 +135,6 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
   return { ...ag, demanda: { ...CICLO_DA_DEMANDA.mudar(demanda, "gate_demanda", ctx.agora), enviada: true } };
 }
 
-// A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
-const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
-
 function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
   const ticket = ticketAtualDaEtapa(ag, etapaDoPapel("planeja_a_demanda"));
   if (ticket === undefined) {
@@ -161,8 +159,8 @@ export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plan
 }
 
 /**
- * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `PlanoProposto` e
- * citar só `CA-n` da definição congelada. Devolve o plano e o ticket de planejamento, ou lança a recusa.
+ * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pela validação do
+ * Planejamento (`validarPlanoDaDemanda`). Devolve o plano e o ticket de planejamento, ou lança a recusa.
  */
 export function validarPlano(
   ag: AgregadoDemanda,
@@ -180,39 +178,11 @@ export function validarPlano(
   const planejamento = etapaDoPapel("planeja_a_demanda");
   CICLO_DA_DEMANDA.exigir(demanda, estadoDaDemandaNaEtapa(planejamento));
   exigirSemFalha(ag, planejamento);
-  const plano = PlanoProposto.safeParse(entrada);
-  if (!plano.success) {
-    throw new ErroDeRegra(
-      `plano inválido: ${plano.error.issues.map((i) => i.message).join("; ")}`,
-      "corrija o plano e submeta de novo",
-    );
-  }
-  // A aprovação materializa todo ticket do plano na primeira Etapa da rodada, e a seleção só enxerga tickets de rodada.
-  const semRodada = plano.data.tickets.filter((t) => t.rodada_id === undefined).map((t) => String(t.ticket_id));
-  if (semRodada.length > 0) {
-    throw new ErroDeRegra(
-      `os tickets ${semRodada.join(", ")} do plano não têm rodada`,
-      "informe a rodada_id de cada ticket de implementação",
-    );
-  }
-  if (plano.data.demanda_id !== demanda.id) {
-    throw new ErroDeRegra(
-      `o plano é da demanda ${plano.data.demanda_id}, não da ${demanda.id}`,
-      "use o demanda_id certo",
-    );
-  }
-  const definicao = ag.evidencias.find(
-    (e) => e.tipo === "criterios_aceite" && e.rodada_id === undefined && e.ticket_id === undefined,
-  );
-  const existentes = new Set(DadosCriterios.safeParse(definicao?.dados).data?.criterios.map((c) => c.id));
-  const ausentes = plano.data.criterios.filter((c) => !existentes.has(c));
-  if (ausentes.length > 0) {
-    throw new ErroDeRegra(
-      `o plano cita ${ausentes.join(", ")}, que a definição da demanda ${demanda.id} não tem`,
-      "cite só os CA-n da definição congelada",
-    );
-  }
-  return { plano: plano.data, ticket };
+  const plano = validarPlanoDaDemanda(entrada, {
+    id: demanda.id,
+    criteriosDaDefinicao: criteriosDaDefinicaoCongelada(ag),
+  });
+  return { plano, ticket };
 }
 
 /**

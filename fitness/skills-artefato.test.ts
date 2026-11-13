@@ -6,8 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CATALOGO_ETAPAS, TipoEvidencia } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { PlanoProposto } from "../src/modulos/sdlc/nucleo/demanda/plano.ts";
+import { CATALOGO_ETAPAS, PlanoProposto, TipoEvidencia } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { PACOTE, skillDoTipo } from "../src/modulos/sessoes/publico.ts";
 
 const MAX_LINHAS = 100;
