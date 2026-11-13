@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
-import { AUDITOR, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
+import { AUDITOR, Endereco, FABRIQUINHA } from "../../etapas/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarTicket,
   estaOcupado,
