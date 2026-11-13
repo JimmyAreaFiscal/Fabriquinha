@@ -12,7 +12,7 @@ import {
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo,

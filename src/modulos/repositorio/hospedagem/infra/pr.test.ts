@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as esperar } from "node:timers/promises";
-import { ErroDeRegra, ErroExterno } from "../../../compartilhado/nucleo/erros.ts";
-import type { Hospedagem } from "../../nucleo/repositorio_do_projeto.ts";
+import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import type { Hospedagem } from "../../git/publico.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
-import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { integrarPR, lerPR, PADROES_DA_ESPERA_DO_PR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));

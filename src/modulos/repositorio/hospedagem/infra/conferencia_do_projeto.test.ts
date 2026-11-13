@@ -14,8 +14,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { conferirProjeto, hospedagemDoRemoto } from "./cadastro.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { conferirProjeto, hospedagemDoRemoto } from "./conferencia_do_projeto.ts";
 
 // realpath: a conferência 1 compara caminhos literais, e o tmpdir pode ser um symlink (ex.: /tmp no macOS).
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-cadastro-")));

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { heatmapDo, lerLog, prsDos } from "./heatmap.ts";
 
 type NoDoHeatmap = Awaited<ReturnType<typeof heatmapDo>>["raiz"];

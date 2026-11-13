@@ -391,20 +391,19 @@ test("a fitness do processo acusa o chamador do Espaço que importa child_proces
     [ARQUIVO_DO_PROCESSO]: 'import { spawn } from "node:child_process";\n',
     [`${PASTAS_LIBERADAS_DO_PROCESSO[0] ?? ""}host_local/ambiente_host_local.ts`]:
       'import { spawn } from "child_process";\nimport { executar } from "../../../compartilhado/infra/processo.ts";\n',
-    "modulos/repositorio/infra/hospedagem/pr.ts":
-      'import { executar } from "../../../compartilhado/infra/processo.ts";\n',
-    "modulos/repositorio/infra/git/commit.ts": 'import { exigirGitNoAmbiente } from "../worktree/worktree.ts";\n',
-    "modulos/repositorio/aplicacao/espaco_ruim.ts":
-      'import { spawn } from "node:child_process";\nimport { git } from "../../compartilhado/infra/processo.ts";\n',
+    "modulos/repositorio/hospedagem/infra/pr.ts": 'import { executar } from "../../../../shared/infra/processo.ts";\n',
+    "modulos/repositorio/commits/infra/commit.ts": 'import { exigirGitNoAmbiente } from "../../git/publico.ts";\n',
+    "modulos/repositorio/espaco_de_trabalho/aplicacao/espaco_ruim.ts":
+      'import { spawn } from "node:child_process";\nimport { git } from "../../../../shared/infra/processo.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["modulos/repositorio/infra/hospedagem/pr.ts"]).sort(), [
-    "modulos/repositorio/aplicacao/espaco_ruim.ts importa infra/processo.ts",
-    "modulos/repositorio/aplicacao/espaco_ruim.ts importa node:child_process",
+  assert.deepEqual(acharViolacoesDoProcesso(raiz, ["modulos/repositorio/hospedagem/infra/pr.ts"]).sort(), [
+    "modulos/repositorio/espaco_de_trabalho/aplicacao/espaco_ruim.ts importa infra/processo.ts",
+    "modulos/repositorio/espaco_de_trabalho/aplicacao/espaco_ruim.ts importa node:child_process",
   ]);
 });
 

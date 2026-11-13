@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { espacoDaDemanda, espacoDaRodada, espacoDoTicket, EspacoDeTrabalho } from "./espaco_de_trabalho.ts";
-import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { EtapaTicket } from "../../etapas/catalogo.ts";
+import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { EtapaTicket } from "../../../etapas/catalogo.ts";
 
 const projeto = { nome: "proj", branch_base: "main" };
 const ag = { demanda: { id: "I-7" } } as Parameters<typeof espacoDoTicket>[0];

@@ -4,8 +4,8 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { executar } from "../../../compartilhado/infra/processo.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { executar } from "../../../../shared/infra/processo.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo as commit,
@@ -17,7 +17,7 @@ import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
-import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
+import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
 import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();
