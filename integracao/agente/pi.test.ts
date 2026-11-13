@@ -11,6 +11,8 @@ import { HarnessPi, PACOTE } from "../../src/modulos/sessoes/publico.ts";
 import { skillsDaEtapaDemanda } from "../../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/lancamento_do_ticket.ts";
 import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
 
+// A fumaça é do pi de verdade, o do PATH, e não do pi falso que o harness dos testes põe no lugar.
+delete process.env.FABRIQUINHA_PI;
 const harness = new HarnessPi();
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
 after(() => {

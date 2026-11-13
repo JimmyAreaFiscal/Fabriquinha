@@ -86,3 +86,60 @@ test("sem $FABRIQUINHA_PI usa pi do PATH; binário ausente diz como resolver", a
     process.env.FABRIQUINHA_PI = piFalso.caminho;
   }
 });
+
+test("HarnessPi.precosDosModelos: o preço de cada modelo do catálogo do pi, pelo RPC get_available_models", async () => {
+  piFalso.roteirizar([
+    {
+      catalogoDeModelos: [
+        {
+          provider: "openai-codex",
+          id: "gpt-6-luna",
+          name: "GPT-6 Luna",
+          cost: {
+            input: 0.1,
+            output: 0.5,
+            cacheRead: 0.01,
+            cacheWrite: 0.125,
+            tiers: [{ inputTokensAbove: 272000, input: 0.2, output: 0.75, cacheRead: 0.02, cacheWrite: 0.25 }],
+          },
+        },
+        // O pi declara 0 quando não sabe o preço (os modelos das extensões sem preço): fica fora, não é preço.
+        {
+          provider: "claude-bridge",
+          id: "claude-haiku-5-5",
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        },
+        { provider: "local", id: "sem-custo" },
+      ],
+    },
+  ]);
+  try {
+    assert.deepEqual(await harness.precosDosModelos(), [
+      {
+        modelo: { provedor: "openai-codex", nome: "gpt-6-luna" },
+        usd_por_milhao: { entrada: 0.1, saida: 0.5, cache_leitura: 0.01, cache_escrita: 0.125 },
+        origem: "pi",
+      },
+    ]);
+    const [inicio, comando] = piFalso.registro();
+    assert.deepEqual(inicio?.argv, ["--mode", "rpc", "--no-session", "--offline"]);
+    assert.deepEqual(comando?.comando, { type: "get_available_models" });
+  } finally {
+    piFalso.roteirizar([{ listaDeModelos: { tabela } }]);
+  }
+});
+
+test("HarnessPi.precosDosModelos recusa quando o pi não responde ao get_available_models", async () => {
+  piFalso.roteirizar([{ sai: { codigo: 3, stderr: "sem provedores", quando: "antes_da_sessao" } }]);
+  try {
+    await assert.rejects(
+      harness.precosDosModelos(),
+      (erro) =>
+        erro instanceof ErroDeRegra &&
+        erro.message ===
+          "o pi não informou os preços dos modelos: sem provedores (confira o pi rodando pi --mode rpc e o comando get_available_models)",
+    );
+  } finally {
+    piFalso.roteirizar([{ listaDeModelos: { tabela } }]);
+  }
+});

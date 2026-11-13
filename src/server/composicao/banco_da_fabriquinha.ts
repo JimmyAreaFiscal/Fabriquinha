@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DO_AMBIENTE } from "../../modulos/ambiente/publico.ts";
+import { MIGRACOES_DE_SESSOES } from "../../modulos/sessoes/publico.ts";
 import { concluirDesenvolvimento } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import {
   configuracao,
@@ -33,7 +34,12 @@ ligarLeituraDosLimitesDasSessoes({
   ociosidadeMin: (banco) => configuracao(banco).ociosidadeMin,
 });
 
-const MIGRACOES_DOS_DOMINIOS = [MIGRACOES_DE_DEMANDAS, MIGRACOES_DO_CICLO_DE_VIDA, MIGRACOES_DO_AMBIENTE];
+const MIGRACOES_DOS_DOMINIOS = [
+  MIGRACOES_DE_DEMANDAS,
+  MIGRACOES_DO_CICLO_DE_VIDA,
+  MIGRACOES_DO_AMBIENTE,
+  MIGRACOES_DE_SESSOES,
+];
 
 /** Abre o banco da `raiz` (padrão: a do serviço) e aplica as migrações pendentes, do histórico e dos domínios. */
 export const abrirBancoDaFabriquinha = (raiz?: string): DatabaseSync => abrir(raiz, MIGRACOES_DOS_DOMINIOS);

@@ -1,25 +1,22 @@
 // Tokens, modelo e custo de cada Etapa, do Uso medido nas execuções e do Uso declarado das sessões externas.
-import { type LinhaDeUso, textoDoCusto, Uso, type UsoDaExecucao, usoEmLote } from "../../../../sessoes/publico.ts";
+import {
+  type CustoDoUso,
+  type LinhaDeUso,
+  linhaDeUsoDaExecucao,
+  textoDoCusto,
+  Uso,
+  type UsoDaExecucao,
+  usoEmLote,
+} from "../../../../sessoes/publico.ts";
 import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 import { encontrado } from "../../../../../shared/nucleo/erros.ts";
 import { type EscopoDosFatos, lerExecucoesDoRecorte, lerUsoDeclaradoDoRecorte } from "../leitura_dos_fatos.ts";
 
-/** O Uso medido como Uso; o banco não guarda as chamadas do uso medido, por isso 0, e o custo ausente é desconhecido. */
-const linhaDeUsoMedido = (uso: UsoDaExecucao): LinhaDeUso => ({
-  modelo: `${uso.modelo_provedor}/${uso.modelo_nome}`,
-  tokens_entrada: uso.tokens_entrada,
-  tokens_saida: uso.tokens_saida,
-  tokens_cache_leitura: uso.tokens_cache_leitura,
-  tokens_cache_escrita: uso.tokens_cache_escrita,
-  custo: uso.custo ?? null,
-  chamadas: 0,
-});
-
 /** O Uso das execuções, cada uma um Trabalho: o custo desconhecido conta uma sessão sem custo por execução. */
 export const usoPorExecucao = (usos: readonly UsoDaExecucao[]): Uso =>
   [...Map.groupBy(usos, (uso) => uso.execucao_id).values()]
-    .map((daExecucao) => Uso.de(daExecucao.map(linhaDeUsoMedido), 1))
+    .map((daExecucao) => Uso.de(daExecucao.map(linhaDeUsoDaExecucao), 1))
     .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
 
 /** O Uso declarado, cada sessão externa um Trabalho. */
@@ -46,12 +43,15 @@ export class MetricaDeUso extends MetricaPorEtapa<
     duracaoMs: number;
     tokens: { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number; total: number };
     modelos: LinhaDeUso[];
-    /** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
-    custo: { conhecido: number; trabalhosSemCusto: number };
+    /**
+     * Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado ou estimado, e
+     * `trabalhosComCustoEstimado > 0`, que parte dele foi estimada pelo catálogo de preços.
+     */
+    custo: CustoDoUso;
     /** O custo como todas as telas o mostram (`textoDoCusto`). */
     textoDoCusto: string;
     /** A parte do custo vinda das sessões externas declaradas, já somada em `custo`. */
-    custoExterno: { conhecido: number; trabalhosSemCusto: number; sessoes: number };
+    custoExterno: CustoDoUso & { sessoes: number };
   }
 > {
   readonly definicao = { tipo: "uso", rotulo: "Uso", fonte: "Uso" } as const;

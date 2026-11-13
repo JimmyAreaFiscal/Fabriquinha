@@ -43,7 +43,7 @@ const consumo = (custo: number, entrada = 0, saida = 0, cacheLeitura = 0, cacheE
   falhas: 0,
   duracaoMs: 0,
   tokens: { entrada, saida, cacheLeitura, cacheEscrita, total: entrada + saida + cacheLeitura + cacheEscrita },
-  custo: { conhecido: custo, trabalhosSemCusto: 0 },
+  custo: { conhecido: custo, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 },
   textoDoCusto: `US$ ${custo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
 });
 
@@ -519,6 +519,7 @@ test("por etapa: o Uso de cada Etapa com o custo, a média, a fonte e os modelos
       entender_e_desenhar: {
         uso: uso(4.2, 0, 9_800_000, {
           textoDoCusto: "≥ US$ 4,20 (2 sessões sem custo)",
+          custo: { conhecido: 4.2, trabalhosSemCusto: 2, trabalhosComCustoEstimado: 0 },
           custoExterno: externo,
           modelos: [modelo("claude-bridge/claude-opus-5-5", 4.2, 100, 6_000_000), modelo("local", null, 50)],
         }),
@@ -591,7 +592,11 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o aviso quand
       meses: [
         mes("2026-10", 2, 1, null, {
           niveis,
-          total: { ...consumo(2), custo: { conhecido: 2, trabalhosSemCusto: 2 }, modelos: [] },
+          total: {
+            ...consumo(2),
+            custo: { conhecido: 2, trabalhosSemCusto: 2, trabalhosComCustoEstimado: 0 },
+            modelos: [],
+          },
         }),
       ],
     },
@@ -611,7 +616,11 @@ test("por nível: cada nível do agrupamento com a soma do mês, e o aviso quand
     { ...ESTADO, de: "2026-10" },
   );
   assert.doesNotMatch(texto(/<h2>Por nível<\/h2>[\s\S]*?<\/section>/.exec(completo)?.[0] ?? ""), /≥:/);
-  const uma = { ...consumo(2), custo: { conhecido: 2, trabalhosSemCusto: 1 }, modelos: [] };
+  const uma = {
+    ...consumo(2),
+    custo: { conhecido: 2, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 },
+    modelos: [],
+  };
   assert.match(
     texto(
       paginaDeMetricas(
@@ -662,6 +671,56 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
     { ...ESTADO, de: "2026-10" },
   );
   assert.match(zerado, /<div class="trilha" style="width:0.0%"><\/div>/);
+});
+
+test("custo estimado pelo catálogo: o aviso em destaque próprio, a marca no modelo e a nota sob os níveis", () => {
+  const estimado = { conhecido: 3, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 1 };
+  const textoDoCusto = "US$ 3,00 (estimado em 1 sessão)";
+  const modelos = [
+    {
+      modelo: "claude-bridge/claude-haiku-5-5",
+      tokens_entrada: 1_000_000,
+      tokens_saida: 0,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo: 3,
+      custo_estimado: true as const,
+      chamadas: 0,
+    },
+  ];
+  const total = { ...consumo(3), custo: estimado, textoDoCusto, modelos };
+  const html = paginaDeMetricas(
+    {
+      ...DADOS,
+      meses: [
+        mes("2026-10", 3, 1, null, {
+          total,
+          niveis: [{ nivel: "execucao", grupos: 1, total }],
+          etapas: etapas({ implementar: { uso: uso(3, 1, 1_000_000, { custo: estimado, textoDoCusto, modelos }) } }),
+        }),
+      ],
+    },
+    { ...ESTADO, de: "2026-10" },
+  );
+  // O aviso do estimado não é o das sessões sem custo: tem a classe própria, no card e na Etapa.
+  assert.match(html, /<span class="kpi-valor">US\$ 3,00 <small class="estimado">\(estimado em 1 sessão\)<\/small>/);
+  assert.match(
+    secoesDaPagina(html)[2]?.html ?? "",
+    /<span class="kpi-valor">US\$ 3,00 <small class="estimado">\(estimado em 1 sessão\)<\/small><\/span>/,
+  );
+  assert.doesNotMatch(html, /class="sem-custo"/);
+  // No modelo, a marca "estimado" ao lado do valor.
+  assert.match(html, /<b>US\$ 3,00 <small class="estimado">estimado<\/small><\/b>/);
+  const porModelo = /<h3>out\/26<\/h3><span class="sub">tokens por tipo[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
+  assert.match(
+    texto(porModelo),
+    /^out\/26 tokens por tipo e custo como o pi calculou ou, marcado, estimado pelo preço do catálogo /,
+  );
+  const porNivel = /<h2>Por nível<\/h2>[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
+  assert.match(
+    texto(porNivel),
+    /estimado: o pi não informou o custo de 1 sessão; ele foi estimado pelo preço do catálogo de modelos\.$/,
+  );
 });
 
 test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, estado, nota e o total", () => {

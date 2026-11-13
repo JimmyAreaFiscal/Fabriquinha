@@ -10,7 +10,7 @@ import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
 import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
-import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
+import { dirDoPiDoAuditor, gravarCatalogoDePrecos, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
 import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
@@ -128,6 +128,16 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     throw error_;
   }
   const banco = aberto;
+  // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
+  // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
+  // ponytail: o preço que o pi passa a declarar depois da subida só entra na subida seguinte; reler na batida do relógio
+  // se o catálogo do pi mudar com o serviço no ar.
+  const gravacaoDoCatalogo = harnessDoServico
+    .precosDosModelos()
+    .then((precos) => {
+      gravarCatalogoDePrecos(banco, precos, relogio.agora());
+    })
+    .catch(noLogDoServico);
   const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
@@ -205,6 +215,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
       await eliminacaoDeOciosos;
+      await gravacaoDoCatalogo;
       await condutor.aguardarTodos(LIMITE_PARADA_MS);
       banco.close();
     },

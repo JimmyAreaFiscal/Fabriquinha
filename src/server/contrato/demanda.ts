@@ -84,6 +84,8 @@ const LinhaDeUso = z.object({
   tokens_cache_leitura: z.number(),
   tokens_cache_escrita: z.number(),
   custo: z.number().nullable(),
+  /** O custo foi estimado pelo catálogo de preços, porque o harness não o informou. */
+  custo_estimado: z.literal(true).optional(),
   chamadas: z.number(),
 });
 
@@ -111,10 +113,10 @@ export const PaginaDaDemanda = z.object({
     terminal: z.boolean(),
     arquivavel: z.boolean(),
   }),
-  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo. */
+  /** O Uso da demanda; o custo já vem em texto (`textoDoCusto`), com ≥ e o aviso quando falta custo ou ele foi estimado. */
   uso: z.object({
     modelos: z.array(LinhaDeUso),
-    custo: z.object({ conhecido: z.number(), trabalhosSemCusto: z.number() }),
+    custo: z.object({ conhecido: z.number(), trabalhosSemCusto: z.number(), trabalhosComCustoEstimado: z.number() }),
     textoDoCusto: z.string(),
   }),
   rodadas: z.array(

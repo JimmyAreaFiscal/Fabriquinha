@@ -1,4 +1,4 @@
-// Uso: a soma por modelo, o custo desconhecido e a contagem de Trabalhos sem custo.
+// Uso: a soma por modelo, o custo desconhecido e a contagem de Trabalhos sem custo e com custo estimado.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { LinhaDeUso } from "../../harness/publico.ts";
@@ -27,7 +27,7 @@ test("Uso.de soma o custo conhecido como número e agrupa as linhas do mesmo mod
       chamadas: 2,
     },
   ]);
-  assert.deepEqual(uso.custo(), { conhecido: 4.2, trabalhosSemCusto: 0 });
+  assert.deepEqual(uso.custo(), { conhecido: 4.2, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
 });
 
 test("Uso.de deixa o custo desconhecido como null e conta os Trabalhos sem custo", () => {
@@ -36,7 +36,7 @@ test("Uso.de deixa o custo desconhecido como null e conta os Trabalhos sem custo
     uso.porModelo().map((linha) => linha.custo),
     [null, null],
   );
-  assert.deepEqual(uso.custo(), { conhecido: 0, trabalhosSemCusto: 2 });
+  assert.deepEqual(uso.custo(), { conhecido: 0, trabalhosSemCusto: 2, trabalhosComCustoEstimado: 0 });
 });
 
 test("Uso.de rejeita custo negativo", () => {
@@ -55,12 +55,12 @@ test("Uso.somar agrupa por modelo, mantém o custo conhecido diante do desconhec
       { modelo: "b/m", custo: 1, tokens_entrada: 20 },
     ],
   );
-  assert.deepEqual(soma.custo(), { conhecido: 1, trabalhosSemCusto: 2 });
+  assert.deepEqual(soma.custo(), { conhecido: 1, trabalhosSemCusto: 2, trabalhosComCustoEstimado: 0 });
 });
 
 test("Uso.vazio não tem linhas nem Trabalhos sem custo", () => {
   assert.deepEqual(Uso.vazio().porModelo(), []);
-  assert.deepEqual(Uso.vazio().custo(), { conhecido: 0, trabalhosSemCusto: 0 });
+  assert.deepEqual(Uso.vazio().custo(), { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
 });
 
 test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso com '≥' e a contagem", () => {
@@ -68,6 +68,39 @@ test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso co
   assert.equal(textoDoCusto(conhecido), "US$ 4,20");
   assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 2))), "≥ US$ 4,20 (2 sessões sem custo)");
   assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 1))), "≥ US$ 4,20 (1 sessão sem custo)");
+});
+
+const linhaComCustoEstimado = (modelo: string, custo: number): LinhaDeUso => ({
+  ...linhaDeUso(modelo, custo),
+  custo_estimado: true,
+});
+
+test("Uso.de conta como estimado o Trabalho com alguma linha de custo estimado, e a soma marca o modelo estimado", () => {
+  const informado = Uso.de([linhaDeUso("a/m", 1)], 1);
+  const estimado = Uso.de([linhaComCustoEstimado("a/m", 2), linhaDeUso("b/m", 0.5)], 3);
+  const soma = informado.somar(estimado);
+  assert.deepEqual(
+    soma.porModelo().map(({ modelo, custo, custo_estimado }) => ({ modelo, custo, custo_estimado })),
+    [
+      { modelo: "a/m", custo: 3, custo_estimado: true },
+      { modelo: "b/m", custo: 0.5, custo_estimado: undefined },
+    ],
+  );
+  assert.deepEqual(soma.custo(), { conhecido: 3.5, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 3 });
+  assert.equal("custo_estimado" in (informado.porModelo()[0] ?? {}), false, "o custo informado não ganha a marca");
+});
+
+test("textoDoCusto avisa o custo estimado, sozinho ou ao lado das sessões sem custo", () => {
+  const estimado = Uso.de([linhaComCustoEstimado("a/m", 4.2)], 1);
+  assert.equal(textoDoCusto(estimado), "US$ 4,20 (estimado em 1 sessão)");
+  assert.equal(
+    textoDoCusto(estimado.somar(Uso.de([linhaComCustoEstimado("b/m", 1)], 1))),
+    "US$ 5,20 (estimado em 2 sessões)",
+  );
+  assert.equal(
+    textoDoCusto(estimado.somar(Uso.de([linhaDeUso("b/m", null)], 2))),
+    "≥ US$ 4,20 (2 sessões sem custo; estimado em 1 sessão)",
+  );
 });
 
 test("a sessão declarada em duas demandas, somada, conta os tokens uma vez", () => {

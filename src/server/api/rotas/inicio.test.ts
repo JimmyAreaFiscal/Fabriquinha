@@ -60,7 +60,7 @@ test("GET /api/inicio: o custo do mês sai no texto do Uso somado, com ≥ e o a
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
       ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0),
       ('xu2', 's-ajustes', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu2', 'p', 'm', 5, 1, 0, 0, NULL);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu2', 'p', 'm', 5, 1, 0, 0, NULL);`);
   const { pedir } = await servir(banco);
   const { mes } = (await pedir("/api/inicio")).json<DadosDoInicio>();
   assert.equal(mes.total.textoDoCusto, "≥ US$ 4,20 (1 sessão sem custo)");
@@ -73,7 +73,7 @@ test("GET /api/inicio: o Uso declarado soma ao medido do mês, e a sessão decla
   banco.exec(`
     UPDATE processo_demanda SET estado_alterado_em = '${agoraIso}' WHERE demanda_id = 'I-300';
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2);`);
   const declarar = (sessao: string, custo: string) => {
     banco.exec(`INSERT INTO uso_declarado VALUES ('claude', '${sessao}', 'I-300', json_array(json_object(
       'modelo', 'p/m', 'tokens_entrada', 5, 'tokens_saida', 1, 'tokens_cache_leitura', 0, 'tokens_cache_escrita', 0,

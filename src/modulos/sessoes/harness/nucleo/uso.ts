@@ -3,6 +3,8 @@
 
 /**
  * O Uso de um modelo (`provedor/modelo`): tokens, chamadas e o custo, `null` quando desconhecido (D10), nunca 0.
+ * `custo_estimado` marca o custo que a Fabriquinha estimou pelo catálogo de preços, porque o harness não o informou; o
+ * harness nunca o marca.
  */
 export interface LinhaDeUso {
   modelo: string;
@@ -11,6 +13,7 @@ export interface LinhaDeUso {
   tokens_cache_leitura: number;
   tokens_cache_escrita: number;
   custo: number | null;
+  custo_estimado?: true;
   chamadas: number;
 }
 

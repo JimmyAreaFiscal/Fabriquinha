@@ -12,8 +12,11 @@ export type FiltroDeMetricas = z.infer<typeof FiltroDeMetricas>;
 const Texto = z.string();
 const Contagem = z.number().int().nonnegative();
 const Numero = z.number();
-/** Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado. */
-const Custo = z.object({ conhecido: Numero, trabalhosSemCusto: Contagem });
+/**
+ * Custo ausente não é zero: `trabalhosSemCusto > 0` avisa que `conhecido` soma só o que foi informado ou estimado, e
+ * `trabalhosComCustoEstimado > 0`, que parte dele foi estimada pelo catálogo de preços.
+ */
+const Custo = z.object({ conhecido: Numero, trabalhosSemCusto: Contagem, trabalhosComCustoEstimado: Contagem });
 
 const LinhaDeUso = z.object({
   modelo: Texto,
@@ -22,6 +25,8 @@ const LinhaDeUso = z.object({
   tokens_cache_leitura: Contagem,
   tokens_cache_escrita: Contagem,
   custo: Numero.nullable(),
+  /** O custo foi estimado pelo catálogo de preços, porque o harness não o informou. */
+  custo_estimado: z.literal(true).optional(),
   chamadas: Contagem,
 });
 

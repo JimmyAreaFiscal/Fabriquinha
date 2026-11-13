@@ -335,7 +335,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
       INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
-      INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
+      INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
       INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
       INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
       INSERT INTO iteracao_demanda (demanda_id, ticket_id, tipo, em) VALUES ('${d}', 1, 'mensagem', 't');
@@ -594,7 +594,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO uso_declarado VALUES ('pi', '${d}x', '${d}', '[]');
     INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
     INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);

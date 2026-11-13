@@ -63,7 +63,7 @@ function demandaComExecucao(id: string, projeto: string, tipo = "problema"): voi
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
     INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'p', 'm', 10, 1, 0, 0, 2);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('x-${id}', 'p', 'm', 10, 1, 0, 0, 2);`);
 }
 
 const agora = new Date();
@@ -82,7 +82,7 @@ test("GET /api/metricas: padrão nos 11 meses anteriores mais o corrente, de tod
   );
   assert.equal(meses.at(-1)?.projeto, null);
   assert.equal(meses.at(-1)?.demandas.registradas, 2);
-  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, trabalhosSemCusto: 0 });
+  assert.deepEqual(meses.at(-1)?.total.custo, { conhecido: 4, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
   assert.equal(meses.at(-1)?.total.textoDoCusto, "US$ 4,00");
 });
 
@@ -90,7 +90,7 @@ test("GET /api/metricas e /api/metricas/demandas: o mesmo texto do custo, com �
   demandaComExecucao("I-1", "loja");
   const agoraIso = new Date().toISOString();
   banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('y-I-1', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('y-I-1', 'p', 'm', 3, 1, 0, 0, NULL);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('y-I-1', 'p', 'm', 3, 1, 0, 0, NULL);`);
   const texto = "≥ US$ 2,00 (1 sessão sem custo)";
   const [mesAtual] = (await chamar(`/api/metricas?de=${mes(0)}&ate=${mes(0)}`)) as [MetricasDoMes];
   assert.equal(mesAtual.total.textoDoCusto, texto);
@@ -185,7 +185,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
     falhas: 0,
     duracaoMs: 0,
     tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0, total: 11 },
-    custo: { conhecido: 2, trabalhosSemCusto: 0 },
+    custo: { conhecido: 2, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 },
     textoDoCusto: "US$ 2,00",
   };
   assert.deepEqual(corpo, {
@@ -193,7 +193,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
       ...execucaoDeUmaDemanda,
       execucoes: 2,
       tokens: { entrada: 20, saida: 2, cacheLeitura: 0, cacheEscrita: 0, total: 22 },
-      custo: { conhecido: 4, trabalhosSemCusto: 0 },
+      custo: { conhecido: 4, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 },
       textoDoCusto: "US$ 4,00",
       conformidade: null,
       nota: null,

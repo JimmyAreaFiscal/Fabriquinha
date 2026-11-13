@@ -23,7 +23,7 @@ function semear(raiz: string): void {
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO trabalho_agentico VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x${String(id)}', 's${String(id)}', '${em(mes)}', '${em(mes)}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('x${String(id)}', 'anthropic', 'claude-sonnet-5-5', ${String(custo * 1000)}, 500, 0, 0, ${String(custo)});`;
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('x${String(id)}', 'anthropic', 'claude-sonnet-5-5', ${String(custo * 1000)}, 500, 0, 0, ${String(custo)});`;
   banco.exec(`
     ${projeto("loja")}
     ${projeto("site")}
@@ -237,7 +237,7 @@ test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo tex
     INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-1', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-1', 2, 'autonomo', 'c2');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
       ('xc', 's-com-custo', '${em(M0)}', '${em(M0)}', 0), ('xs', 's-sem-custo', '${em(M0)}', '${em(M0)}', 0);
-    INSERT INTO uso_modelo_execucao VALUES
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES
       ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2),
       ('xs', 'anthropic', 'claude-sonnet-5-5', 2000, 500, 0, 0, NULL);
   `);
@@ -249,6 +249,65 @@ test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo tex
   await expect(pagina.getByRole("row", { name: /^Sessão \d/ })).toContainText(texto);
   await expect(pagina.getByRole("row", { name: /^I-1 / })).toContainText(texto);
   await expect(pagina.getByText("custo incompleto")).toHaveCount(0);
+});
+
+test("o custo estimado pelo catálogo: marcado no card, na Etapa, no nível, no modelo e na demanda, distinto do informado", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  // A subida leu o catálogo de preços do pi (o falso declara o opus e o sonnet).
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
+  await expect
+    .poll(() => banco.prepare("SELECT count(*) AS n FROM preco_do_modelo WHERE origem = 'pi'").get()?.n)
+    .toBe(2);
+  // Como Sessões grava no fim da execução: a xc com o custo informado pelo pi; a xe sem ele, estimada pelo preço do haiku.
+  banco.exec(`
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
+    INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) VALUES ('I-1', 'em_execucao', '${em(M0)}', 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
+      ('I-1', 1, 'implementar', 'aberto', '${em(M0)}'), ('I-1', 2, 'implementar', 'aberto', '${em(M0)}');
+    INSERT INTO trabalho_agentico VALUES ('s-informado', 'I-1', 1, 'autonomo', 'c1'), ('s-estimado', 'I-1', 2, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
+      ('xc', 's-informado', '${em(M0)}', '${em(M0)}', 0), ('xe', 's-estimado', '${em(M0)}', '${em(M0)}', 0);
+    INSERT INTO preco_do_modelo (id, modelo_provedor, modelo_nome, usd_por_milhao_entrada, usd_por_milhao_saida,
+      usd_por_milhao_cache_leitura, usd_por_milhao_cache_escrita, origem, vigente_de)
+      VALUES (100, 'claude-bridge', 'claude-haiku-5-5', 1, 5, 0.1, 1.25, 'pi', '2026-01-01T00:00:00.000Z');
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida,
+      tokens_cache_leitura, tokens_cache_escrita, custo, preco_id) VALUES
+      ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2, NULL),
+      ('xe', 'claude-bridge', 'claude-haiku-5-5', 2000000, 200000, 0, 0, 3, 100);
+  `);
+  banco.close();
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  await pagina.goto(`${fabriquinha.base}/metrics`);
+  const texto = "US$ 7,20 (estimado em 1 sessão)";
+  const card = pagina.locator('[data-metrica="custo"] .kpi-valor');
+  await expect(card).toHaveText(texto);
+  await expect(card.locator("small.estimado")).toHaveText("(estimado em 1 sessão)");
+  await expect(pagina.getByRole("row", { name: /^Sessão \d/ })).toContainText(texto);
+  await expect(
+    pagina.getByText(
+      "estimado: o pi não informou o custo de 1 sessão; ele foi estimado pelo preço do catálogo de modelos.",
+    ),
+  ).toBeVisible();
+  await expect(pagina.getByRole("row", { name: /^I-1 / })).toContainText(texto);
+  // O modelo estimado leva a marca; o informado, não.
+  const haiku = pagina.locator(".modelos .uso-modelo", { hasText: "claude-haiku-5-5" });
+  await expect(haiku.locator(".vals b")).toHaveText("US$ 3,00 estimado");
+  await expect(pagina.locator(".modelos .uso-modelo", { hasText: "claude-sonnet-5-5" }).locator(".vals b")).toHaveText(
+    "US$ 4,20",
+  );
+  // Os tons: o estimado não usa o aviso do custo que falta.
+  const corDoEstimado = await card.locator("small.estimado").evaluate((e) => getComputedStyle(e).color);
+  expect(corDoEstimado).toBe("rgb(142, 188, 233)");
+  await pagina.screenshot({ path: info.outputPath("custo-estimado-metricas-1440.png"), fullPage: true });
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-1`);
+  await expect(pagina.locator(".dm-linha")).toContainText(`Custo ${texto}`);
+  await pagina.screenshot({ path: info.outputPath("custo-estimado-demanda-1440.png"), fullPage: true });
 });
 
 /**
@@ -269,7 +328,7 @@ function semearNumerosGrandes(raiz: string): void {
     INSERT INTO trabalho_agentico VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ${execucoes.join(", ")},
       ('anterior', 's1', '${em(M1)}', '${em(M1)}', 0);
-    INSERT INTO uso_modelo_execucao VALUES
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES
       ('x0', 'anthropic', 'claude-sonnet-5-5', 52000000, 900000, 0, 0, 1351.76),
       ('x1', 'anthropic', 'claude-sonnet-5-5', 1000, 10, 0, 0, NULL),
       ('anterior', 'anthropic', 'claude-sonnet-5-5', 30000000, 500000, 0, 0, 980.4);

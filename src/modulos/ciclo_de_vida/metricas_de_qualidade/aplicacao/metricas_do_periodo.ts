@@ -3,7 +3,14 @@
 // só a Métrica de Uso.
 import { intervalo } from "../../../../shared/nucleo/periodo.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
-import { type LinhaDeUso, textoDoCustoDe, Uso, type UsoDaExecucao, usoEmLote } from "../../../sessoes/publico.ts";
+import {
+  type CustoDoUso,
+  type LinhaDeUso,
+  textoDoCustoDe,
+  Uso,
+  type UsoDaExecucao,
+  usoEmLote,
+} from "../../../sessoes/publico.ts";
 import type { EtapaTicket, TipoMetrica } from "../../etapas/publico.ts";
 import type { Recorte } from "../nucleo/metrica.ts";
 import { Periodo } from "../nucleo/periodo.ts";
@@ -30,7 +37,7 @@ interface Soma {
   falhas: number;
   duracaoMs: number;
   tokens: { entrada: number; saida: number; cacheLeitura: number; cacheEscrita: number; total: number };
-  custo: { conhecido: number; trabalhosSemCusto: number };
+  custo: CustoDoUso;
   /** O custo como todas as telas o mostram (`textoDoCusto`). */
   textoDoCusto: string;
 }
@@ -166,6 +173,7 @@ function somarUso(usos: readonly ValorDe<MetricaDeUso>[]): Soma {
   const custo = {
     conhecido: soma(usos.map((u) => u.custo.conhecido)),
     trabalhosSemCusto: soma(usos.map((u) => u.custo.trabalhosSemCusto)),
+    trabalhosComCustoEstimado: soma(usos.map((u) => u.custo.trabalhosComCustoEstimado)),
   };
   return {
     execucoes: soma(usos.map((u) => u.execucoes)),
@@ -208,7 +216,7 @@ const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoDaExecucao[]>): U
     .reduce((total, daExecucao) => total.somar(daExecucao), Uso.vazio());
 
 function resumir(execs: ExecucaoNoPeriodo[], doUso: Uso): Soma {
-  const tokens = (campo: Exclude<keyof LinhaDeUso, "modelo" | "custo" | "chamadas">) =>
+  const tokens = (campo: keyof LinhaDeUso & `tokens_${string}`) =>
     doUso.porModelo().reduce((n, linha) => n + linha[campo], 0);
   const [entrada, saida, cacheLeitura, cacheEscrita] = [
     tokens("tokens_entrada"),

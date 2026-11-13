@@ -1,10 +1,10 @@
-// I-278 CA-4: a consulta sem ferramentas (`pi -p`) mede o Uso. O do resumo do PR conta para a Rodada e o do Auditor
+// I-278 CA-4: a consulta sem ferramentas (`pi -p`) mede o Uso, e o Uso sem custo informado é estimado pelo catálogo. O do resumo do PR conta para a Rodada e o do Auditor
 // automático, para o ticket que perguntou. O cenário é montado pelos serviços e pelo agendador, com banco e git reais
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cicloDoDespacho, produtividadeDaRodada } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { carregarSessoesDoContexto, gravarCatalogoDePrecos, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   abrirPortao,
@@ -121,4 +121,34 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
   // Os outros pis do cenário não emitem Uso: o da consulta é o único, e está no ticket `encerrar_rodada` da rodada.
   assert.deepEqual(carregarSessoesDoContexto(c.banco, encerramento).usos, usos);
   assert.equal(usos.length, 1);
+});
+
+test("ticket 27: a execução cujo pi não informa o custo tem o custo estimado pelo preço que o catálogo do pi declara", async (t) => {
+  const c = criarCenario(t);
+  const id = await demandaEmExecucao(c, [{ tickets: 1 }]);
+  const ticket = ticketDe(c, id, 1);
+  // Como a subida do serviço: o catálogo de preços vem do harness (o pi falso declara o opus a US$ 4 e 20 por milhão).
+  gravarCatalogoDePrecos(c.banco, await new HarnessPi().precosDosModelos(), "2026-01-01T00:00:00.000Z");
+
+  abrirPortao();
+  pi.roteirizar([{ agente, custo: null, uso: { input: 1_000_000, output: 100_000 } }]);
+  await ciclo(c, despacho());
+
+  const { execucoes, usos } = carregarSessoesDoContexto(c.banco, ticket);
+  const precoDoOpus = c.banco
+    .prepare("SELECT id FROM preco_do_modelo WHERE modelo_nome = 'claude-opus-5-5' AND vigente_ate IS NULL")
+    .get()?.id;
+  assert.deepEqual(usos, [
+    {
+      execucao_id: execucoes.at(-1)?.id,
+      ...modeloDoPiFalso,
+      tokens_entrada: 1_000_000,
+      tokens_saida: 100_000,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      // 1M × 4 + 0,1M × 20, com a referência do preço usado.
+      custo: 6,
+      preco_id: precoDoOpus,
+    },
+  ]);
 });

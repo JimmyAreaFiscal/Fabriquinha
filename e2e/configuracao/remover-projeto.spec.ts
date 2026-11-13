@@ -18,7 +18,7 @@ const demanda = (id: string, nome: string, custo: number, andamento = false) =>
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', '${andamento ? "em_execucao" : "aberto"}', '${em}');
     INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', ${andamento ? "NULL" : `'${em}'`}, 0);
-    INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, ${String(custo)});`;
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('x-${id}', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, ${String(custo)});`;
 
 /** `demo`: uma demanda de US$ 40; `outro`: uma de US$ 10; `ocupado`: uma com execução em andamento. */
 function semear(raiz: string): void {

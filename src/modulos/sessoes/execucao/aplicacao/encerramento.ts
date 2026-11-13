@@ -1,5 +1,6 @@
 // O fim de cada execução: o fim com a falha e o Uso na mesma unidade de trabalho, o Uso de uma consulta somado à execução
-// que a pediu e a execução que ficou aberta sem processo. Quem mata o processo é `SessoesDeAgente`; o que a falha
+// que a pediu e a execução que ficou aberta sem processo. O Uso sem custo informado pelo harness recebe aqui, antes de ser
+// gravado, o custo estimado pelo preço do catálogo vigente no instante (MELHORIAS §13, item 2). Quem mata o processo é `SessoesDeAgente`; o que a falha
 // significa para quem pediu a sessão é da política, que recebe a execução encerrada.
 import type { DatabaseSync } from "node:sqlite";
 import { raizDo } from "../../../../shared/armazenamento/banco.ts";
@@ -7,7 +8,13 @@ import { existe, mensagem } from "../../../../shared/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 import type { Harness, LinhaDeUso } from "../../harness/publico.ts";
-import { acumularUso, type UsoDaExecucao, usoDaExecucaoDaLinha } from "../../metricas_de_execucao/publico.ts";
+import {
+  acumularUso,
+  estimarCustoPeloCatalogo,
+  type UsoDaExecucao,
+  usoDaExecucaoDaLinha,
+} from "../../metricas_de_execucao/publico.ts";
+import { lerPrecoVigente } from "../../modelos/publico.ts";
 import {
   type ContextoDaSessao,
   encerrarExecucao,
@@ -29,12 +36,25 @@ interface ExecucaoEncerravel {
 /** Quem lê o Uso da sessão do agente: o harness. */
 type LeitorDeUso = Pick<Harness, "lerUsoDaSessao">;
 
-/** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
+/** A linha de Uso como a execução a guarda, com o custo que o harness não informou estimado pelo preço vigente em `instante`. */
+function usoComCustoEstimado(
+  banco: DatabaseSync,
+  execucao: IdDaExecucao,
+  linha: LinhaDeUso,
+  instante: string,
+): UsoDaExecucao {
+  const uso = usoDaExecucaoDaLinha(execucao, linha);
+  if (uso.custo !== undefined) return uso;
+  const preco = lerPrecoVigente(banco, { provedor: uso.modelo_provedor, nome: uso.modelo_nome }, instante);
+  return estimarCustoPeloCatalogo(uso, preco);
+}
+
+/** O uso por modelo da janela da execução; custo ausente sem preço no catálogo, ou parcial, fica nulo, nunca zero. */
 function coletarUso(c: ExecucaoEncerravel, fim: string, log: string, harness: LeitorDeUso): UsoDaExecucao[] {
   try {
     return harness
       .lerUsoDaSessao(raizDo(c.banco), c.sessao.id, Date.parse(c.execucao.inicio), Date.parse(fim))
-      .map((linha) => usoDaExecucaoDaLinha(c.execucao.id, linha));
+      .map((linha) => usoComCustoEstimado(c.banco, c.execucao.id, linha, fim));
   } catch (error_) {
     // Métrica nunca impede o encerramento.
     anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
@@ -60,17 +80,19 @@ export function encerrarExecucaoComUso(
   }));
 }
 
-/** Soma o Uso de uma consulta à execução que a pediu, para ele contar no contexto dela. */
+/** Soma o Uso de uma consulta à execução que a pediu, para ele contar no contexto dela, com o custo estimado se faltar. */
 export function registrarUsoDaConsulta(
   banco: DatabaseSync,
   ref: ContextoDaSessao,
   execucao: IdDaExecucao,
   linhas: readonly LinhaDeUso[],
+  relogio: Relogio = relogioDoSistema,
 ): void {
+  const instante = relogio.agora();
   comSessoesDoContexto(banco, ref, (estado) => ({
     ...estado,
     usos: linhas.reduce(
-      (acumulado, linha) => acumularUso(acumulado, usoDaExecucaoDaLinha(execucao, linha)),
+      (acumulado, linha) => acumularUso(acumulado, usoComCustoEstimado(banco, execucao, linha, instante)),
       estado.usos,
     ),
   }));

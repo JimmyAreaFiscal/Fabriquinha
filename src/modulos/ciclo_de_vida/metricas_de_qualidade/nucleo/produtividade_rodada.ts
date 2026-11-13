@@ -3,6 +3,7 @@
 import {
   type Execucao,
   type LinhaDeUso,
+  linhaDeUsoDaExecucao,
   registrarUso,
   type Sessao,
   Uso,
@@ -38,8 +39,7 @@ export interface ProdutividadeRodada {
 
 const consumo = (uso: Uso, execucoes: number, semMedida: boolean): ConsumoRodada => {
   const linhas = uso.porModelo();
-  const tokens = (campo: Exclude<keyof LinhaDeUso, "modelo" | "custo" | "chamadas">) =>
-    linhas.reduce((n, l) => n + l[campo], 0);
+  const tokens = (campo: keyof LinhaDeUso & `tokens_${string}`) => linhas.reduce((n, l) => n + l[campo], 0);
   const { conhecido, trabalhosSemCusto } = uso.custo();
   return {
     execucoes,
@@ -51,17 +51,6 @@ const consumo = (uso: Uso, execucoes: number, semMedida: boolean): ConsumoRodada
     custoIncompleto: semMedida || trabalhosSemCusto > 0,
   };
 };
-
-// O banco não guarda as chamadas do uso medido, por isso 0.
-const linhaDeUso = (u: UsoDaExecucao): LinhaDeUso => ({
-  modelo: `${u.modelo_provedor}/${u.modelo_nome}`,
-  tokens_entrada: u.tokens_entrada,
-  tokens_saida: u.tokens_saida,
-  tokens_cache_leitura: u.tokens_cache_leitura,
-  tokens_cache_escrita: u.tokens_cache_escrita,
-  custo: u.custo ?? null,
-  chamadas: 0,
-});
 
 export function produtividadeDaRodada(
   sessoes: readonly Sessao[],
@@ -81,7 +70,7 @@ export function produtividadeDaRodada(
       ticket: formatarTicketRef(t),
       etapa: t.etapa,
       execucoes: execs.size,
-      uso: Uso.de(usosDoTicket.map(linhaDeUso), 1),
+      uso: Uso.de(usosDoTicket.map(linhaDeUsoDaExecucao), 1),
       // Sem nenhum uso registrado não há custo medido: nunca vale zero.
       semMedida: usosDoTicket.length === 0,
     };

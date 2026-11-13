@@ -25,6 +25,7 @@ export const MIGRACOES_DOS_DOMINIOS = [
   "modulos/demandas/pedidos/armazenamento/migracao_da_situacao.ts",
   "modulos/ciclo_de_vida/processo/armazenamento/migracao_do_estado_do_processo.ts",
   "modulos/ambiente/configuracao/armazenamento/migracao_da_configuracao.ts",
+  "modulos/sessoes/modelos/armazenamento/migracao_do_catalogo_de_precos.ts",
 ];
 
 // O shared não tem subdomínios.

@@ -181,6 +181,46 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
+/** Os preços vigentes do catálogo da `raiz`, lidos depois de o serviço parar. */
+function precosVigentes(raiz: string) {
+  const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
+  try {
+    return banco
+      .prepare(
+        `SELECT modelo_provedor, modelo_nome, usd_por_milhao_entrada, origem FROM preco_do_modelo
+         WHERE vigente_ate IS NULL ORDER BY modelo_nome`,
+      )
+      .all()
+      .map((preco) => ({ ...preco }));
+  } finally {
+    banco.close();
+  }
+}
+
+test("a subida grava no catálogo os preços que o harness informa, e o parar espera a gravação", async () => {
+  const raiz = novaRaiz();
+  await (await subir(raiz)).parar();
+  // O pi falso dos testes declara o preço do opus e do sonnet.
+  assert.deepEqual(precosVigentes(raiz), [
+    { modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", usd_por_milhao_entrada: 4, origem: "pi" },
+    { modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5", usd_por_milhao_entrada: 2, origem: "pi" },
+  ]);
+});
+
+test("o harness que não informa os preços não impede a subida: o erro vai para o log e o catálogo fica como estava", async (t) => {
+  const erros = t.mock.method(console, "error", () => undefined);
+  const pi = process.env.FABRIQUINHA_PI;
+  process.env.FABRIQUINHA_PI = join(tmpdir(), "pi-que-nao-existe");
+  const raiz = novaRaiz();
+  try {
+    await (await subir(raiz)).parar();
+  } finally {
+    process.env.FABRIQUINHA_PI = pi;
+  }
+  assert.deepEqual(precosVigentes(raiz), []);
+  assert.match(String(erros.mock.calls[0]?.arguments[1]), /não foi possível rodar .*pi-que-nao-existe/);
+});
+
 test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas históricas delas ficam como estão e nenhum grupo delas é sinalizado", async () => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });

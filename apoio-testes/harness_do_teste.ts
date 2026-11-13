@@ -21,4 +21,8 @@ if (process.env.PI_CODING_AGENT_DIR === undefined) {
   });
 }
 
+// Nenhum teste roda o pi de verdade: sem `FABRIQUINHA_PI`, vale o pi falso sem roteiro, de quem o serviço que sobe lê o
+// catálogo de preços. Quem precisa de outro roteiro instala o seu (`instalarPiFalso`).
+process.env.FABRIQUINHA_PI ??= join(import.meta.dirname, "falsos", "pi_falso.ts");
+
 condutor.montarHarness(new HarnessPi());

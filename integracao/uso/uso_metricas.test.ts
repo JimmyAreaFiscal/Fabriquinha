@@ -119,7 +119,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
       ["p/b", 30, null],
     ],
   );
-  assert.deepEqual(demandaTotal.custo, { conhecido: 3, trabalhosSemCusto: 1 });
+  assert.deepEqual(demandaTotal.custo, { conhecido: 3, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 });
 
   // A página Métricas lê o mesmo: as mesmas execuções (a retomada não duplica o uso) e o custo desconhecido sinalizado.
   const meses = metricasDosMeses(origemDe(c.banco), {
@@ -188,7 +188,11 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
       ?.find((m) => m.definicao.tipo === "uso")?.valor as ValorDe<MetricaDeUso>;
   const total = usoDaDemanda(origemDe(c.banco), id);
 
-  assert.deepEqual(usoDaEtapa("implementar").custo, { conhecido: 5, trabalhosSemCusto: 1 });
+  assert.deepEqual(usoDaEtapa("implementar").custo, {
+    conhecido: 5,
+    trabalhosSemCusto: 1,
+    trabalhosComCustoEstimado: 0,
+  });
   assert.deepEqual(
     metricasDasEtapas(origemDe(c.banco), { demandaId: id })
       .get("revisar_rodada")
@@ -199,7 +203,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
       ["bugs_nos_arquivos_revisados", { alteradasPorHumanos: 0 }],
     ],
   );
-  assert.deepEqual(total.custo, { conhecido: 11.5, trabalhosSemCusto: 2 });
+  assert.deepEqual(total.custo, { conhecido: 11.5, trabalhosSemCusto: 2, trabalhosComCustoEstimado: 0 });
   // A única falha é o planejamento interrompido da própria demanda; a execução falha da vizinha não entra.
   assert.deepEqual([total.falhas, usoDaEtapa("planejar").falhas], [1, 1]);
   assert.deepEqual(
@@ -214,6 +218,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   assert.deepEqual(usoDaEtapa("entender_e_desenhar").custoExterno, {
     conhecido: 6.5,
     trabalhosSemCusto: 1,
+    trabalhosComCustoEstimado: 0,
     sessoes: 2,
   });
   assert.equal(usoDaEtapa("implementar").custoExterno.sessoes, 0);
@@ -222,12 +227,13 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   declararUso(c, id, "ext-r2", 7);
   assert.deepEqual(
     usoDaEtapa("implementar").custo,
-    { conhecido: 5, trabalhosSemCusto: 1 },
+    { conhecido: 5, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 },
     "o externo não entra no custo interno",
   );
   assert.deepEqual(usoDaEtapa("entender_e_desenhar").custoExterno, {
     conhecido: 13.5,
     trabalhosSemCusto: 1,
+    trabalhosComCustoEstimado: 0,
     sessoes: 3,
   });
   assert.equal(atual(c, id, "implementar", 1).titulo, "Corrigir");

@@ -20,7 +20,7 @@ const mes = {
     falhas: 0,
     duracaoMs: 0,
     tokens: { entrada: 0, saida: 0, cacheLeitura: 0, cacheEscrita: 0, total: 0 },
-    custo: { conhecido: 0, trabalhosSemCusto: 0 },
+    custo: { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 },
     textoDoCusto: "US$ 0,00",
     modelos: [],
   },
