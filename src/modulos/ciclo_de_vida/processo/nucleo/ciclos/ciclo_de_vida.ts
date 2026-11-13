@@ -1,7 +1,7 @@
 // Ciclo de vida de um item com estado (Demanda, Rodada ou Ticket): estados, transições permitidas, terminais e
 // o que conta como em andamento ou satisfazendo dependência. Uma abstração só, em vez de uma máquina por item.
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import type { Instante } from "../../../compartilhado/nucleo/primitivos.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
+import type { Instante } from "../../../../../shared/nucleo/primitivos.ts";
 
 interface ItemComEstado<Estado extends string> {
   readonly estado: Estado;

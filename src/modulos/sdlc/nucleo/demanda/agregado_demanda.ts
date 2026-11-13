@@ -12,19 +12,11 @@ import {
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ProgressoEncerramento } from "../transicoes/encerramento_demanda.ts";
 import { PullRequest, prDoEscopo } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { donoDe, EvidenciaDemanda } from "../../../ciclo_de_vida/publico.ts";
+import { Decisao, donoDe, EvidenciaDemanda } from "../../../ciclo_de_vida/publico.ts";
 import { GrafoDeDependencias } from "../item_de_trabalho/item_de_trabalho.ts";
 import { OrigemDaVersao } from "./plano.ts";
-import {
-  EstadoTicket,
-  Id,
-  Instante,
-  Markdown,
-  Motivo,
-  Slug,
-  Titulo,
-} from "../../../compartilhado/nucleo/primitivos.ts";
-import { EtapaTicket, NomeGate, etapaDoPapel } from "../../../etapas/catalogo.ts";
+import { EstadoTicket, Id, Instante, Markdown, Slug, Titulo } from "../../../compartilhado/nucleo/primitivos.ts";
+import { EtapaTicket, etapaDoPapel } from "../../../etapas/catalogo.ts";
 import { Tentativa } from "../tentativa.ts";
 
 export const TicketDemanda = z.object({
@@ -46,19 +38,8 @@ export const TicketDemanda = z.object({
   instrucao: Markdown.optional(),
 });
 
-/** A Decisão sabe de qual gate é; mora aqui, e não em `gate.ts`, porque o agregado a contém e `gate.ts` o transforma. */
-export const Decisao = z.object({
-  demanda_id: DemandaId,
-  ticket_id: Id,
-  decisao_id: Id,
-  gate: NomeGate,
-  resultado: z.enum(["aprovado", "reprovado"]),
-  nota: z.number().int().min(1).max(5).optional(),
-  motivo: Motivo.optional(),
-  por: Ator,
-  em: Instante,
-});
-export type Decisao = z.infer<typeof Decisao>;
+// provisório: remover no ticket 22 (a Decisão mudou para src/modulos/ciclo_de_vida/processo/, pela fachada)
+export { Decisao } from "../../../ciclo_de_vida/publico.ts";
 
 export const RodadaDemanda = z.object({
   demanda_id: DemandaId,

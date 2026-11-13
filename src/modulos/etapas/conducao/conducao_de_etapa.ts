@@ -7,7 +7,7 @@ import type { DefinicaoDaEtapa } from "../definicao/definicao_da_etapa.ts";
 import { espacoDoTicket } from "../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { reservarTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
-import { retornoAoAgenteDoTicket } from "../../sdlc/nucleo/tentativa.ts";
+import { lerTentativasDasDemandas, retornoAoAgenteDoTicket } from "../../ciclo_de_vida/publico.ts";
 import {
   type FalhaDaTentativa,
   falhaDoErro,
@@ -151,7 +151,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   protected retomadaDe(ticket: TicketDemanda): Pick<OpcoesExecucaoDemanda, "retomada" | "iniciarEmSessaoNova"> {
     return {
       retomada: retornoAoAgenteDoTicket(
-        carregarDemanda(this.deps.banco, ticket.demanda_id).tentativas,
+        lerTentativasDasDemandas(this.deps.banco, [ticket.demanda_id]),
         ticket.ticket_id,
       ),
     };
