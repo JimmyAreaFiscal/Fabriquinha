@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { EtapaTicket } from "../../etapas/catalogo.ts";
+import {
+  AUDITOR,
+  type CausaDeInfraestrutura,
+  Endereco,
+  type EtapaTicket,
+  type ResultadoDaTentativa,
+} from "../../etapas/publico.ts";
 import {
   comReaberturaDoAuditor,
   comTentativaAberta,
@@ -18,10 +22,6 @@ import {
   tentativaAnteriorEmMemoria,
   tentativasDoTicket,
 } from "./tentativa.ts";
-import {
-  type CausaDeInfraestrutura,
-  type ResultadoDaTentativa,
-} from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 
 const ticket = Endereco.doTicket("I-1", 3);
 const MINUTO = 60_000;

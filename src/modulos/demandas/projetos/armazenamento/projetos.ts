@@ -12,6 +12,7 @@ import {
   linhaComConfiguracaoAgente,
 } from "../../../compartilhado/armazenamento/configuracao_agente.ts";
 import { Projeto } from "../nucleo/projeto.ts";
+import { apagarEstadoDoProcessoDasDemandas } from "../../../ciclo_de_vida/publico.ts";
 
 type Linha = Record<string, unknown>;
 
@@ -240,19 +241,20 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("trabalho_agentico", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("trabalho_nao_gerenciado", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("uso_declarado", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("iteracao_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("proposta_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR demanda_criada_id IN (${DAS_DEMANDAS})`);
-  apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagarEstadoDoProcessoDasDemandas(
+    banco,
+    banco
+      .prepare(DAS_DEMANDAS)
+      .all(p)
+      .map((demanda) => String(demanda.id)),
+  );
   apagar("evidencia_demanda", `demanda_id IN (${DAS_DEMANDAS})`); // arquivo_evidencia e evidencia_historico saem por ON DELETE CASCADE
   apagar("pull_request", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("limpeza_pendente_encerramento", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("encerramento_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("caminho_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("arquivo_previsto_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("arquivo_previsto_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("versao_plano", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("tentativa", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("criterio_citado_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("dependencia_rodada", `demanda_id IN (${DAS_DEMANDAS})`);

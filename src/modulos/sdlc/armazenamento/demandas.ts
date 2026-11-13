@@ -1,71 +1,33 @@
 // Repositório do agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4): carrega e grava só a diferença.
 // Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira. As tabelas dos itens de
-// Planejamento (rodadas, tickets, vínculos e versões do Plano) passam pela API dele.
+// Planejamento (rodadas, tickets, vínculos e versões do Plano) passam pela API dele, e as do estado do desenvolvimento
+// (Tentativas, Decisões e encerramento), pela do Processo.
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/demanda/agregado_demanda.ts";
-import type { Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import type { EstadoDemanda } from "../nucleo/ciclo_de_vida/ciclos.ts";
-import type { ResultadoDaTentativa } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { escrever, novoId } from "../../compartilhado/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 import {
-  agruparColunasDoCampo,
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
-  type LinhaDaTabela,
   semNulos,
   type TabelaDoAgregado,
 } from "../../../shared/armazenamento/diferenca_do_agregado.ts";
 import {
+  apagarEstadoQueSumiu,
   apagarItensQueSumiram,
+  carregarEstadoDoProcesso,
   carregarItensDoPlanejamento,
+  gravarEstadoNovoEMudado,
   gravarEvidenciasNovasEAlteradas,
   gravarItensNovosEMudados,
   gravarRetiradaDasEvidencias,
   lerEvidenciasDaDemanda,
 } from "../../ciclo_de_vida/publico.ts";
 
-/** Um grupo de colunas opcionais que existe por inteiro ou não existe (`integracao`, `falha`, ...). */
-const grupo = (campos: Record<string, unknown>) => (Object.values(campos).includes(null) ? null : campos);
-
 const bit = (b: boolean) => Number(b);
-
-/** O Ator nas colunas `<prefixo>_tipo` e `<prefixo>_trabalho_id`; a ferramenta e a sessão do externo só a evidência guarda. */
-const colunasDoAtor = (prefixo: string, ator: Ator): LinhaDaTabela => ({
-  [`${prefixo}_tipo`]: ator.tipo,
-  [`${prefixo}_trabalho_id`]: ator.tipo === "agente" ? ator.trabalho_id : null,
-});
-
-/**
- * O resultado da Tentativa nas colunas `resultado_tipo`, `causa` e `motivo`. A `causa` é a da falha de infraestrutura
- * ou, em `interrompida`, o tipo do Ator que interrompeu.
- */
-function colunasDoResultado(resultado: ResultadoDaTentativa | undefined): LinhaDaTabela {
-  return {
-    resultado_tipo: resultado?.tipo ?? null,
-    causa:
-      resultado?.tipo === "falha_infraestrutura"
-        ? resultado.causa
-        : resultado?.tipo === "interrompida"
-          ? resultado.por.tipo
-          : null,
-    motivo: resultado && "motivo" in resultado ? (resultado.motivo ?? null) : null,
-  };
-}
-
-/** O inverso de `colunasDoResultado`, para o domínio validar. */
-function resultadoDaLinha({ resultado_tipo, causa, motivo }: Record<string, unknown>): unknown {
-  if (resultado_tipo === null) return null;
-  const semCausa = semNulos({ tipo: resultado_tipo, motivo });
-  if (resultado_tipo === "interrompida") return { ...semCausa, por: { tipo: causa } };
-  return causa === null ? semCausa : { ...semCausa, causa };
-}
-
-/** Decisão do Agente gravada antes da migração 37, sem execução: o `trabalho_id` não existe, mas o Ator exige um. */
-const TRABALHO_ANTERIOR_A_MIGRACAO = "anterior-a-migracao-37";
 
 /** A linha única da demanda: a mãe de todas as tabelas do agregado. */
 const TABELA_DA_DEMANDA: TabelaDoAgregado<AgregadoDemanda> = {
@@ -83,8 +45,8 @@ const TABELA_DA_DEMANDA: TabelaDoAgregado<AgregadoDemanda> = {
 
 /**
  * As tabelas do agregado que dependem dos itens de Planejamento, dos pais para os filhos: insere e atualiza nessa ordem
- * e apaga na inversa, porque as FKs são RESTRICT. As evidências, filhas da rodada e do ticket, são do armazenamento
- * das Evidências: saem antes e entram depois de todas as tabelas.
+ * e apaga na inversa, porque as FKs são RESTRICT. As do Processo, filhas dos tickets e do PR final, e as evidências,
+ * filhas da rodada e do ticket, são dos armazenamentos deles: saem antes e entram depois destas.
  */
 const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>[] = [
   {
@@ -92,59 +54,6 @@ const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>
     chave: ["demanda_id", "rodada_id"],
     linhas: (ag) =>
       ag.pull_requests.map((pr) => ({ ...pr, demanda_id: ag.demanda.id, rodada_id: pr.rodada_id ?? null })),
-  },
-  {
-    nome: "tentativa",
-    chave: ["demanda_id", "ticket_id", "numero"],
-    linhas: (ag) =>
-      ag.tentativas.map(({ ticket, resultado, ...t }) => ({
-        demanda_id: ticket.demanda_id,
-        ticket_id: Number(ticket.ticket_id),
-        numero: t.numero,
-        processo_id: t.processo_id ?? null,
-        inicio: t.inicio,
-        fim: t.fim ?? null,
-        ...colunasDoResultado(resultado),
-        instrucao: t.instrucao ?? null,
-        migrada: bit(t.migrada === true),
-      })),
-  },
-  {
-    nome: "encerramento_demanda",
-    chave: ["demanda_id"],
-    linhas: ({ encerramento: e }) =>
-      e
-        ? [
-            {
-              demanda_id: e.demanda_id,
-              branch: e.branch,
-              base: e.base,
-              sha_verificado: e.sha_verificado ?? null,
-              aguardando_merge_humano: bit(e.aguardando_merge_humano === true),
-              integracao_sha: e.integracao?.sha ?? null,
-              conflito_ticket_id: e.conflito_pendente?.ticket_id ?? null,
-              falha_etapa: e.falha?.etapa ?? null,
-              falha_motivo: e.falha?.motivo ?? null,
-            },
-          ]
-        : [],
-  },
-  {
-    nome: "limpeza_pendente_encerramento",
-    chave: ["demanda_id", "limpeza_pendente"],
-    linhas: ({ encerramento: e }) =>
-      e?.limpeza_pendente.map((limpeza_pendente) => ({ demanda_id: e.demanda_id, limpeza_pendente })) ?? [],
-  },
-  {
-    nome: "decisao_ticket",
-    chave: ["demanda_id", "ticket_id", "decisao_id"],
-    linhas: (ag) =>
-      ag.decisoes.map(({ por, ...d }) => ({
-        ...d,
-        ...colunasDoAtor("por", por),
-        nota: d.nota ?? null,
-        motivo: d.motivo ?? null,
-      })),
   },
 ];
 
@@ -154,12 +63,14 @@ const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>
  */
 function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined, depois: AgregadoDemanda): void {
   gravarRetiradaDasEvidencias(banco, antes?.evidencias ?? [], depois.evidencias);
+  apagarEstadoQueSumiu(banco, antes, depois);
   apagarLinhasQueSumiram(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
   apagarItensQueSumiram(banco, antes, depois);
   apagarLinhasQueSumiram(banco, [TABELA_DA_DEMANDA], antes, depois);
   gravarLinhasNovasEMudadas(banco, [TABELA_DA_DEMANDA], antes, depois);
   gravarItensNovosEMudados(banco, antes, depois);
   gravarLinhasNovasEMudadas(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
+  gravarEstadoNovoEMudado(banco, antes, depois);
   gravarEvidenciasNovasEAlteradas(banco, antes?.evidencias ?? [], depois.evidencias);
 }
 
@@ -170,52 +81,15 @@ function carregar(
 ): AgregadoDemanda | undefined {
   const demanda = preparar("SELECT * FROM demanda WHERE id = ?").get(id);
   if (!demanda) return undefined;
-  const filhas = (tabela: string) => preparar(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(id);
-  const enc = preparar("SELECT * FROM encerramento_demanda WHERE demanda_id = ?").get(id);
   return AgregadoDemanda.parse({
-    ...(enc && {
-      encerramento: semNulos({
-        demanda_id: id,
-        branch: enc.branch,
-        base: enc.base,
-        sha_verificado: enc.sha_verificado,
-        aguardando_merge_humano: enc.aguardando_merge_humano === 1 || null,
-        integracao: grupo({ sha: enc.integracao_sha }),
-        limpeza_pendente: filhas("limpeza_pendente_encerramento").map((l) => l.limpeza_pendente),
-        conflito_pendente: grupo({ ticket_id: enc.conflito_ticket_id }),
-        falha: grupo({ etapa: enc.falha_etapa, motivo: enc.falha_motivo }),
-      }),
-    }),
     demanda: {
       ...demanda,
       criada_por: { tipo: "externo", ferramenta: demanda.criada_por_ferramenta, sessao: demanda.criada_por_sessao },
       enviada: demanda.enviada === 1,
     },
     ...carregarItensDoPlanejamento(preparar, id),
+    ...carregarEstadoDoProcesso(preparar, id),
     pull_requests: preparar("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid").all(id).map(semNulos),
-    tentativas: filhas("tentativa").map((t) => ({
-      ...semNulos({
-        numero: t.numero,
-        processo_id: t.processo_id,
-        inicio: t.inicio,
-        fim: t.fim,
-        instrucao: t.instrucao,
-        migrada: t.migrada === 1 || null,
-        resultado: resultadoDaLinha(t),
-      }),
-      ticket: Endereco.doTicket(String(t.demanda_id), Number(t.ticket_id)),
-    })),
-    decisoes: filhas("decisao_ticket").map((d) =>
-      semNulos(
-        agruparColunasDoCampo(
-          {
-            ...d,
-            por_trabalho_id: d.por_tipo === "agente" ? (d.por_trabalho_id ?? TRABALHO_ANTERIOR_A_MIGRACAO) : null,
-          },
-          "por",
-        ),
-      ),
-    ),
     evidencias: lerEvidenciasDaDemanda(id, preparar),
   });
 }

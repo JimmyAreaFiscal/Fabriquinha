@@ -8,9 +8,9 @@ import {
   etapaDoEstado,
   EstadoDemanda,
   EstadoRodada,
+  EstadoTicket,
 } from "./ciclos.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { EstadoTicket } from "../../../compartilhado/nucleo/primitivos.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 
 const agora = "2026-01-02T00:00:00Z";
 const ciclo = new CicloDeVida<"a" | "b" | "c">({

@@ -58,12 +58,6 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
   },
   posseDasTabelas: "inventario",
   excecoes: [
-    // `Modelo` e `Effort` ainda moram no compartilhado; o ticket 22 os importa pela fachada de Sessões.
-    {
-      arquivo: "modulos/ciclo_de_vida/etapas/nucleo/configuracao_agente.ts",
-      import: "../../../compartilhado/nucleo/primitivos.ts (um domínio migrado não importa o código antigo)",
-      ticket: "22",
-    },
     // O mapeador das colunas da configuração do agente ainda mora no compartilhado (Sessões e Projetos também o usam);
     // o ticket 22 o traz para o Ciclo de Vida.
     {
@@ -83,8 +77,8 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     },
     ...CAMINHOS_ANTIGOS_QUE_O_CLI_DO_AGENTE_EMPACOTA,
   ],
-  // O compartilhado reexporta o vocabulário e a configuração do agente da fachada, e a configuração do agente lê dele
-  // `Modelo` e `Effort`: os dois somem no ticket 22.
+  // O compartilhado reexporta o vocabulário, a configuração do agente e os estados do ticket da fachada, e o Planejamento
+  // lê dele o mapeador das colunas da configuração do agente: os dois somem no ticket 22.
   dependenciasToleradas: [{ de: "modulos/compartilhado", para: "modulos/ciclo_de_vida", removidaEm: "22" }],
   // O sonar-scanner fala com o host.
   processoDoHost: {
