@@ -16,7 +16,7 @@ import {
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { integrarPR } from "../../src/modulos/repositorio/publico.ts";
+import { integrarPR } from "../../apoio-testes/repositorio_de_teste.ts";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import {
   agregadoNoEstado,

@@ -1,7 +1,7 @@
 // O Markdown dos PRs (F3 §4.6) e o limite da hospedagem (F3 §4.7): texto do agente e do Auditor neutralizado, listas,
 // tabelas e números no formato pt-BR, montados só pela Fabriquinha.
 import markdownit from "markdown-it";
-import type { Hospedagem } from "../../git/publico.ts";
+import type { Hospedagem } from "../../../../../repositorio/publico.ts";
 
 /** F3 §4.7: tamanho máximo do corpo em cada hospedagem, em caracteres. */
 export const LIMITE_DO_CORPO: Readonly<Record<Hospedagem, number>> = {

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { AUDITOR, Endereco, decidirGate } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   abrirPortao,
   agente,

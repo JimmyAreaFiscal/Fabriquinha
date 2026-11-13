@@ -12,11 +12,7 @@ import {
   type AgregadoDemanda,
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import {
-  gravarCommitDemanda,
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../src/modulos/repositorio/publico.ts";
+import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../falsos/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../repositorio_de_teste.ts";

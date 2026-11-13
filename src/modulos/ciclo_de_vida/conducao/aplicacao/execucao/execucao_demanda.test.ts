@@ -29,7 +29,7 @@ import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 import { ConducaoDeImplementar } from "../implementar/conducao_de_implementar.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
-import { gravarCommitDemanda, garantirWorktreeDemanda } from "../../../../repositorio/publico.ts";
+import { gravarCommitDemanda, garantirWorktreeDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import {

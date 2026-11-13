@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { branchDemanda, branchRodada, DemandaId, ocupanteDoDono } from "./nome_do_espaco.ts";
+import { branchDemanda, branchRodada, ocupanteDoDono } from "./nome_do_espaco.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
 
 test("mesmo número local em demandas distintas gera branches distintas", () => {
   assert.equal(branchDemanda("I-196"), "fabriquinha/I-196");

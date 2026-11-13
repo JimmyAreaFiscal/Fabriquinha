@@ -1,6 +1,6 @@
 // A consulta da configuração SDLC do projeto (comparacao-sdlc §7.1): monta o contrato da resposta num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import type { ConfiguracaoSdlcDoProjeto } from "../../contrato/sdlc.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
@@ -13,7 +13,7 @@ export function consultarConfiguracaoSdlc(
 ): ConfiguracaoSdlcDoProjeto {
   return lerEmSnapshot(banco, () => {
     const configuracao = gestaoDeDemandas.projeto(nome);
-    const cursor = cursorDaBase(banco, nome);
+    const cursor = montarRepositorio({ banco }).cursorDaBase(nome);
     const comCursor = cursor === undefined ? {} : { cursor_commit_humano: cursor };
     return { configurada: configuracao.verificacoes.linguagens.length > 0, configuracao, ...comCursor };
   });

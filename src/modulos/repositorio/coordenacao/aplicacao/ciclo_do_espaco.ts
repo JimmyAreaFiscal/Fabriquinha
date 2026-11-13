@@ -16,12 +16,12 @@ import {
   pendenciasDoEspaco,
   type ResultadoAtualizacao,
 } from "../../espaco_de_trabalho/publico.ts";
-import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto, type RepositorioDoProjeto } from "../../git/publico.ts";
+import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto, type ProjetoDoRepositorio } from "../../git/publico.ts";
 import { integrarPR } from "../../hospedagem/publico.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 
 /** O Projeto como o ciclo o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
-type ProjetoDoCiclo = RepositorioDoProjeto & { imagem_do_ambiente?: string };
+type ProjetoDoCiclo = ProjetoDoRepositorio & { imagem_do_ambiente?: string };
 
 /** Onde o ciclo grava: a raiz da Fabriquinha (worktrees e fila git) e o log da operação. */
 interface RegistroDoCiclo {

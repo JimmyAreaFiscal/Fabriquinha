@@ -20,7 +20,7 @@ import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/proces
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   agente,
   agora,

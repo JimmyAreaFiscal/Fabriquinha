@@ -9,7 +9,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { type AgregadoDemanda, carregarDemanda } from "../../processo/publico.ts";
-import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../repositorio/publico.ts";
+import {
+  gravarCommitDemanda,
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { cicloDoDespacho, configuracao } from "../publico.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";

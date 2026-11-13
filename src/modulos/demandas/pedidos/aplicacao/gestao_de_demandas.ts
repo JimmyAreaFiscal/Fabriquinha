@@ -7,6 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
 import type { Ator } from "../../../ciclo_de_vida/publico.ts";
+import type { RepositorioDoProjeto } from "../../../repositorio/publico.ts";
 import {
   cadastrarProjetoDoFormulario,
   type ConferirModeloNoHarness,
@@ -36,6 +37,8 @@ interface MontagemDaGestaoDeDemandas {
   banco: DatabaseSync;
   /** F4 §9: o modelo novo ou trocado de cada etapa do projeto só é gravado depois de o harness conhecê-lo. */
   conferirModeloNoHarness: ConferirModeloNoHarness;
+  /** Confere o repositório do projeto, fixa o cursor da varredura no cadastro e apaga os Espaços na remoção. */
+  repositorio: Pick<RepositorioDoProjeto, "conferir" | "varrerBase" | "apagarEspacosDoProjeto">;
 }
 
 /** O pedido como a consulta o lê: o conteúdo, a situação, o histórico, a origem e as relações com os outros pedidos. */
@@ -97,6 +100,7 @@ export interface GestaoDeDemandas {
 export function montarGestaoDeDemandas({
   banco,
   conferirModeloNoHarness,
+  repositorio,
 }: MontagemDaGestaoDeDemandas): GestaoDeDemandas {
   const pedidosConsultados = (filtro: FiltroDePedidos): PedidoConsultado[] =>
     lerEmSnapshot(banco, () => {
@@ -110,20 +114,27 @@ export function montarGestaoDeDemandas({
   return {
     projetos: () => listarProjetos(banco),
     projeto: (nome, orientacaoSeNaoExistir) => projetoExistente(banco, nome, orientacaoSeNaoExistir),
-    cadastrarProjeto: (formulario) => cadastrarProjetoDoFormulario(banco, formulario, conferirModeloNoHarness),
-    editarProjeto: (formulario) => editarProjetoDoFormulario(banco, formulario, conferirModeloNoHarness),
+    cadastrarProjeto: (formulario) =>
+      cadastrarProjetoDoFormulario(banco, formulario, { conferirModeloNoHarness, repositorio }),
+    editarProjeto: (formulario) =>
+      editarProjetoDoFormulario(banco, formulario, { conferirModeloNoHarness, repositorio }),
     configurarSdlc: (configurado) => gravarConfiguracaoSdlc(banco, configurado),
     removerProjeto: (nome, apagarOQueDependeDasDemandas) =>
-      removerProjeto(banco, nome, () => {
-        // Dos mais novos para os mais antigos, a ordem em que a remoção sempre entregou as demandas.
-        const demandas = lerPedidosDoFiltro(banco, { projeto: nome })
-          .map(({ id }) => id)
-          .reverse();
-        const sobras = apagarOQueDependeDasDemandas(demandas);
-        apagarDependenciasDosPedidos(banco, demandas);
-        apagarPedidosDoProjeto(banco, nome);
-        return sobras;
-      }),
+      removerProjeto(
+        banco,
+        nome,
+        () => {
+          // Dos mais novos para os mais antigos, a ordem em que a remoção sempre entregou as demandas.
+          const demandas = lerPedidosDoFiltro(banco, { projeto: nome })
+            .map(({ id }) => id)
+            .reverse();
+          const sobras = apagarOQueDependeDasDemandas(demandas);
+          apagarDependenciasDosPedidos(banco, demandas);
+          apagarPedidosDoProjeto(banco, nome);
+          return sobras;
+        },
+        repositorio,
+      ),
 
     pedidos: (filtro = {}) => pedidosConsultados(filtro),
     pedido: (id) =>

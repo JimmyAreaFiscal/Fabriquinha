@@ -3,12 +3,7 @@
 // da rodada pela fachada, em vez de montá-las, e informa só o identificador da demanda e o número da rodada.
 import { z } from "zod";
 import { Id } from "../../../../shared/nucleo/primitivos.ts";
-
-// Letras + hífen + número (`I-196`): sem `/`, `.`, `..`, espaço ou `-` duplo, e sem colidir `fabriquinha/{demanda}-{rodada}`
-// com a branch de outra demanda (uma demanda sempre termina em `-n` com prefixo só de letras).
-export const DemandaId = z
-  .string()
-  .regex(/^[A-Za-z]{1,16}-[1-9][0-9]{0,9}$/, "use letras, hífen e número, como I-196 (sem barra, ponto ou espaço)");
+import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
 
 /** A rodada dona de um Espaço: a demanda e o número da rodada nela. */
 export const RodadaDoEspaco = z.object({ demanda_id: DemandaId, rodada_id: Id });
@@ -31,5 +26,3 @@ export const branchRodada = (demandaId: string, rodadaId: number): string => {
  */
 export const ocupanteDoDono = ({ demanda_id, rodada_id }: DonoDoEspaco): string =>
   rodada_id === undefined ? demanda_id : `${demanda_id}.R${String(rodada_id)}`;
-
-export type DemandaId = z.infer<typeof DemandaId>;

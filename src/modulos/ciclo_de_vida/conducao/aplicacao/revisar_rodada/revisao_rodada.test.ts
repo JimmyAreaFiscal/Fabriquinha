@@ -10,7 +10,10 @@ import { PREFIXO_TERCEIRA_REPROVACAO } from "../../../processo/nucleo/transicoes
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../../../repositorio/publico.ts";
+import {
+  caminhoDaWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,

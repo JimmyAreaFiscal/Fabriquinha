@@ -15,8 +15,7 @@ import { servirWeb } from "../api/servidor.ts";
 import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
-import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
-import { ligarGestaoDeAmbientes } from "../../modulos/repositorio/publico.ts";
+import { ligarGestaoDeAmbientes, montarRepositorio } from "../../modulos/repositorio/publico.ts";
 import type { AmbientesDoServico } from "../api/rotas.ts";
 import { montarAmbientesDoServico } from "./ambientes_do_servico.ts";
 
@@ -138,14 +137,30 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     .catch(noLogDoServico);
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
-
-  /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
-  let varredura: Promise<void> | undefined;
+  // F4 §4, passo 1: o Repositório varre em segundo plano, de minuto em minuto com o agendador ligado, a base dos projetos
+  // sem varredura há 24 horas; o `parar` a espera antes de fechar o banco.
+  // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada minuto, com uma linha de log
+  // em cada; guardar a última tentativa se o log incomodar.
+  const repositorio = montarRepositorio({
+    banco,
+    varredura: {
+      projetos: () => demandas.projetos(),
+      // A configuração que não se lê é a mesma que a batida do agendador lê e já leva ao log: sem ela, a varredura espera.
+      ligada: () => {
+        try {
+          return configuracao(banco).agendadorAtivo;
+        } catch {
+          return false;
+        }
+      },
+      relogio,
+      registrarErro: noLogDoServico,
+    },
+  });
 
   /**
-   * F4 §4, passos 1 a 4, numa batida do relógio. Nunca lança:
-   * qualquer erro vai para o log, e a batida seguinte roda. O passo 1 roda em segundo plano:
-   * a batida nunca espera o git, e uma varredura só começa quando a anterior terminou.
+   * F4 §4, passos 2 a 4, numa batida do relógio (o passo 1 é a varredura do Repositório). Nunca lança: qualquer erro
+   * vai para o log, e a batida seguinte roda.
    */
   function ciclo(): void {
     batida = Date.parse(relogio.agora());
@@ -155,13 +170,6 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
       etapaTerminou = false;
-      // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
-      // em cada; guardar a última tentativa se o log incomodar.
-      varredura ??= varrerCommitsHumanosVencidos(banco, demandas, relogio, noLogDoServico)
-        .catch(noLogDoServico)
-        .finally(() => {
-          varredura = undefined;
-        });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
       for (const fim of despacharTrabalho(banco, demandas, c, despachoDoServico, relogio))
         void fim.then(() => {
@@ -199,7 +207,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       await fechou;
       // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
       rmSync(join(raiz, "web.url"), { force: true });
-      await varredura;
+      await repositorio.parar();
       await ambientes.parar();
       await gravacaoDoCatalogo;
       await condutor.aguardarTodos(LIMITE_PARADA_MS);

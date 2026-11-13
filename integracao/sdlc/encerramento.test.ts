@@ -23,7 +23,7 @@ import {
   integrarPR,
   caminhoDaWorktreeDemanda,
   caminhoDaWorktreeRodada,
-} from "../../src/modulos/repositorio/publico.ts";
+} from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   agente,
   agora,

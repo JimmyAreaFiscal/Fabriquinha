@@ -11,7 +11,7 @@ import {
 } from "../../../../processo/publico.ts";
 import { type Ator, exigirAtor, formatarRodadaRef, Endereco } from "../../../../etapas/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../../shared/nucleo/erros.ts";
-import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../../repositorio/publico.ts";
+import { espacoDoTicket, montarRepositorio } from "../../../../../repositorio/publico.ts";
 import { GateDoPR } from "../gate.ts";
 import type { GateComEfeitos } from "../../decisao_dos_gates/gate_com_efeitos.ts";
 import type { Relogio } from "../../../../../../shared/nucleo/relogio.ts";
@@ -78,7 +78,7 @@ async function aprovarPR(
     "o encerramento publica o PR",
   );
   const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
-  await cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco)).integrar();
+  await montarRepositorio({ banco }).integrarPR(projeto, espaco, log);
 
   return aprovarPRIntegradoDaRodada(banco, gate, endereco, entrada, ator, relogio, {
     rodada_id: ref.rodada_id,

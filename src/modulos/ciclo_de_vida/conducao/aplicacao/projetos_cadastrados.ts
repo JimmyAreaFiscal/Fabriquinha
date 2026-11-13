@@ -5,14 +5,14 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, encontrado } from "../../../../shared/nucleo/erros.ts";
 import type { ConfiguracaoAgente, EtapaTicket } from "../../etapas/publico.ts";
 import type { ProjetoAVerificar } from "../../verificacoes/publico.ts";
-import type { RepositorioDoProjeto } from "../../../repositorio/publico.ts";
+import type { ProjetoDoRepositorio } from "../../../repositorio/publico.ts";
 
 /** O que a Condução lê do projeto: o repositório, as verificações, a configuração de cada Etapa e a imagem do Ambiente. */
-export interface ProjetoConduzido extends ProjetoAVerificar, RepositorioDoProjeto {
+export interface ProjetoConduzido extends ProjetoAVerificar, ProjetoDoRepositorio {
   readonly chave_sonarqube: string;
   readonly etapas: readonly { readonly etapa: EtapaTicket; readonly configuracao_agente?: ConfiguracaoAgente }[];
   readonly imagem_do_ambiente?: string;
-  readonly verificacoes: ProjetoAVerificar["verificacoes"] & RepositorioDoProjeto["verificacoes"];
+  readonly verificacoes: ProjetoAVerificar["verificacoes"] & ProjetoDoRepositorio["verificacoes"];
 }
 
 /** A leitura dos projetos cadastrados que a composição liga. */

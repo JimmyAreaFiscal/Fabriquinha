@@ -31,7 +31,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_de
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
-import { publicarPRDe } from "../../src/modulos/repositorio/publico.ts";
+import { publicarPRDe } from "../../apoio-testes/repositorio_de_teste.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
 

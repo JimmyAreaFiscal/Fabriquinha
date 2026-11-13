@@ -15,7 +15,7 @@ import {
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";

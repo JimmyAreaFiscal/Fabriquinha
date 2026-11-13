@@ -9,12 +9,7 @@ import { escrever, raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
 import { ErroDeRegra, ErroExterno, mensagem } from "../../../../shared/nucleo/erros.ts";
 import { EtapaTicket } from "../../../ciclo_de_vida/publico.ts";
-import {
-  conferirProjeto,
-  type Hospedagem,
-  removerWorktrees,
-  varrerCommitsHumanos,
-} from "../../../repositorio/publico.ts";
+import type { Hospedagem, RepositorioDoProjeto } from "../../../repositorio/publico.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 import {
   anexosDeUsuariosSimulados,
@@ -138,6 +133,12 @@ async function conferirModelosAlterados(
   if (rejeitados.length > 0) throw new z.ZodError(rejeitados);
 }
 
+/** O que confere o formulário: o modelo de cada etapa, no harness, e o repositório, pelo Repositório. */
+interface ConferenciasDoCadastro {
+  conferirModeloNoHarness: ConferirModeloNoHarness;
+  repositorio: Pick<RepositorioDoProjeto, "conferir" | "varrerBase">;
+}
+
 /**
  * C19 pelo formulário: confere o repositório (F5 §2; a falha é externa, ErroExterno, e nada é gravado) e os modelos, e
  * grava o cadastro e as etapas numa transação só.
@@ -146,10 +147,10 @@ async function conferirEGravar(
   banco: DatabaseSync,
   formulario: FormularioDoProjeto,
   gravar: typeof registrarProjeto,
-  conferirModeloNoHarness: ConferirModeloNoHarness,
+  { conferirModeloNoHarness, repositorio }: ConferenciasDoCadastro,
 ) {
   const { configuracoes, preparacao, ...cadastro } = formulario;
-  const { hospedagem } = await conferirProjeto(cadastro).catch((error_: unknown) => {
+  const { hospedagem } = await repositorio.conferir(cadastro).catch((error_: unknown) => {
     throw new ErroExterno(mensagem(error_));
   });
   await conferirModelosAlterados(banco, formulario.nome, configuracoes, conferirModeloNoHarness);
@@ -170,10 +171,10 @@ async function conferirEGravar(
 export async function cadastrarProjetoDoFormulario(
   banco: DatabaseSync,
   formulario: FormularioDoProjeto,
-  conferirModeloNoHarness: ConferirModeloNoHarness,
+  conferencias: ConferenciasDoCadastro,
 ) {
-  const salvo = await conferirEGravar(banco, formulario, registrarProjeto, conferirModeloNoHarness);
-  await varrerCommitsHumanos(banco, salvo).catch(noLog);
+  const salvo = await conferirEGravar(banco, formulario, registrarProjeto, conferencias);
+  await conferencias.repositorio.varrerBase(salvo).catch(noLog);
   return salvo;
 }
 
@@ -181,8 +182,8 @@ export async function cadastrarProjetoDoFormulario(
 export const editarProjetoDoFormulario = (
   banco: DatabaseSync,
   formulario: FormularioDoProjeto,
-  conferirModeloNoHarness: ConferirModeloNoHarness,
-) => conferirEGravar(banco, formulario, editarProjeto, conferirModeloNoHarness);
+  conferencias: ConferenciasDoCadastro,
+) => conferirEGravar(banco, formulario, editarProjeto, conferencias);
 
 /** O que sobra para apagar no disco do que dependia do projeto: as execuções, as conversas das sessões e os anexos que nenhuma evidência cita mais. */
 export interface SobrasNoDisco {
@@ -212,6 +213,7 @@ export async function removerProjeto(
   banco: DatabaseSync,
   nome: string,
   apagarOQueDependeDoProjeto: ApagarOQueDependeDoProjeto,
+  repositorio: Pick<RepositorioDoProjeto, "apagarEspacosDoProjeto">,
 ): Promise<{ projeto: Projeto; avisos: string[] }> {
   const { removido, execucoes, sessoes, simuladas, orfaos } = escrever(banco, () => {
     const removido = projetoExistente(banco, nome);
@@ -255,6 +257,6 @@ export async function removerProjeto(
     ...sessoes.map((conversa) => apagar(join(dirSessoes, conversa))), // a pasta própria da sessão
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
   ]);
-  avisos.push(...(await removerWorktrees(raiz, removido)));
+  avisos.push(...(await repositorio.apagarEspacosDoProjeto(removido)));
   return { projeto: removido, avisos };
 }

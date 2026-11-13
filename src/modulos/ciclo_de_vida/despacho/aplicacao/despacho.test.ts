@@ -23,7 +23,7 @@ import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenar
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
 import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda } from "../../../repositorio/publico.ts";
+import { garantirWorktreeDemanda } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { conferirPromptComFoto } from "../../conducao/aplicacao/prompt/fotos_retorno/conferir_foto.ts";
 import {
   ConducaoDeImplementar,

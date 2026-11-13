@@ -13,7 +13,7 @@ import { validarPlano } from "../../src/modulos/ciclo_de_vida/processo/nucleo/tr
 import { type Pedido, Projeto } from "../../src/modulos/demandas/publico.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
 import { ErroDeRegra } from "../../src/shared/nucleo/erros.ts";
-import { garantirWorktreeDemanda } from "../../src/modulos/repositorio/publico.ts";
+import { garantirWorktreeDemanda } from "../repositorio_de_teste.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";

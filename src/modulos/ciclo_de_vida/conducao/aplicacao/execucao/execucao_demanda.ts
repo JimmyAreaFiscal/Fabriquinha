@@ -25,11 +25,9 @@ import {
 } from "../../../processo/publico.ts";
 import {
   ambienteDoEspaco,
-  cicloDoEspaco,
-  commitDoTicketDemanda,
   type EspacoDeTrabalho,
   espacoDoTicket,
-  varrerCommitsHumanos,
+  montarRepositorio,
 } from "../../../../repositorio/publico.ts";
 import { encontrado, existe, mensagem } from "../../../../../shared/nucleo/erros.ts";
 import {
@@ -66,8 +64,8 @@ interface OpcoesComunsDaExecucao {
   iniciarEmSessaoNova?: boolean;
   /** O que fazer com o ticket depois do encerramento do processo; sem ele, quem conduz a etapa o fecha. */
   fechar?: (banco: DatabaseSync, ref: TicketRef, resultado: { falha?: FalhaDaTentativa }) => Promise<void>;
-  /** O Espaço que a condução já criou (e se buscou a base); sem ele, a execução o cria. */
-  espaco?: { pasta: string; buscouBase: boolean };
+  /** O Espaço que a condução já criou; sem ele, a execução o cria. */
+  espaco?: { pasta: string };
 }
 
 /** O prompt da execução: a mensagem do Auditor ou a montagem da Etapa, com o contexto que a execução junta. */
@@ -99,11 +97,7 @@ async function worktreeDoEspacoDoTicket(
   espaco: EspacoDeTrabalho,
   log: string,
 ): Promise<string> {
-  const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
-  const { pasta, buscouBase } = opcoes.espaco ?? (await ciclo.criar());
-  if (buscouBase) await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
-  return pasta;
+  return opcoes.espaco?.pasta ?? (await montarRepositorio({ banco }).prepararEspaco(projeto, espaco, log));
 }
 
 /** Grava o grupo de processo do pi e o Ambiente que o lançou, para o reinício do serviço poder interrompê-lo (§4.2). */
@@ -138,9 +132,10 @@ function perguntasDosTicketsReprovadosDaRodada({
 
 /** O SHA do commit de cada ticket da demanda que tem um (as revisões leem o que a Fabriquinha já verificou nele). */
 function commitsDosTickets({ banco, ag }: Conducao): ContextoDoPrompt["commitsDosTickets"] {
+  const repositorio = montarRepositorio({ banco });
   return new Map(
     ag.tickets.flatMap((t) => {
-      const commit = commitDoTicketDemanda(banco, ag.demanda.id, t.ticket_id);
+      const commit = repositorio.commitDoTicket(ag.demanda.id, t.ticket_id);
       return commit ? [[t.ticket_id, commit.sha] as const] : [];
     }),
   );

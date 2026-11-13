@@ -10,7 +10,7 @@ import {
   ticketsDasDemandas,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
-import { apagarCommitsDasDemandas, apagarVarreduraDoProjeto } from "../../../modulos/repositorio/publico.ts";
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 import { apagarSessoesDasDemandas, execucoesAbertas } from "../../../modulos/sessoes/publico.ts";
 
 /** Recusa a remoção enquanto um ticket do projeto está em execução ou tem execução de sessão aberta. */
@@ -38,9 +38,8 @@ export const removerProjetoComOQueDependeDele = (
 ) =>
   gestaoDeDemandas.removerProjeto(nome, (pedidos) => {
     recusarExecucaoEmAndamento(banco, nome, pedidos);
-    apagarCommitsDasDemandas(banco, pedidos);
+    montarRepositorio({ banco }).esquecer(nome, pedidos);
     const { execucoes, sessoes } = apagarSessoesDasDemandas(banco, pedidos);
     const anexosSemEvidencia = apagarDesenvolvimentoDasDemandas(banco, pedidos);
-    apagarVarreduraDoProjeto(banco, nome);
     return { execucoes, sessoes, anexosSemEvidencia };
   });

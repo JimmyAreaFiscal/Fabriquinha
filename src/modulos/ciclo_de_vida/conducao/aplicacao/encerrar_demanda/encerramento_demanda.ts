@@ -3,7 +3,8 @@
 import { type Execucao, type Sessao, Uso, type UsoDaExecucao, type UsoDeclarado } from "../../../../sessoes/publico.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../../processo/publico.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
-import { prDoEspaco, lista, neutro } from "../../../../repositorio/publico.ts";
+import { prDoEspaco } from "../../../../repositorio/publico.ts";
+import { lista, neutro } from "../encerrar_rodada/documentacao_do_pr/corpo_do_pr.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../../evidencias/publico.ts";
 import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
 

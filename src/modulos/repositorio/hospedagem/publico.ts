@@ -1,5 +1,4 @@
-// API do subdomínio Hospedagem (MELHORIAS §10): confere o remoto e monta, publica, consulta e integra os PRs.
-export { codigo, dolares, inteiro, LIMITE_DO_CORPO, lista, neutro, plural, tabela } from "./aplicacao/corpo_do_pr.ts";
+// Fronteira interna do subdomínio Hospedagem (MELHORIAS §10): confere o remoto e publica, consulta e integra os PRs.
 export {
   apagarPullRequestsDasDemandas,
   apagarPullRequestsQueSumiram,

@@ -5,8 +5,8 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
-import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { commitDoTicketDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,
@@ -202,8 +202,7 @@ test("CA-16: commit sem as evidências devolve o ticket citando o que falta", as
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
   await commitarTicketDemanda(c.banco, ref(1), {
     projeto: c.c.projeto,
-    ambiente: new AmbienteHostLocal(),
-    worktree: c.worktree,
+    espaco: espacoDoTicket(c.ag(), { rodada_id: 1 }, c.c.projeto, c.c.raiz),
     tipo: "feat",
     titulo: "Cachear",
     etapa: "implementar",

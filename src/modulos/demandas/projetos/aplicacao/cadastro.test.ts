@@ -12,7 +12,8 @@ import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../../../shared/
 import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
 import { raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { cursorDaBase } from "../../../repositorio/publico.ts";
+import { cursorDaBase } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { montarRepositorio } from "../../../repositorio/publico.ts";
 import { buscarProjeto, listarProjetos } from "../armazenamento/projetos.ts";
 import {
   cadastrarProjetoDoFormulario,
@@ -27,6 +28,11 @@ import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fa
 
 /** O pi falso do teste responde a conferência, como o harness do serviço. */
 const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
+/** As conferências do formulário: o modelo no pi e o repositório, pelo Repositório montado sobre o `banco`. */
+const conferenciasDo = (banco: DatabaseSync) => ({
+  conferirModeloNoHarness: conferirModeloNoPi,
+  repositorio: montarRepositorio({ banco }),
+});
 
 /** A pasta da execução simulada `id`, da Simulação que saiu (ticket 02). */
 const pastaDaExecucaoSimulada = (raiz: string, id: number): string => join(raiz, "simulacoes", String(id));
@@ -702,7 +708,7 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
       hospedagem: "azure-devops",
       configuracoes,
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   assert.equal(salvo.hospedagem, "github");
   assert.equal(salvo.chave_sonarqube, "loja");
@@ -718,7 +724,7 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
   );
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
   await assert.rejects(
-    cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo), conferirModeloNoPi),
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo), conferenciasDo(banco)),
     /já existe o projeto loja/,
   );
   banco.close();
@@ -734,7 +740,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
       ...formularioDeLoja(repo),
       configuracoes: { planejar: { modelo: opus } },
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   const cursor = cursorDaBase(banco, "loja");
   git(repo, "commit", "-q", "--allow-empty", "-m", "outro");
@@ -751,7 +757,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
           implementar: { modelo: { provedor: "inexistente", nome: "xyz" } },
         },
       },
-      conferirModeloNoPi,
+      conferenciasDo(banco),
     ),
     (erro: unknown) =>
       erro instanceof ZodError &&
@@ -774,7 +780,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
       preparacao: ["npm ci"],
       configuracoes: { planejar: { modelo: opus, effort: "low" } },
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   assert.deepEqual(editado.verificacoes.preparacao, ["npm ci"]);
   assert.deepEqual(linhasDasEtapas(banco), [
@@ -784,7 +790,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
     editarProjetoDoFormulario(
       banco,
       { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } },
-      conferirModeloNoPi,
+      conferenciasDo(banco),
     ),
     ZodError,
   );
@@ -796,7 +802,7 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
   const banco = novoBanco();
   const pasta = mkdtempSync(join(base, "nao-git-"));
   await assert.rejects(
-    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta), conferirModeloNoPi),
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta), conferenciasDo(banco)),
     (erro: unknown) =>
       erro instanceof ErroExterno &&
       erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,

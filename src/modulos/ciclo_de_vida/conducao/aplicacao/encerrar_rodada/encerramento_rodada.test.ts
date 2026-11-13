@@ -14,7 +14,7 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenario_de_encerramento_rodada.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../../shared/nucleo/erros.ts";
-import { cursorDaBase, caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";
+import { cursorDaBase, caminhoDaWorktreeRodada } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anexosDaDemanda, schemaDoTipo } from "../../../evidencias/publico.ts";
 import { conferirEncerramentoRodada } from "./encerramento_rodada.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";

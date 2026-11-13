@@ -25,16 +25,7 @@ import {
 } from "../../../processo/publico.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import {
-  ambienteDoEspaco,
-  cicloDoEspaco,
-  espacoDaDemanda,
-  lerPR,
-  type OpcoesVerificacao,
-  pendenciasDeLimpeza,
-  sobrasDaDemanda,
-  varrerCommitsHumanos,
-} from "../../../../repositorio/publico.ts";
+import { espacoDaDemanda, montarRepositorio, type OpcoesVerificacao } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { carregarSessoesDoContexto, lerUsoDeclarado } from "../../../../sessoes/publico.ts";
 import { logDaOperacao } from "../../../../../shared/infra/registro.ts";
@@ -47,7 +38,7 @@ import {
   type PassoDaEtapa,
   type ResultadoDoPasso,
 } from "../conducao_de_etapa/conducao_de_etapa.ts";
-import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
 
 /**
  * Grava o encerramento do processo (`gravarEncerramentoDoProcesso`) junto da conclusão do pedido `demandaId`, na mesma
@@ -117,12 +108,9 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     this.opcoes = opcoes;
   }
 
-  /** O ciclo do Espaço da demanda, no Ambiente do Espaço, com o log do encerramento. */
-  private cicloDoEspacoDaDemanda(projeto: ProjetoConduzido, demanda_id: string): ReturnType<typeof cicloDoEspaco> {
-    const raiz = raizDo(this.deps.banco);
-    const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
-    const espaco = espacoDaDemanda(projeto, demanda_id, raiz);
-    return cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
+  /** O log do encerramento da demanda. */
+  private logDoEncerramento(demanda_id: string): string {
+    return logDaOperacao(raizDo(this.deps.banco), `encerramento-${demanda_id}`);
   }
 
   private async conferirPRFinal(endereco: Endereco): Promise<ResultadoDoPasso> {
@@ -130,12 +118,9 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const { demanda_id } = endereco;
     const ag = this.agregadoDe(endereco);
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
-    const raiz = raizDo(banco);
-    const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
+    const log = this.logDoEncerramento(demanda_id);
     // O erro até a tentativa registrada sobe e a base falha o ticket.
-    const ciclo = this.cicloDoEspacoDaDemanda(projeto, demanda_id);
-    await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
-    const publicado = await publicarPRFinal(banco, ag, projeto, projeto.branch_base, raiz);
+    const publicado = await publicarPRFinal(banco, ag, projeto, log);
     registrarTentativaDoEncerramento(
       banco,
       demanda_id,
@@ -151,7 +136,8 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
 
     try {
       const { conferencia_do_pr: conferenciaDoPR } = montarVerificacoesDaEtapa("encerrar_demanda", {
-        conferencia_do_pr: () => new ConferenciaDoPR(projeto, publicado.id, log, this.opcoes.verificacao),
+        conferencia_do_pr: () =>
+          new ConferenciaDoPR(montarRepositorio({ banco }), projeto, publicado.id, log, this.opcoes.verificacao),
       });
       const problemas = await conferenciaDoPR.conferir();
       if (problemas.conflito) {
@@ -188,7 +174,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     };
     let leitura;
     try {
-      leitura = await lerPR(projeto, String(pr.numero), relogio);
+      leitura = await montarRepositorio({ banco }).situacaoDoPR(projeto, String(pr.numero), relogio);
     } catch (erro) {
       devolverParaEspera(); // a leitura que falha não é decisão do humano: o próximo ciclo relê
       throw erro;
@@ -210,8 +196,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a hospedagem não informou o merge do PR ${pr.url}`,
       "confira o PR na plataforma",
     );
-    const ambiente = this.cicloDoEspacoDaDemanda(projeto, demanda_id).ambiente;
-    const pendentes = await pendenciasDeLimpeza(ambiente, raizDo(banco), projeto, ag);
+    const pendentes = await montarRepositorio({ banco }).pendenciasDeLimpeza(projeto, ag);
     registrarIntegracaoFinal(
       banco,
       demanda_id,
@@ -232,9 +217,13 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a demanda ${demanda_id} não tem progresso de encerramento`,
       "registre a tentativa antes",
     ).limpeza_pendente;
-    const ciclo = this.cicloDoEspacoDaDemanda(projeto, demanda_id);
-    const feito = await ciclo.limpar(pendentes);
-    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(ciclo.ambiente, projeto, feito.removidos))];
+    const feito = await montarRepositorio({ banco }).limparEspaco(
+      projeto,
+      espacoDaDemanda(projeto, demanda_id, raizDo(banco)),
+      this.logDoEncerramento(demanda_id),
+      pendentes,
+    );
+    const sobras = [...feito.pendentes, ...feito.sobras];
     const demonstracao = montarDemonstracaoLimpeza(feito.removidos, sobras);
     const { sessoes, execucoes, usos } = carregarSessoesDoContexto(banco, { demanda_id: demanda_id, ticket_id: null });
     // Com sobras só a demonstração é submetida: o Avaliador a recusa e nada é gravado.

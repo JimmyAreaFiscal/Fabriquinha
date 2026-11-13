@@ -13,16 +13,8 @@ import {
 } from "../../../processo/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
-import {
-  ambienteDoEspaco,
-  cicloDoEspaco,
-  commitDoTicketDemanda,
-  espacoDoTicket,
-  exigirGit,
-  LIMITE_DO_CORPO,
-  publicarPRDe,
-  varrerCommitsHumanos,
-} from "../../../../repositorio/publico.ts";
+import { espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
+import { LIMITE_DO_CORPO } from "./documentacao_do_pr/corpo_do_pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
 import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
@@ -198,8 +190,8 @@ async function publicarEConferir(
   submeterEvidenciaDoEncerramento(banco, ticket, "relatorio_produtividade", relatorio);
 
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
-  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
-  const atualizacao = await ciclo.atualizarComBase();
+  const repositorio = montarRepositorio({ banco });
+  const atualizacao = await repositorio.atualizarComBase(projeto, espaco, log);
   if (atualizacao.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
     const arquivosEmConflito = atualizacao.arquivos.join(", ");
@@ -235,36 +227,18 @@ async function publicarEConferir(
       return resumo;
     },
   );
-  const registrados = new Set(
+  const commitsRegistrados = new Set(
     doRodada
       .filter((t) => t.etapa === "implementar")
-      .map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha),
+      .map((t) => repositorio.commitDoTicket(demanda.id, t.ticket_id)?.sha),
   );
-  const conferirCommits = async (head: string) => {
-    // Commit que já está na base publicada veio de trazer a base para a rodada (merge), não de um agente: não é órfão.
-    const basePublicada = `refs/remotes/origin/${projeto.branch_base}`;
-    await exigirGit(projeto.raiz_git, "fetch", "origin", `+refs/heads/${projeto.branch_base}:${basePublicada}`);
-    const novos = (
-      await exigirGit(
-        projeto.raiz_git,
-        "rev-list",
-        "--no-merges",
-        head,
-        `^refs/heads/${demanda.branch}`,
-        `^${basePublicada}`,
-      )
-    )
-      .split("\n")
-      .filter(Boolean);
-    const orfao = novos.find((sha) => !registrados.has(sha));
-    if (orfao === undefined) return;
-    throw new ErroDeRegra(
+  const recusarCommitOrfao = (orfao: string) =>
+    new ErroDeRegra(
       `a branch ${branchRodada} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${refRodada} registrou: ` +
         "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
       `desfaça com git -C ${espaco.pasta} reset --hard HEAD~1, repetindo até a HEAD ` +
         "ser um commit de ticket da Fabriquinha, e reabra o ticket",
     );
-  };
   // Os PRs que os `encerrar_rodada` anteriores da rodada já registraram; a marca cobre o que a queda deixou sem registro.
   const anteriores = new Set<number | undefined>(
     doRodada.filter((t) => t.etapa === "encerrar_rodada" && t.ticket_id < ticket.ticket_id).map((t) => t.ticket_id),
@@ -272,18 +246,18 @@ async function publicarEConferir(
   const conhecidos = ag.evidencias
     .filter((e) => e.tipo === "pr_aberto" && anteriores.has(e.ticket_id))
     .map((e) => (e.dados as { id: string }).id);
-  await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
-  const publicado = await publicarPRDe(
-    raiz,
+  const publicado = await repositorio.publicarPR(
     projeto,
-    { branch: branchRodada, base: demanda.branch, publicarBase: true },
+    espaco,
     {
       titulo: pr.titulo,
       corpo: pr.publicado,
       conhecidos,
       marca: marcaDoPRRodada(demanda.id, ticket.ticket_id),
+      commitsRegistrados,
+      recusarCommitOrfao,
     },
-    conferirCommits,
+    log,
   );
   submeterEvidenciaDoEncerramento(banco, ticket, "pr_aberto", {
     ...publicado,
@@ -303,7 +277,7 @@ async function publicarEConferir(
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
   const { conferencia_do_pr: conferenciaDoPR } = montarVerificacoesDaEtapa("encerrar_rodada", {
-    conferencia_do_pr: () => new ConferenciaDoPR(projeto, publicado.id, log),
+    conferencia_do_pr: () => new ConferenciaDoPR(repositorio, projeto, publicado.id, log),
   });
   const problemas = await conferenciaDoPR.conferir();
   const correcoes = [

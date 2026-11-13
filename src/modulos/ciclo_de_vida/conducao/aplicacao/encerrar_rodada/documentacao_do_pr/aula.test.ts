@@ -11,6 +11,7 @@ import { type EvidenciaDemanda } from "../../../../evidencias/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
 import { type ComandoNoAmbiente } from "../../../../../ambiente/publico.ts";
 import { AmbienteHostLocal } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { exigirGitNoAmbiente } from "../../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { faixas, gerarAula, linhasMudadas, type Trecho } from "./aula.ts";
 
 /** O host local registrando cada comando que recebe, para provar que o git passou pelo Ambiente. */
@@ -24,6 +25,7 @@ class AmbienteQueRegistra extends AmbienteHostLocal {
 
 const ambiente = new AmbienteQueRegistra();
 const repo = mkdtempSync(join(tmpdir(), "fabriquinha-aula-"));
+const lerGitDaRodada = (...argumentos: string[]) => exigirGitNoAmbiente(ambiente, repo, ...argumentos);
 after(() => {
   rmSync(repo, { recursive: true, force: true });
 });
@@ -116,7 +118,7 @@ test("linhasMudadas e faixas: as linhas novas dos cabeçalhos do diff, em faixas
 });
 
 test("a aula: o código do git na ordem dos trechos, a linha alterada marcada e o texto do agente escapado", async () => {
-  const html = await gerarAula(ambiente, ag(), repo, [
+  const html = await gerarAula(lerGitDaRodada, ag(), [
     trecho({ alternativaDescartada: "ler do .env" }),
     trecho({ inicio: 4, fim: 4, oQueFaz: "define d" }),
   ]);
@@ -143,33 +145,33 @@ test("a aula: o código do git na ordem dos trechos, a linha alterada marcada e 
 
 test("a aula recusa o que não é código alterado pela demanda, dizendo onde procurar", async () => {
   await assert.rejects(
-    gerarAula(ambiente, ag({ evidencias: [] }), repo, [trecho()]),
+    gerarAula(lerGitDaRodada, ag({ evidencias: [] }), [trecho()]),
     recusa("a demanda não tem revisão concluída com arquivos_alterados (a aula vem depois da revisão)"),
   );
   for (const arquivo of ["nada.ts", "velho.ts"]) {
     await assert.rejects(
-      gerarAula(ambiente, ag(), repo, [trecho({ arquivo })]),
+      gerarAula(lerGitDaRodada, ag(), [trecho({ arquivo })]),
       recusa(
         `${arquivo} não é um arquivo criado ou alterado pela demanda (escolha um da lista: busca.ts, logo.png, velho.ts)`,
       ),
     );
   }
   await assert.rejects(
-    gerarAula(ambiente, ag(), repo, [trecho({ arquivo: "logo.png" })]),
+    gerarAula(lerGitDaRodada, ag(), [trecho({ arquivo: "logo.png" })]),
     recusa("logo.png é binário (explique arquivos binários na mensagem do PR)"),
   );
   await assert.rejects(
-    gerarAula(ambiente, ag(), repo, [trecho({ fim: 5 })]),
+    gerarAula(lerGitDaRodada, ag(), [trecho({ fim: 5 })]),
     recusa("busca.ts:1-5 passa do fim do arquivo (busca.ts tem 4 linhas)"),
   );
   await assert.rejects(
-    gerarAula(ambiente, ag(), repo, [trecho(), trecho({ inicio: 1, fim: 1 })]),
+    gerarAula(lerGitDaRodada, ag(), [trecho(), trecho({ inicio: 1, fim: 1 })]),
     recusa("busca.ts:1-1 não toca nenhuma linha alterada pela demanda (as linhas alteradas de busca.ts são 2, 4)"),
   );
 });
 
 test("a aula confere o trecho contra o diff desde o ancestral comum, como o arquivos_alterados", async () => {
   const avancada = { ...alterados, dados: { ...alterados.dados, base: baseAvancada } };
-  const html = await gerarAula(ambiente, ag({ evidencias: [avancada] }), repo, [trecho()]);
+  const html = await gerarAula(lerGitDaRodada, ag({ evidencias: [avancada] }), [trecho()]);
   assert.match(html, /<tr class="mudou"><td class="n">2<\/td>/);
 });

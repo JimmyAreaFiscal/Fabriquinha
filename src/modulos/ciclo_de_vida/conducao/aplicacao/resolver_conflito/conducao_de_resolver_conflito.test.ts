@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
 import { podeTentarEncerramento } from "../../../processo/publico.ts";
-import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
+import { commitDoTicketDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,

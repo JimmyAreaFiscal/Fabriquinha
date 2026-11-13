@@ -24,7 +24,7 @@ import {
   pendenciasDeLimpeza,
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
-} from "../../../../repositorio/publico.ts";
+} from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";

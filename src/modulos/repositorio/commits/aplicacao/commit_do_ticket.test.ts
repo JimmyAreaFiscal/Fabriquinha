@@ -5,12 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { ErroDeReprovacao } from "../../../../../shared/nucleo/erros.ts";
-import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import { type ComandoNoAmbiente } from "../../../../ambiente/publico.ts";
-import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
-import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
-import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { ErroDeReprovacao } from "../../../../shared/nucleo/erros.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
+import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
+import { type ComandoNoAmbiente } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { acharCommitComMarca, commitarTicket, type PedidoDeCommit } from "./commit_do_ticket.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-commit-demanda-")));
 after(() => {
@@ -24,7 +25,15 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
 const escreve = (cwd: string, arquivo: string, texto: string) => {
   writeFileSync(join(cwd, arquivo), texto);
 };
-const ref = (n: number) => ({ demanda_id: "I-1", ticket_id: n });
+const marca = (n: number) => `[I-1.T${String(n)}]`;
+/** O pedido do ticket `n` com a mensagem `<tipo>: <título> [I-1.Tn]`. */
+const pedido = (n: number, cabecalho: string, extra: Partial<PedidoDeCommit> = {}): PedidoDeCommit => ({
+  demanda_id: "I-1",
+  ticket_id: n,
+  marca: marca(n),
+  mensagem: `${cabecalho} ${marca(n)}`,
+  ...extra,
+});
 
 let n = 0;
 function cenario() {
@@ -61,17 +70,17 @@ class AmbienteQueRegistra extends AmbienteHostLocal {
 test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repetição não duplica", async () => {
   const { worktree, banco } = cenario();
   const ambiente = new AmbienteQueRegistra();
-  assert.equal(await acharCommitTicketDemanda(ambiente, worktree, ref(1)), undefined);
+  assert.equal(await acharCommitComMarca(ambiente, worktree, marca(1)), undefined);
   escreve(worktree, "a.txt", "a\nb\nc\n");
   escreve(worktree, "novo.txt", "x\ny\n");
-  const feito = await commitarTicketDemanda(banco, ref(1), {
-    projeto: { nome: "p", raiz_git: worktree },
+  const feito = await commitarTicket(
+    banco,
     ambiente,
     worktree,
-    tipo: "feat",
-    titulo: "Cache",
-    etapa: "implementar",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(1, "feat: Cache"),
+    LIMITE_COMANDO_MS,
+  );
   assert.equal(feito.mensagem, "feat: Cache [I-1.T1]");
   assert.deepEqual(
     feito.arquivos.map((a) => [a.caminho, a.status, a.adicionadas, a.removidas]),
@@ -82,39 +91,38 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   );
   assert.match(git(worktree, "show", "--stat", "--format=", "HEAD"), /a\.txt\s+\|\s+1 \+\n.*novo\.txt\s+\|\s+2 \+\+/);
   assert.deepEqual(commitDoTicketDemanda(banco, "I-1", 1), feito);
-  assert.deepEqual(await acharCommitTicketDemanda(ambiente, worktree, ref(1)), feito);
-  assert.equal(await acharCommitTicketDemanda(ambiente, worktree, ref(2)), undefined);
+  assert.deepEqual(await acharCommitComMarca(ambiente, worktree, marca(1)), feito);
+  assert.equal(await acharCommitComMarca(ambiente, worktree, marca(2)), undefined);
   const subcomandos = ambiente.argumentosRecebidos.map((a) => a.slice(2).find((x) => !x.startsWith("-")));
   for (const subcomando of ["add", "diff", "rev-parse", "show", "log"]) assert.ok(subcomandos.includes(subcomando));
 
   // queda antes da gravação: o commit existe, o registro não
   banco.exec("DELETE FROM arquivo_commit_demanda; DELETE FROM commit_ticket_demanda");
-  const de_novo = await commitarTicketDemanda(banco, ref(1), {
-    projeto: { nome: "p", raiz_git: worktree },
-    ambiente: new AmbienteHostLocal(),
+  const de_novo = await commitarTicket(
+    banco,
+    new AmbienteHostLocal(),
     worktree,
-    tipo: "feat",
-    titulo: "Cache",
-    etapa: "implementar",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(1, "feat: Cache"),
+    LIMITE_COMANDO_MS,
+  );
   assert.equal(de_novo.sha, feito.sha);
   assert.equal(git(worktree, "rev-list", "--count", "HEAD").trim(), "2");
   assert.deepEqual(commitDoTicketDemanda(banco, "I-1", 1), feito);
 });
 
-test("implementar sem alteração é rejeitado, sem commit", async () => {
+test("com a recusa, o ticket sem alteração é rejeitado com ela, sem commit", async () => {
   const { worktree, banco } = cenario();
   await assert.rejects(
-    commitarTicketDemanda(banco, ref(1), {
-      projeto: { nome: "p", raiz_git: worktree },
-      ambiente: new AmbienteHostLocal(),
+    commitarTicket(
+      banco,
+      new AmbienteHostLocal(),
       worktree,
-      tipo: "fix",
-      titulo: "Nada",
-      etapa: "implementar",
-    }),
-    (erro) =>
-      erro instanceof ErroDeReprovacao && erro.message.startsWith("o ticket I-1.T1 terminou sem alteração na worktree"),
+      { nome: "p", raiz_git: worktree },
+      pedido(1, "fix: Nada", { recusaSemAlteracao: "o ticket I-1.T1 terminou sem alteração na worktree" }),
+      LIMITE_COMANDO_MS,
+    ),
+    (erro) => erro instanceof ErroDeReprovacao && erro.message === "o ticket I-1.T1 terminou sem alteração na worktree",
   );
   assert.equal(git(worktree, "rev-list", "--count", "HEAD").trim(), "1");
 });
@@ -125,14 +133,14 @@ test("resolver_conflito sem alteração commita o merge vazio com dois pais", as
   git(worktree, "commit", "-q", "--allow-empty", "-m", "outra");
   git(worktree, "checkout", "-q", "main");
   git(worktree, "merge", "--no-ff", "--no-commit", "outra");
-  const c = await commitarTicketDemanda(banco, ref(2), {
-    projeto: { nome: "p", raiz_git: worktree },
-    ambiente: new AmbienteHostLocal(),
+  const c = await commitarTicket(
+    banco,
+    new AmbienteHostLocal(),
     worktree,
-    tipo: "fix",
-    titulo: "Nada",
-    etapa: "resolver_conflito",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(2, "fix: Nada"),
+    LIMITE_COMANDO_MS,
+  );
   assert.deepEqual(c.arquivos, []);
   assert.equal(c.mensagem, "fix: Nada [I-1.T2]");
   assert.equal(git(worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
@@ -149,14 +157,14 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   git(worktree, "add", "-A");
   git(worktree, "commit", "-qm", "main");
   git(worktree, "merge", "--no-commit", "--no-ff", "outra");
-  const c = await commitarTicketDemanda(banco, ref(2), {
-    projeto: { nome: "p", raiz_git: worktree },
-    ambiente: new AmbienteHostLocal(),
+  const c = await commitarTicket(
+    banco,
+    new AmbienteHostLocal(),
     worktree,
-    tipo: "fix",
-    titulo: "Conflito",
-    etapa: "resolver_conflito",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(2, "fix: Conflito"),
+    LIMITE_COMANDO_MS,
+  );
   assert.equal(git(worktree, "rev-list", "--parents", "-n1", "HEAD").trim().split(" ").length, 3);
   assert.deepEqual(
     c.arquivos.map((a) => a.caminho),
@@ -167,23 +175,23 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
 test("o commit do ticket grava os commits posteriores sobre as linhas do ticket anterior", async () => {
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
-  await commitarTicketDemanda(banco, ref(1), {
-    projeto: { nome: "p", raiz_git: worktree },
-    ambiente: new AmbienteHostLocal(),
+  await commitarTicket(
+    banco,
+    new AmbienteHostLocal(),
     worktree,
-    tipo: "feat",
-    titulo: "Um",
-    etapa: "implementar",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(1, "feat: Um"),
+    LIMITE_COMANDO_MS,
+  );
   escreve(worktree, "a.txt", "a\nb\nX\nY\nZ\n");
-  await commitarTicketDemanda(banco, ref(2), {
-    projeto: { nome: "p", raiz_git: worktree },
-    ambiente: new AmbienteHostLocal(),
+  await commitarTicket(
+    banco,
+    new AmbienteHostLocal(),
     worktree,
-    tipo: "feat",
-    titulo: "Dois",
-    etapa: "implementar",
-  });
+    { nome: "p", raiz_git: worktree },
+    pedido(2, "feat: Dois"),
+    LIMITE_COMANDO_MS,
+  );
   assert.deepEqual(
     banco
       .prepare(

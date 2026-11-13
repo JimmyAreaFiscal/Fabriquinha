@@ -1,73 +1,33 @@
-// Fachada do domínio Repositório (MELHORIAS §10), `RepositorioDoProjeto`: confere repositórios, prepara e limpa
-// espaços, registra commits, publica e acompanha PRs, integra o PR da rodada e informa alterações e histórico. É a
-// única entrada usada por fora do domínio; os subdomínios ficam atrás dela.
+// Fachada do domínio Repositório (MELHORIAS §10): a montagem e a interface `RepositorioDoProjeto`, com os tipos de entrada
+// e saída dela, e o Espaço de Trabalho como valor (o nome das branches, a pasta e o PR de cada Espaço), que o Ciclo de
+// Vida calcula sem montar o Repositório. A fila git, o git do Ambiente e a varredura dos commits humanos são internos.
+export type { Commit, PedidoDeCommit } from "./commits/publico.ts";
+export { montarRepositorio, type RepositorioDoProjeto } from "./coordenacao/publico.ts";
 export {
-  alteracoesDosCommitsEmLote,
-  apagarCommitsDasDemandas,
-  apagarVarreduraDoProjeto,
-  arquivosDe,
-  arquivosDosCommits,
-  type Commit,
-  commitar,
-  commitDoTicketDemanda,
-  commitsDosTicketsEmLote,
-  cursorDaBase,
-  gravarCommitDemanda,
-  projetosAVarrer,
-  registrarCommitsHumanosDoTicket,
-  varrerCommitsHumanos,
-} from "./commits/publico.ts";
-export { cicloDoEspaco } from "./coordenacao/publico.ts";
-export {
-  ambienteDoEspaco,
-  caminhoDaWorktreeDemanda,
-  caminhoDaWorktreeRodada,
-  descartarAlteracoes,
+  branchDemanda,
+  branchRodada,
   espacoDaDemanda,
-  espacoDaRodada,
   EspacoDeTrabalho,
   espacoDoTicket,
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-  ligarGestaoDeAmbientes,
-  ocupanteDoAmbiente,
-  pendenciasDeLimpeza,
   prDoEscopo,
   prDoEspaco,
   PullRequest,
-  removerWorktrees,
-  sobrasDaDemanda,
-  branchDemanda,
-  branchRodada,
-  DemandaId,
+  type ResultadoAtualizacao,
 } from "./espaco_de_trabalho/publico.ts";
-export {
-  exigirGit,
-  exigirGitNoAmbiente,
-  gitNoAmbiente,
-  Hospedagem,
-  naFilaDoProjeto,
-  type RepositorioDoProjeto,
-} from "./git/publico.ts";
-export { heatmapDo } from "./historico/publico.ts";
+export { Hospedagem, type ProjetoDoRepositorio } from "./git/publico.ts";
+export type { Heatmap } from "./historico/publico.ts";
+export type { OpcoesVerificacao, ProblemasDoPR } from "./hospedagem/publico.ts";
+
+// ponytail: ligações provisórias. O Ambiente do Espaço e a gestão de Ambientes saem no passo 6 da migração das
+// interfaces, quando o Ciclo de Vida alocar o Ambiente e o entregar ao Repositório.
+export { ambienteDoEspaco, ligarGestaoDeAmbientes } from "./espaco_de_trabalho/publico.ts";
+// ponytail: as leituras dos commits para as métricas do Ciclo de Vida saem no passo 5, com `metricas()` da interface.
+export { alteracoesDosCommitsEmLote, arquivosDosCommits, commitsDosTicketsEmLote } from "./commits/publico.ts";
+// ponytail: o SQL de `pull_request`, que o agregado da demanda do Ciclo de Vida grava na unidade de trabalho dele, sai no
+// passo 6, quando o Ciclo de Vida passar a pedir o PR do Espaço ao Repositório.
 export {
   apagarPullRequestsDasDemandas,
   apagarPullRequestsQueSumiram,
-  codigo,
-  conferirProjeto,
-  dolares,
   gravarPullRequestsNovosEMudados,
-  integrarPR,
-  inteiro,
-  lerPR,
   lerPullRequestsDaDemanda,
-  LIMITE_DO_CORPO,
-  lista,
-  neutro,
-  type OpcoesVerificacao,
-  plural,
-  type ProblemasDoPR,
-  publicarPRDe,
-  tabela,
-  verificarPR,
 } from "./hospedagem/publico.ts";

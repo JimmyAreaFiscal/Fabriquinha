@@ -8,12 +8,8 @@ import { setImmediate } from "node:timers/promises";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import {
-  type EspacoDeTrabalho,
-  espacoDaDemanda,
-  espacoDaRodada,
-  ocupanteDoAmbiente,
-} from "../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
+import { espacoDaRodada, ocupanteDoAmbiente } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { Projeto } from "../../../demandas/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";

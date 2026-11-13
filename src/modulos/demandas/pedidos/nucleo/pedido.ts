@@ -2,7 +2,7 @@
 // do Ciclo de Vida e não entra aqui; a situação diz só se o pedido é rascunho, foi enviado, cancelado ou concluído.
 import { z } from "zod";
 import { type Ator, AtorExterno, exigirAutoria } from "../../../ciclo_de_vida/publico.ts";
-import { DemandaId } from "../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Markdown, Slug, Titulo } from "../../../../shared/nucleo/primitivos.ts";
 

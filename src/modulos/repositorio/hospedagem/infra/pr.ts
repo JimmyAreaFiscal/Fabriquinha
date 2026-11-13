@@ -11,7 +11,7 @@ import { comoInstante, type Relogio, relogioDoSistema } from "../../../../shared
 import { anotar } from "../../../../shared/infra/registro.ts";
 import { executar } from "../../../../shared/infra/processo.ts";
 import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
-import { exigirGit, naFilaDoProjeto, type RepositorioDoProjeto } from "../../git/publico.ts";
+import { exigirGit, naFilaDoProjeto, type ProjetoDoRepositorio } from "../../git/publico.ts";
 
 /** Um PR da branch da demanda, como a hospedagem o lista. */
 interface PRNaHospedagem {
@@ -359,7 +359,7 @@ const PoliticasAz = z.array(
   }),
 );
 
-const CLIS: Readonly<Record<RepositorioDoProjeto["hospedagem"], CliDePR>> = { github, "azure-devops": azure };
+const CLIS: Readonly<Record<ProjetoDoRepositorio["hospedagem"], CliDePR>> = { github, "azure-devops": azure };
 
 /** A origem e o destino do PR; `publicarBase` empurra também a base, que pode nunca ter ido ao remoto (branch da demanda). */
 interface AlvoDoPR {
@@ -388,7 +388,7 @@ interface AlvoDoPR {
  */
 export async function publicarPRDe(
   raiz: string,
-  projeto: Pick<RepositorioDoProjeto, "nome" | "raiz_git" | "hospedagem">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "hospedagem">,
   alvo: AlvoDoPR,
   pr: { titulo: string; corpo: string; conhecidos: readonly string[]; marca: string },
   conferirCommits: (head: string) => void | Promise<void>,
@@ -430,7 +430,7 @@ export async function publicarPRDe(
 
 /** O estado do PR `id`, lido agora na plataforma. */
 export async function lerPR(
-  projeto: Pick<RepositorioDoProjeto, "raiz_git" | "hospedagem">,
+  projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">,
   id: string,
   relogio: Relogio = relogioDoSistema,
 ): Promise<LeituraDoPR> {
@@ -444,7 +444,7 @@ export async function lerPR(
  * confirma, lança ErroExterno.
  */
 export async function integrarPR(
-  projeto: Pick<RepositorioDoProjeto, "raiz_git" | "hospedagem">,
+  projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">,
   id: string,
 ): Promise<string> {
   const cli = CLIS[projeto.hospedagem];
@@ -486,7 +486,7 @@ export interface OpcoesVerificacao {
  * para o `log`; passado o limite, lança ErroExterno com o que ainda espera.
  */
 export async function verificarPR(
-  projeto: Pick<RepositorioDoProjeto, "raiz_git" | "hospedagem">,
+  projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">,
   id: string,
   log: string,
   {

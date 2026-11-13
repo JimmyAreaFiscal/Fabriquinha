@@ -20,7 +20,7 @@ import {
   commitarArquivo,
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../modulos/repositorio/publico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { servir } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import {
   DecisaoDoPR,

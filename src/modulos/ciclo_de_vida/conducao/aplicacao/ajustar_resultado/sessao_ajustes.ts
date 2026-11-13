@@ -15,13 +15,7 @@ import {
   type TicketDemanda,
 } from "../../../processo/publico.ts";
 import { existe } from "../../../../../shared/nucleo/erros.ts";
-import {
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  descartarAlteracoes,
-  exigirGitNoAmbiente,
-  ambienteDoEspaco,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
@@ -79,11 +73,9 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
     [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz)],
     [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz)],
   ];
-  for (const [{ branch, sha }, espaco] of pontas) {
-    const ambiente = ambienteDoEspaco(espaco);
-    await exigirGitNoAmbiente(ambiente, espaco.pasta, "update-ref", `refs/heads/${branch}`, sha);
-    await descartarAlteracoes(ambiente, espaco.pasta, log);
-  }
+  const repositorio = montarRepositorio({ banco });
+  // A branch do marco é a do Espaço: o marco a guarda para o leitor do arquivo.
+  for (const [{ sha }, espaco] of pontas) await repositorio.voltarEspaco(espaco, sha, log);
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }
 
@@ -99,9 +91,8 @@ export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, 
     projetosCadastrados().projetoExistente(banco, ag.demanda.projeto),
     raizDo(banco),
   );
-  const demanda = await exigirGitNoAmbiente(
-    ambienteDoEspaco(espacoDaDemanda),
-    espacoDaDemanda.pasta,
+  const demanda = await montarRepositorio({ banco }).gitNoEspaco(
+    espacoDaDemanda,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,
   );

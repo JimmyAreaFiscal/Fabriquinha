@@ -21,7 +21,12 @@ import {
   submeterEvidencia,
   type TicketDemanda,
 } from "../../../processo/publico.ts";
-import { espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
+import {
+  ambienteDoEspaco,
+  type EspacoDeTrabalho,
+  espacoDoTicket,
+  montarRepositorio,
+} from "../../../../repositorio/publico.ts";
 import { evidenciasPendentes } from "../../../evidencias/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import {
@@ -33,7 +38,7 @@ import {
   type RegistroDaVerificacao,
 } from "../../../verificacoes/publico.ts";
 import type { Ambiente } from "../../../../ambiente/publico.ts";
-import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
+import { commitarTicketDemanda, marcaDoTicket } from "./commit_do_ticket.ts";
 import {
   ConducaoAgentica,
   type DepsDaConducao,
@@ -127,10 +132,9 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const ag = carregarDemanda(banco, ticket.demanda_id);
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const espaco = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
-    const { pasta: worktree } = espaco;
     const ambiente = ambienteDoEspaco(espaco);
-    if (!(await acharCommitTicketDemanda(ambiente, worktree, ticket))) {
-      const naoPassou = await this.verificarEGravarEvidencias(ticket, ag, projeto, worktree, ambiente);
+    if (!(await montarRepositorio({ banco }).commitComMarca(espaco, marcaDoTicket(ticket)))) {
+      const naoPassou = await this.verificarEGravarEvidencias(ticket, ag, projeto, espaco, ambiente);
       if (naoPassou) return naoPassou;
     }
     const pendentes = evidenciasPendentes(carregarDemanda(banco, ticket.demanda_id), ticket, CATALOGO_ETAPAS);
@@ -140,7 +144,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
         motivo: `o ticket já tem commit, mas faltam as evidências: ${pendentes.join(", ")}`,
       };
     }
-    return this.commitarComHooks(ticket, ag, projeto, worktree, ambiente);
+    return this.commitarComHooks(ticket, ag, projeto, espaco, ambiente);
   }
 
   /** Coleta as verificações e grava como evidência as que o Avaliador aceita; devolve o que impede de seguir ao commit. */
@@ -148,10 +152,11 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     ticket: TicketDemanda,
     ag: AgregadoDemanda,
     projeto: ProjetoConduzido,
-    worktree: string,
+    espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia | undefined> {
     const { banco, condutor } = this.deps;
+    const { pasta: worktree } = espaco;
     const e2e = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id)?.e2e ?? false;
     const verificacoes = await (this.opcoes.coletarVerificacoes ?? coletarVerificacoes)({
       etapa: ticket.etapa,
@@ -159,6 +164,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
       projeto,
       e2e,
       worktree,
+      lerGitDoEspaco: (...argumentos) => montarRepositorio({ banco }).gitNoEspaco(espaco, ...argumentos),
       opcoes: this.opcoes.opcoesSonar,
     });
     if (condutor.emParada()) return falhaPorServicoReiniciado;
@@ -180,20 +186,19 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     ticket: TicketDemanda,
     ag: AgregadoDemanda,
     projeto: ProjetoConduzido,
-    worktree: string,
+    espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia> {
     const { banco, condutor } = this.deps;
     const { hooks_do_commit: hooks } = montarVerificacoesDaEtapa(ticket.etapa, {
       hooks_do_commit: () =>
-        new HooksDoCommit(async ({ worktree: raiz, limiteMs }) => {
+        new HooksDoCommit(async ({ limiteMs }) => {
           await commitarTicketDemanda(
             banco,
             ticket,
             {
-              ambiente,
               projeto,
-              worktree: raiz,
+              espaco,
               tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
               titulo: ticket.titulo ?? ag.demanda.titulo,
               etapa: ticket.etapa,
@@ -206,7 +211,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     try {
       resultadoDosHooks = await hooks.executar({
         ambiente,
-        worktree,
+        worktree: espaco.pasta,
         limiteMs: this.opcoes.limiteCommitMs,
       });
     } catch (erro) {

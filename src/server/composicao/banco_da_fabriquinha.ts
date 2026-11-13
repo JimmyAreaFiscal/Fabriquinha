@@ -20,14 +20,19 @@ import {
   MIGRACOES_DO_CICLO_DE_VIDA,
 } from "../../modulos/ciclo_de_vida/publico.ts";
 import { type GestaoDeDemandas, montarGestaoDeDemandas } from "../../modulos/demandas/publico.ts";
+import { montarRepositorio } from "../../modulos/repositorio/publico.ts";
 
 /**
  * A gestão de Demandas sobre o `banco`, com a conferência do modelo pelo harness do serviço (lido na hora da conferência).
- * ponytail: a gestão só guarda o banco e a conferência, então montá-la a cada leitura ligada ao Ciclo de Vida não custa;
+ * ponytail: a gestão só guarda o banco, a conferência e o Repositório sem a varredura, então montá-la a cada leitura ligada ao Ciclo de Vida não custa;
  * montar uma por banco quando a gestão guardar estado.
  */
 export const montarDemandasDoBanco = (banco: DatabaseSync): GestaoDeDemandas =>
-  montarGestaoDeDemandas({ banco, conferirModeloNoHarness: (modelo) => condutor.harness.conferirModelo(modelo) });
+  montarGestaoDeDemandas({
+    banco,
+    conferirModeloNoHarness: (modelo) => condutor.harness.conferirModelo(modelo),
+    repositorio: montarRepositorio({ banco }),
+  });
 
 ligarLeituraDosProjetosCadastrados({
   projetoExistente: (banco, nome, orientacao) => montarDemandasDoBanco(banco).projeto(nome, orientacao),

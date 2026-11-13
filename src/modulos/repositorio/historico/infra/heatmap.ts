@@ -5,7 +5,7 @@ import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { instanteMesesAntes } from "../../../../shared/nucleo/relogio.ts";
 import { git } from "../../../../shared/infra/processo.ts";
-import { exigirGit, type RepositorioDoProjeto } from "../../git/publico.ts";
+import { exigirGit, type ProjetoDoRepositorio } from "../../git/publico.ts";
 
 interface CommitDoHeatmap {
   hash: string;
@@ -26,7 +26,7 @@ interface NoDoHeatmap {
   commits?: string[];
 }
 
-interface Heatmap {
+export interface Heatmap {
   branch: string;
   /** Início e fim da janela (ISO 8601). */
   desde: string;
@@ -166,7 +166,7 @@ function somar(no: NoDoHeatmap): number {
  * não-merge dos 12 meses até `agora` que o tocam. Só lê: roda fora da fila do projeto.
  */
 export async function heatmapDo(
-  projeto: Pick<RepositorioDoProjeto, "raiz_git" | "branch_base">,
+  projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "branch_base">,
   agora: Instante,
 ): Promise<Heatmap> {
   const { raiz_git: repo, branch_base } = projeto;

@@ -8,7 +8,7 @@ import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 import { servir } from "../../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";

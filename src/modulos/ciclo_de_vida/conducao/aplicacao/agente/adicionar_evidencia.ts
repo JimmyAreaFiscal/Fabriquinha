@@ -8,7 +8,12 @@ import {
   submeterEvidencia,
   type TicketDemanda,
 } from "../../../processo/publico.ts";
-import { type EspacoDeTrabalho, espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
+import {
+  ambienteDoEspaco,
+  type EspacoDeTrabalho,
+  espacoDoTicket,
+  montarRepositorio,
+} from "../../../../repositorio/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import {
   agregadoDaRodada,
@@ -120,9 +125,8 @@ export async function adicionarEvidenciaComAnexosEnviados(
     // O HTML nasce dos trechos, antes de a submissão ser avaliada; a API devolve o ZodError como 422.
     const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
     const html = await gerarAula(
-      ambienteDoEspaco(espaco),
+      (...argumentos) => montarRepositorio({ banco }).gitNoEspaco(espaco, ...argumentos),
       agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
-      origens.worktree,
       trechos as Trecho[],
     );
     mkdirSync(origens.saida, { recursive: true });

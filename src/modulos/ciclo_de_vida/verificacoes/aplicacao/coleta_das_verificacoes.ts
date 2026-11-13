@@ -17,6 +17,8 @@ interface EntradaVerificacoes {
   /** A rodada está marcada com e2e. */
   e2e: boolean;
   worktree: string;
+  /** O git na worktree, no Ambiente do Espaço: dele saem os arquivos alterados. */
+  lerGitDoEspaco: (...argumentos: string[]) => Promise<string>;
   opcoes?: OpcoesSonar;
 }
 
@@ -26,7 +28,7 @@ interface EntradaVerificacoes {
  */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
   const { etapa, ambiente, projeto, e2e, worktree, opcoes } = entrada;
-  const arquivos = await arquivosAlterados(ambiente, worktree);
+  const arquivos = await arquivosAlterados(entrada.lerGitDoEspaco);
   const contexto = { ambiente, worktree, limiteMs: opcoes?.limiteMs };
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;
   const iniciarSonar = () => (sonarEmAndamento ??= sonar.coletar(contexto));

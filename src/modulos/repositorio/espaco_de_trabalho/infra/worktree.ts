@@ -14,7 +14,7 @@ import {
   naFilaDaPasta,
   naFilaDoProjeto,
   pastaDasWorktreesDoProjeto,
-  type RepositorioDoProjeto,
+  type ProjetoDoRepositorio,
 } from "../../git/publico.ts";
 
 /**
@@ -41,7 +41,7 @@ export async function podarWorktreesNoCore(raiz_git: string): ReturnType<typeof 
 export async function preparar(
   ambiente: Ambiente,
   caminho: string,
-  preparacao: RepositorioDoProjeto["verificacoes"]["preparacao"],
+  preparacao: ProjetoDoRepositorio["verificacoes"]["preparacao"],
   log: string,
 ): Promise<void> {
   for (const comando of preparacao) {
@@ -95,7 +95,7 @@ export async function descartarAlteracoes(ambiente: Ambiente, worktree: string, 
  */
 export function removerWorktrees(
   raiz: string,
-  projeto: Pick<RepositorioDoProjeto, "nome" | "raiz_git">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git">,
 ): Promise<string[]> {
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
     const avisos: string[] = [];

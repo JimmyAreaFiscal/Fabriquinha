@@ -3,8 +3,9 @@
 import { resolve } from "node:path";
 import { z } from "zod";
 import { Id, Slug } from "../../../../shared/nucleo/primitivos.ts";
-import type { RepositorioDoProjeto } from "../../git/publico.ts";
-import { branchDemanda, branchRodada, DemandaId } from "./nome_do_espaco.ts";
+import type { ProjetoDoRepositorio } from "../../git/publico.ts";
+import { branchDemanda, branchRodada } from "./nome_do_espaco.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
 
 /** O PR do Espaço: lido de um lugar só (`pull_request`), por rodada ou, sem rodada, o final da demanda. */
 export const PullRequest = z.object({
@@ -31,7 +32,7 @@ export const pastaDaDemanda = (raiz: string, projeto: string, demanda: string): 
 
 /** O Espaço da demanda: parte da base do projeto. */
 export function espacoDaDemanda(
-  projeto: Pick<RepositorioDoProjeto, "nome" | "branch_base">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "branch_base">,
   demanda: string,
   raiz: string,
 ): EspacoDeTrabalho {
@@ -45,7 +46,7 @@ export function espacoDaDemanda(
 
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function espacoDaRodada(
-  projeto: Pick<RepositorioDoProjeto, "nome">,
+  projeto: Pick<ProjetoDoRepositorio, "nome">,
   demanda: string,
   rodada: number,
   raiz: string,
@@ -80,7 +81,7 @@ export function prDoEspaco(
 export function espacoDoTicket(
   ag: { demanda: { id: string }; pull_requests?: readonly PullRequestDaDemanda[] | undefined },
   ticket: { rodada_id?: number | undefined },
-  projeto: Pick<RepositorioDoProjeto, "nome" | "branch_base">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "branch_base">,
   raiz: string,
 ): EspacoDeTrabalho {
   const espaco =

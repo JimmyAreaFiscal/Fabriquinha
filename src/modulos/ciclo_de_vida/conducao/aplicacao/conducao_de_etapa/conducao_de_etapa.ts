@@ -18,7 +18,7 @@ import {
   type TicketDemanda,
 } from "../../../processo/publico.ts";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../repositorio/publico.ts";
+import { espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
@@ -149,7 +149,9 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     const espaco = espacoDoTicket(ag, ticket, projeto, raiz);
-    return cicloDoEspaco(espaco, projeto, { raiz, log: `${raiz}/log` }, ambienteDoEspaco(espaco)).criar();
+    return montarRepositorio({ banco })
+      .prepararEspaco(projeto, espaco, `${raiz}/log`)
+      .then((pasta) => ({ pasta }));
   }
 
   /**

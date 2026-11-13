@@ -11,11 +11,11 @@ import {
   exigirGitNoAmbiente,
   gitNoAmbiente,
   naFilaDoProjeto,
-  type RepositorioDoProjeto,
+  type ProjetoDoRepositorio,
 } from "../../git/publico.ts";
 import { podarWorktreesNoCore } from "./worktree.ts";
 
-type ProjetoLimpeza = Pick<RepositorioDoProjeto, "nome" | "raiz_git">;
+type ProjetoLimpeza = Pick<ProjetoDoRepositorio, "nome" | "raiz_git">;
 
 const refRemota = async (repo: string, branch: string): Promise<boolean> =>
   (await exigirGit(repo, "ls-remote", "--heads", "origin", `refs/heads/${branch}`)).trim() !== "";

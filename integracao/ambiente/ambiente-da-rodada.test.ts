@@ -17,7 +17,7 @@ import {
 import { despachoDasEtapas } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "../apoio-execucao.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import { base, ciclo, criarCenario, demanda } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";

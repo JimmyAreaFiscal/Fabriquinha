@@ -21,10 +21,11 @@ import {
   exigirGitNoAmbiente,
   gitNoAmbiente,
   naFilaDoProjeto,
-  type RepositorioDoProjeto,
+  type ProjetoDoRepositorio,
 } from "../../git/publico.ts";
 import { podarWorktreesNoCore, preparar } from "./worktree.ts";
-import { branchDemanda, branchRodada, DemandaId, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
+import { branchDemanda, branchRodada, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(
@@ -170,7 +171,7 @@ async function adicionarWorktree(
   symlinkSync(relative(dirname(entrada), entradaNaPastaDaFabriquinha), entrada);
 }
 
-type ProjetoWorktree = Pick<RepositorioDoProjeto, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
+type ProjetoWorktree = Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
 
 /**
  * Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. Devolve a pasta e se buscou

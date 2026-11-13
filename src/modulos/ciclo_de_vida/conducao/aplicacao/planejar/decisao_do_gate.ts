@@ -9,13 +9,7 @@ import {
 } from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra, mensagem } from "../../../../../shared/nucleo/erros.ts";
-import {
-  ambienteDoEspaco,
-  cicloDoEspaco,
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  varrerCommitsHumanos,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
 import { GateDoPlanejamento } from "./gate.ts";
 import type { GateComEfeitos } from "../decisao_dos_gates/gate_com_efeitos.ts";
 import { lerPlanoGravado } from "../../../planejamento/publico.ts";
@@ -69,10 +63,9 @@ async function aprovarGateDoPlanejamento(
   const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
+  const repositorio = montarRepositorio({ banco });
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
-    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
-    const { buscouBase } = await ciclo.criar();
-    if (buscouBase) await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
+    await repositorio.prepararEspaco(projeto, espaco, log);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [

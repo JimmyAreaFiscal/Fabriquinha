@@ -17,7 +17,10 @@ import {
   commitarArquivo,
   rodarGit,
 } from "../../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../../repositorio/publico.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "../../gates.ts";
 import { AmbienteHostLocal } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";

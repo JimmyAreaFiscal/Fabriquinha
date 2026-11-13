@@ -15,7 +15,7 @@ import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/falsos/p
 import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
-import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
+import { cursorDaBase } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import type { AmbientesDoServico } from "../rotas.ts";

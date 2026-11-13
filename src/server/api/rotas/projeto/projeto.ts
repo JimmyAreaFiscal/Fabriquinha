@@ -2,6 +2,7 @@
 // concluídas e o heatmap do projeto.
 import { arquivarConcluidas } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { consultarHeatmapDoProjeto } from "../../../consultas/projeto/heatmap.ts";
+import { montarRepositorio } from "../../../../modulos/repositorio/publico.ts";
 import {
   consultarProjeto,
   idsDasDemandasDoProjeto,
@@ -30,7 +31,8 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/heatmap",
-    tratar: ({ demandas, params, relogio }) => consultarHeatmapDoProjeto(demandas, String(params.nome), relogio),
+    tratar: ({ banco, demandas, params, relogio }) =>
+      consultarHeatmapDoProjeto(montarRepositorio({ banco }), demandas, String(params.nome), relogio),
     resposta: Heatmap,
   },
 ];
