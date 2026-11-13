@@ -15,14 +15,14 @@ const REFERENCIA_AO_SERVICO_REAL = /4317|~\/fabriquinha|homedir\(\)[^;]*["'/]fab
 // Estes dois testes fixam os padrões de produção (porta do serviço, raiz de `abrir()`) sem subir o serviço nem tocar o banco real.
 const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = [
   "src/server/composicao/servico.test.ts",
-  "src/modulos/compartilhado/armazenamento/banco.test.ts",
+  "src/shared/armazenamento/banco.test.ts",
 ];
 
 const PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO = ["src", "pacote-pi", "integracao", "e2e", "estresse"];
 // Estes dois testam o próprio `banco.ts` e a linha de base de migração: precisam abrir o banco numa raiz que eles controlam.
 const ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO = [
-  "src/modulos/compartilhado/armazenamento/banco.test.ts",
-  "src/modulos/compartilhado/armazenamento/migracoes/migracao_linha_de_base.test.ts",
+  "src/shared/armazenamento/banco.test.ts",
+  "src/shared/armazenamento/migracoes/migracao_linha_de_base.test.ts",
 ];
 
 const PASTAS_QUE_NAO_IMPORTAM_TESTE = ["src", "pacote-pi", "integracao", "e2e", "apoio-testes", "fitness", "estresse"];
@@ -96,7 +96,7 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
     // Fora do alcance da regra: código de produção, teste sem sufixo em src/ e as exceções listadas.
     escrever("src/a/producao.ts", "const PORTA = 4317;\n");
     escrever("src/server/composicao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
-    escrever("src/modulos/compartilhado/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
+    escrever("src/shared/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
     escrever("e2e/node_modules/x/index.ts", "4317\n");
     escrever("estresse/resultados/medicao.json", '{"url":"http://127.0.0.1:4317/"}\n');
 
@@ -132,11 +132,8 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
     escrever("src/a/so_mkdtemp.test.ts", "mkdtempSync(tmp);\n");
     escrever("src/a/so_abrir.test.ts", "abrir(raiz);\n");
     escrever("src/a/pr.test.ts", "mkdtempSync(tmp);\nhospedagem.abrirPr({});\n");
-    escrever("src/modulos/compartilhado/armazenamento/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
-    escrever(
-      "src/modulos/compartilhado/armazenamento/migracoes/migracao_linha_de_base.test.ts",
-      "mkdtempSync(tmp);\nabrir(raiz);\n",
-    );
+    escrever("src/shared/armazenamento/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("src/shared/armazenamento/migracoes/migracao_linha_de_base.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
     escrever("e2e/node_modules/x/index.ts", "mkdtemp abrir(\n");
 
     assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), [

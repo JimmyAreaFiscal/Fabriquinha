@@ -18,17 +18,17 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/modulos/etapas/catalogo.ts";
-import { relogioDoSistema } from "../../src/modulos/compartilhado/nucleo/relogio.ts";
+import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
-import { abrir, raizDo } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrir, raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,
 } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
-import { noLog } from "../../src/modulos/compartilhado/infra/registro.ts";
+import { noLog } from "../../src/shared/infra/registro.ts";
 import { publicarPRDe } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";

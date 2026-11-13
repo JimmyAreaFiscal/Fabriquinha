@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -81,6 +81,73 @@ test("abrir() aplica as migrações e grava a versão; reabrir não reaplica", (
   assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_LINHA_DE_BASE + MIGRACOES.length);
   assert.equal(valor(banco, "SELECT count(*) FROM sequencia"), 0);
   banco.close();
+});
+
+// A versão que o histórico congelado entrega; a primeira migração de domínio é a seguinte.
+const VERSAO_DO_HISTORICO = VERSAO_LINHA_DE_BASE + MIGRACOES.length;
+
+test("abrir() aplica, depois do histórico, as migrações registradas pelos domínios na ordem das versões; reabrir não reaplica", () => {
+  const raiz = raizTemp();
+  abrir(raiz).close(); // o banco real: o histórico inteiro aplicado
+  const migracoesDosDominios = [
+    {
+      dominio: "dominio_b",
+      migracoes: [{ versao: VERSAO_DO_HISTORICO + 2, migracao: "INSERT INTO sintetica VALUES ('do b')" }],
+    },
+    {
+      dominio: "dominio_a",
+      migracoes: [
+        { versao: VERSAO_DO_HISTORICO + 1, migracao: "CREATE TABLE sintetica (origem TEXT)" },
+        {
+          versao: VERSAO_DO_HISTORICO + 3,
+          migracao: (banco: DatabaseSync) => {
+            banco.exec("INSERT INTO sintetica VALUES ('do a')");
+          },
+        },
+      ],
+    },
+  ];
+  abrir(raiz, migracoesDosDominios).close();
+  const banco = abrir(raiz, migracoesDosDominios); // CREATE TABLE sem IF NOT EXISTS: reaplicar falharia
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_DO_HISTORICO + 3);
+  assert.deepEqual(
+    banco
+      .prepare("SELECT origem FROM sintetica ORDER BY rowid")
+      .all()
+      .map((linha) => linha.origem),
+    ["do b", "do a"],
+  );
+  banco.close();
+});
+
+test("abrir() recusa, sem criar o banco, migração de domínio que deixa buraco, repete versão ou reusa a do histórico", () => {
+  const sintetica = (dominio: string, versao: number) => ({
+    dominio,
+    migracoes: [{ versao, migracao: "CREATE TABLE sintetica (x INTEGER)" }],
+  });
+  const casos = [
+    { registradas: [sintetica("dominio_a", VERSAO_DO_HISTORICO + 2)], recusada: "a", proxima: 1 },
+    {
+      registradas: [sintetica("dominio_a", VERSAO_DO_HISTORICO + 1), sintetica("dominio_b", VERSAO_DO_HISTORICO + 1)],
+      recusada: "b",
+      proxima: 2,
+    },
+    { registradas: [sintetica("dominio_a", VERSAO_DO_HISTORICO)], recusada: "a", proxima: 1 },
+  ];
+  for (const { registradas, recusada, proxima } of casos) {
+    const raiz = raizTemp();
+    const versaoRecusada = registradas.at(-1)?.migracoes[0]?.versao;
+    assert.throws(
+      () => abrir(raiz, registradas),
+      (erro) =>
+        erro instanceof ErroDeRegra &&
+        erro.message ===
+          `a migração ${String(versaoRecusada)} do domínio dominio_${recusada} está fora da sequência: a próxima é a ` +
+            `${String(VERSAO_DO_HISTORICO + proxima)} (numere a migração nova com a versão seguinte à última registrada ` +
+            "pelo histórico ou por qualquer domínio)",
+    );
+    assert.equal(existsSync(join(raiz, "fabriquinha.db")), false);
+  }
 });
 
 test("a coluna projeto.link_produto é opcional", () => {
@@ -364,6 +431,40 @@ test("escrever() aninhada: cada conexão conta os próprios SAVEPOINTs, sem conf
   conexaoA.close();
   conexaoB.close();
   conexaoC.close();
+});
+
+test("escrever() como unidade de trabalho de um coordenador: as escritas de dois domínios confirmam juntas ou nenhuma", () => {
+  const raiz = raizTemp();
+  const banco = abrir(raiz);
+  const leitor = abrir(raiz);
+  banco.exec("CREATE TABLE do_dominio_a (numero INTEGER); CREATE TABLE do_dominio_b (numero INTEGER)");
+  // Cada domínio abre a própria unidade de trabalho; dentro da do coordenador, ela não abre outra transação.
+  const gravarNoDominioA = (numeroGravado: number) =>
+    escrever(banco, () => banco.prepare("INSERT INTO do_dominio_a VALUES (?)").run(numeroGravado));
+  const gravarNoDominioB = (numeroGravado: number) => {
+    escrever(banco, () => {
+      banco.prepare("INSERT INTO do_dominio_b VALUES (?)").run(numeroGravado);
+      if (numeroGravado < 0) throw new Error("o domínio B recusou");
+    });
+  };
+  const contar = (tabela: string) => valor(leitor, `SELECT count(*) FROM ${tabela}`);
+
+  escrever(banco, () => {
+    gravarNoDominioA(1);
+    assert.equal(contar("do_dominio_a"), 0, "a escrita do domínio A só aparece no commit do coordenador");
+    gravarNoDominioB(1);
+  });
+  assert.deepEqual([contar("do_dominio_a"), contar("do_dominio_b")], [1, 1]);
+
+  assert.throws(() => {
+    escrever(banco, () => {
+      gravarNoDominioA(2);
+      gravarNoDominioB(-2);
+    });
+  }, /o domínio B recusou/);
+  assert.deepEqual([contar("do_dominio_a"), contar("do_dominio_b")], [1, 1]);
+  banco.close();
+  leitor.close();
 });
 
 test("escrever() desfaz e propaga quando o próprio COMMIT falha", () => {

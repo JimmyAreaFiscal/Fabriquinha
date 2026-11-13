@@ -15,7 +15,7 @@ import {
 import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo, guardarArquivos, guardarBytes } from "./arquivos.ts";
 import { raizDo } from "./banco.ts";

@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
-import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { abrir } from "../src/shared/armazenamento/banco.ts";
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import { REGRAS_DO_AMBIENTE } from "./fronteiras/dominios/ambiente.ts";
 import { PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
@@ -86,7 +86,7 @@ test("a fitness da posse acha a tabela no SQL e no nome passado ao montador, e o
     "modulos/ambiente/sandboxes/armazenamento/sandboxes.ts":
       'banco.prepare("SELECT * FROM ambiente");\nbanco.prepare(`UPDATE ambiente SET x = ${y}`);\n',
     // O histórico do esquema fica de fora.
-    "modulos/compartilhado/armazenamento/migracoes/migracoes.ts": 'banco.exec("CREATE TABLE demanda (id)");\n',
+    [`${PASTA_DO_HISTORICO_DO_ESQUEMA}migracoes.ts`]: 'banco.exec("CREATE TABLE demanda (id)");\n',
     // Fora do dono: depois de FROM/JOIN/INTO/UPDATE/TABLE/REFERENCES, em literal ou template, de qualquer caixa.
     "modulos/sdlc/armazenamento/demandas.ts":
       "banco.prepare(`SELECT d.id FROM demanda d JOIN ambiente a ON a.id = ${x} WHERE d.id IN (SELECT 1 FROM rodada)`);\n" +
@@ -112,7 +112,7 @@ test("a fitness da posse acha a tabela no SQL e no nome passado ao montador, e o
     sequencia: "shared",
   };
 
-  const toques = acharToquesForaDoDono(raiz, donos, ["modulos/compartilhado/armazenamento/migracoes/"]);
+  const toques = acharToquesForaDoDono(raiz, donos, [PASTA_DO_HISTORICO_DO_ESQUEMA]);
   assert.deepEqual(toques.map(descreverToque), [
     "modulos/projeto/armazenamento/projetos.ts toca ambiente (dono: ambiente/sandboxes)",
     "modulos/sdlc/armazenamento/demandas.ts toca ambiente (dono: ambiente/sandboxes)",

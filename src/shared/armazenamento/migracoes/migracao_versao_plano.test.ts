@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { MetricaDeConformidade } from "../../../metricas/aplicacao/metricas/metrica_de_conformidade.ts";
-import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../sdlc/nucleo/demanda/plano.ts";
+import { MetricaDeConformidade } from "../../../modulos/metricas/aplicacao/metricas/metrica_de_conformidade.ts";
+import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../modulos/sdlc/nucleo/demanda/plano.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 

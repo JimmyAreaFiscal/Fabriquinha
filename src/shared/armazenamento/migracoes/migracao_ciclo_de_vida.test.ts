@@ -6,7 +6,7 @@ import {
   ESTADO_NOVO_DA_RODADA,
   ESTADO_NOVO_DO_TICKET,
   ETAPA_NOVA,
-} from "../../../../../apoio-testes/esquema_anterior.ts";
+} from "../../../../apoio-testes/esquema_anterior.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES as MIGRACOES_DISPONIVEIS, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
