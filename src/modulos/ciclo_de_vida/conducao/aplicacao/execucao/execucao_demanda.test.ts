@@ -36,6 +36,7 @@ import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_d
 import { AmbienteHostLocal, montarAmbienteDoServico } from "../../../../ambiente/publico.ts";
 import { recuperacaoDaSubida } from "../../../../../server/composicao/servico.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -155,7 +156,7 @@ const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     condutor,
     registro: anotar,
-  }).conduzir(Endereco.doTicket("I-1", ticket_id));
+  }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", ticket_id)));
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {

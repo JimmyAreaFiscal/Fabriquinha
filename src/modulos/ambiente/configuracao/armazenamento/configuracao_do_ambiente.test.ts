@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import { Configuracao, salvarConfiguracao } from "../../../compartilhado/armazenamento/servico.ts";
+import { Configuracao, salvarConfiguracao } from "../../../ciclo_de_vida/despacho/publico.ts";
 import type { ConfiguracaoDoAmbiente } from "../nucleo/configuracao_do_ambiente.ts";
 import { configuracaoDoAmbiente, salvarConfiguracaoDoAmbiente } from "./configuracao_do_ambiente.ts";
 

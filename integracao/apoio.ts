@@ -12,17 +12,19 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { ErroDeRegra } from "../src/modulos/compartilhado/nucleo/erros.ts";
 import { submeterEvidencia } from "../src/modulos/sdlc/aplicacao/evidencias/submeter.ts";
-import { cicloDoDespacho, type DepsDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import type { DepsDespacho } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarUsoDeclarado } from "../src/modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
-import { type Configuracao, configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
+import { type Configuracao, configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
+import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));
@@ -146,7 +148,7 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
 export async function ciclo(c: Cenario, deps: DepsDespacho = despachoDasEtapas()): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco)));
 }
 
 // Evidências de uma IA externa que registra a demanda (F3): critérios e desenho com o html.

@@ -14,7 +14,7 @@ import {
   registrarTentativaEncerramento,
 } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/modulos/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import {

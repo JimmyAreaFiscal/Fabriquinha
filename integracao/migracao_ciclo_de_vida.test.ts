@@ -12,7 +12,7 @@ import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/s
 import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
-import { configuracao } from "../src/modulos/compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {

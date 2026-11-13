@@ -25,7 +25,8 @@ import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_
 import { marcaDoPRFinal } from "../../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { cicloDoDespacho } from "../../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { predecessorasPendentesNoBanco } from "../../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
 import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { decidirGate } from "../../src/modulos/etapas/gates.ts";
@@ -37,7 +38,7 @@ import { concluirSessaoAjustes } from "../../src/modulos/etapas/ajustar_resultad
 import { condutor } from "../../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { carregarTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { integrarPR } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
@@ -225,14 +226,14 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco)));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco));
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -323,7 +324,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(c.banco, c.config, deps);
+  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco));
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

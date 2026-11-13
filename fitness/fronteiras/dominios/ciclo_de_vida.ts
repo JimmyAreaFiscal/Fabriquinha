@@ -51,8 +51,10 @@ const CAMINHOS_ANTIGOS_QUE_O_CLI_DO_AGENTE_EMPACOTA: Excecao[] = (
 // provisório: remover no ticket 22. O que a Condução e as transições que ela pede ao Processo ainda leem do código antigo:
 // o agregado da demanda e o carregamento dele, o Gate ligado ao agregado e as transições que as regras dos gates usam, a
 // submissão das Evidências e a decisão comum dos gates (sdlc), o projeto cadastrado e a varredura de commits humanos pelo
-// adaptador de projeto/ (o Ciclo de Vida passa a receber o projeto como dado), a configuração do serviço (Despacho, 16),
-// a produtividade da rodada (Métricas, 17), a pasta do processo do compartilhado e as dependências entre demandas (19).
+// adaptador de projeto/ (o Ciclo de Vida passa a receber o projeto como dado), a produtividade da rodada (Métricas, 17), a
+// pasta do processo do compartilhado e a configuração do serviço. A tabela `configuracao` é do Despacho (16), que depende
+// da Condução: a Condução lê o timeout e a ociosidade pelo caminho antigo do compartilhado, que reexporta do arquivo do
+// Despacho, até o ticket 22 entregá-los como dado (hoje o Gate do PR e o chat do Auditor os leem sem passar pelo Despacho).
 const IMPORTS_DO_CODIGO_ANTIGO: Record<string, string[]> = {
   "conducao/aplicacao/agente/adicionar_evidencia.ts": [
     "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
@@ -174,9 +176,7 @@ const IMPORTS_DO_CODIGO_ANTIGO: Record<string, string[]> = {
   ],
   "conducao/aplicacao/planejar/conducao_de_planejar.ts": [
     "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
-    "../../../../sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts",
     "../../../../sdlc/armazenamento/demandas.ts",
-    "../../../../sdlc/armazenamento/dependencias_demanda.ts",
   ],
   "conducao/aplicacao/planejar/decisao_do_gate.ts": [
     "../../../../sdlc/nucleo/demanda/agregado_demanda.ts",
@@ -214,6 +214,31 @@ const IMPORTS_DO_CODIGO_ANTIGO: Record<string, string[]> = {
     "../../../../sdlc/armazenamento/demandas.ts",
     "../../../../sdlc/aplicacao/evidencias/submeter.ts",
   ],
+  // O Despacho lê o agregado da demanda e o grava pela unidade de trabalho do sdlc, pede ao sdlc a reserva, a retomada
+  // do ticket falho por infraestrutura e a revisão integral (as transições ainda moram lá), e a retomada lê o modelo
+  // configurado no projeto cadastrado pelo caminho antigo de projeto/.
+  "despacho/aplicacao/despacho.ts": [
+    "../../../sdlc/nucleo/demanda/agregado_demanda.ts",
+    "../../../sdlc/armazenamento/demandas.ts",
+    "../../../sdlc/aplicacao/revisao_demanda.ts",
+  ],
+  "despacho/aplicacao/retomada_infraestrutura.ts": [
+    "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts",
+    "../../../projeto/armazenamento/projetos.ts",
+    "../../../sdlc/armazenamento/demandas.ts",
+  ],
+  "despacho/armazenamento/despacho_demanda.ts": [
+    "../../../sdlc/nucleo/demanda/agregado_demanda.ts",
+    "../../../sdlc/armazenamento/demandas.ts",
+  ],
+  "despacho/nucleo/despacho.ts": [
+    "../../../sdlc/nucleo/demanda/agregado_demanda.ts",
+    "../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts",
+  ],
+  "despacho/nucleo/reserva_ticket.ts": [
+    "../../../sdlc/nucleo/demanda/agregado_demanda.ts",
+    "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts",
+  ],
   "processo/aplicacao/transicoes_pedidas.ts": [
     "../../../sdlc/nucleo/demanda/agregado_demanda.ts",
     "../../../sdlc/nucleo/gate.ts",
@@ -238,7 +263,6 @@ const QUEM_PEDE_TRANSICAO_AO_PROCESSO = [
   "encerrar_rodada/gate_do_pr/decisao_do_gate.ts",
   "execucao/execucao_demanda.ts",
   "implementar/conducao_de_implementar.ts",
-  "planejar/conducao_de_planejar.ts",
   "planejar/decisao_do_gate.ts",
   "resolver_conflito/conducao_de_resolver_conflito.ts",
 ].map((arquivo) => `modulos/ciclo_de_vida/conducao/aplicacao/${arquivo}`);
@@ -283,6 +307,31 @@ const CAMINHOS_ANTIGOS_DA_CONDUCAO: [string, string][] = [
   ]),
 ];
 
+// provisório: remover no ticket 22. A API do Despacho fica fora da fachada pelo mesmo ciclo com o sdlc. Quem a usa por
+// fora do domínio (a composição e as consultas do servidor) importa a API; a API do servidor, que não pode ter exceção,
+// segue pelos caminhos antigos, que reexportam do arquivo de origem; e o sdlc lê a seleção
+// e a configuração do serviço direto do arquivo, sem trazer a Condução de volta ao sdlc no meio da carga dele.
+const API_DO_DESPACHO = "modulos/ciclo_de_vida/despacho/publico.ts";
+const DESPACHO = "modulos/ciclo_de_vida/despacho/";
+const CAMINHOS_ANTIGOS_DO_DESPACHO: [string, string][] = [
+  ["modulos/sdlc/aplicacao/despacho/despacho.ts", API_DO_DESPACHO],
+  ["modulos/sdlc/aplicacao/despacho/despacho.ts", API_DA_CONDUCAO],
+  ["modulos/sdlc/aplicacao/despacho/retomada_infraestrutura.ts", API_DO_DESPACHO],
+  ["modulos/sdlc/nucleo/despacho/despacho.ts", `${DESPACHO}nucleo/despacho.ts`],
+  ["modulos/sdlc/nucleo/despacho/reserva_ticket.ts", `${DESPACHO}nucleo/reserva_ticket.ts`],
+  ["modulos/sdlc/armazenamento/despacho_demanda.ts", `${DESPACHO}armazenamento/despacho_demanda.ts`],
+  ["modulos/compartilhado/armazenamento/servico.ts", `${DESPACHO}armazenamento/configuracao_do_servico.ts`],
+  ["modulos/projeto/aplicacao/configuracao_do_agente.ts", `${DESPACHO}aplicacao/configuracao_do_servico.ts`],
+  ["modulos/sdlc/nucleo/demanda/pendencia.ts", `${DESPACHO}nucleo/despacho.ts`],
+  ["modulos/sdlc/aplicacao/sessoes/sessoes_demanda.ts", `${DESPACHO}armazenamento/configuracao_do_servico.ts`],
+  ...[
+    "composicao/servico.ts",
+    "consultas/configuracao.ts",
+    "consultas/demandas/demanda.ts",
+    "consultas/demandas/pendencias.ts",
+  ].map((arquivo): [string, string] => [`server/${arquivo}`, `modulos/ciclo_de_vida/despacho/publico.ts`]),
+];
+
 const importRelativo = (arquivo: string, alvo: string): string => relative(dirname(arquivo), alvo);
 
 const EXCECOES_DA_CONDUCAO: Excecao[] = [
@@ -298,7 +347,7 @@ const EXCECOES_DA_CONDUCAO: Excecao[] = [
     import: `${importRelativo(arquivo, ARQUIVO_DAS_TRANSICOES_PEDIDAS)} (entre subdomínios, só pelo publico.ts do subdomínio)`,
     ticket: "22",
   })),
-  ...CAMINHOS_ANTIGOS_DA_CONDUCAO.map(([arquivo, alvo]) => ({
+  ...[...CAMINHOS_ANTIGOS_DA_CONDUCAO, ...CAMINHOS_ANTIGOS_DO_DESPACHO].map(([arquivo, alvo]) => ({
     arquivo,
     import: `${importRelativo(arquivo, alvo)} (de fora do domínio ciclo_de_vida, só pela fachada publico.ts)`,
     ticket: "22",
@@ -317,7 +366,8 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     verificacoes: ["etapas"],
     // As conduções leem o plano e o ticket atual de cada Etapa, e a recuperação acha os tickets presos, no Planejamento.
     conducao: ["processo", "evidencias", "verificacoes", "etapas", "planejamento"],
-    despacho: ["processo", "planejamento", "conducao"],
+    // O vocabulário do SDLC e o catálogo (o executor e o papel de cada Etapa) são de Etapas.
+    despacho: ["processo", "planejamento", "conducao", "etapas"],
     metricas_de_qualidade: ["etapas", "planejamento", "processo", "evidencias", "verificacoes"],
   },
   posseDasTabelas: "inventario",

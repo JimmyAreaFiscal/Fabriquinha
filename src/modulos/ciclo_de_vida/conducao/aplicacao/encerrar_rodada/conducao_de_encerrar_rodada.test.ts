@@ -19,6 +19,7 @@ import { conferirPromptComFoto } from "../../../../sdlc/aplicacao/fotos_retorno/
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarRodada } from "./conducao_de_encerrar_rodada.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const ENCERRAR = Endereco.doTicket(DEMANDA, 8);
@@ -29,7 +30,7 @@ const conduzir = (banco: Banco) =>
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     condutor,
     registro: anotar,
-  }).conduzir(ENCERRAR);
+  }).conduzir(reservadoPeloDespacho(banco, ENCERRAR));
 
 const motivoDaFalha = (banco: Banco) => {
   const ag = carregarDemanda(banco, DEMANDA);

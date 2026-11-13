@@ -12,7 +12,7 @@ import {
   formatarRodadaRef,
   formatarTicketRef,
 } from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { Despacho, prontosParaExecutarAgora } from "../../../modulos/sdlc/nucleo/despacho/despacho.ts";
+import { Despacho, prontosParaExecutarAgora } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../../modulos/sdlc/nucleo/item_de_trabalho/item_de_trabalho.ts";
 import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";

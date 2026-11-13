@@ -8,7 +8,8 @@ import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { cicloDoDespacho, type DepsDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import type { DepsDespacho } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
@@ -20,6 +21,8 @@ import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/arma
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/pi_falso.ts";
+import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -118,7 +121,7 @@ export async function planejarDemanda(
     relogio: relogioDoSistema,
     condutor,
     registro: anotar,
-  }).conduzir(Endereco.doTicket(id, 2));
+  }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => piEPortaoEmUso.pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
   if (!passoDoPi.sai) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;
@@ -221,7 +224,7 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
-  const fins = cicloDoDespacho(c.banco, c.config, deps);
+  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco));
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();

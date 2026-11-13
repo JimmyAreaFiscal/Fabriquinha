@@ -22,7 +22,7 @@ import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "../../../../modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import type { MotivoDeRecusa } from "../../../../modulos/sdlc/nucleo/despacho/despacho.ts";
+import type { MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { servir } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import {

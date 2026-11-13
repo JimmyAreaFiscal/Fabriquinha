@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { motivoDaFalhaDoTicket } from "../src/modulos/sdlc/nucleo/tentativa.ts";
-import type { DepsDaConducao } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import type { DepsDaConducao } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
 import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import {

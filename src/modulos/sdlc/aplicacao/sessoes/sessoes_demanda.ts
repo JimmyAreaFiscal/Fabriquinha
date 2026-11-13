@@ -21,7 +21,7 @@ import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import { pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
-import { configuracao } from "../../../compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../../../ciclo_de_vida/despacho/armazenamento/configuracao_do_servico.ts";
 import {
   carregarTrabalhosDoTicket,
   ticketDoTrabalho,

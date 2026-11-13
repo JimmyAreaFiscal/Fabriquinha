@@ -18,7 +18,7 @@ import {
   falhaPorServicoReiniciado,
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Despacho, situacaoDeUmaDemanda } from "../despacho/despacho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../../ciclo_de_vida/despacho/nucleo/despacho.ts";
 import {
   enviarDemanda,
   devolverTicket,

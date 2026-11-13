@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Despacho, situacaoDeUmaDemanda } from "../../../../sdlc/nucleo/despacho/despacho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
 import { podeTentarEncerramento } from "../../../../sdlc/nucleo/transicoes/transicoes_encerramento.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
 import {
@@ -19,10 +19,11 @@ import {
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import type { OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "./conducao_de_resolver_conflito.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 const RESOLVER = 3;
 const conduzir = (c: CenarioDeImplementacao, opcoes: OpcoesDaImplementacao) =>
-  new ConducaoDeResolverConflito(c.deps(), opcoes).conduzir(enderecoDoTicket(RESOLVER));
+  new ConducaoDeResolverConflito(c.deps(), opcoes).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(RESOLVER)));
 
 test("CA-12 e CA-13: aprovado conclui e o encerramento volta a ser tentado sozinho", async () => {
   const c = await cenarioDeImplementacao({ conflito: true });

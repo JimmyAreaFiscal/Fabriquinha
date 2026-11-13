@@ -10,7 +10,7 @@ import { Endereco } from "../../../modulos/compartilhado/nucleo/vocabulario_do_s
 import { pendenciasDaDemanda, type TrabalhoVivo } from "../../../modulos/sdlc/nucleo/demanda/pendencia.ts";
 import type { Instante } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
 import type { EstadoDemanda } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { configuracao } from "../../../modulos/compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { condutor, type Situacao } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";

@@ -1,5 +1,6 @@
-// A condução de uma Etapa (CONCEITOS.md §2): o que a Fabriquinha faz do ticket reservado até concluí-lo ou falhá-lo. As
-// etapas agênticas compartilham o ciclo aqui; cada concreta só declara o que difere (preparação, conferência, conclusão).
+// A condução de uma Etapa (CONCEITOS.md §2): o que a Fabriquinha faz do ticket que o Despacho reservou e lhe entregou, até
+// concluí-lo ou falhá-lo. As etapas agênticas compartilham o ciclo aqui; cada concreta só declara o que difere
+// (preparação, conferência, conclusão).
 import {
   Endereco,
   type FalhaDaTentativa,
@@ -12,11 +13,7 @@ import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
 import type { DefinicaoDaEtapa } from "../../../etapas/publico.ts";
 import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../repositorio/publico.ts";
 import { lerTentativasDasDemandas, retornoAoAgenteDoTicket } from "../../../processo/publico.ts";
-import {
-  devolverTicketAoAgente,
-  registrarFalhaDoTicket,
-  reservarTicketParaAFabriquinha,
-} from "../../../processo/aplicacao/transicoes_pedidas.ts";
+import { devolverTicketAoAgente, registrarFalhaDoTicket } from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
@@ -55,12 +52,6 @@ export abstract class ConducaoDeEtapa implements ConducaoDoTicket {
   }
 
   abstract conduzir(ticket: Endereco): Promise<void>;
-
-  /** Reserva o ticket aberto para a Fabriquinha. */
-  protected reservar(ticket: TicketDemanda): void {
-    const { banco, relogio } = this.deps;
-    reservarTicketParaAFabriquinha(banco, ticket, relogio);
-  }
 
   protected ticketDe(endereco: Endereco): TicketDemanda {
     const ticket_id = existe(endereco.ticket_id, `${endereco.toString()} não é um ticket`, "use I-n.Tm, como I-206.T3");
@@ -102,15 +93,14 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
   }
 
   /**
-   * Reserva o ticket, prepara o Espaço e sobe o agente, sem esperar o fim dele: devolve a execução em segundo plano (ou
+   * Prepara o Espaço do ticket reservado e sobe o agente, sem esperar o fim dele: devolve a execução em segundo plano (ou
    * nada, se a preparação falhou e o ticket já foi falhado).
    */
   async iniciar(endereco: Endereco): Promise<ExecucaoIniciada | undefined> {
     const { banco, condutor, registro } = this.deps;
     const ticket = this.ticketDe(endereco);
-    this.reservar(ticket);
     const preparacao = this.prepararEspaco(ticket);
-    // Sem preparação a execução nasce já, na transação da reserva: é ela que ocupa a vaga do limite global.
+    // Sem preparação a execução nasce já, na transação da reserva do Despacho: é ela que ocupa a vaga do limite global.
     if (preparacao === undefined) return this.subir(ticket, undefined);
     let espaco: EspacoPreparado;
     try {
@@ -213,7 +203,6 @@ export abstract class ConducaoDeterministica extends ConducaoDeEtapa {
 
   async conduzir(endereco: Endereco): Promise<void> {
     const ticket = this.ticketDe(endereco);
-    this.reservar(ticket);
     try {
       for (const passo of this.passos.filter((p) => p.pendente(endereco))) {
         if ((await passo.executar(endereco)) === "parar") return;

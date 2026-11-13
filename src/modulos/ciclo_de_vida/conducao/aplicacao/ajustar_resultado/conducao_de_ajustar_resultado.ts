@@ -21,10 +21,6 @@ export class ConducaoDeAjustarResultado extends ConducaoInterativa {
     super(DEFINICAO_DO_AJUSTAR_RESULTADO, deps);
   }
 
-  protected override reservar(): void {
-    // O ticket da sessão nunca é reservado: fica aberto até o Auditor concluir a sessão.
-  }
-
   /** Leva ao agente o PR reprovado e o motivo do Auditor, a última recusa de um `encerrar_rodada` da rodada. */
   protected override retomadaDe(ticket: TicketDemanda): Pick<OpcoesExecucaoDemanda, "retomada"> {
     const ref = this.rodadaDe(ticket);

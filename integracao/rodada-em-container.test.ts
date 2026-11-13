@@ -14,7 +14,7 @@ import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
 import { conjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/modulos/sdlc/aplicacao/despacho/retomada_infraestrutura.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { enviarDemanda } from "../src/modulos/etapas/conducao/mensagem_do_auditor.ts";
 import { lerConversa } from "../src/modulos/trabalho_agentico/aplicacao/sessoes/conversa.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
@@ -51,6 +51,7 @@ import {
   raizCompartilhadaComODocker,
 } from "./falsos.ts";
 import { cancelarDemandaEmCascata } from "../src/server/fluxos/cancelamento_em_cascata.ts";
+import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 
 const gh = ghFalso(base);
 await instalarSonarFalso(join(base, "bin"));
@@ -281,7 +282,7 @@ async function iniciarConversaDoPlanejamento(c: Cenario) {
     relogio: relogioDoSistema,
     condutor,
     registro: anotar,
-  }).conduzir(Endereco.doTicket(id, 2));
+  }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => carregarTrabalhosDoTicket(c.banco, ticket).sessoes.length === 1, "a sessão do planejamento");
   const [sessao] = carregarTrabalhosDoTicket(c.banco, ticket).sessoes;
   assert.ok(sessao);

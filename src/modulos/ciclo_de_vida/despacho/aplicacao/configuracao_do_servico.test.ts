@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
-import { validarESalvarConfiguracao } from "./configuracao_do_agente.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
+import { validarESalvarConfiguracao } from "./configuracao_do_servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 test("validarESalvarConfiguracao grava a configuração validada e recusa o modelo da Avaliação, que saiu (ticket 02)", () => {

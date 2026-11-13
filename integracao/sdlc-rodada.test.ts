@@ -12,7 +12,8 @@ import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdl
 import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
 import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
@@ -375,7 +376,10 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
     ["reprovado", "o PR mistura duas mudanças", undefined],
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
-  assert.equal(cicloDoDespacho(humana.banco, humana.config, despacho()).length, 0);
+  assert.equal(
+    cicloDoDespacho(humana.banco, humana.config, despacho(), predecessorasPendentesNoBanco(humana.banco)).length,
+    0,
+  );
 
   // A conversa só registra correções: o que ela commitou é desfeito ao concluir, e nada é implementado nem integrado.
   const { ticket_id } = atual(humana, idHumana, "ajustar_resultado");

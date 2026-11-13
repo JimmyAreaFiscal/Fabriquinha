@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { type TestContext, test } from "node:test";
 import { Endereco } from "../../../etapas/publico.ts";
-import { configuracao } from "../../../../compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../../../despacho/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
@@ -10,6 +10,7 @@ import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "../revisar_demanda/conducao_de_revisar_demanda.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 test("só se conduz o endereço de um ticket", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
@@ -34,7 +35,7 @@ test("o limite informado nas deps é o que o agente recebe; sem ele vale o timeo
       condutor,
       registro: anotar,
       limiteMin,
-    }).conduzir(Endereco.doTicket("I-1", 3));
+    }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 3)));
   }
   assert.deepEqual(limites, [0.5, timeoutDaConfiguracao]);
 });

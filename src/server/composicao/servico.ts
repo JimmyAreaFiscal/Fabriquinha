@@ -6,7 +6,6 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { MotivoDeRecusa } from "../../modulos/sdlc/nucleo/despacho/despacho.ts";
 import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { projetosAVarrer, varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
@@ -14,9 +13,14 @@ import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
-import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
 import { servirWeb } from "../api/servidor.ts";
-import { cicloDoDespacho, executarAgora } from "../../modulos/sdlc/aplicacao/despacho/despacho.ts";
+import {
+  cicloDoDespacho,
+  configuracao,
+  executarAgora,
+  type MotivoDeRecusa,
+} from "../../modulos/ciclo_de_vida/despacho/publico.ts";
+import { predecessorasPendentesNoBanco } from "../../modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
 import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
 import { concluirDesenvolvimentoNoBanco } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import { condutor, type RecuperacaoDaSubida } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
@@ -188,7 +192,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c, despachoDoServico, relogio))
+      for (const fim of cicloDoDespacho(banco, c, despachoDoServico, predecessorasPendentesNoBanco(banco), relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -201,7 +205,14 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(banco, ref, configuracao(banco), despachoDoServico, relogio);
+      const aceitoOuRecusa = executarAgora(
+        banco,
+        ref,
+        configuracao(banco),
+        despachoDoServico,
+        predecessorasPendentesNoBanco(banco),
+        relogio,
+      );
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

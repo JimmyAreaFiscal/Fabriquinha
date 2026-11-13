@@ -1,34 +1,8 @@
-// Configuração do serviço (F4 §3, §10).
-import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
-
-export const Configuracao = z.strictObject({
-  agendadorAtivo: z.boolean().default(false),
-  intervaloMin: z.number().int().min(1).max(1440).default(5),
-  timeoutMin: z.number().int().min(10).max(1440).default(120),
-  ociosidadeMin: z.number().int().min(5).max(1440).default(30),
-});
-export type Configuracao = z.infer<typeof Configuracao>;
-
-export function configuracao(banco: DatabaseSync): Configuracao {
-  const l = banco.prepare("SELECT * FROM configuracao").get() as Record<string, number | string | null>;
-  return {
-    agendadorAtivo: l.agendador_ativo === 1,
-    intervaloMin: Number(l.intervalo_min),
-    timeoutMin: Number(l.timeout_min),
-    ociosidadeMin: Number(l.ociosidade_min),
-  };
-}
-
-/** Limite global de paralelismo (D04): todas as demandas juntas. Fora de `Configuracao`, que a web grava inteira. */
-export const limiteParalelismo = (banco: DatabaseSync): number =>
-  (banco.prepare("SELECT limite_paralelismo FROM configuracao").get() as { limite_paralelismo: number })
-    .limite_paralelismo;
-
-/** Grava a configuração inteira, já validada pela aplicação; as colunas do modelo da Avaliação, que saiu, ficam como estão. */
-export function salvarConfiguracao(banco: DatabaseSync, c: Configuracao): Configuracao {
-  banco
-    .prepare("UPDATE configuracao SET agendador_ativo = ?, intervalo_min = ?, timeout_min = ?, ociosidade_min = ?")
-    .run(Number(c.agendadorAtivo), c.intervaloMin, c.timeoutMin, c.ociosidadeMin);
-  return c;
-}
+// provisório: remover no ticket 22 (mudou para src/modulos/ciclo_de_vida/despacho/armazenamento/configuracao_do_servico.ts;
+// o arquivo, e não a API do Despacho, porque a Condução ainda lê a configuração por aqui e a API traz a Condução)
+export {
+  Configuracao,
+  configuracao,
+  limiteParalelismo,
+  salvarConfiguracao,
+} from "../../ciclo_de_vida/despacho/armazenamento/configuracao_do_servico.ts";

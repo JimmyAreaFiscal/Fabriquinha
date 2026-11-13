@@ -13,16 +13,18 @@ import { gravarCommitDemanda } from "../../repositorio/armazenamento/commits_dem
 import { registrarProjeto } from "../../projeto/aplicacao/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { configuracao } from "../../compartilhado/armazenamento/servico.ts";
+import { configuracao } from "../../ciclo_de_vida/despacho/publico.ts";
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { verificacaoDeTeste } from "../../../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/infra/worktree/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "../../verificacao/aplicacao/coleta_das_verificacoes.ts";
-import { cicloDoDespacho, type DepsDespacho } from "./despacho/despacho.ts";
+import { cicloDoDespacho } from "../../ciclo_de_vida/despacho/publico.ts";
+import type { DepsDespacho } from "../../ciclo_de_vida/conducao/publico.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { despachoDasEtapas } from "../../etapas/conducoes.ts";
+import { predecessorasPendentesNoBanco } from "./liberacao_das_demandas.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -130,7 +132,7 @@ async function cenario() {
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps)),
+    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesNoBanco(banco))),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

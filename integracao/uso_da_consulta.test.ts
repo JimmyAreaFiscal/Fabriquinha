@@ -3,7 +3,7 @@
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cicloDoDespacho } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
+import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { produtividadeDaRodada } from "../src/modulos/ciclo_de_vida/publico.ts";
 import {
   carregarTrabalhosDaDemanda,
@@ -28,6 +28,7 @@ import {
 } from "./apoio-execucao.ts";
 import { base, ciclo, criarCenario, demanda, esperar } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
+import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
 
 const gh = ghFalso(base);
 
@@ -100,7 +101,7 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
     { agente: agenteMudo, uso: null },
     { chamadaUnica: { saida: "Resumo da demanda.", uso: usoDaConsulta } },
   ]);
-  const fins = cicloDoDespacho(c.banco, c.config, despachoComEsperaCurta());
+  const fins = cicloDoDespacho(c.banco, c.config, despachoComEsperaCurta(), predecessorasPendentesNoBanco(c.banco));
   await esperar(() => pisAteAgora() === fins.length, "o pi do encerramento receber o prompt");
   comoAgente(c, id, encerramento.ticket_id, [
     ["mensagem_pr", MENSAGEM_PR],

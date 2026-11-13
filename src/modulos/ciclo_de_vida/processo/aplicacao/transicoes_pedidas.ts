@@ -14,7 +14,7 @@ import {
 } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import type { Gate } from "../../../sdlc/nucleo/gate.ts";
 import { comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
-import { iniciarTentativaDoTicket, reservarTicket } from "../../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { iniciarTentativaDoTicket } from "../../../sdlc/nucleo/despacho/reserva_ticket.ts";
 import {
   type ContextoDemanda,
   devolverTicket,
@@ -53,17 +53,6 @@ const pedidoDa =
     comDemanda(banco, demandaId, (ag) => transicao(ag, entrada, ator, { agora: relogio.agora() }));
 
 // O ticket.
-
-/** Reserva o ticket aberto para a Fabriquinha; `predecessorasSatisfeitas` diz se as demandas de que ela depende já integraram. */
-export const reservarTicketParaAFabriquinha = (
-  banco: DatabaseSync,
-  { demanda_id, ticket_id }: TicketDaTransicao,
-  relogio: Relogio,
-  predecessorasSatisfeitas = true,
-): AgregadoDemanda =>
-  comDemanda(banco, demanda_id, (ag) =>
-    reservarTicket(ag, { ticket_id }, FABRIQUINHA, { agora: relogio.agora() }, predecessorasSatisfeitas),
-  );
 
 /** Abre, no início da execução, a Tentativa do ticket que começa a executar, guardando o processo dela. */
 export const abrirTentativaDoTicket = (

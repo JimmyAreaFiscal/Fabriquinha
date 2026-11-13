@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { migrar } from "../../compartilhado/armazenamento/banco.ts";
-import { Endereco } from "../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { demandasParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
-import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
+import { Endereco } from "../../etapas/publico.ts";
+import { agregadosParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 
 const ESTADOS_LIDOS = ["planejar", "em_execucao", "revisar_demanda", "encerrar_demanda"] as const;
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -31,7 +31,7 @@ const execucao = (b: DatabaseSync, id: string, n: number, inicio: string, fim: s
   );
 };
 
-test("CA-1 a CA-6: lê só as demandas nos estados pedidos, com as predecessoras", () => {
+test("CA-1 a CA-6: lê só as demandas nos estados pedidos, sem consultar as dependências entre elas", () => {
   const b = banco();
   demanda(b, "I-4", "em_execucao");
   demanda(b, "I-6", "planejar");
@@ -40,13 +40,8 @@ test("CA-1 a CA-6: lê só as demandas nos estados pedidos, com as predecessoras
   demanda(b, "I-9", "gate_planejamento");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-6', 'I-4')");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-7', 'I-8')");
-  const lidas = demandasParaDespacho(b, ESTADOS_LIDOS).map((d) => [d.agregado.demanda.id, d.predecessoras]);
-  assert.deepEqual(lidas, [
-    ["I-4", []],
-    ["I-6", [{ demanda_id: "I-4", estado: "em_execucao" }]],
-    ["I-7", [{ demanda_id: "I-8", estado: "encerrar_demanda" }]],
-    ["I-8", []],
-  ]);
+  const lidas = agregadosParaDespacho(b, ESTADOS_LIDOS).map((agregado) => agregado.demanda.id);
+  assert.deepEqual(lidas, ["I-4", "I-6", "I-7", "I-8"]);
   assert.equal(b.isTransaction, false);
 });
 

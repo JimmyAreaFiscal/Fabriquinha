@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { Configuracao, configuracao, limiteParalelismo, salvarConfiguracao } from "./servico.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { Configuracao, configuracao, limiteParalelismo, salvarConfiguracao } from "./configuracao_do_servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;

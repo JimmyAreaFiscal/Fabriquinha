@@ -22,6 +22,7 @@ import { limitarTempoDoPi } from "./limite_do_pi.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
 import { registrarDependencia } from "../src/modulos/demandas/publico.ts";
+import { reservadoPeloDespacho } from "./reserva_do_despacho.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
@@ -175,9 +176,9 @@ export const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plan
   comDemanda(banco, demandaId, (ag) => comPlanoSubmetido(ag, planoEntrada, agente, new Date().toISOString()));
 
 /** Conduz o `planejar` da demanda I-1 até o fim da execução, com a ociosidade do pi limitada a `minutos`. */
-export function planejar(banco: DatabaseSync, minutos: number): Promise<void> {
+export async function planejar(banco: DatabaseSync, minutos: number): Promise<void> {
   limitarTempoDoPi(banco, minutos);
-  return new ConducaoDePlanejar({ banco, relogio: relogioDoSistema, condutor, registro: anotar }).conduzir(
-    Endereco.doTicket("I-1", 1),
+  await new ConducaoDePlanejar({ banco, relogio: relogioDoSistema, condutor, registro: anotar }).conduzir(
+    reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 1)),
   );
 }

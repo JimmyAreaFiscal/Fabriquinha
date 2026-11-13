@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Despacho, situacaoDeUmaDemanda } from "../../../../sdlc/nucleo/despacho/despacho.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import {
@@ -24,13 +24,14 @@ import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts
 import { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
 import { commitarTicketDemanda } from "./commit_do_ticket.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 const conduzir = (
   c: CenarioDeImplementacao,
   n: number,
   opcoes: OpcoesDaImplementacao,
   condutor?: CondutorDeTrabalhos,
-) => new ConducaoDeImplementar(c.deps(condutor), opcoes).conduzir(enderecoDoTicket(n));
+) => new ConducaoDeImplementar(c.deps(condutor), opcoes).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(n)));
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenarioDeImplementacao();

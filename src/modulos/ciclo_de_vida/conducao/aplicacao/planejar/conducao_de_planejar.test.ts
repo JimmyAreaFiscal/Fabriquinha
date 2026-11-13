@@ -39,7 +39,15 @@ test("CA-2: predecessora em execução recusa, sem reservar nem criar sessão", 
 });
 
 test("CA-1, CA-3: estado errado e ticket inesperado recusam com orientação", async () => {
-  await assert.rejects(planejar(cenarioDePlanejamento({ estado: "em_execucao" }).banco, 0.02), /só no estado planejar/);
+  // O planejar aberto fora do planejamento nem é reservado (o Despacho não o seleciona); o em execução a Condução recusa.
+  await assert.rejects(
+    planejar(cenarioDePlanejamento({ estado: "em_execucao" }).banco, 0.02),
+    /a etapa planejar não é a do trabalho do estado em_execucao/,
+  );
+  await assert.rejects(
+    planejar(cenarioDePlanejamento({ estado: "em_execucao", estadoDoTicket: "em_execucao" }).banco, 0.02),
+    /só no estado planejar/,
+  );
   await assert.rejects(
     planejar(cenarioDePlanejamento({ estadoDoTicket: "concluido" }).banco, 0.02),
     /está concluido e não pode ser iniciado \(só se inicia ou retoma/,

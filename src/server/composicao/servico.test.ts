@@ -22,7 +22,7 @@ import { escrever, migrar, novoId } from "../../modulos/compartilhado/armazename
 import { MIGRACOES } from "../../modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DE_DEMANDAS } from "../../modulos/demandas/publico.ts";
 import { registrarProjeto } from "../../modulos/demandas/publico.ts";
-import { Configuracao, salvarConfiguracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
+import { Configuracao, salvarConfiguracao } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";

@@ -13,6 +13,7 @@ import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios_de_deman
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 3);
@@ -34,7 +35,7 @@ const estado = (banco: Banco) => {
 
 test("o ticket global roda na worktree da demanda e, sem decisão, falha", async () => {
   const { c, banco, pastas } = await cenarioRevisao({ integral: true });
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "a revisão terminou sem registrar a decisão");
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
@@ -42,7 +43,7 @@ test("o ticket global roda na worktree da demanda e, sem decisão, falha", async
 test("pi com falha deixa o ticket falhou e a demanda em revisar_demanda", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const e = estado(banco);
   assert.deepEqual([e.ticket, e.demanda, e.decisoes], ["falhou", "revisar_demanda", 0]);
 });
@@ -78,7 +79,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
       ],
     },
   ]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const e = estado(banco);
   assert.deepEqual([e.ticket, e.decisoes], ["concluido", 1]);
 });

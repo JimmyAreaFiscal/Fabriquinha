@@ -3,13 +3,10 @@
 import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import type { TicketDemanda } from "../../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../../processo/publico.ts";
-import { predecessorasPendentes } from "../../../../sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
 import { secaoDoPromptDoPlanejar } from "./secao_do_prompt.ts";
 import { DEFINICAO_DO_PLANEJAR, Endereco } from "../../../etapas/publico.ts";
-import { reservarTicketParaAFabriquinha } from "../../../processo/aplicacao/transicoes_pedidas.ts";
 import { carregarDemanda } from "../../../../sdlc/armazenamento/demandas.ts";
-import { predecessorasDaDemanda } from "../../../../sdlc/armazenamento/dependencias_demanda.ts";
 import type { OpcoesExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { ConducaoInterativa } from "../conducao_de_etapa/conducao_de_etapa.ts";
 import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
@@ -21,19 +18,17 @@ export class ConducaoDePlanejar extends ConducaoInterativa {
     super(DEFINICAO_DO_PLANEJAR, deps);
   }
 
-  /** Reserva o `planejar` aberto (só com as predecessoras satisfeitas); com o ticket já em execução, retoma a mesma sessão. */
-  protected override reservar(ticket: TicketDemanda): void {
-    const { banco, relogio } = this.deps;
-    CICLO_DA_DEMANDA.exigir(carregarDemanda(banco, ticket.demanda_id).demanda, "planejar");
-    if (ticket.estado === "aberto") {
-      const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ticket.demanda_id)).length === 0;
-      reservarTicketParaAFabriquinha(banco, ticket, relogio, satisfeitas);
-    } else if (ticket.estado !== "em_execucao") {
+  /** Só o `planejar` em execução, que o Despacho reservou ou que retoma a mesma sessão, com a demanda em planejamento. */
+  override iniciar(endereco: Endereco): ReturnType<ConducaoInterativa["iniciar"]> {
+    const ticket = this.ticketDe(endereco);
+    CICLO_DA_DEMANDA.exigir(carregarDemanda(this.deps.banco, ticket.demanda_id).demanda, "planejar");
+    if (ticket.estado !== "em_execucao") {
       throw new ErroDeRegra(
         `o ticket de planejamento da demanda ${ticket.demanda_id} está ${ticket.estado} e não pode ser iniciado`,
         "só se inicia ou retoma o planejamento com o ticket aberto ou em execução",
       );
     }
+    return super.iniciar(endereco);
   }
 
   /**

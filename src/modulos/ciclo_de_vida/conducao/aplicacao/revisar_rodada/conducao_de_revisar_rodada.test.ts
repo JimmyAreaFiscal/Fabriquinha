@@ -18,6 +18,7 @@ import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
 import { CondutorDeTrabalhos, condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
@@ -42,7 +43,7 @@ const estado = (banco: Banco) => {
 
 test("o pi roda na worktree da rodada, com a fitness gravada antes, e sem decisão o ticket falha com o motivo", async () => {
   const { c, banco, pastas } = await cenarioRevisao();
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const e = estado(banco);
   assert.deepEqual([e.ticket, e.motivo, e.evidencias], ["falhou", SEM_DECISAO, 1]);
   assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
@@ -69,7 +70,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
       ],
     },
   ]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const e = estado(banco);
   assert.deepEqual([e.ticket, e.decisoes], ["concluido", 1]);
 });
@@ -77,7 +78,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
 test("pi com falha deixa o ticket falhou, sem decisão e com a rodada em revisao", async () => {
   const { banco, piFalso } = await cenarioRevisao();
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const e = estado(banco);
   assert.deepEqual(
     [e.ticket, e.motivo, e.rodada, e.demanda, e.decisoes],
@@ -88,7 +89,7 @@ test("pi com falha deixa o ticket falhou, sem decisão e com a rodada em revisao
 test("preparação que lança falha o ticket sem rodar o pi e vai ao log", async () => {
   const { c, banco, pastas } = await cenarioRevisao();
   banco.exec("DELETE FROM linguagem_projeto");
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.match(estado(banco).motivo ?? "", /não tem configuração/);
   assert.deepEqual(pastas(), []);
   assert.match(readFileSync(`${c.raiz}/log`, "utf8"), /preparação falhou: .*não tem configuração/);
@@ -99,19 +100,19 @@ test("preparação interrompida pela parada do serviço falha como serviço rein
   banco.exec("DELETE FROM linguagem_projeto");
   const emParada = new CondutorDeTrabalhos();
   emParada.marcarParada();
-  await conducao(banco, emParada).conduzir(REVISOR);
+  await conducao(banco, emParada).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "serviço reiniciado");
 });
 
 test("ticket reaberto leva a instrução ao prompt como reabertura", async () => {
   const { c, banco, piFalso } = await cenarioRevisao();
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   comDemanda(banco, "I-1", (ag) =>
     reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, { agora: RELOGIO.agora() }),
   );
   piFalso.roteirizar([{}]);
-  await conducao(banco).conduzir(REVISOR);
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
   const prompts = readdirSync(`${c.raiz}/execucoes`).map((d) =>
     readFileSync(`${c.raiz}/execucoes/${d}/prompt.md`, "utf8"),
   );

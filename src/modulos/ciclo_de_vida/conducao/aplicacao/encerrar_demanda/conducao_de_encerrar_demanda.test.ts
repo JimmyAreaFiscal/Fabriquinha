@@ -40,6 +40,8 @@ import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from ".
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import { concluirDesenvolvimentoNoBanco } from "../../../../../server/fluxos/conclusao_do_desenvolvimento.ts";
 import { lerPedido } from "../../../../demandas/publico.ts";
+import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
+import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -194,7 +196,7 @@ async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDeman
   await new ConducaoDeEncerrarDemanda(
     { banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar },
     opcoes,
-  ).conduzir(Endereco.doTicket(D, 8));
+  ).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket(D, 8)));
   return carregarDemanda(banco, D);
 }
 
@@ -550,14 +552,24 @@ test("árvore de PRs inválida falha a Tentativa, sem gravar evidência nem conc
 });
 
 test("CA-16: fora de encerramento, com o encerrar_demanda já reservado ou ausente, recusa sem efeito externo", async () => {
-  const casos: [Opcoes, RegExp][] = [
-    [{ estado: "em_execucao" }, /não pode ser reservado: a etapa encerrar_demanda não é a do trabalho/],
-    [{ estadoDoTicket: "em_execucao" }, /o estado atual é em_execucao \(só no estado aberto\)/],
-    [{ semTicket: true }, /o ticket I-206.T8 não existe/],
+  // O ticket já reservado não volta à Condução: o Despacho recusa a segunda reserva.
+  const reservarDeNovo = (banco: DatabaseSync) =>
+    Promise.resolve().then(() =>
+      reservarTicketParaAFabriquinha(
+        banco,
+        { demanda_id: D, ticket_id: 8 },
+        relogioFixo("2026-01-01T00:00:00.000Z"),
+        true,
+      ),
+    );
+  const casos: [Opcoes, RegExp, (banco: DatabaseSync) => Promise<unknown>][] = [
+    [{ estado: "em_execucao" }, /não pode ser reservado: a etapa encerrar_demanda não é a do trabalho/, conduzir],
+    [{ estadoDoTicket: "em_execucao" }, /o estado atual é em_execucao \(só no estado aberto\)/, reservarDeNovo],
+    [{ semTicket: true }, /o ticket I-206.T8 não existe/, conduzir],
   ];
-  for (const [opcoes, mensagem] of casos) {
+  for (const [opcoes, mensagem, tentar] of casos) {
     const c = await cenario(opcoes);
-    await assert.rejects(conduzir(c.banco), mensagem);
+    await assert.rejects(tentar(c.banco), mensagem);
     assert.deepEqual(hospedagem.chamadas(), []);
     assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
     assert.equal(existsSync(c.demanda), true);
