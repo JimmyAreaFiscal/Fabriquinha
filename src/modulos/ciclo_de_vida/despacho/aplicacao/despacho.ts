@@ -4,9 +4,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
   type AgregadoDemanda,
-  CICLO_DA_DEMANDA,
-  EstadoDemanda,
-  etapaDoEstado,
   iniciarRevisaoIntegral,
   reservarTicketSelecionado,
   type TicketDemanda,
@@ -18,10 +15,11 @@ import {
   motivoDeRecusaDoItem,
   type ResultadoDoDespacho,
   type SituacaoDoDespacho,
+  ESTADOS_DESPACHADOS,
 } from "../nucleo/despacho.ts";
 import { exigirSelecaoDoDespacho } from "../nucleo/reserva_ticket.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS, Endereco, exigirEtapaConduzida, formatarTicketRef } from "../../etapas/publico.ts";
+import { Endereco, exigirEtapaConduzida, formatarTicketRef } from "../../etapas/publico.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
@@ -37,22 +35,8 @@ import { condutor, type DepsDaConducao, type DepsDespacho } from "../../conducao
  */
 type PredecessorasPendentes = (demandaIds: readonly string[]) => ReadonlyMap<string, readonly string[]>;
 
-const ehDaEtapaExterna = (estado: EstadoDemanda): boolean => {
-  const etapa = etapaDoEstado(estado);
-  return etapa !== undefined && CATALOGO_DE_ETAPAS[etapa].executor === "externo";
-};
-
-// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (a Etapa externa) e dos Gates,
-// cuja Etapa é a do ticket que eles esperam, não a do estado.
-const ESTADOS_DESPACHADOS = EstadoDemanda.options.filter(
-  (estado) =>
-    CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
-    !ehDaEtapaExterna(estado) &&
-    (etapaDoEstado(estado) ?? estado) === estado,
-);
-
 /** Os agregados das demandas em planejamento, execução, revisão da demanda e encerramento. */
-export const agregadosDespachados = (banco: DatabaseSync): AgregadoDemanda[] =>
+const agregadosDespachados = (banco: DatabaseSync): AgregadoDemanda[] =>
   agregadosParaDespacho(banco, ESTADOS_DESPACHADOS);
 
 /**

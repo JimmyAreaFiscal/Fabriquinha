@@ -36,6 +36,7 @@ export {
   despachoDasEtapas,
   montarConducoesDasEtapas,
 } from "./aplicacao/conducoes.ts";
+export { ligarConclusaoDoDesenvolvimento } from "./aplicacao/encerrar_demanda/conducao_de_encerrar_demanda.ts";
 export { marcaDoPRFinal } from "./aplicacao/encerrar_demanda/encerramento_demanda.ts";
 export { marcaDoPRRodada } from "./aplicacao/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 export { type RefRodada } from "./aplicacao/encerrar_rodada/encerramento_rodada.ts";

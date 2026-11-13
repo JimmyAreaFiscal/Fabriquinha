@@ -17,7 +17,6 @@ import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
-import { concluirDesenvolvimentoNoBanco } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import {
   AmbienteHostLocal,
   type ConjuntoDeAmbientes,
@@ -131,7 +130,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   const banco = aberto;
   const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
-  const despachoDoServico = despachoDasEtapas({ concluirDesenvolvimento: concluirDesenvolvimentoNoBanco(banco) });
+  const despachoDoServico = despachoDasEtapas();
 
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;

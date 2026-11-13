@@ -2,11 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bancoComProjeto, pedidoEnviadoDeTeste, situacaoGravada } from "../../../apoio-testes/pedidos_de_teste.ts";
-import { concluirDesenvolvimentoNoBanco } from "./conclusao_do_desenvolvimento.ts";
-
-const concluirDesenvolvimento = (banco: ReturnType<typeof bancoComProjeto>, id: string, gravar: () => void) => {
-  concluirDesenvolvimentoNoBanco(banco)(id, gravar);
-};
+import { concluirDesenvolvimento } from "./conclusao_do_desenvolvimento.ts";
 
 const concluirOProcesso = (banco: ReturnType<typeof bancoComProjeto>, id: string) => () => {
   banco.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(id);

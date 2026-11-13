@@ -39,7 +39,6 @@ import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
-import { concluirDesenvolvimentoNoBanco } from "../../../../../server/fluxos/conclusao_do_desenvolvimento.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
@@ -200,11 +199,11 @@ async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDeman
   return carregarDemanda(banco, D);
 }
 
-test("com o fluxo da conclusão da composição, o pedido fica concluído junto do encerramento do processo", async () => {
+test("com o fluxo da conclusão que a composição liga, o pedido fica concluído junto do encerramento do processo", async () => {
   const c = await cenario();
   await conduzir(c.banco);
   execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
-  const ag = await conduzir(c.banco, { concluirDesenvolvimento: concluirDesenvolvimentoNoBanco(c.banco) });
+  const ag = await conduzir(c.banco);
   assert.equal(ag.demanda.estado, "concluida");
   assert.equal(lerPedido(c.banco, D).situacao, "concluido");
 });

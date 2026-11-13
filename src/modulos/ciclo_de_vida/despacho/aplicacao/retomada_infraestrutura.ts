@@ -12,7 +12,8 @@ import {
 } from "../../processo/publico.ts";
 import { type Relogio, relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
-import { agregadosDespachados } from "./despacho.ts";
+import { agregadosParaDespacho } from "../armazenamento/despacho_demanda.ts";
+import { ESTADOS_DESPACHADOS } from "../nucleo/despacho.ts";
 import type { Modelo } from "../../../sessoes/publico.ts";
 import { projetosCadastrados } from "../../conducao/publico.ts";
 
@@ -24,7 +25,7 @@ import { projetosCadastrados } from "../../conducao/publico.ts";
 export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): string[] {
   const agora = relogio.agora();
   const retomados: string[] = [];
-  for (const ag of agregadosDespachados(banco)) {
+  for (const ag of agregadosParaDespacho(banco, ESTADOS_DESPACHADOS)) {
     for (const t of ag.tickets) {
       if (t.estado !== "falhou") continue;
       const historico = desdeAReabertura(tentativasDoTicket(ag.tentativas, t.ticket_id));

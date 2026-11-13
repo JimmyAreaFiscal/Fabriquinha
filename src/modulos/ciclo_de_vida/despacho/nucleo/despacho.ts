@@ -3,6 +3,8 @@
 import { z } from "zod";
 import {
   type AgregadoDemanda,
+  CICLO_DA_DEMANDA,
+  EstadoDemanda,
   etapaDoEstado,
   gateQueEsperaGenteNaRodada,
   motivoDaFalhaDoTicket,
@@ -15,6 +17,22 @@ import { estaOcupado, GrafoDeDependencias } from "../../planejamento/publico.ts"
 import { Motivo, motivo } from "../../../../shared/nucleo/primitivos.ts";
 
 const ehEndereco = z.custom<Endereco>((candidato) => candidato instanceof Endereco);
+
+const ehDaEtapaExterna = (estado: EstadoDemanda): boolean => {
+  const etapa = etapaDoEstado(estado);
+  return etapa !== undefined && CATALOGO_DE_ETAPAS[etapa].executor === "externo";
+};
+
+/**
+ * Os estados em andamento em que o agendador despacha (planejamento, execução, revisão da demanda e encerramento): fora
+ * da conversa do Auditor (a Etapa externa) e dos Gates, cuja Etapa é a do ticket que eles esperam, não a do estado.
+ */
+export const ESTADOS_DESPACHADOS = EstadoDemanda.options.filter(
+  (estado) =>
+    CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
+    !ehDaEtapaExterna(estado) &&
+    (etapaDoEstado(estado) ?? estado) === estado,
+);
 
 /** Por que um item não foi despachado; o Auditor o vê, em vez de só o log do serviço. */
 /** @testes o teste confere cada motivo; a produção o usa pelo tipo `MotivoDeRecusa` */

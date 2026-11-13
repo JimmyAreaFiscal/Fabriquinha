@@ -23,7 +23,8 @@ import {
   solicitarIntegracaoFinal,
   submeterEvidencia,
 } from "../../../processo/publico.ts";
-import { existe } from "../../../../../shared/nucleo/erros.ts";
+import type { DatabaseSync } from "node:sqlite";
+import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
 import {
   ambienteDoEspaco,
   cicloDoEspaco,
@@ -48,22 +49,34 @@ import {
 } from "../conducao_de_etapa/conducao_de_etapa.ts";
 import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
 
-/** Grava o encerramento do processo (`gravarEncerramentoDoProcesso`) junto da conclusão do pedido `demandaId`. */
-type ConcluirDesenvolvimento = (demandaId: string, gravarEncerramentoDoProcesso: () => void) => void;
+/**
+ * Grava o encerramento do processo (`gravarEncerramentoDoProcesso`) junto da conclusão do pedido `demandaId`, na mesma
+ * unidade de trabalho: o fluxo da conclusão do desenvolvimento (MELHORIAS §5.3), entre o Ciclo de Vida e Demandas.
+ */
+type ConcluirDesenvolvimento = (
+  banco: DatabaseSync,
+  demandaId: string,
+  gravarEncerramentoDoProcesso: () => void,
+) => void;
+
+let conclusaoLigada: ConcluirDesenvolvimento | undefined;
+
+/** A composição liga o fluxo da conclusão do desenvolvimento, uma vez, antes de qualquer condução. */
+export const ligarConclusaoDoDesenvolvimento = (concluirDesenvolvimento: ConcluirDesenvolvimento): void => {
+  conclusaoLigada = concluirDesenvolvimento;
+};
+
+const conclusaoDoDesenvolvimento = (): ConcluirDesenvolvimento =>
+  encontrado(
+    conclusaoLigada,
+    "a conclusão do desenvolvimento não foi ligada ao Ciclo de Vida",
+    "abra o banco por abrirBancoDaFabriquinha, que liga a conclusão do pedido em Demandas",
+  );
 
 export interface OpcoesDoEncerramentoDaDemanda {
   /** Espera da verificação do PR (limite, intervalo e carência); o padrão é o de produção. */
   verificacao?: OpcoesVerificacao;
-  /**
-   * O fluxo da conclusão, que a composição liga a Demandas; sem ele (nos testes da condução), só o processo é gravado.
-   * provisório: remover no ticket 22, quando a Condução pedir a conclusão ao Processo e a composição sempre o ligar.
-   */
-  concluirDesenvolvimento?: ConcluirDesenvolvimento;
 }
-
-const soOEncerramentoDoProcesso: ConcluirDesenvolvimento = (_demandaId, gravarEncerramentoDoProcesso) => {
-  gravarEncerramentoDoProcesso();
-};
 
 /** As evidências do encerramento não têm anexo: nenhuma origem é lida. */
 const SEM_ORIGEM_DE_ANEXO = { worktree: "", saida: "", fora: "", copie: "" };
@@ -263,8 +276,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
         return "parar";
       }
     }
-    const concluirDesenvolvimento = this.opcoes.concluirDesenvolvimento ?? soOEncerramentoDoProcesso;
-    concluirDesenvolvimento(demanda_id, () => {
+    conclusaoDoDesenvolvimento()(banco, demanda_id, () => {
       concluirEncerramentoDaDemanda(banco, demanda_id, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, relogio);
     });
     return "seguir";

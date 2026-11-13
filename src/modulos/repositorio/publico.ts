@@ -50,12 +50,16 @@ export {
 } from "./git/publico.ts";
 export { heatmapDo } from "./historico/publico.ts";
 export {
+  apagarPullRequestsDasDemandas,
+  apagarPullRequestsQueSumiram,
   codigo,
   conferirProjeto,
   dolares,
+  gravarPullRequestsNovosEMudados,
   integrarPR,
   inteiro,
   lerPR,
+  lerPullRequestsDaDemanda,
   LIMITE_DO_CORPO,
   lista,
   neutro,

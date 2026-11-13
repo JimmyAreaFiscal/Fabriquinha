@@ -12,7 +12,6 @@ import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import {
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
-  semNulos,
   type TabelaDoAgregado,
 } from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
 import {
@@ -21,6 +20,12 @@ import {
   carregarEstadoDoProcesso,
   gravarEstadoNovoEMudado,
 } from "./estado_do_processo.ts";
+import {
+  apagarPullRequestsDasDemandas,
+  apagarPullRequestsQueSumiram,
+  gravarPullRequestsNovosEMudados,
+  lerPullRequestsDaDemanda,
+} from "../../../repositorio/publico.ts";
 import {
   apagarItensDasDemandas,
   apagarItensQueSumiram,
@@ -45,33 +50,23 @@ const TABELA_DO_ESTADO_DA_DEMANDA: TabelaDoAgregado<AgregadoDemanda> = {
   ],
 };
 
-/**
- * As tabelas do agregado que dependem dos itens de Planejamento, dos pais para os filhos: insere e atualiza nessa ordem
- * e apaga na inversa, porque as FKs são RESTRICT. As do Processo, filhas dos tickets e do PR final, e as evidências,
- * filhas da rodada e do ticket, são dos armazenamentos deles: saem antes e entram depois destas.
- */
-const TABELAS_QUE_DEPENDEM_DOS_ITENS: readonly TabelaDoAgregado<AgregadoDemanda>[] = [
-  {
-    nome: "pull_request",
-    chave: ["demanda_id", "rodada_id"],
-    linhas: (ag) =>
-      ag.pull_requests.map((pr) => ({ ...pr, demanda_id: ag.demanda.id, rodada_id: pr.rodada_id ?? null })),
-  },
-];
+/** Os PRs do agregado como o Repositório os grava, pela fachada dele: filhos das rodadas, pais do estado do Processo. */
+const pullRequestsDe = ({ demanda, pull_requests }: AgregadoDemanda) => ({ demanda_id: demanda.id, pull_requests });
 
 /**
- * Grava só a diferença entre `antes` e `depois`: insere o novo, atualiza o que mudou, apaga o que sumiu. Os itens de
- * Planejamento ficam no meio: dependem só da demanda, e as demais tabelas dependem deles.
+ * Grava só a diferença entre `antes` e `depois`: insere o novo, atualiza o que mudou, apaga o que sumiu, na ordem das FKs
+ * (RESTRICT): os itens de Planejamento ficam no meio, porque dependem só da demanda e os PRs dependem deles; o estado do
+ * Processo, filho dos tickets e do PR final, e as Evidências, filhas da rodada e do ticket, saem antes e entram depois.
  */
 function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined, depois: AgregadoDemanda): void {
   gravarRetiradaDasEvidencias(banco, antes?.evidencias ?? [], depois.evidencias);
   apagarEstadoQueSumiu(banco, antes, depois);
-  apagarLinhasQueSumiram(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
+  apagarPullRequestsQueSumiram(banco, antes && pullRequestsDe(antes), pullRequestsDe(depois));
   apagarItensQueSumiram(banco, antes, depois);
   apagarLinhasQueSumiram(banco, [TABELA_DO_ESTADO_DA_DEMANDA], antes, depois);
   gravarLinhasNovasEMudadas(banco, [TABELA_DO_ESTADO_DA_DEMANDA], antes, depois);
   gravarItensNovosEMudados(banco, antes, depois);
-  gravarLinhasNovasEMudadas(banco, TABELAS_QUE_DEPENDEM_DOS_ITENS, antes, depois);
+  gravarPullRequestsNovosEMudados(banco, antes && pullRequestsDe(antes), pullRequestsDe(depois));
   gravarEstadoNovoEMudado(banco, antes, depois);
   gravarEvidenciasNovasEAlteradas(banco, antes?.evidencias ?? [], depois.evidencias);
 }
@@ -91,7 +86,7 @@ function carregar(
     demanda: { ...pedido, ...estado },
     ...carregarItensDoPlanejamento(preparar, id),
     ...carregarEstadoDoProcesso(preparar, id),
-    pull_requests: preparar("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid").all(id).map(semNulos),
+    pull_requests: lerPullRequestsDaDemanda(preparar, id),
     evidencias: lerEvidenciasDaDemanda(id, preparar),
   });
 }
@@ -227,7 +222,7 @@ export function apagarDesenvolvimentoDasDemandas(banco: DatabaseSync, demandaIds
   const dasDemandas = JSON.stringify(demandaIds);
   apagarEstadoDoProcessoDasDemandas(banco, demandaIds);
   apagarEvidenciasDasDemandas(banco, demandaIds);
-  banco.prepare("DELETE FROM pull_request WHERE demanda_id IN (SELECT value FROM json_each(?))").run(dasDemandas);
+  apagarPullRequestsDasDemandas(banco, demandaIds);
   apagarItensDasDemandas(banco, demandaIds);
   banco.prepare("DELETE FROM processo_demanda WHERE demanda_id IN (SELECT value FROM json_each(?))").run(dasDemandas);
   const citados = anexosCitadosPorEvidencia(banco, anexos);
