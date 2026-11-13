@@ -101,13 +101,19 @@ function montarAgendador(
   });
 }
 
-/** O que o formulário do Ambiente tem agora, no formato de `ConfiguracaoDoAmbiente`. */
-const lerAmbiente = (form: HTMLFormElement): EstadoDoAmbiente["configuracao"] => ({
-  tipo: valor(form, '[name="tipo"]') as EstadoDoAmbiente["configuracao"]["tipo"],
-  memoria_maxima_mb: Number(valor(form, '[name="memoria_maxima_mb"]')),
-  cpus: Number(valor(form, '[name="cpus"]')),
-  ociosidade_para_eliminar_min: Number(valor(form, '[name="ociosidade_para_eliminar_min"]')),
-});
+/** O que o formulário do Ambiente tem agora, no formato de `ConfiguracaoDoAmbiente`; a capacidade vazia é sem limite. */
+const lerAmbiente = (form: HTMLFormElement): EstadoDoAmbiente["configuracao"] => {
+  const capacidade = valor(form, '[name="capacidade_do_conjunto"]');
+  return {
+    tipo: valor(form, '[name="tipo"]') as EstadoDoAmbiente["configuracao"]["tipo"],
+    memoria_maxima_mb: Number(valor(form, '[name="memoria_maxima_mb"]')),
+    cpus: Number(valor(form, '[name="cpus"]')),
+    ociosidade_para_eliminar_min: Number(valor(form, '[name="ociosidade_para_eliminar_min"]')),
+    conjunto: valor(form, '[name="conjunto"]') as EstadoDoAmbiente["configuracao"]["conjunto"],
+    capacidade_do_conjunto: capacidade === "" ? null : Number(capacidade),
+    minimo_do_conjunto: Number(valor(form, '[name="minimo_do_conjunto"]')),
+  };
+};
 
 /** O Ambiente: salvar grava o tipo e os limites; Eliminar pede confirmação e o 409 do alocado vai para o aviso. */
 function montarAmbiente(
@@ -119,6 +125,11 @@ function montarAmbiente(
 ): void {
   main.innerHTML = pagina(menuHtml, ambiente(estado, erros));
   const form = main.querySelector<HTMLFormElement>("[data-ambiente]");
+  // O fixo não usa o mínimo nem a ociosidade: os campos ficam desativados enquanto ele está escolhido.
+  form?.querySelector('[name="conjunto"]')?.addEventListener("change", () => {
+    const fixo = valor(form, '[name="conjunto"]') === "fixo";
+    for (const campo of form.querySelectorAll<HTMLInputElement>("[data-so-no-variavel]")) campo.disabled = fixo;
+  });
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
     const dados = lerAmbiente(form);

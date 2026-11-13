@@ -1,9 +1,11 @@
 // O conjunto compartilhado de sandboxes em container (CONCEITOS.md §7 e §13): aloca um container a cada ocupante
-// (exclusivo enquanto ele o usa), limpa e devolve ao conjunto quando ele o libera e elimina os que ficam ociosos.
+// (exclusivo enquanto ele o usa), limpa e devolve ao conjunto quando ele o libera e, no conjunto variável, elimina os que
+// ficam ociosos até o mínimo; o fixo os mantém. Na capacidade, um parado cede a vaga ao novo e, sem parado, o conjunto
+// informa a indisponibilidade (MELHORIAS §8, regra 4).
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que cria e elimina os containers. A alocação devolvida é a
 // referência que a Execução usa para rodar comandos no container.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeRegra, ErroExterno, existe } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import {
@@ -21,6 +23,13 @@ import type { Copias, GeradorDeAmbientes, Montagens } from "../infra/gerador_de_
 import { recolherParaOEspaco } from "../infra/pastas_do_ambiente.ts";
 
 const MS_POR_MINUTO = 60_000;
+
+/** O parado (livre ou sujo) que sai primeiro: o sujo, que nunca é reusado, e depois o liberado há mais tempo. */
+const primeiroOSujoDepoisOMaisAntigo = (a: AmbienteGravado, b: AmbienteGravado): number =>
+  Number(a.estado !== "sujo") - Number(b.estado !== "sujo") ||
+  String(a.liberado_em).localeCompare(String(b.liberado_em));
+
+const estaParado = ({ estado, liberado_em }: AmbienteGravado): boolean => estado !== "alocado" && liberado_em !== null;
 
 /**
  * O que o conjunto precisa saber do serviço para montar o `AmbienteContainer`: a raiz da Fabriquinha, a porta da API do
@@ -72,6 +81,8 @@ export class ConjuntoDeSandboxes {
   readonly #relogio: Relogio;
   /** Sem ele o conjunto só elimina containers (a tela de Configuração com `host_local`); `alocar` exige. */
   readonly #servico: ServicoDoConjunto | undefined;
+  /** Os containers que um `alocar` está criando e que o banco ainda não tem: ocupam vaga desde a decisão de criar. */
+  #criacoesEmAndamento = 0;
 
   constructor(
     banco: DatabaseSync,
@@ -95,7 +106,11 @@ export class ConjuntoDeSandboxes {
     return listarAmbientes(this.#banco).find((candidato) => candidato.id === id);
   }
 
-  /** Dá ao ocupante um livre da mesma imagem ou, sem nenhum, um container novo; o que já tem um recebe o mesmo. */
+  /**
+   * Dá ao ocupante um livre da mesma imagem ou, sem nenhum, um container novo; o que já tem um recebe o mesmo. Na
+   * capacidade, o novo toma a vaga de um parado e, sem parado, lança `ErroExterno` de indisponibilidade: quem pede decide
+   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura).
+   */
   async alocar(
     { dono: alocadoPara, pasta_das_worktrees_do_projeto }: OcupanteDoAmbiente,
     projeto: ProjetoDoAmbiente,
@@ -124,7 +139,36 @@ export class ConjuntoDeSandboxes {
       pacote: servico.pacote_do_harness,
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
-    return this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias);
+    const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
+    try {
+      if (paradoQueCedeAVaga) await this.#eliminarContainerReservado(paradoQueCedeAVaga);
+      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias);
+    } finally {
+      this.#criacoesEmAndamento--;
+    }
+  }
+
+  /**
+   * Reserva a vaga do container que o `alocar` vai criar, ainda no trecho síncrono: abaixo da capacidade (ou sem ela),
+   * só conta a criação; na capacidade, reserva para eliminar o parado que cede a vaga e o devolve; sem parado, lança a
+   * indisponibilidade.
+   */
+  #reservarVagaNoConjunto(): AmbienteGravado | undefined {
+    const capacidade = configuracaoDoAmbiente(this.#banco).capacidade_do_conjunto;
+    const vivos = listarAmbientes(this.#banco);
+    let paradoQueCedeAVaga: AmbienteGravado | undefined;
+    if (capacidade !== null && vivos.length + this.#criacoesEmAndamento >= capacidade) {
+      // Da leitura à reserva não há `await`: o primeiro parado da lista ainda está parado.
+      const [primeiroParado] = vivos.filter(estaParado).sort(primeiroOSujoDepoisOMaisAntigo);
+      paradoQueCedeAVaga = primeiroParado && reservarAmbienteParaEliminar(this.#banco, primeiroParado.id);
+      if (!paradoQueCedeAVaga)
+        throw new ErroExterno(
+          `nenhum sandbox disponível: o conjunto está na capacidade de ${String(capacidade)}, todos ocupados`,
+          "o trabalho volta a tentar quando um sandbox for liberado; ou aumente a capacidade na Configuração do Ambiente",
+        );
+    }
+    this.#criacoesEmAndamento++;
+    return paradoQueCedeAVaga;
   }
 
   /** Limpa o container do ocupante e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
@@ -154,15 +198,22 @@ export class ConjuntoDeSandboxes {
     throw new ErroDeRegra(`o ambiente ${id} está alocado a ${String(ambiente.alocado_para)}`, "espere o Espaço acabar");
   }
 
-  /** Elimina os `livre` e `sujo` parados há mais de `ociosidade_para_eliminar_min`. */
+  /**
+   * No conjunto variável, elimina os `livre` e `sujo` parados há mais de `ociosidade_para_eliminar_min`, sem deixar o
+   * conjunto abaixo do mínimo: o sujo sai primeiro, depois o mais antigo. O fixo mantém os que criou.
+   */
   async eliminarOciosos(agora: Instante): Promise<void> {
-    const limiteMs = configuracaoDoAmbiente(this.#banco).ociosidade_para_eliminar_min * MS_POR_MINUTO;
+    const { conjunto, ociosidade_para_eliminar_min, minimo_do_conjunto } = configuracaoDoAmbiente(this.#banco);
+    if (conjunto === "fixo") return;
+    const limiteMs = ociosidade_para_eliminar_min * MS_POR_MINUTO;
+    const vivos = listarAmbientes(this.#banco);
     // Reserva todos de uma vez, sem esperar o docker, para um `alocar` não pegar um ocioso no meio do caminho.
-    const reservados = listarAmbientes(this.#banco)
+    const reservados = vivos
       .filter(
-        ({ estado, liberado_em }) =>
-          estado !== "alocado" && liberado_em !== null && Date.parse(agora) - Date.parse(liberado_em) >= limiteMs,
+        (ambiente) => estaParado(ambiente) && Date.parse(agora) - Date.parse(String(ambiente.liberado_em)) >= limiteMs,
       )
+      .sort(primeiroOSujoDepoisOMaisAntigo)
+      .slice(0, Math.max(0, vivos.length - minimo_do_conjunto))
       .map(({ id }) => reservarAmbienteParaEliminar(this.#banco, id))
       .filter((reservado) => reservado !== undefined);
     for (const reservado of reservados) await this.#eliminarContainerReservado(reservado);

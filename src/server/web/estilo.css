@@ -758,9 +758,13 @@ textarea:focus {
   outline-offset: 0;
   border-color: transparent;
 }
-input[readonly] {
+input[readonly],
+input:disabled {
   color: var(--muted);
   background: var(--surface-2);
+}
+input:disabled {
+  cursor: not-allowed;
 }
 textarea {
   resize: vertical;
@@ -872,6 +876,10 @@ input.erro {
   flex-wrap: wrap;
   gap: var(--s-3) var(--s-5);
   margin-top: var(--s-3);
+}
+/* Mais largo que os tempos do Agendador: a capacidade vazia mostra "sem limite" inteiro, e os vizinhos a acompanham. */
+.limites-ambiente .num-campo input {
+  width: 104px;
 }
 .conjunto-ambiente {
   margin-top: var(--s-5);

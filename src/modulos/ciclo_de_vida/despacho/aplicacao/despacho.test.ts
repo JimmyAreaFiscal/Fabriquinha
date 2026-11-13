@@ -10,10 +10,12 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
+import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
 import {
   criarSessao,
   iniciarExecucao,
+  PACOTE,
   carregarSessoesDoContexto,
   comSessoesDoContexto,
 } from "../../../sessoes/publico.ts";
@@ -31,7 +33,16 @@ import {
   despachoDasEtapas,
 } from "../../conducao/publico.ts";
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import {
+  AmbienteHostLocal,
+  ConjuntoDeAmbientes,
+  GeradorDeAmbientes,
+  inserirAmbienteAlocado,
+  montarConjuntoDoServico,
+  validarESalvarConfiguracaoDoAmbiente,
+} from "../../../ambiente/publico.ts";
+import { relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -330,6 +341,49 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   );
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["falhou", 0]);
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
+});
+
+test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
+  const { c, banco, config } = await cenario(3);
+  banco.prepare("UPDATE projeto SET imagem_do_ambiente = 'alpine' WHERE nome = 'loja'").run();
+  validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
+  instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
+  inserirAmbienteAlocado(banco, {
+    id: "amb-ocupado",
+    container_id: "c-ocupado",
+    imagem: "alpine",
+    alocado_para: "I-9",
+    criado_em: em,
+  });
+  const servico = {
+    raiz: c.raiz,
+    porta_da_api: 4999,
+    home_do_usuario: c.raiz,
+    pacote_do_harness: PACOTE,
+    dir_do_harness_do_auditor: c.raiz,
+  };
+  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, servico);
+  montarConjuntoDoServico(() => conjunto);
+  t.after(() => {
+    montarConjuntoDoServico(() => undefined);
+  });
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
+
+  await Promise.all(
+    cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+  );
+
+  const ag = carregarDemanda(banco, "I-2");
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+  const resultado = ag.tentativas.at(-1)?.resultado;
+  assert.ok(resultado?.tipo === "falha_infraestrutura");
+  assert.equal(resultado.causa, "servico_externo_inacessivel");
+  assert.match(resultado.motivo, /nenhum sandbox disponível: o conjunto está na capacidade de 1/);
+  const falhouEm = Date.parse(String(ag.tickets[0]?.estado_alterado_em));
+  const depoisDe = (minutos: number) => relogioFixo(new Date(falhouEm + minutos * 60_000).toISOString());
+  assert.deepEqual(retomarFalhasDeInfraestrutura(banco, depoisDe(1)), [], "aguarda a espera da política");
+  assert.equal(retomarFalhasDeInfraestrutura(banco, depoisDe(2)).length, 1);
+  assert.equal(estadoDoTicket(banco, 2, 1), "aberto");
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {

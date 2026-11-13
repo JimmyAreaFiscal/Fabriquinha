@@ -462,11 +462,27 @@ test("remover projeto com execução em andamento dá 409 e o projeto continua",
   assert.equal(((await chamar("GET", "/api/projetos")) as unknown[]).length, 1);
 });
 
-const AMBIENTE_PADRAO = { tipo: "host_local", memoria_maxima_mb: 2048, cpus: 2, ociosidade_para_eliminar_min: 60 };
+const AMBIENTE_PADRAO = {
+  tipo: "host_local",
+  memoria_maxima_mb: 2048,
+  cpus: 2,
+  ociosidade_para_eliminar_min: 60,
+  conjunto: "variavel",
+  capacidade_do_conjunto: null,
+  minimo_do_conjunto: 0,
+};
 
 test("ambiente: o padrão é host_local com o conjunto vazio; salvar grava e um valor inválido dá 422 sem mudar nada", async () => {
   assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: AMBIENTE_PADRAO, conjunto: [] });
-  const salvo = { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 15 };
+  const salvo = {
+    tipo: "container",
+    memoria_maxima_mb: 1024,
+    cpus: 1.5,
+    ociosidade_para_eliminar_min: 15,
+    conjunto: "fixo",
+    capacidade_do_conjunto: 3,
+    minimo_do_conjunto: 0,
+  };
   assert.deepEqual(await chamar("POST", "/api/ambiente", salvo), { configuracao: salvo, conjunto: [] });
 
   const [status, erro] = (await chamar("POST", "/api/ambiente", { ...salvo, memoria_maxima_mb: 100 })) as [
@@ -475,6 +491,12 @@ test("ambiente: o padrão é host_local com o conjunto vazio; salvar grava e um 
   ];
   assert.equal(status, 422);
   assert.match(erro, /→ at memoria_maxima_mb/);
+  const [statusDoFixo, erroDoFixo] = (await chamar("POST", "/api/ambiente", {
+    ...salvo,
+    capacidade_do_conjunto: null,
+  })) as [number, string];
+  assert.equal(statusDoFixo, 422);
+  assert.match(erroDoFixo, /✖ o conjunto fixo precisa de uma capacidade\n {2}→ at capacidade_do_conjunto/);
   assert.deepEqual(await chamar("GET", "/api/ambiente"), { configuracao: salvo, conjunto: [] });
 });
 

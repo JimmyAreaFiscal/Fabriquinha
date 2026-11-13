@@ -11,6 +11,9 @@ const AMBIENTE_PADRAO: ConfiguracaoDoAmbiente = {
   memoria_maxima_mb: 2048,
   cpus: 2,
   ociosidade_para_eliminar_min: 60,
+  conjunto: "variavel",
+  capacidade_do_conjunto: null,
+  minimo_do_conjunto: 0,
 };
 const novoBanco = () => abrirBancoTemporario().banco;
 
@@ -23,6 +26,9 @@ test("configuração do Ambiente: host_local por padrão, gravada à parte da Co
     memoria_maxima_mb: 512,
     cpus: 0.5,
     ociosidade_para_eliminar_min: 5,
+    conjunto: "fixo",
+    capacidade_do_conjunto: 4,
+    minimo_do_conjunto: 1,
   };
   assert.deepEqual(salvarConfiguracaoDoAmbiente(banco, nova), nova);
   assert.deepEqual(configuracaoDoAmbiente(banco), nova);

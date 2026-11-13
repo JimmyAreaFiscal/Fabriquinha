@@ -99,6 +99,9 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
     memoria_maxima_mb: 1024,
     cpus: 1,
     ociosidade_para_eliminar_min: 60,
+    conjunto: "variavel",
+    capacidade_do_conjunto: null,
+    minimo_do_conjunto: 0,
   });
   writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
   // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.

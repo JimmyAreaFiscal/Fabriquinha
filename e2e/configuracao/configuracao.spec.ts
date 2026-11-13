@@ -325,3 +325,50 @@ test("Ambiente: salva os limites; com host_local, o padrão, subir e abrir a Con
   await expect(pagina.locator(".num-campo.erro .msg-erro")).toHaveCount(1);
   expect(fabriquinha.dockerFalso.registro()).toEqual([]);
 });
+
+test("Ambiente: o tamanho do conjunto é variável sem limite por padrão; o fixo exige a capacidade, desativa o mínimo e a ociosidade, e é gravado", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  await pagina.goto(`${fabriquinha.base}/config?ambiente`);
+  const tipoDeConjunto = pagina.getByLabel("Tipo de conjunto");
+  const capacidade = pagina.getByRole("spinbutton", { name: "Capacidade do conjunto" });
+  const minimo = pagina.getByRole("spinbutton", { name: "Manter ao menos" });
+  const ociosidade = pagina.getByRole("spinbutton", { name: "Eliminar container livre após" });
+  await expect(tipoDeConjunto).toHaveValue("variavel");
+  await expect(capacidade).toHaveValue("");
+  await expect(capacidade).toHaveAttribute("placeholder", "sem limite");
+  await expect(minimo).toHaveValue("0");
+  for (const campo of [minimo, ociosidade]) await expect(campo).toBeEnabled();
+
+  await tipoDeConjunto.selectOption("fixo");
+  for (const campo of [minimo, ociosidade]) await expect(campo).toBeDisabled();
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  const erroDaCapacidade = pagina.locator("#campo-capacidade_do_conjunto-erro");
+  await expect(erroDaCapacidade).toHaveText("o conjunto fixo precisa de uma capacidade");
+  await expect(capacidade).toHaveAttribute("aria-invalid", "true");
+  await fotografar(pagina, info, "configuracao-ambiente-fixo-sem-capacidade");
+
+  await capacidade.fill("3");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(erroDaCapacidade).toHaveCount(0);
+  await pagina.reload();
+  await expect(tipoDeConjunto).toHaveValue("fixo");
+  await expect(capacidade).toHaveValue("3");
+  for (const campo of [minimo, ociosidade]) await expect(campo).toBeDisabled();
+  await fotografar(pagina, info, "configuracao-ambiente-fixo");
+
+  await tipoDeConjunto.selectOption("variavel");
+  for (const campo of [minimo, ociosidade]) await expect(campo).toBeEnabled();
+  await minimo.fill("4");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.locator("#campo-minimo_do_conjunto-erro")).toHaveText("o mínimo passa da capacidade do conjunto");
+  await capacidade.fill("");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.locator(".msg-erro")).toHaveCount(0);
+  await pagina.reload();
+  await expect(tipoDeConjunto).toHaveValue("variavel");
+  await expect(capacidade).toHaveValue("");
+  await expect(minimo).toHaveValue("4");
+  expect(fabriquinha.dockerFalso.registro()).toEqual([]);
+});

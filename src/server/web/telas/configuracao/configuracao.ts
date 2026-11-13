@@ -146,11 +146,56 @@ const TIPOS_DE_AMBIENTE: Record<ConfiguracaoDoAmbiente["tipo"], string> = {
   container: "Container",
 };
 
-const LIMITES_DO_AMBIENTE = [
+const TIPOS_DE_CONJUNTO: Record<ConfiguracaoDoAmbiente["conjunto"], string> = {
+  fixo: "Fixo",
+  variavel: "Variável",
+};
+
+const LIMITES_DO_CONTAINER = [
   ["memoria_maxima_mb", "Memória máxima por container", 512, "1", "MB"],
   ["cpus", "CPUs por container", 0.1, "any", "CPUs"],
+] as const;
+
+const LIMITES_DO_CONJUNTO = [
+  ["capacidade_do_conjunto", "Capacidade do conjunto", 1, "1", "containers"],
+  ["minimo_do_conjunto", "Manter ao menos", 0, "1", "containers"],
   ["ociosidade_para_eliminar_min", "Eliminar container livre após", 5, "1", "min"],
 ] as const;
+
+// O mínimo e a ociosidade só valem no variável: o fixo mantém os containers que criou.
+const CAMPOS_SO_DO_VARIAVEL: ReadonlySet<string> = new Set(["minimo_do_conjunto", "ociosidade_para_eliminar_min"]);
+
+type CampoNumericoDoAmbiente = (typeof LIMITES_DO_CONTAINER | typeof LIMITES_DO_CONJUNTO)[number];
+
+/** O campo numérico do Ambiente; a capacidade vazia é sem limite, e o que só vale no variável fica desativado no fixo. */
+function campoNumericoDoAmbiente(
+  configuracao: ConfiguracaoDoAmbiente,
+  erros: Erros,
+  [campo, rotulo, minimo, passo, unidade]: CampoNumericoDoAmbiente,
+): string {
+  const m = marca(erros, campo);
+  const valorGravado = configuracao[campo];
+  const semLimite = campo === "capacidade_do_conjunto" ? ' placeholder="sem limite"' : "";
+  const soNoVariavel = CAMPOS_SO_DO_VARIAVEL.has(campo)
+    ? ` data-so-no-variavel${configuracao.conjunto === "fixo" ? " disabled" : ""}`
+    : "";
+  return `<div class="num-campo${m.classe}"><label for="${idDe(campo)}">${rotulo}</label><span class="com-unidade"><input type="number" id="${idDe(campo)}" name="${campo}" value="${valorGravado === null ? "" : String(valorGravado)}" min="${String(minimo)}" step="${passo}"${semLimite}${soNoVariavel}${m.aria}> ${unidade}</span>${m.msg}</div>`;
+}
+
+/** Um seletor do Ambiente com o rótulo e o erro do campo. */
+function seletorDoAmbiente(
+  erros: Erros,
+  campo: string,
+  rotulo: string,
+  opcoes: Record<string, string>,
+  escolhida: string,
+) {
+  const m = marca(erros, campo);
+  const options = Object.entries(opcoes).map(
+    ([valor, texto]) => `<option value="${valor}"${valor === escolhida ? " selected" : ""}>${texto}</option>`,
+  );
+  return `<div class="campo${m.classe}"><label for="${idDe(campo)}">${rotulo}</label><select id="${idDe(campo)}" name="${campo}"${m.aria}>${options.join("")}</select>${m.msg}</div>`;
+}
 
 const FORMATO_DO_INSTANTE = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 const instanteLegivel = (instante: string): string => FORMATO_DO_INSTANTE.format(Date.parse(instante));
@@ -169,22 +214,19 @@ function linhaDoAmbiente({
   return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td><td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
 }
 
-/** Ambiente: o tipo e os limites de cada container, e o conjunto de containers da Fabriquinha com o Eliminar de cada um. */
+/**
+ * Ambiente: o tipo e os limites de cada container, o tipo e os limites do conjunto, e o conjunto de containers da
+ * Fabriquinha com o Eliminar de cada um.
+ */
 export function ambiente({ configuracao, conjunto }: EstadoDoAmbiente, erros: Erros): string {
-  const opcoes = Object.entries(TIPOS_DE_AMBIENTE).map(
-    ([tipo, rotulo]) => `<option value="${tipo}"${tipo === configuracao.tipo ? " selected" : ""}>${rotulo}</option>`,
-  );
-  const limites = LIMITES_DO_AMBIENTE.map(([campo, rotulo, minimo, passo, unidade]) => {
-    const m = marca(erros, campo);
-    return `<div class="num-campo${m.classe}"><label for="${idDe(campo)}">${rotulo}</label><span class="com-unidade"><input type="number" id="${idDe(campo)}" name="${campo}" value="${String(configuracao[campo])}" min="${String(minimo)}" step="${passo}"${m.aria}> ${unidade}</span>${m.msg}</div>`;
-  });
-  const tipo = marca(erros, "tipo");
+  const campos = (limites: readonly CampoNumericoDoAmbiente[]) =>
+    limites.map((limite) => campoNumericoDoAmbiente(configuracao, erros, limite)).join("");
   const linhas = conjunto.map(linhaDoAmbiente);
   const tabela =
     linhas.length > 0
       ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
       : '<p class="muted">Nenhum container no conjunto.</p>';
-  return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3><div class="campo${tipo.classe}"><label for="${idDe("tipo")}">Tipo de Ambiente</label><select id="${idDe("tipo")}" name="tipo"${tipo.aria}>${opcoes.join("")}</select>${tipo.msg}</div><div class="limites-ambiente">${limites.join("")}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
+  return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3>${seletorDoAmbiente(erros, "tipo", "Tipo de Ambiente", TIPOS_DE_AMBIENTE, configuracao.tipo)}<div class="limites-ambiente">${campos(LIMITES_DO_CONTAINER)}</div></div><div class="grupo"><h3>Tamanho do conjunto <span class="nota">· o fixo mantém os containers que criou; o variável elimina os livres ociosos até o mínimo; sem vaga, o trabalho espera e tenta de novo</span></h3>${seletorDoAmbiente(erros, "conjunto", "Tipo de conjunto", TIPOS_DE_CONJUNTO, configuracao.conjunto)}<div class="limites-ambiente">${campos(LIMITES_DO_CONJUNTO)}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
 }
 
 /** A confirmação de eliminar um container do conjunto. */

@@ -307,7 +307,15 @@ test("página: cabeçalho, menu e painel; projeto do endereço que não existe",
 });
 
 const AMBIENTE: EstadoDoAmbiente = {
-  configuracao: { tipo: "container", memoria_maxima_mb: 1024, cpus: 1.5, ociosidade_para_eliminar_min: 30 },
+  configuracao: {
+    tipo: "container",
+    memoria_maxima_mb: 1024,
+    cpus: 1.5,
+    ociosidade_para_eliminar_min: 30,
+    conjunto: "variavel",
+    capacidade_do_conjunto: 4,
+    minimo_do_conjunto: 1,
+  },
   conjunto: [
     {
       id: "a-livre",
@@ -345,7 +353,14 @@ test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para
   assert.match(html, /<option value="host_local">Host local<\/option><option value="container" selected>Container</);
   assert.match(html, /name="memoria_maxima_mb" value="1024" min="512" step="1"> MB/);
   assert.match(html, /name="cpus" value="1.5" min="0.1" step="any"> CPUs/);
-  assert.match(html, /name="ociosidade_para_eliminar_min" value="30" min="5" step="1"> min/);
+  assert.match(html, /name="ociosidade_para_eliminar_min" value="30" min="5" step="1" data-so-no-variavel> min/);
+  assert.match(html, /<option value="fixo">Fixo<\/option><option value="variavel" selected>Variável<\/option>/);
+  assert.match(
+    html,
+    /<label for="campo-capacidade_do_conjunto">Capacidade do conjunto<\/label><span class="com-unidade"><input type="number" id="campo-capacidade_do_conjunto" name="capacidade_do_conjunto" value="4" min="1" step="1" placeholder="sem limite"> containers/,
+  );
+  assert.match(html, /name="minimo_do_conjunto" value="1" min="0" step="1" data-so-no-variavel> containers/);
+  assert.doesNotMatch(html, /data-so-no-variavel disabled/);
   assert.match(
     html,
     /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
@@ -359,6 +374,23 @@ test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para
     /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
   );
   assert.equal(html.match(/ disabled>/g)?.length, 1);
+});
+
+test("ambiente: o fixo desativa o mínimo e a ociosidade, e o variável sem capacidade fica sem limite", () => {
+  const fixo = ambiente({ ...AMBIENTE, configuracao: { ...AMBIENTE.configuracao, conjunto: "fixo" } }, new Map());
+  assert.match(fixo, /<option value="fixo" selected>Fixo<\/option>/);
+  assert.match(fixo, /name="minimo_do_conjunto" value="1" min="0" step="1" data-so-no-variavel disabled> containers/);
+  assert.match(
+    fixo,
+    /name="ociosidade_para_eliminar_min" value="30" min="5" step="1" data-so-no-variavel disabled> min/,
+  );
+  assert.equal(fixo.match(/data-so-no-variavel disabled/g)?.length, 2);
+
+  const semLimite = ambiente(
+    { ...AMBIENTE, configuracao: { ...AMBIENTE.configuracao, capacidade_do_conjunto: null } },
+    new Map(),
+  );
+  assert.match(semLimite, /name="capacidade_do_conjunto" value="" min="1" step="1" placeholder="sem limite">/);
 });
 
 test("ambiente: conjunto vazio e o erro de um limite ao lado do campo", () => {
