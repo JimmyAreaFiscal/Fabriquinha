@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarPiFalso } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
+import { conferirModeloNaLista } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 import { HarnessPi } from "./harness_pi.ts";
 
 const harness = new HarnessPi();
@@ -25,21 +26,20 @@ piFalso.roteirizar([{ listaDeModelos: { tabela } }]);
 symlinkSync(piFalso.caminho, join(base, "pi"));
 const argumentos = () => piFalso.registro().at(-1)?.argv;
 
+const conferir = (modelo: { provedor: string; nome: string }) => conferirModeloNaLista(harness.listarModelos(), modelo);
 const recusa = async (provedor: string, modelo: string, mensagem: string) => {
   await assert.rejects(
-    harness.conferirModelo({ provedor, nome: modelo }),
+    conferir({ provedor, nome: modelo }),
     (erro) => erro instanceof ErroDeRegra && erro.message === mensagem,
   );
 };
 
-test("aceita o par listado exatamente e passa a busca como um argumento só", async () => {
-  await harness.conferirModelo({ provedor: "openai-codex", nome: "gpt-6-luna" });
-  assert.deepEqual(argumentos(), ["--list-models", "openai-codex/gpt-6-luna"]);
-  await harness.conferirModelo({ provedor: "llamacpp", nome: "qwen3 coder (local)" });
-  assert.deepEqual(argumentos(), ["--list-models", "llamacpp/qwen3 coder (local)"]);
+test("aceita o par listado exatamente", async () => {
+  await conferir({ provedor: "openai-codex", nome: "gpt-6-luna" });
+  await conferir({ provedor: "llamacpp", nome: "qwen3 coder (local)" });
 });
 
-test("recusa o que a busca aproximada do pi lista, mas não é o par exato", async () => {
+test("recusa o que não é o par exato da lista", async () => {
   const como = (par: string) => `o modelo ${par} não existe no pi (escolha um par listado por pi --list-models)`;
   await recusa("openai-codex", "gpt-6", como("openai-codex/gpt-6"));
   await recusa("openai", "gpt-6-luna", como("openai/gpt-6-luna"));
@@ -74,7 +74,7 @@ test("sem $FABRIQUINHA_PI usa pi do PATH; binário ausente diz como resolver", a
   delete process.env.FABRIQUINHA_PI;
   process.env.PATH = `${base}:${pathOriginal ?? ""}`; // o pi falso na frente do de verdade
   try {
-    await harness.conferirModelo({ provedor: "openai-codex", nome: "gpt-6-luna" });
+    await conferir({ provedor: "openai-codex", nome: "gpt-6-luna" });
     process.env.FABRIQUINHA_PI = join(base, "nao-existe");
     await recusa(
       "openai-codex",

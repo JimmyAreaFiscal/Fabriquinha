@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { PACOTE } from "../../modulos/sessoes/publico.ts";
+import { PACOTE } from "../../shared/infra/isolamento_do_ambiente.ts";
 
 const DESTINO_DO_CLI_DO_AGENTE = join(PACOTE, "bin", "fabriquinha");
 const ENTRADA_DO_CLI_DO_AGENTE = fileURLToPath(new URL("../cli-agente/principal.ts", import.meta.url));

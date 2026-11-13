@@ -22,11 +22,18 @@ export {
   execucoesEmLote,
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
-  resumoDaSessao,
+  type FiltroDeSessoes,
   type ResumoDaSessao,
-  resumosDasSessoesEmLote,
-  sessaoDeCadaTicketDasDemandas,
 } from "./armazenamento/sessoes_e_execucoes.ts";
+export { pastasDoProcesso } from "./nucleo/pastas_da_execucao.ts";
 export { carregarSessoesDoContexto, comSessoesDoContexto } from "./aplicacao/sessoes_do_contexto.ts";
 export { encerrarExecucaoComUso, encerrarExecucaoOrfa, registrarUsoDaConsulta } from "./aplicacao/encerramento.ts";
-export { type PedidoDeProcesso, SessoesDeAgente } from "./aplicacao/sessoes_de_agente.ts";
+export { MotorDasSessoes, type PedidoDeProcesso, type RespostaAoDialogo } from "./aplicacao/motor_das_sessoes.ts";
+export {
+  type MontagemDasSessoesDeAgente,
+  montarSessoesDeAgente,
+  motorDasSessoes,
+  type ResumoDaSessaoComSituacao,
+  type SessoesDeAgente,
+  type SubidaDasSessoes,
+} from "./aplicacao/montagem_das_sessoes.ts";

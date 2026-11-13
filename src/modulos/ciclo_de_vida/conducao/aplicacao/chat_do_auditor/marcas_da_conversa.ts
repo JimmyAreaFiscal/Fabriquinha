@@ -12,7 +12,7 @@ import {
   type Sessao,
   texto,
 } from "../../../../sessoes/publico.ts";
-import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
+import { pastasDoProcesso } from "../../../../sessoes/publico.ts";
 
 /** A sessão e as execuções dela, em ordem: de onde saem os prompts e os registros das respostas automáticas. */
 interface ExecucoesDaSessao {

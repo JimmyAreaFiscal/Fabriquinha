@@ -6,21 +6,35 @@ import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import {
   type ResumoDaDemanda,
   CICLO_DA_DEMANDA,
-  condutor,
   configuracao,
   Endereco,
   formatarRodadaRef,
   pendenciasDaDemanda,
   type TrabalhoVivo,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
-import type { Situacao } from "../../../modulos/sessoes/publico.ts";
+import { montarSessoesDeAgente, type Situacao } from "../../../modulos/sessoes/publico.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { type SessaoDeDemanda, sessoesDasDemandas } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, type Predecessora, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
 export type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
-export const situacaoDoCondutor: SituacaoDaSessao = (sessao) => condutor.situacao(sessao);
+
+/**
+ * O processo vivo de cada sessão, das sessões com execução aberta (só elas têm pi rodando), lidas uma vez, na primeira
+ * pergunta.
+ */
+export function situacoesDoBanco(banco: DatabaseSync): SituacaoDaSessao {
+  let situacaoPorSessao: Map<string, Situacao> | undefined;
+  return (sessao) => {
+    situacaoPorSessao ??= new Map(
+      montarSessoesDeAgente({ banco })
+        .listar({ abertas: true })
+        .flatMap(({ id, situacao }) => (situacao ? [[id, situacao] as const] : [])),
+    );
+    return situacaoPorSessao.get(sessao);
+  };
+}
 
 /** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */

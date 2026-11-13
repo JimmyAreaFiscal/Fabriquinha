@@ -1,6 +1,7 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
-import { condutor, validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { montarSessoesDeAgente } from "../../../modulos/sessoes/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
   consultarEstadoDaConfiguracao,
@@ -71,7 +72,12 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     tratar: ({ demandas, params }) => consultarProjetoCadastrado(demandas, String(params.nome)),
     resposta: ProjetoCadastrado,
   },
-  { metodo: "GET", caminho: "/api/modelos", tratar: () => condutor.harness.listarModelos(), resposta: ModelosDoPi },
+  {
+    metodo: "GET",
+    caminho: "/api/modelos",
+    tratar: ({ banco }) => montarSessoesDeAgente({ banco }).modelos(),
+    resposta: ModelosDoPi,
+  },
   {
     metodo: "POST",
     caminho: "/api/projetos",

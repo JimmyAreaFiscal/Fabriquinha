@@ -17,7 +17,7 @@ import { pastasDoAmbiente } from "../../sandboxes/infra/pastas_do_ambiente.ts";
 import { AmbienteContainer } from "../infra/container/ambiente_container.ts";
 import { AmbienteHostLocal } from "../infra/host_local/ambiente_host_local.ts";
 import { montarGestaoDeAmbientes } from "./gestao_de_ambientes.ts";
-import { PACOTE } from "../../../sessoes/publico.ts";
+import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { Endereco, metricasDasDemandasDoPeriodo, gravarAnexos } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { guardarBytes } from "../../../../shared/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarUsoDeclarado } from "../../../../modulos/sessoes/publico.ts";
+import { gravarUsoDeclarado } from "../../../../../apoio-testes/sessoes_de_teste.ts";
 import { cenarioDemandas } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
 import { origemDe } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";

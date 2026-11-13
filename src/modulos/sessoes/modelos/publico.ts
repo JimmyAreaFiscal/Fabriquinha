@@ -3,4 +3,3 @@
 export { ConfiguracaoDoModelo, Effort, Modelo } from "./nucleo/modelo.ts";
 export { custoPeloPreco, type PrecoDoCatalogo, PrecoDoModelo } from "./nucleo/preco_do_modelo.ts";
 export { gravarCatalogoDePrecos, lerPrecoVigente } from "./armazenamento/catalogo_de_precos.ts";
-export { MIGRACOES_DE_SESSOES } from "./armazenamento/migracao_do_catalogo_de_precos.ts";

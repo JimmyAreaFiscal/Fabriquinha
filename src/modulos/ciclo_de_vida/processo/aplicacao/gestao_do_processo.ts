@@ -23,7 +23,7 @@ import {
   gravarDemandaNova,
   situacaoDasDemandas,
 } from "../armazenamento/agregado_da_demanda.ts";
-import { gravarUsoDeclarado } from "../../../sessoes/publico.ts";
+import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./submissao_de_evidencia.ts";
 
 /** `arquivos` são caminhos: abrir cada um, com a defesa de origem, é de `guardarAnexos`. */
@@ -165,7 +165,7 @@ export const declararUso = (banco: DatabaseSync, id: string, dados: unknown, aut
           chamadas: 0,
         })),
       };
-      const { demandaDona } = gravarUsoDeclarado(banco, uso);
+      const { demandaDona } = montarSessoesDeAgente({ banco }).declararUso(uso);
       if (demandaDona !== id) {
         avisos.push(
           `a sessão ${sessao} de ${ferramenta} já consta na demanda ${demandaDona} e não é contada de novo para ${id}`,

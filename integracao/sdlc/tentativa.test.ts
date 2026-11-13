@@ -16,12 +16,8 @@ import {
 } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
 import { Endereco, type Tentativa } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import {
-  criarSessao,
-  iniciarExecucao,
-  comSessoesDoContexto,
-  gravarTokenDaExecucao,
-} from "../../src/modulos/sessoes/publico.ts";
+import { criarSessao, iniciarExecucao, comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { gravarTokenDaExecucao } from "../../apoio-testes/sessoes_de_teste.ts";
 import type { PaginaDaDemanda } from "../../src/server/contrato/demanda.ts";
 import { pagina } from "../../src/server/web/telas/demandas/demandas.ts";
 import { descreverEtapasDoSdlc } from "../../src/server/consultas/etapas.ts";

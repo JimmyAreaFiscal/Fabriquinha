@@ -23,14 +23,11 @@ import {
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import {
-  carregarSessoesDoContexto,
-  gravarTokenDaExecucao,
-  dirDoPiDoAuditor,
-  PACOTE,
-} from "../../src/modulos/sessoes/publico.ts";
+import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { gravarTokenDaExecucao } from "../../apoio-testes/sessoes_de_teste.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { anotar, noLog } from "../../src/shared/infra/registro.ts";
-import { pastasDoProcesso } from "../../src/modulos/ciclo_de_vida/conducao/nucleo/pastas_do_processo.ts";
+import { pastasDoProcesso } from "../../src/modulos/sessoes/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { caminhoDaWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { iniciarServico } from "../../src/server/composicao/servico.ts";

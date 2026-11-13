@@ -11,12 +11,19 @@ import {
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
-import { apagarSessoesDasDemandas, execucoesAbertas } from "../../../modulos/sessoes/publico.ts";
+import { montarSessoesDeAgente, type SessoesDeAgente } from "../../../modulos/sessoes/publico.ts";
 
 /** Recusa a remoção enquanto um ticket do projeto está em execução ou tem execução de sessão aberta. */
-function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string, pedidos: readonly string[]): void {
+function recusarExecucaoEmAndamento(
+  banco: DatabaseSync,
+  sessoes: SessoesDeAgente,
+  nome: string,
+  pedidos: readonly string[],
+): void {
   const comExecucaoAberta = new Set(
-    execucoesAbertas(banco).map(({ demanda_id, ticket_id }) => `${demanda_id}.${String(ticket_id)}`),
+    sessoes
+      .listar({ demandas: pedidos, abertas: true })
+      .map(({ demanda_id, ticket_id }) => `${demanda_id}.${String(ticket_id)}`),
   );
   const ticketEmAndamento = ticketsDasDemandas(banco, pedidos).find(
     (ticket) =>
@@ -37,9 +44,10 @@ export const removerProjetoComOQueDependeDele = (
   nome: string,
 ) =>
   gestaoDeDemandas.removerProjeto(nome, (pedidos) => {
-    recusarExecucaoEmAndamento(banco, nome, pedidos);
+    const sessoesDeAgente = montarSessoesDeAgente({ banco });
+    recusarExecucaoEmAndamento(banco, sessoesDeAgente, nome, pedidos);
     montarRepositorio({ banco }).esquecer(nome, pedidos);
-    const { execucoes, sessoes } = apagarSessoesDasDemandas(banco, pedidos);
+    const { execucoes, sessoes } = sessoesDeAgente.esquecer(pedidos);
     const anexosSemEvidencia = apagarDesenvolvimentoDasDemandas(banco, pedidos);
     return { execucoes, sessoes, anexosSemEvidencia };
   });

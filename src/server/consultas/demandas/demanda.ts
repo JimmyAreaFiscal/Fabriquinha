@@ -24,12 +24,11 @@ import {
   usoDaDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
-import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
-import { ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { sessaoDeCadaTicketDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "./pedidos_das_metricas.ts";
-import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
+import { pendenciasDeUmaDemanda, situacoesDoBanco, type SituacaoDaSessao } from "./pendencias.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 
 /** Os endereços públicos das rodadas e dos tickets da demanda. */
@@ -76,7 +75,7 @@ export function consultarDemanda(
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   relogio: Relogio,
-  situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
+  situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): PaginaDaDemanda {
   return lerEmSnapshot(banco, () => {
     const ag = carregarDemanda(banco, id);

@@ -9,9 +9,10 @@ import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazen
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
 import { MIGRACOES_DE_DEMANDAS } from "../../shared/armazenamento/migracoes/migracoes_de_demandas.ts";
-import { MIGRACOES_DE_SESSOES } from "../../modulos/sessoes/publico.ts";
+import { MIGRACOES_DE_SESSOES } from "../../shared/armazenamento/migracoes/migracoes_de_sessoes.ts";
+import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import { type Modelo, montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import {
-  condutor,
   configuracao,
   ligarConclusaoDoDesenvolvimento,
   ligarLeituraDosLimitesDasSessoes,
@@ -23,14 +24,27 @@ import { type GestaoDeDemandas, montarGestaoDeDemandas } from "../../modulos/dem
 import { montarRepositorio } from "../../modulos/repositorio/publico.ts";
 
 /**
- * A gestão de Demandas sobre o `banco`, com a conferência do modelo pelo harness do serviço (lido na hora da conferência).
+ * Recusa o par provedor/modelo que não está entre os `modelos` que o harness das Sessões conhece.
+ * @testes os testes conferem com o harness do teste
+ */
+export async function conferirModeloNaLista(modelos: Promise<Modelo[]>, { provedor, nome }: Modelo): Promise<void> {
+  if (!(await modelos).some((m) => m.provedor === provedor && m.nome === nome)) {
+    throw new ErroDeRegra(
+      `o modelo ${provedor}/${nome} não existe no pi`,
+      "escolha um par listado por pi --list-models",
+    );
+  }
+}
+
+/**
+ * A gestão de Demandas sobre o `banco`, com a conferência do modelo pelos modelos de Sessões (lidos na hora da conferência).
  * ponytail: a gestão só guarda o banco, a conferência e o Repositório sem a varredura, então montá-la a cada leitura ligada ao Ciclo de Vida não custa;
  * montar uma por banco quando a gestão guardar estado.
  */
 export const montarDemandasDoBanco = (banco: DatabaseSync): GestaoDeDemandas =>
   montarGestaoDeDemandas({
     banco,
-    conferirModeloNoHarness: (modelo) => condutor.harness.conferirModelo(modelo),
+    conferirModeloNoHarness: (modelo) => conferirModeloNaLista(montarSessoesDeAgente({ banco }).modelos(), modelo),
     repositorio: montarRepositorio({ banco }),
   });
 

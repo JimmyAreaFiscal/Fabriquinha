@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cicloDoDespacho, produtividadeDaRodada } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarSessoesDoContexto, gravarCatalogoDePrecos, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
+import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { gravarCatalogoDePrecos, HarnessPi } from "../../apoio-testes/sessoes_de_teste.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   abrirPortao,

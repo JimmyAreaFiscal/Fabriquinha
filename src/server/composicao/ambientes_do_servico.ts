@@ -3,7 +3,7 @@
 import { homedir } from "node:os";
 import type { DatabaseSync } from "node:sqlite";
 import { montarGestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../modulos/sessoes/publico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../shared/infra/isolamento_do_ambiente.ts";
 import {
   configuracaoDoAmbiente,
   salvarConfiguracaoDoAmbiente,

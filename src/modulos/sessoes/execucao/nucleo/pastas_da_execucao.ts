@@ -1,4 +1,4 @@
-// As pastas de uma execução fora do agregado (F2 §2, F4 §6.1.2): as do processo, onde a Condução grava o prompt e lê o log.
+// As pastas de uma execução fora do banco (F2 §2, F4 §6.1.2): onde quem pede a sessão grava o prompt e onde fica o log.
 import { join } from "node:path";
 
 /** `<raiz>/execucoes/E-<id>`: a pasta do processo `id` (prompt, `saida/`, `vazio/`) e o `log` dentro dela. */

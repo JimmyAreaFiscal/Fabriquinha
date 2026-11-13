@@ -13,7 +13,7 @@ import type { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 import { enderecosNaDemanda, prDoGateDaRodada } from "./demanda.ts";
-import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
+import { pendenciasDasDemandas, situacoesDoBanco, type SituacaoDaSessao } from "./pendencias.ts";
 
 /** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
 const emExecucao = (ag: ResumoDaDemanda, comPiAtivo: ReadonlySet<string>): BoardDeDemandas["trabalho"] =>
@@ -34,7 +34,7 @@ export function consultarBoardDeDemandas(
   banco: DatabaseSync,
   gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
-  situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
+  situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): BoardDeDemandas {
   return lerEmSnapshot(banco, () => {
     const todas = listarResumosDasDemandas(banco);

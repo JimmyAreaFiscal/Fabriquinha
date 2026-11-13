@@ -24,7 +24,6 @@ export const PASTA_DO_HISTORICO_DO_ESQUEMA = "shared/armazenamento/migracoes/";
 export const MIGRACOES_DOS_DOMINIOS = [
   "modulos/ciclo_de_vida/processo/armazenamento/migracao_do_estado_do_processo.ts",
   "shared/armazenamento/configuracao_do_ambiente.ts",
-  "modulos/sessoes/modelos/armazenamento/migracao_do_catalogo_de_precos.ts",
 ];
 
 // O shared não tem subdomínios.

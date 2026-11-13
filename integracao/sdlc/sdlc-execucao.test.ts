@@ -10,7 +10,6 @@ import {
   retomarFalhasDeInfraestrutura,
   Endereco,
   AUDITOR,
-  condutor,
   comTentativaAberta,
   motivoDaFalhaDoTicket,
   tentativasDoTicket,
@@ -43,7 +42,7 @@ import {
   ticketDe,
 } from "../apoio-execucao.ts";
 import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParalelismo } from "../apoio.ts";
-import { recuperacaoDaSubida } from "../../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { recuperarAposReinicio } from "../../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
@@ -369,7 +368,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarExecucao(criarSessao([], sessao), estado.execucoes, execucao),
   }));
-  await condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida);
+  await recuperarAposReinicio(c.banco);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

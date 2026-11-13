@@ -32,6 +32,7 @@ import type {
   ProcessoDoAgente,
   RespostaDaConsulta,
 } from "../../harness/publico.ts";
+import { HarnessPi } from "../../harness/publico.ts";
 import { lerConversaDoArquivo, perguntasRespondidasNaConversa } from "../../historico/publico.ts";
 import type { Modelo } from "../../modelos/publico.ts";
 import { execucoesAbertas, gravarTokenDaExecucao } from "../armazenamento/sessoes_e_execucoes.ts";
@@ -91,6 +92,9 @@ export interface PedidoDeProcesso {
   silencioMaximoDoModeloMin?: number;
 }
 
+/** A resposta a um diálogo pendente do pi: o valor, a confirmação ou o cancelamento. */
+export type RespostaAoDialogo = { value: string } | { confirmed: boolean } | { cancelled: true };
+
 /** O sinal a um processo que não vai esperar a resposta; a falha do sinal vai para o log, nunca derruba o serviço. */
 function sinalizarSemEsperar(
   ambienteDoProcesso: Ambiente,
@@ -100,8 +104,8 @@ function sinalizarSemEsperar(
   ambienteDoProcesso.sinalizar(identificador, sinal).catch(noLog);
 }
 
-export class SessoesDeAgente {
-  #harness: Harness | undefined;
+export class MotorDasSessoes {
+  #harness: Harness;
   #ambientes: GestaoDeAmbientes | undefined;
   private readonly vivas = new Map<number | string, Viva>();
   private readonly ouvintes = new OuvintesDasSessoes();
@@ -119,14 +123,14 @@ export class SessoesDeAgente {
   /** O endereço da API do agente (`FABRIQUINHA_API`): o serviço o informa depois do listen e o retira ao parar. */
   urlDaApi: string | undefined;
 
-  /** Sem o harness, o condutor espera o da composição (`montarHarness`). */
-  constructor(harness?: Harness) {
+  /** Sem o harness, o do pi; os testes trocam pelo falso (`montarHarness`). */
+  constructor(harness: Harness = new HarnessPi()) {
     this.#harness = harness;
   }
 
-  /** O harness que roda o agente; o resto do serviço o pede ao condutor, que o recebeu da composição. */
+  /** O harness que roda o agente. */
   get harness(): Harness {
-    return existe(this.#harness, "o condutor não tem harness", "monte o harness pela composição do serviço");
+    return this.#harness;
   }
 
   montarHarness(harness: Harness): void {
@@ -224,11 +228,7 @@ export class SessoesDeAgente {
   }
 
   /** Responde um diálogo pendente (`extension_ui_response` do RPC do pi): `value`, `confirmed` ou `cancelled`. */
-  responder(
-    execucao: number | string,
-    dialogo: string,
-    resposta: { value: string } | { confirmed: boolean } | { cancelled: true },
-  ): void {
+  responder(execucao: number | string, dialogo: string, resposta: RespostaAoDialogo): void {
     this.viva(execucao, "nada a responder").responder(dialogo, resposta);
   }
 

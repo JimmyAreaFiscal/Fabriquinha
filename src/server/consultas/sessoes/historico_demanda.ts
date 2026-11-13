@@ -11,10 +11,10 @@ import {
   formatarTicketRef,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
-  execucoesAbertas,
   type Execucao,
+  type IdDaSessao,
+  montarSessoesDeAgente,
   type ResumoDaSessao,
-  resumosDasSessoesEmLote,
 } from "../../../modulos/sessoes/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Resultado, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
@@ -84,7 +84,8 @@ export function sessoesDasDemandas(
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
   const resumoDaDemanda = new Map(demandas.map((ag) => [ag.demanda.id, ag]));
-  return sessoesDosResumos(resumosDasSessoesEmLote(banco, [...resumoDaDemanda.keys()]), resumoDaDemanda, filtro);
+  const resumos = montarSessoesDeAgente({ banco }).listar({ demandas: [...resumoDaDemanda.keys()] });
+  return sessoesDosResumos(resumos, resumoDaDemanda, filtro);
 }
 
 /**
@@ -102,7 +103,9 @@ export function sessoesDeDemanda(
       : filtro.projeto !== undefined
         ? gestaoDeDemandas.pedidos({ projeto: filtro.projeto }).map(({ id }) => id)
         : undefined;
-  const resumos = resumosDasSessoesEmLote(banco, demandasDoFiltro);
+  const resumos = montarSessoesDeAgente({ banco }).listar(
+    demandasDoFiltro === undefined ? {} : { demandas: demandasDoFiltro },
+  );
   const resumosDasDemandasLidas = resumosDasDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
   return sessoesDosResumos(resumos, new Map(resumosDasDemandasLidas.map((ag) => [ag.demanda.id, ag])), filtro);
 }
@@ -113,7 +116,17 @@ export function sessoesDeDemanda(
  */
 export const ticketsComPiAtivo = (banco: DatabaseSync): Set<string> =>
   new Set(
-    execucoesAbertas(banco)
-      .filter((e) => e.grupo_processo !== null)
+    montarSessoesDeAgente({ banco })
+      .listar({ abertas: true })
+      .filter(({ execucoes }) => execucoes.some((e) => e.fim == null && e.grupo_processo !== undefined))
       .map(({ demanda_id, ticket_id }) => formatarTicketRef({ demanda_id, ticket_id })),
   );
+
+/** O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente. */
+export function sessaoDeCadaTicketDasDemandas(
+  banco: DatabaseSync,
+  ids: readonly string[],
+): Map<string, Map<number, IdDaSessao>> {
+  const porDemanda = Map.groupBy(montarSessoesDeAgente({ banco }).listar({ demandas: ids }), (s) => s.demanda_id);
+  return new Map(ids.map((id) => [id, new Map((porDemanda.get(id) ?? []).map((s) => [s.ticket_id, s.id]))]));
+}

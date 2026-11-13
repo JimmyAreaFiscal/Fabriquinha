@@ -29,8 +29,8 @@ import {
   carregarSessoesDoContexto,
   comSessoesDoContexto,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
-  emMarkdown,
 } from "../../../modulos/sessoes/publico.ts";
+import { emMarkdown } from "./markdown_da_conversa.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste } from "../../../../apoio-testes/repositorio_de_teste.ts";

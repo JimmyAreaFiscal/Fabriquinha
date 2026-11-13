@@ -15,10 +15,10 @@ import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../pro
 import {
   criarSessao,
   iniciarExecucao,
-  PACOTE,
   carregarSessoesDoContexto,
   comSessoesDoContexto,
 } from "../../../sessoes/publico.ts";
+import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";

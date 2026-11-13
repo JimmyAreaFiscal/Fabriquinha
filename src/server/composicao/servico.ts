@@ -9,21 +9,15 @@ import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
-import { gravarCatalogoDePrecos, HarnessPi } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
-import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import { configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { SessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { ligarGestaoDeAmbientes, montarRepositorio } from "../../modulos/repositorio/publico.ts";
 import type { AmbientesDoServico } from "../api/rotas.ts";
 import { montarAmbientesDoServico } from "./ambientes_do_servico.ts";
-
-/** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
-export const harnessDoServico = new HarnessPi();
-
-/** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
-const LIMITE_PARADA_MS = 10_000;
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface Servico {
@@ -54,7 +48,6 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   await garantirPacoteDoAgente(join(pastaDoPacote, "fabriquinha")).catch((erro: unknown) => {
     throw new ErroDeRegra(`não foi possível gerar o CLI do agente (pacote-pi/bin/fabriquinha): ${mensagem(erro)}`);
   });
-  condutor.montarHarness(harnessDoServico);
   const relogio = relogioDoSistema;
   const noLogDoServico = (erro: unknown): void => {
     noLog(erro, relogio);
@@ -87,9 +80,9 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     web.listen(pedida, "127.0.0.1", pronto);
   });
   const { port: porta } = web.address() as AddressInfo;
-  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
   let aberto: DatabaseSync | undefined;
   let ambientesMontados: AmbientesDoServico | undefined;
+  let sessoesMontadas: SessoesDeAgente | undefined;
   try {
     aberto = abrirBancoDaFabriquinha(raiz);
     // A montagem confere as sandboxes com o docker antes da recuperação, que mata os processos da instância anterior.
@@ -100,9 +93,14 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       registrarErro: noLogDoServico,
       relogio,
     });
-    condutor.montarAmbientes(ambientesMontados.gestao);
     ligarGestaoDeAmbientes(ambientesMontados.gestao);
-    await recuperarAposReinicio(aberto);
+    // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
+    // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
+    sessoesMontadas = await recuperarAposReinicio(aberto, {
+      ambientes: ambientesMontados.gestao,
+      urlDaApi: `http://127.0.0.1:${String(porta)}`,
+      catalogo: { relogio, registrarErro: noLogDoServico },
+    });
     web.on(
       "request",
       servirWeb({
@@ -125,16 +123,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   const banco = aberto;
   const ambientes = ambientesMontados.gestao;
   const demandas = montarDemandasDoBanco(banco);
-  // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
-  // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
-  // ponytail: o preço que o pi passa a declarar depois da subida só entra na subida seguinte; reler na batida do relógio
-  // se o catálogo do pi mudar com o serviço no ar.
-  const gravacaoDoCatalogo = harnessDoServico
-    .precosDosModelos()
-    .then((precos) => {
-      gravarCatalogoDePrecos(banco, precos, relogio.agora());
-    })
-    .catch(noLogDoServico);
+  const sessoes = sessoesMontadas;
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
   // F4 §4, passo 1: o Repositório varre em segundo plano, de minuto em minuto com o agendador ligado, a base dos projetos
@@ -198,8 +187,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     executarAgora: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
-      condutor.marcarParada();
-      condutor.urlDaApi = undefined;
+      // Antes de qualquer `await`: o condutor que acordar depois não lança pi novo.
+      const paradaDasSessoes = sessoes.parar();
       clearInterval(intervaloDoCiclo);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
@@ -209,8 +198,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       rmSync(join(raiz, "web.url"), { force: true });
       await repositorio.parar();
       await ambientes.parar();
-      await gravacaoDoCatalogo;
-      await condutor.aguardarTodos(LIMITE_PARADA_MS);
+      await paradaDasSessoes;
       banco.close();
     },
   };

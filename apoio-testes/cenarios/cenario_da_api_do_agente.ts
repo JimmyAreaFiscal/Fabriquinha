@@ -11,7 +11,7 @@ import { Readable } from "node:stream";
 import { after } from "node:test";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { gravarTokenDaExecucao } from "../../src/modulos/sessoes/publico.ts";
+import { gravarTokenDaExecucao } from "../sessoes_de_teste.ts";
 import type { RotaDoAgente } from "../../src/server/api/agente/rotas.ts";
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";

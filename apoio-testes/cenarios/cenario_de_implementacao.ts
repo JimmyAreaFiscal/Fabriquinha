@@ -1,5 +1,6 @@
 // O cenário das conduções do `implementar` e do `resolver_conflito`: git real temporário, banco real, pi falso que escreve
 // na pasta de trabalho e a demanda I-1 com a rodada 1 em `implementar` (ou, com `conflito`, em `encerrar_demanda`).
+import type { MotorDasSessoes } from "../../src/modulos/sessoes/publico.ts";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import {
@@ -7,7 +8,6 @@ import {
   Endereco,
   type RegistroDaVerificacao,
   condutor as condutorDoServico,
-  type CondutorDeTrabalhos,
   motivoDaFalhaDoTicket,
   type DepsDaConducao,
   carregarDemanda,
@@ -182,7 +182,7 @@ export async function cenarioDeImplementacao({
       })),
     }));
   /** As dependências da condução; `condutor` troca o do serviço (a parada do serviço, por exemplo). */
-  const deps = (condutor: CondutorDeTrabalhos = condutorDoServico): DepsDaConducao => ({
+  const deps = (condutor: MotorDasSessoes = condutorDoServico): DepsDaConducao => ({
     banco,
     relogio: relogioDoSistema,
     condutor,

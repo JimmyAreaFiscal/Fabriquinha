@@ -22,7 +22,7 @@ import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../contrato
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "../demandas/pedidos_das_metricas.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
-import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
+import { pendenciasDasDemandas, situacoesDoBanco, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
 type TicketDoCartao = NonNullable<CartaoDoBoard["ticket"]>;
 
@@ -89,7 +89,7 @@ export function consultarInicio(
   banco: DatabaseSync,
   gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
-  situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
+  situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): DadosDoInicio {
   return lerEmSnapshot(banco, () => {
     const agora = relogio.agora();

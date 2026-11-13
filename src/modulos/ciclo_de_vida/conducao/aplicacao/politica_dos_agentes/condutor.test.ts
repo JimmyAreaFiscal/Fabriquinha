@@ -23,20 +23,17 @@ import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor, type EtapaTicket } from "../../../etapas/publico.ts";
-import {
-  type Harness,
-  HarnessPi,
-  type LancamentoDoTicket,
-  type MensagemDoAgente,
-} from "../../../../sessoes/publico.ts";
+import { type Harness, type LancamentoDoTicket, MotorDasSessoes } from "../../../../sessoes/publico.ts";
+import type { MensagemDoAgente } from "../../../../sessoes/harness/publico.ts";
+import { HarnessPi } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import {
   atividadeDo,
   condutor,
-  CondutorDeTrabalhos,
+  iniciarProcessoDoTicket,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type PedidoDeProcesso,
 } from "./condutor.ts";
-import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { recuperarAposReinicio } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
@@ -157,7 +154,7 @@ function rodar(
       .map((entrada) => `${String(entrada.comando?.value)}\n`)
       .join("");
   let grupoDoPi = 0;
-  const fim = condutor.iniciar(
+  const fim = iniciarProcessoDoTicket(
     {
       execucao: { id: sessao, sessao, modo },
       // Sem banco: o agente sem token.
@@ -565,7 +562,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)})`);
 
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco);
 
     assert.deepEqual(await daTicket.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -578,7 +575,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
 test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco);
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
       INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
@@ -586,7 +583,7 @@ test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", asyn
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco);
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -618,7 +615,7 @@ test("recuperarNaSubida não sinaliza o pi que rodou num container, que a montag
   try {
     ticketComProcessoAberto(banco, "amb-1", 4321);
 
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco);
 
     assert.deepEqual(docker.registro(), []);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -639,10 +636,10 @@ test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessã
       throw recusa;
     },
   } as unknown as Harness;
-  const condutorQueRecusa = new CondutorDeTrabalhos(harnessQueRecusa);
+  const condutorQueRecusa = new MotorDasSessoes(harnessQueRecusa);
   condutorQueRecusa.montarAmbientes(gestaoQueSoUsa(new AmbienteHostLocal()));
   await assert.rejects(
-    condutorQueRecusa.iniciar({
+    condutorQueRecusa.lancarExecucao({
       execucao: { id: "s-recusada", sessao: "s-recusada", modo: "consulta" },
       lancamento: lancamentoDeTeste(base, "s-recusada"),
       cwd: base,
@@ -661,12 +658,11 @@ test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que 
     (codigo: number): typeof executar =>
     () =>
       Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
-  assert.deepEqual(await new CondutorDeTrabalhos(new HarnessPi(pi(0))).consultar("pergunta", undefined, 1000), {
+  assert.deepEqual(await new MotorDasSessoes(new HarnessPi(pi(0))).consultar("pergunta", undefined, 1000), {
     saida: "resposta",
     uso: [],
   });
-  assert.equal(await new CondutorDeTrabalhos(new HarnessPi(pi(1))).consultar("pergunta", undefined, 1000), undefined);
-  assert.throws(() => new CondutorDeTrabalhos().harness, /o condutor não tem harness/);
+  assert.equal(await new MotorDasSessoes(new HarnessPi(pi(1))).consultar("pergunta", undefined, 1000), undefined);
 });
 
 /** Um pi falso em `[ao vivo]` (que não termina sozinho) lançado pelo AmbienteContainer, com o condutor acompanhando-o. */
@@ -686,7 +682,7 @@ async function lancarPiNoContainer() {
   let grupoDoPi = 0;
   let ambienteDoPiGravado = "";
   const fim = condutor.acompanhar(id, () =>
-    condutor.iniciar({
+    iniciarProcessoDoTicket({
       execucao: { id, sessao: id, modo: "autonomo" },
       lancamento: lancamentoDeTeste(dir, id),
       cwd: dir,

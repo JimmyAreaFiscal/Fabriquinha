@@ -19,11 +19,11 @@ test("só se conduz o endereço de um ticket", async () => {
 });
 
 test("o limite informado nas deps é o que o agente recebe; sem ele vale o timeoutMin da configuração", async (t: TestContext) => {
-  const iniciar = condutor.iniciar.bind(condutor);
+  const lancarExecucao = condutor.lancarExecucao.bind(condutor);
   const limites: number[] = [];
-  t.mock.method(condutor, "iniciar", (pedido: Parameters<typeof iniciar>[0]) => {
+  t.mock.method(condutor, "lancarExecucao", (pedido: Parameters<typeof lancarExecucao>[0]) => {
     limites.push(pedido.limiteMin);
-    return iniciar(pedido);
+    return lancarExecucao(pedido);
   });
   let timeoutDaConfiguracao = 0;
   for (const limiteMin of [0.5, undefined]) {

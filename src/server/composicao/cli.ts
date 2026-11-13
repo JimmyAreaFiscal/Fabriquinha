@@ -5,10 +5,9 @@ import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "./banco_da_fabri
 import { type DepsDoCli } from "../cli/comando.ts";
 import { principal } from "../cli/cli.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
-import { PACOTE } from "../../modulos/sessoes/publico.ts";
-import { condutor } from "../../modulos/ciclo_de_vida/publico.ts";
+import { PACOTE } from "../../shared/infra/isolamento_do_ambiente.ts";
 import { lancarSolto } from "../../shared/infra/processo.ts";
-import { harnessDoServico, iniciarServico } from "./servico.ts";
+import { iniciarServico } from "./servico.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
 type ProcessoDoCli = Pick<DepsDoCli, "env" | "stdin" | "stdout" | "stderr" | "parada" | "sair">;
@@ -21,7 +20,6 @@ export const comandoDoNavegador = (plataforma: NodeJS.Platform): string =>
 /** Roda `fabriquinha <args>` no `processo` e devolve o código de saída (F7 §3.3). */
 export function executarFabriquinha(args: readonly string[], processo: ProcessoDoCli): Promise<number> {
   const raiz = raizPadrao(processo.env);
-  condutor.montarHarness(harnessDoServico);
   return principal(args, {
     ...processo,
     raiz,

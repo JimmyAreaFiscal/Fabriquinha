@@ -11,7 +11,6 @@ import { type Relogio, relogioDoSistema } from "../../../shared/nucleo/relogio.t
 import {
   type ResumoDaDemanda,
   carregarDemanda,
-  condutor,
   configuracao,
   type EstadoDaSessao,
   estadoEDesdeDaSessao,
@@ -31,16 +30,16 @@ import {
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   type Dialogo,
-  emMarkdown,
   type EventoDaSessao,
   type Execucao,
   type Mensagem,
   type Modelo,
   type ModoTrabalho,
+  montarSessoesDeAgente,
   type ResumoDaSessao,
-  resumoDaSessao,
-  resumosDasSessoesEmLote,
+  type Situacao,
 } from "../../../modulos/sessoes/publico.ts";
+import { emMarkdown } from "./markdown_da_conversa.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 
 /** A sessão do ticket da demanda com o estado calculado; `execucao` é o id (uuid) da última execução. */
@@ -92,26 +91,31 @@ export interface ChatDemanda {
   assinar(ouvinte: (evento: EventoDoChat) => void): () => void;
 }
 
+/** A sessão do ticket com o processo vivo dela neste serviço, se há um. */
+type SessaoDoTicketComSituacao = SessaoDoTicket & { viva?: Situacao };
+
 /** A sessão do resumo com o agregado da demanda dela e o ticket; recusa a sessão de ticket que não está no agregado. */
-export function sessaoDoTicketDoResumo(ag: ResumoDaDemanda, { execucoes, ...sessao }: ResumoDaSessao): SessaoDoTicket {
+export function sessaoDoTicketDoResumo(
+  ag: ResumoDaDemanda,
+  { execucoes, situacao, ...sessao }: ResumoDaSessao,
+): SessaoDoTicketComSituacao {
   const ticket = encontrado(
     ag.tickets.find((t) => t.ticket_id === sessao.ticket_id),
     `a sessão ${sessao.id} não existe`,
     "confira o endereço do chat",
   );
-  return { ag, ticket, sessao, execucoes };
+  return { ag, ticket, sessao, execucoes, ...(situacao && { viva: situacao }) };
 }
 
 /** A sessão `id` do ticket, com o agregado e as execuções dela; `undefined` se o id não é de uma sessão. */
-function lerSessaoDoTicket(banco: DatabaseSync, id: string): SessaoDoTicket | undefined {
-  const resumo = resumoDaSessao(banco, id);
+function lerSessaoDoTicket(banco: DatabaseSync, id: string): SessaoDoTicketComSituacao | undefined {
+  const [resumo] = montarSessoesDeAgente({ banco }).listar({ sessoes: [id] });
   return resumo && sessaoDoTicketDoResumo(carregarDemanda(banco, resumo.demanda_id), resumo);
 }
 
 /** O cabeçalho da sessão: o estado e a Pendência dela, pela situação viva do processo, e os endereços públicos. */
-export function montarCabecalhoDaSessao(c: SessaoDoTicket, relogio: Relogio): CabecalhoDaSessao {
-  const { ag, ticket, sessao, execucoes } = c;
-  const viva = condutor.situacao(sessao.id);
+export function montarCabecalhoDaSessao(c: SessaoDoTicketComSituacao, relogio: Relogio): CabecalhoDaSessao {
+  const { ag, ticket, sessao, execucoes, viva } = c;
   const estadoEDesde = estadoEDesdeDaSessao(c, viva);
   const [estado, desde] = estadoEDesde;
   const pendencia = pendenciaDaSessao(c, viva, estadoEDesde, relogio);
@@ -147,13 +151,11 @@ export function montarCabecalhoDaSessao(c: SessaoDoTicket, relogio: Relogio): Ca
 
 /** As sessões da demanda paradas no diálogo ou na conversa: o que `pendenciasDaDemanda` pede dos trabalhos vivos. */
 function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: ResumoDaDemanda) {
-  return resumosDasSessoesEmLote(banco, [ag.demanda.id])
+  return montarSessoesDeAgente({ banco })
+    .listar({ demandas: [ag.demanda.id] })
     .map((resumo) => sessaoDoTicketDoResumo(ag, resumo))
     .filter((c) => c.execucoes.length > 0)
-    .flatMap((c) => {
-      const viva = condutor.situacao(c.sessao.id);
-      return trabalhoVivoDaSessao(c, viva, estadoEDesdeDaSessao(c, viva)) ?? [];
-    });
+    .flatMap((c) => trabalhoVivoDaSessao(c, c.viva, estadoEDesdeDaSessao(c, c.viva)) ?? []);
 }
 
 /** As Pendências da demanda, as mesmas do Início, para o chat mostrar o que a demanda espera do Auditor. */
@@ -195,18 +197,19 @@ export function abrirChatDemanda(
   const c = lerSessaoDoTicket(banco, id);
   if (!c) return undefined;
   const raiz = raizDo(banco);
+  const sessoes = montarSessoesDeAgente({ banco });
   const marcar = marcadorDaConversa(raiz, c);
   // Cada evento relê a sessão, que já existia ao abrir o chat.
   const relida = () =>
     encontrado(lerSessaoDoTicket(banco, id), `a sessão ${id} não existe`, "confira o endereço do chat");
   return {
     cabecalho: montarCabecalho(banco, gestaoDeDemandas, c, relogio),
-    conversa: condutor.lerConversa(raiz, id).map((e) => ({
+    conversa: sessoes.conversa(id).map((e) => ({
       ...(e as EntradaDemanda),
       ...marcar((e as EntradaDemanda).message),
     })),
     assinar: (ouvinte) =>
-      condutor.assinar(id, (evento) => {
+      sessoes.assinar(id, (evento) => {
         if (evento.type === "estado")
           ouvinte({ type: "estado", ...montarCabecalho(banco, gestaoDeDemandas, relida(), relogio) });
         else if (evento.type === "message_end") {
@@ -226,10 +229,12 @@ export function exportarHistoricoDemanda(
   const raiz = raizDo(banco);
   const { ag, ticket } = c;
   const enderecoDoTicket = formatarTicketRef(ticket);
-  const mensagens = condutor.lerConversa(raiz, id).flatMap((entrada) => {
-    const { type, message } = entrada as { type?: string; message?: Mensagem };
-    return type === "message" && message ? [message] : [];
-  });
+  const mensagens = montarSessoesDeAgente({ banco })
+    .conversa(id)
+    .flatMap((entrada) => {
+      const { type, message } = entrada as { type?: string; message?: Mensagem };
+      return type === "message" && message ? [message] : [];
+    });
   const modelos = new Set(
     mensagens.filter((m) => m.role === "assistant").map((m) => `${String(m.provider)}/${String(m.model)}`),
   );

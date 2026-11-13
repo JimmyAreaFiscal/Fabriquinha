@@ -20,12 +20,11 @@ import {
   situacaoDasDemandas,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
-import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
 import type { GestaoDeDemandas, Projeto } from "../../../modulos/demandas/publico.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
-import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { sessaoDeCadaTicketDasDemandas, sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
-import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
+import { pendenciasDasDemandas, situacoesDoBanco, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
 export const ORIENTACAO_PROJETO_INEXISTENTE = "escolha um projeto cadastrado na Configuração";
 
@@ -128,7 +127,7 @@ export function consultarProjeto(
   nome: string,
   filtro: FiltroDoProjeto,
   relogio: Relogio,
-  situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
+  situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): ListaDoProjeto {
   const projeto = gestaoDeDemandas.projeto(nome, ORIENTACAO_PROJETO_INEXISTENTE);
   return lerEmSnapshot(banco, () => {

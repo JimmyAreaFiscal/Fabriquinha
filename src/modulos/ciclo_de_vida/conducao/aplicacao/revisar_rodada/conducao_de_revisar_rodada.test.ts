@@ -15,7 +15,8 @@ import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts"
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
-import { CondutorDeTrabalhos, condutor } from "../politica_dos_agentes/condutor.ts";
+import { MotorDasSessoes } from "../../../../sessoes/publico.ts";
+import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
@@ -23,7 +24,7 @@ type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
-const conducao = (banco: Banco, condutorDeTeste: CondutorDeTrabalhos = condutor) =>
+const conducao = (banco: Banco, condutorDeTeste: MotorDasSessoes = condutor) =>
   new ConducaoDeRevisarRodada({ banco, relogio: RELOGIO, condutor: condutorDeTeste, registro: anotar });
 
 const estado = (banco: Banco) => {
@@ -97,7 +98,7 @@ test("preparação que lança falha o ticket sem rodar o pi e vai ao log", async
 test("preparação interrompida pela parada do serviço falha como serviço reiniciado", async () => {
   const { banco } = await cenarioRevisao();
   banco.exec("DELETE FROM linguagem_projeto");
-  const emParada = new CondutorDeTrabalhos();
+  const emParada = new MotorDasSessoes();
   emParada.marcarParada();
   await conducao(banco, emParada).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "serviço reiniciado");

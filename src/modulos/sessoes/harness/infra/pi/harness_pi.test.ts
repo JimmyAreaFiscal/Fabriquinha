@@ -18,7 +18,7 @@ import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { HarnessPi, divisorJsonl } from "./harness_pi.ts";
-import { PACOTE } from "./pi.ts";
+import { PACOTE } from "../../../../../shared/infra/isolamento_do_ambiente.ts";
 
 const harness = new HarnessPi();
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-harness-pi-")));

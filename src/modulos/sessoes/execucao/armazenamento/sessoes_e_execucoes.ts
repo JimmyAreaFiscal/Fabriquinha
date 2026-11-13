@@ -259,53 +259,40 @@ export const contextoDaSessao = (banco: DatabaseSync, sessao: IdDaSessao): Conte
 /** A sessão sem a conversa: o registro e as execuções dela. */
 export type ResumoDaSessao = Sessao & { execucoes: Execucao[] };
 
-/** O resumo da sessão, lido só do banco (regra 8: sem carregar a conversa), ou `undefined` se o id não é de uma sessão. */
-export function resumoDaSessao(banco: DatabaseSync, sessao: IdDaSessao): ResumoDaSessao | undefined {
-  const registro = banco.prepare("SELECT * FROM trabalho_agentico WHERE id = ?").get(sessao);
-  if (!registro) return undefined;
-  const execucoes = banco
-    .prepare("SELECT * FROM processo_do_trabalho WHERE trabalho_id = ? ORDER BY rowid")
-    .all(sessao);
-  return { ...Sessao.parse(registro), execucoes: z.array(Execucao).parse(execucoes.map(execucaoDaLinha)) };
+/** Quais sessões ler: as de `sessoes`, as das `demandas`, só as que têm execução aberta; os filtros se somam, e sem nenhum vêm todas. */
+export interface FiltroDeSessoes {
+  sessoes?: readonly IdDaSessao[];
+  demandas?: readonly string[];
+  abertas?: true;
 }
 
 /**
- * O resumo de cada sessão das demandas `demandas`, ou de todas sem `demandas`, na ordem em que foram criadas, sem carregar a
- * conversa (regra 8): numa leitura das sessões e outra das execuções, sem uma por sessão.
+ * O resumo de cada sessão do filtro, na ordem em que foram criadas, sem carregar a conversa (regra 8): numa leitura das
+ * sessões e outra das execuções, sem uma por sessão. Só os filtros pedidos entram no SQL.
  */
-export function resumosDasSessoesEmLote(banco: DatabaseSync, demandas?: readonly string[]): ResumoDaSessao[] {
-  const filtro = { demandas: demandas === undefined ? null : JSON.stringify(demandas) };
-  const DAS_DEMANDAS = "$demandas IS NULL OR demanda_id IN (SELECT value FROM json_each($demandas))";
+export function resumosDasSessoesEmLote(banco: DatabaseSync, filtro: FiltroDeSessoes = {}): ResumoDaSessao[] {
+  const condicoes = [
+    ...(filtro.sessoes === undefined ? [] : ["id IN (SELECT value FROM json_each($sessoes))"]),
+    ...(filtro.demandas === undefined ? [] : ["demanda_id IN (SELECT value FROM json_each($demandas))"]),
+    ...(filtro.abertas === undefined ? [] : ["id IN (SELECT trabalho_id FROM processo_do_trabalho WHERE fim IS NULL)"]),
+  ];
+  const parametros = {
+    ...(filtro.sessoes !== undefined && { sessoes: JSON.stringify(filtro.sessoes) }),
+    ...(filtro.demandas !== undefined && { demandas: JSON.stringify(filtro.demandas) }),
+  };
+  const DO_FILTRO = condicoes.length === 0 ? "1" : condicoes.join(" AND ");
   const sessoes = z
     .array(Sessao)
-    .parse(banco.prepare(`SELECT * FROM trabalho_agentico WHERE ${DAS_DEMANDAS} ORDER BY rowid`).all(filtro));
-  const execucoes = banco
-    .prepare(
-      `SELECT * FROM processo_do_trabalho
-        WHERE trabalho_id IN (SELECT id FROM trabalho_agentico WHERE ${DAS_DEMANDAS}) ORDER BY rowid`,
-    )
-    .all(filtro);
+    .parse(
+      instrucaoPreparada(banco, `SELECT * FROM trabalho_agentico WHERE ${DO_FILTRO} ORDER BY rowid`).all(parametros),
+    );
+  const execucoes = instrucaoPreparada(
+    banco,
+    `SELECT * FROM processo_do_trabalho
+        WHERE trabalho_id IN (SELECT id FROM trabalho_agentico WHERE ${DO_FILTRO}) ORDER BY rowid`,
+  ).all(parametros);
   const execucoesDaSessao = Map.groupBy(z.array(Execucao).parse(execucoes.map(execucaoDaLinha)), (e) => e.trabalho_id);
   return sessoes.map((sessao) => ({ ...sessao, execucoes: execucoesDaSessao.get(sessao.id) ?? [] }));
-}
-
-/** O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente. */
-export function sessaoDeCadaTicketDasDemandas(
-  banco: DatabaseSync,
-  ids: readonly string[],
-): Map<string, Map<number, IdDaSessao>> {
-  const linhas = banco
-    .prepare(
-      "SELECT demanda_id, ticket_id, id FROM trabalho_agentico WHERE demanda_id IN (SELECT value FROM json_each(?)) ORDER BY rowid",
-    )
-    .all(JSON.stringify(ids));
-  // shortcut: filtra as linhas por demanda (ids × linhas), agrupar num passe só se passar de milhares de sessões.
-  return new Map(
-    ids.map((id) => [
-      id,
-      new Map(linhas.filter((l) => l.demanda_id === id).map((l) => [Number(l.ticket_id), String(l.id)])),
-    ]),
-  );
 }
 
 /**

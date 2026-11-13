@@ -24,7 +24,7 @@ import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../espaco_de_trabalho/publico.ts";
 import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
-import { execucoesEmLote, resumoDaSessao, resumosDasSessoesEmLote } from "../armazenamento/sessoes_e_execucoes.ts";
+import { execucoesEmLote, resumosDasSessoesEmLote } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type Execucao, type Sessao } from "../nucleo/sessao.ts";
 import { comSessoesDoContexto, usoEmLote } from "./sessoes_do_contexto.ts";
 
@@ -117,14 +117,20 @@ test("as execuções em lote vêm com o contexto e a duração, na ordem do iní
   assert.deepEqual(execucoesEmLote(banco, { demandas: [] }), []);
 });
 
-test("o resumo da sessão traz a sessão e as execuções dela, sem a conversa; id desconhecido volta sem resumo", () => {
+test("os resumos em lote filtram pelas sessões e pelas que têm execução aberta; id desconhecido não traz resumo", () => {
   const banco = bancoComDuasSessoes();
-  const resumo = resumoDaSessao(banco, "s1");
+  const [resumo] = resumosDasSessoesEmLote(banco, { sessoes: ["s1"] });
   assert.deepEqual(
     { ...resumo, execucoes: resumo?.execucoes.map(({ id }) => id) },
     { ...sessao("s1", 1), execucoes: ["e1", "e2"] },
   );
-  assert.equal(resumoDaSessao(banco, "desconhecida"), undefined);
+  assert.deepEqual(resumosDasSessoesEmLote(banco, { sessoes: ["desconhecida"] }), []);
+  assert.deepEqual(resumosDasSessoesEmLote(banco, { abertas: true }), []);
+  banco.exec("UPDATE processo_do_trabalho SET fim = NULL WHERE id = 'e3'");
+  const abertas = (filtro: Parameters<typeof resumosDasSessoesEmLote>[1]) =>
+    resumosDasSessoesEmLote(banco, filtro).map(({ id }) => id);
+  assert.deepEqual(abertas({ abertas: true }), ["s2"]);
+  assert.deepEqual(abertas({ abertas: true, sessoes: ["s1"] }), []);
 });
 
 test("os resumos em lote trazem as sessões das demandas pedidas, ou de todas, cada uma com as execuções dela", () => {
@@ -134,7 +140,10 @@ test("os resumos em lote trazem as sessões das demandas pedidas, ou de todas, c
     sessoes: [...estado.sessoes, sessao("s3", 2)],
   }));
   const execucoesDeCadaSessao = (demandas?: readonly string[]) =>
-    resumosDasSessoesEmLote(banco, demandas).map(({ id, execucoes }) => [id, execucoes.map((e) => e.id)]);
+    resumosDasSessoesEmLote(banco, demandas === undefined ? {} : { demandas }).map(({ id, execucoes }) => [
+      id,
+      execucoes.map((e) => e.id),
+    ]);
   const todas = [
     ["s1", ["e1", "e2"]],
     ["s2", ["e3"]],
@@ -143,5 +152,8 @@ test("os resumos em lote trazem as sessões das demandas pedidas, ou de todas, c
   assert.deepEqual(execucoesDeCadaSessao(), todas);
   assert.deepEqual(execucoesDeCadaSessao(["I-1"]), todas);
   assert.deepEqual(execucoesDeCadaSessao(["I-2"]), []);
-  assert.deepEqual(resumosDasSessoesEmLote(banco, ["I-1"])[0], resumoDaSessao(banco, "s1"));
+  assert.deepEqual(
+    resumosDasSessoesEmLote(banco, { demandas: ["I-1"] })[0],
+    resumosDasSessoesEmLote(banco, { sessoes: ["s1"] })[0],
+  );
 });

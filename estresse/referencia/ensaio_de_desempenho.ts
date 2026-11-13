@@ -17,8 +17,6 @@ import { mesDoInstante, relogioDoSistema } from "../../src/shared/nucleo/relogio
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
-import { harnessDoServico } from "../../src/server/composicao/servico.ts";
-import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { cronometrar } from "../grupos/http_leitura.ts";
 import { medir } from "../medir.ts";
 import { contarExecucoesSql } from "./contador_de_execucoes_sql.ts";
@@ -110,8 +108,6 @@ async function medirVolume(volume: (typeof VOLUMES_SINTETICOS)[number]): Promise
   }
 }
 
-// O harness do serviço, como na subida dele: o chat acha a conversa da sessão pelo harness.
-condutor.montarHarness(harnessDoServico);
 const arquivoDoRelatorio = resolve(process.argv[2] ?? join(import.meta.dirname, "referencia.md"));
 const medicoesPorVolume: MedicoesDoVolume[] = [];
 for (const volume of VOLUMES_SINTETICOS) medicoesPorVolume.push(await medirVolume(volume));

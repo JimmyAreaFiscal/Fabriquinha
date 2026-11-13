@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { pastasDoProcesso } from "./pastas_do_processo.ts";
+import { pastasDoProcesso } from "./pastas_da_execucao.ts";
 
 const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-registro-"));
 after(() => {

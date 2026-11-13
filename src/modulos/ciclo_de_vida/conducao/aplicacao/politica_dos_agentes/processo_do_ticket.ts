@@ -4,10 +4,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { CATALOGO_DE_ETAPAS, type FalhaDaTentativa, falhaPorServicoReiniciado } from "../../../etapas/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
-import { encerrarExecucaoOrfa, execucoesAbertas, type Harness, type Sessao } from "../../../../sessoes/publico.ts";
+import { encerrarExecucaoOrfa, type Harness, pastasDoProcesso, type Sessao } from "../../../../sessoes/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { ticketsEmExecucaoDasEtapas } from "../../../planejamento/publico.ts";
-import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 
 export type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
 
@@ -29,7 +28,7 @@ const ETAPAS_FECHADAS_DEPOIS_DA_EXECUCAO = {
     .map(({ nome }) => nome),
 };
 
-/** Avisa quem assina a sessão que o estado dela pode ter mudado (`CondutorDeTrabalhos.avisar`). */
+/** Avisa quem assina a sessão que o estado dela pode ter mudado (`condutor.avisar`). */
 type AvisarSessao = (sessao: string, log: string) => void;
 
 /** Falha o ticket que ficou sem processo, sem tocar etapa nem gate: é do motor do SDLC, que quem chama entrega. */
@@ -60,18 +59,12 @@ export function encerrarProcessoOrfao(
   avisar(sessao, log);
 }
 
-/** Reinício do serviço (§4.2): todo processo aberto é de uma instância anterior e falha, sem avançar etapa nem gate. */
-export function recuperarProcessosAbertos(
+/** Reinício do serviço (§4.2), depois de Sessões encerrar as execuções abertas: o ticket preso sem processo falha. */
+export function falharTicketsPresosNaSubida(
   banco: DatabaseSync,
-  avisar: AvisarSessao,
-  harness: LeitorDeUso,
   falharTicket: FalharTicketSemProcesso,
   relogio: Relogio = relogioDoSistema,
 ): void {
-  for (const { id, demanda_id, ticket_id } of execucoesAbertas(banco)) {
-    const ref = { demanda_id, ticket_id };
-    encerrarProcessoOrfao(banco, ref, id, falhaPorServicoReiniciado, avisar, harness, falharTicket, relogio);
-  }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
   const presos = ticketsEmExecucaoDasEtapas(banco, ETAPAS_FECHADAS_DEPOIS_DA_EXECUCAO);

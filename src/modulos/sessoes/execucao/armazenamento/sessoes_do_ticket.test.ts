@@ -11,7 +11,6 @@ import {
   gravarTokenDaExecucao,
   execucoesAbertas,
   execucaoVivaDoToken,
-  sessaoDeCadaTicketDasDemandas,
   contextoDaSessao,
 } from "./sessoes_e_execucoes.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
@@ -231,27 +230,6 @@ test("o ticket dono do trabalho; id desconhecido volta sem ticket", () => {
   gravar(b, [sessao("s2", 2)], [], [], noTicket2);
   assert.deepEqual({ ...contextoDaSessao(b, "s2") }, noTicket2);
   assert.equal(contextoDaSessao(b, "nao-existe"), undefined);
-});
-
-test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {
-  const b = banco();
-  b.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');
-    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
-      VALUES ('I-2', 1, 'implementar', 'aberto', ${T})`);
-  const nova = b.prepare(
-    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, 1, 'autonomo', 'c')",
-  );
-  nova.run("s-1", "I-1");
-  nova.run("s-2", "I-2");
-  assert.deepEqual(
-    sessaoDeCadaTicketDasDemandas(b, ["I-2", "I-1", "I-9"]),
-    new Map([
-      ["I-2", new Map([[1, "s-2"]])],
-      ["I-1", new Map([[1, "s-1"]])],
-      ["I-9", new Map()],
-    ]),
-  );
 });
 
 test("o token resolve só o processo vivo dono dele; encerrado, de outro e desconhecido não resolvem", () => {

@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { montarGestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
-import { PACOTE } from "../../src/modulos/sessoes/publico.ts";
+import { PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";

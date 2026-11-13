@@ -27,7 +27,7 @@ import {
   TICKETS_DA_API_DO_AGENTE,
   tokenDoTicket,
 } from "../../apoio-testes/cenarios/cenario_da_api_do_agente.ts";
-import { HarnessPi } from "../../src/modulos/sessoes/publico.ts";
+import { HarnessPi } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const pastaVazia = mkdtempSync(join(tmpdir(), "fabriquinha-cliente-empacotado-"));
 after(() => {

@@ -44,7 +44,7 @@ function cenario(): { banco: DatabaseSync; raiz: string; fechar: () => void } {
       ('I-1', 1, 'implementar', 'aberto', 'agora'), ('I-2', 1, 'implementar', 'em_execucao', 'agora');
     INSERT INTO dependencia_demanda VALUES ('I-2', 'I-1');
     INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 'conversa');
-    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('execucao', 's1', 'agora', NULL, 0);
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('execucao', 's1', '2026-01-01T00:00:00.000Z', NULL, 0);
     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'a', 'Maria', 'd'), (2, 'b', 'João', 'd');
     INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'a', 't', 1, 'agora'), (2, 'b', 't', 1, 'agora');
     INSERT INTO tarefa_usuario VALUES (1, 1), (2, 2);
@@ -73,7 +73,7 @@ test("recusa enquanto um ticket do projeto executa e, sem execução, apaga tudo
   const recusa = { name: ErroDeRegra.name, message: /^o projeto a tem execução em andamento no I-1\.T1/ };
   await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
   banco.exec(
-    "UPDATE processo_do_trabalho SET fim = 'depois'; UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'",
+    "UPDATE processo_do_trabalho SET fim = '2026-01-01T00:01:00.000Z'; UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'",
   );
   await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
   banco.exec("UPDATE ticket_demanda SET estado = 'aberto' WHERE demanda_id = 'I-1'");

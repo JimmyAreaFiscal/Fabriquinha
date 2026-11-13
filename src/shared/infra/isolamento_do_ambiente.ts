@@ -2,6 +2,10 @@
 // código do agente no host tira daqui as credenciais do serviço, o Ambiente em container leva só as chaves do LLM, e o
 // Repositório e o Ambiente combinam a pasta das entradas de worktree da Fabriquinha.
 
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 /** Variáveis com credencial de hospedagem ou do SonarQube (F4 §6.1, F5 §5.0). */
 const CREDENCIAIS = new Set([
   "GH_TOKEN",
@@ -49,3 +53,9 @@ export function chavesDeProvedorDoLlm(env: NodeJS.ProcessEnv): Record<string, st
  * Fabriquinha é um link para cá. Uma worktree que o usuário criar fora da Fabriquinha fica fora do alcance dele.
  */
 export const PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA = "fabriquinha-worktrees";
+
+/** A raiz do pacote P1 `pi-fabriquinha`, versionado junto com a Fabriquinha (F4 §6.1): o Ambiente o monta para o harness. */
+export const PACOTE = fileURLToPath(new URL("../../../pacote-pi", import.meta.url));
+
+/** Onde o pi do Auditor guarda `auth.json` e `trust.json`: `$PI_CODING_AGENT_DIR` ou `~/.pi/agent`, como o próprio pi procura. */
+export const dirDoPiDoAuditor = (): string => process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");

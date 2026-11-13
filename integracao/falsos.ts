@@ -17,7 +17,7 @@ import {
 } from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { AmbienteContainer, ligarGestaoDeAmbientesNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { Projeto } from "../src/modulos/demandas/publico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/shared/infra/isolamento_do_ambiente.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";

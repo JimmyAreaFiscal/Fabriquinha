@@ -22,15 +22,14 @@ import {
   gravarConfiguracaoSdlc,
   registrarProjeto,
 } from "./cadastro.ts";
-import { HarnessPi, type Modelo } from "../../../sessoes/publico.ts";
 import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
-import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { conferirModeloNaLista, montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 
-/** O pi falso do teste responde a conferência, como o harness do serviço. */
-const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
-/** As conferências do formulário: o modelo no pi e o repositório, pelo Repositório montado sobre o `banco`. */
+/** As conferências do formulário: o modelo pelos modelos de Sessões (o pi falso) e o repositório, montados sobre o `banco`. */
 const conferenciasDo = (banco: DatabaseSync) => ({
-  conferirModeloNoHarness: conferirModeloNoPi,
+  conferirModeloNoHarness: (modelo: { provedor: string; nome: string }) =>
+    conferirModeloNaLista(montarSessoesDeAgente({ banco }).modelos(), modelo),
   repositorio: montarRepositorio({ banco }),
 });
 
@@ -341,7 +340,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
       INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
-      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 0);
       INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
       INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
       INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
@@ -469,7 +468,9 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
   assert.deepEqual(contagens(banco), antes);
   assert.equal(existsSync(pastaDe(raizDo(banco), execucaoDe(primeira, true))), true);
 
-  banco.prepare("UPDATE processo_do_trabalho SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
+  banco
+    .prepare("UPDATE processo_do_trabalho SET fim = '2026-01-01T00:00:00.000Z' WHERE id = ?")
+    .run(execucaoDe(primeira, true));
   banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
   await recusaAsync(
     () => removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo"),
@@ -604,7 +605,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
     INSERT INTO uso_declarado VALUES ('pi', '${d}x', '${d}', '[]');
     INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
-    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 0);
     INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');

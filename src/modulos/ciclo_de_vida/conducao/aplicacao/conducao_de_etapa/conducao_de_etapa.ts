@@ -23,7 +23,7 @@ import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
-import type { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
+import type { MotorDasSessoes } from "../../../../sessoes/publico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
 import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
@@ -35,7 +35,7 @@ import { limitesDasSessoes } from "../limites_das_sessoes.ts";
 export interface DepsDaConducao {
   banco: DatabaseSync;
   relogio: Relogio;
-  condutor: CondutorDeTrabalhos;
+  condutor: MotorDasSessoes;
   registro: typeof anotar;
   /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` que a composição liga (limites_das_sessoes.ts). */
   limiteMin?: number;

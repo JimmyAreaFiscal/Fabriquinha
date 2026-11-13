@@ -12,9 +12,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { recuperacaoDaSubida } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
-import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
+import { recuperarAposReinicio } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
 
@@ -50,10 +48,9 @@ async function parar(servico: ChildProcess): Promise<void> {
  * ainda escreve na raiz enquanto ela é apagada.
  */
 async function matarPi(raiz: string): Promise<void> {
-  condutor.montarHarness(new HarnessPi());
   ligarGestaoDeAmbientesNosModulos();
   const banco = abrirBancoDaFabriquinha(raiz);
-  await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+  await recuperarAposReinicio(banco);
   banco.close();
 }
 
