@@ -1,6 +1,5 @@
 // Repositório do agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4): carrega e grava só a diferença.
 // Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
-import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/demanda/agregado_demanda.ts";
 import type { Ator } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
@@ -15,6 +14,11 @@ import {
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
 } from "../../compartilhado/armazenamento/configuracao_agente.ts";
+import {
+  gravarEvidenciasNovasEAlteradas,
+  gravarRetiradaDasEvidencias,
+  lerEvidenciasDaDemanda,
+} from "../../ciclo_de_vida/publico.ts";
 
 type Linha = Record<string, SQLInputValue>;
 
@@ -84,7 +88,8 @@ const rodadaDoTicket = (ag: AgregadoDemanda, ticketId: number) =>
 
 /**
  * Tabelas do agregado, dos pais para os filhos: insere e atualiza nessa ordem e apaga na inversa, porque as FKs
- * são RESTRICT. A evidência não tem `id` aqui: ele nasce no INSERT e a chave da diferença inclui o `em`.
+ * são RESTRICT. As evidências, filhas da rodada e do ticket, são do armazenamento das Evidências: saem antes e entram
+ * depois de todas estas.
  */
 const TABELAS: readonly Tabela[] = [
   {
@@ -212,20 +217,6 @@ const TABELAS: readonly Tabela[] = [
         motivo: d.motivo ?? null,
       })),
   },
-  {
-    nome: "evidencia_demanda",
-    chave: ["demanda_id", "rodada_id", "ticket_id", "tipo", "em"],
-    linhas: (ag) =>
-      ag.evidencias.map(({ autor, ...e }) => ({
-        ...e,
-        ...colunasDoAtor("autor", autor),
-        autor_ferramenta: autor.tipo === "externo" ? autor.ferramenta : null,
-        autor_sessao: autor.tipo === "externo" ? autor.sessao : null,
-        rodada_id: e.rodada_id ?? null,
-        ticket_id: e.ticket_id ?? null,
-        dados: JSON.stringify(e.dados),
-      })),
-  },
 ];
 
 /** Linhas da tabela no agregado, indexadas pelo JSON dos valores da chave, na ordem de `chave`. */
@@ -249,6 +240,7 @@ function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined
     velhas: porChave(tabela, antes),
     novas: porChave(tabela, depois),
   }));
+  gravarRetiradaDasEvidencias(banco, antes?.evidencias ?? [], depois.evidencias);
   for (const { nome, chave, velhas, novas } of comparacoes.toReversed()) {
     const sql = `DELETE FROM ${nome} WHERE ${atribuicoes(chave, " AND ", "IS", false)}`;
     for (const k of velhas.keys()) {
@@ -259,10 +251,9 @@ function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined
     for (const [k, linha] of novas) {
       const velha = velhas.get(k);
       if (!velha) {
-        const nova = nome === "evidencia_demanda" ? { id: randomUUID(), ...linha } : linha;
-        const colunas = Object.keys(nova);
+        const colunas = Object.keys(linha);
         const valores = colunas.map((c) => "$" + c).join(", ");
-        banco.prepare(`INSERT INTO ${nome} (${colunas.join(", ")}) VALUES (${valores})`).run(nova);
+        banco.prepare(`INSERT INTO ${nome} (${colunas.join(", ")}) VALUES (${valores})`).run(linha);
       } else if (JSON.stringify(velha) !== JSON.stringify(linha)) {
         const sets = atribuicoes(
           Object.keys(linha).filter((c) => !chave.includes(c)),
@@ -273,6 +264,7 @@ function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined
       }
     }
   }
+  gravarEvidenciasNovasEAlteradas(banco, antes?.evidencias ?? [], depois.evidencias);
 }
 
 function carregar(
@@ -339,10 +331,7 @@ function carregar(
         ),
       ),
     ),
-    evidencias: filhas("evidencia_demanda").map(({ id: _, dados, ...e }) => ({
-      ...semNulos(comAtor(e, "autor")),
-      dados: JSON.parse(dados as string) as unknown,
-    })),
+    evidencias: lerEvidenciasDaDemanda(id, preparar),
   });
 }
 

@@ -2,3 +2,4 @@
 // o vocabulário do SDLC, a configuração do agente e os tipos que validam a configuração do projeto (`EtapaTicket`,
 // `ConfiguracaoAgente`); os demais subdomínios entram aqui quando migrarem.
 export * from "./etapas/publico.ts";
+export * from "./evidencias/publico.ts";

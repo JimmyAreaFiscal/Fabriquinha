@@ -13,8 +13,16 @@ export const PASTAS_QUE_CITAM_NOME_DE_ETAPA = ["modulos/etapas/", "modulos/ciclo
 export const ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA: string[] = [];
 /** O único caso de uso que grava em `evidencia_demanda` (além do armazenamento): toda Evidência entra pela submissão. */
 export const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "modulos/sdlc/aplicacao/evidencias/submeter.ts";
-/** O armazenamento das Evidências, pelo fim do caminho (o `gravar*` dele só se importa de `submeter.ts`). */
+/**
+ * O armazenamento das Evidências, pelo fim do caminho, e as entradas que o exportam (a API de Evidências e a fachada):
+ * o `gravar*` dele só se importa de `submeter.ts` e do armazenamento do agregado, por qualquer um desses caminhos.
+ */
 export const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
+export const ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA = [
+  ARMAZENAMENTO_DE_EVIDENCIA,
+  "ciclo_de_vida/evidencias/publico.ts",
+  "ciclo_de_vida/publico.ts",
+];
 /** Os casos de uso do agente, os únicos que a API do agente alcança. */
 export const PASTA_DOS_CASOS_DE_USO_DO_AGENTE = "modulos/etapas/agente/";
 
@@ -39,10 +47,26 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
       import: "../../../compartilhado/nucleo/primitivos.ts (um domínio migrado não importa o código antigo)",
       ticket: "22",
     },
+    // O formato do `plano` é do Planejamento (o ticket 11 o move): Evidências o lê do caminho antigo até o ticket 22.
+    {
+      arquivo: "modulos/ciclo_de_vida/evidencias/nucleo/formatos.ts",
+      import: "../../../sdlc/nucleo/demanda/plano.ts (um domínio migrado não importa o código antigo)",
+      ticket: "22",
+    },
+    // A hospedagem do `pr_aberto` é do Repositório: o ticket 22 a importa pela fachada dele.
+    {
+      arquivo: "modulos/ciclo_de_vida/evidencias/nucleo/formatos.ts",
+      import: "../../../repositorio/nucleo/repositorio_do_projeto.ts (um domínio migrado não importa o código antigo)",
+      ticket: "22",
+    },
   ],
   // O compartilhado reexporta o vocabulário e a configuração do agente da fachada, e a configuração do agente lê dele
   // `Modelo` e `Effort`: os dois somem no ticket 22.
-  dependenciasToleradas: [{ de: "modulos/compartilhado", para: "modulos/ciclo_de_vida", removidaEm: "22" }],
+  // Evidências lê o formato do plano do sdlc, que importa a fachada (ver as exceções): some no ticket 22.
+  dependenciasToleradas: [
+    { de: "modulos/compartilhado", para: "modulos/ciclo_de_vida", removidaEm: "22" },
+    { de: "modulos/ciclo_de_vida", para: "modulos/sdlc", removidaEm: "22" },
+  ],
   // O sonar-scanner fala com o host.
   processoDoHost: {
     pastasLiberadas: [],

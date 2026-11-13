@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { comEvidencia } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { type Ator, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { pendentesDeEnvio } from "./evidencia_demanda.ts";

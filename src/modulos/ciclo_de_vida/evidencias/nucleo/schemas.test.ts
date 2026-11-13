@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
-import type { AgregadoDemanda } from "../demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../sdlc/nucleo/demanda/agregado_demanda.ts";
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { schemaDoTipo } from "./evidencia.ts";
+import { schemaDoTipo } from "./formatos.ts";
 import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
-import { CustosRealizados, type EsquemaDeEvidencia, simbolosDe } from "./schemas.ts";
+import { CustosRealizados, daUltimaConcluida, type EsquemaDeEvidencia, simbolosDe } from "./schemas.ts";
 
 /** O que `fabriquinha evidencia schema <tipo>` publica: o JSON Schema de `dados` e as regras de arquivo. */
 const publicado = ({ dados, arquivos }: EsquemaDeEvidencia) => ({
@@ -501,6 +501,19 @@ test("mensagem_pr, regras cruzadas: naoPrevistos são os da última revisão; re
     "mensagem_pr não tem reversao, e o impacto do desenho aprovado é medio (descreva em reversao como desfazer a mudança)",
   );
   cruzar(encerrando("alto", ["metrica.ts"]), { ...MENSAGEM, reversao: "reverter o merge" })();
+});
+
+test("daUltimaConcluida: a evidência do ticket concluído de maior id da etapa, em qualquer ordem", () => {
+  const ag = {
+    tickets: [
+      { ticket_id: 7, etapa: "revisar_rodada", estado: "concluido" },
+      { ticket_id: 5, etapa: "revisar_rodada", estado: "concluido" },
+      { ticket_id: 9, etapa: "revisar_rodada", estado: "falhou" },
+    ],
+    evidencias: [5, 7, 9].map((ticket_id) => ({ ticket_id, tipo: "arquivos_alterados", dados: { ticket_id } })),
+  } as unknown as AgregadoDemanda;
+  assert.deepEqual(daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados")?.dados, { ticket_id: 7 });
+  assert.equal(daUltimaConcluida(ag, "implementar", "arquivos_alterados"), undefined);
 });
 
 test("video_demonstracao: o roteiro e exatamente um vídeo", () => {
