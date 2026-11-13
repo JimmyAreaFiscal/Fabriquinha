@@ -20,7 +20,7 @@ import { relogioDoSistema, relogioFixo } from "../../../compartilhado/nucleo/rel
 import { pastasDoAmbiente } from "../../infra/container/pastas_do_ambiente.ts";
 import { GeradorDeAmbientes } from "../../infra/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
-import { PACOTE } from "../../../harness/pi/pi.ts";
+import { PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao_do_ambiente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));

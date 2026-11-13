@@ -16,7 +16,7 @@ import { montarConjuntoDoServico } from "../ambiente_do_servico.ts";
 import { ConjuntoDeAmbientes } from "./conjunto.ts";
 import { relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
 import { eliminarAmbienteDoConjunto, listarAmbientesDoConjunto } from "./conjunto_da_configuracao.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../configuracao_do_ambiente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-configuracao-"));

@@ -38,11 +38,11 @@ import {
   condutor,
   type CondutorDeTrabalhos,
   type Dialogo,
+  type EventoDaSessao,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
   type Situacao,
 } from "../../../trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import type { EventoDoAgente } from "../../../harness/harness.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
 type Estado = "rodando" | "aguardando_humano" | "terminada";
@@ -91,11 +91,14 @@ interface CabecalhoDemanda extends CabecalhoDaSessao {
 /** Uma entrada do JSONL; o prompt montado pela Fabriquinha vem com `fabriquinha`. */
 type EntradaDemanda = Record<string, unknown> & { fabriquinha?: true };
 
+/** Um evento ao vivo do chat: o da sessão, com o cabeçalho novo no `estado` (o `message_end` leva também a autoria). */
+type EventoDoChat = Exclude<EventoDaSessao, { type: "estado" }> | ({ type: "estado" } & CabecalhoDemanda);
+
 export interface ChatDemanda {
   cabecalho: CabecalhoDemanda;
   conversa: EntradaDemanda[];
   /** Os eventos ao vivo; `{ type: "estado", ...cabecalho }` traz o cabeçalho novo. Devolve a função que cancela. */
-  assinar(ouvinte: (evento: EventoDoAgente) => void): () => void;
+  assinar(ouvinte: (evento: EventoDoChat) => void): () => void;
 }
 
 /** @testes tipo que o teste usa para montar a entrada */

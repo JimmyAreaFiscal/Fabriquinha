@@ -11,9 +11,8 @@ import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { abrir } from "../../modulos/compartilhado/armazenamento/banco.ts";
-import { garantirPacoteDoAgente } from "../../modulos/harness/pi/pacote_do_agente.ts";
-import { HarnessPi } from "../../modulos/harness/pi/harness_pi.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../modulos/harness/pi/pi.ts";
+import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
+import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
 import { projetosAVarrer } from "../../modulos/repositorio/armazenamento/commits_humanos.ts";
 import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.ts";

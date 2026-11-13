@@ -4,7 +4,7 @@ import { abrir as abrirBanco, raizPadrao } from "../../modulos/compartilhado/arm
 import { type DepsDoCli } from "../cli/comando.ts";
 import { principal } from "../cli/cli.ts";
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
-import { PACOTE } from "../../modulos/harness/pi/pi.ts";
+import { PACOTE } from "../../modulos/sessoes/publico.ts";
 import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { lancarSolto } from "../../modulos/compartilhado/infra/processo.ts";
 import { harnessDoServico, iniciarServico } from "./servico.ts";

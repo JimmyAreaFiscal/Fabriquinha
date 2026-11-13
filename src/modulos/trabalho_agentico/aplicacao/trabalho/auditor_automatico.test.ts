@@ -8,7 +8,7 @@ import { migrar } from "../../../compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../../../compartilhado/armazenamento/migracoes/migracoes.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import type { executar } from "../../../compartilhado/infra/processo.ts";
-import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import { HarnessPi } from "../../../sessoes/publico.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./condutor.ts";
 

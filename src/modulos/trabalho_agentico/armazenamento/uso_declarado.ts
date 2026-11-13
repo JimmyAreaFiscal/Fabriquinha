@@ -1,7 +1,7 @@
 // O Uso declarado (D10): o consumo de uma sessão de ferramenta externa, informado pelo produtor, uma linha por
 // (ferramenta, sessao). A sessão repetida em outra demanda é contada uma vez só, na demanda que a informou primeiro.
 import type { DatabaseSync } from "node:sqlite";
-import type { LinhaDeUso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { LinhaDeUso } from "../../sessoes/publico.ts";
 
 export interface UsoDeclarado {
   ferramenta: string;

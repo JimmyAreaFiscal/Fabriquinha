@@ -19,9 +19,11 @@ import type {
   EventoDoAgente,
   Harness,
   LancamentoDoTicket,
+  MensagemDoAgente,
+  PedidoDeExtensao,
   ProcessoDoAgente,
   RespostaDaConsulta,
-} from "../../../harness/harness.ts";
+} from "../../../sessoes/publico.ts";
 import type { Ambiente, IdentificadorDoProcesso } from "../../../sandbox/infra/ambiente.ts";
 import { anotar, noLog } from "../../../compartilhado/infra/registro.ts";
 import { ambienteDoServico, conjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
@@ -70,8 +72,21 @@ export interface RespostaAutomatica extends RespostaDoAuditorAutomatico {
 }
 export const PREFIXO_DA_RESPOSTA_AUTOMATICA = "resposta automática ";
 
-/** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
-export type Dialogo = EventoDoAgente & { em: string; expiraEm?: string };
+/**
+ * Um diálogo de extensão pendente: o pedido do agente, quando chegou e, se o agente o resolve sozinho, quando expira. O
+ * select aberto pela `perguntar` traz também o que o chat mostra dela (`daPergunta`).
+ */
+export type Dialogo = PedidoDeExtensao & {
+  em: string;
+  expiraEm?: string;
+  pergunta?: true;
+  multiSelect?: boolean;
+  descricoes?: (string | undefined)[];
+};
+
+/** O que quem assina a sessão recebe: os eventos do agente, a mudança de estado e a resposta do Auditor automático. */
+export type EventoDaSessao =
+  EventoDoAgente | { type: "estado" } | ({ type: "resposta_automatica" } & RespostaAutomatica);
 
 /** O que o estado da sessão (F4 §5.2) lê de um processo vivo. */
 export interface Situacao {
@@ -84,13 +99,6 @@ export interface Situacao {
   dialogos: Dialogo[];
   /** O que o agente está fazendo, pelo último evento que o diz (`atividadeDo`). */
   atividade?: string;
-}
-
-/** A parte de uma mensagem do pi que decide o sucesso (F4 §6.2, passo 5). */
-interface Mensagem {
-  role?: string;
-  stopReason?: string;
-  errorMessage?: string;
 }
 
 interface Viva extends Omit<Situacao, "dialogos"> {
@@ -121,13 +129,12 @@ const linha = (texto: string): string => (texto.length > 100 ? `${texto.slice(0,
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function atividadeDo(evento: EventoDoAgente): string | undefined {
   if (evento.type === "tool_execution_start") {
-    const args = (evento.args ?? {}) as Record<string, unknown>;
-    const alvo = [args.command, args.path].find((x) => typeof x === "string");
-    return linha([String(evento.toolName), alvo].filter(Boolean).join(" "));
+    const alvo = [evento.args.command, evento.args.path].find((x) => typeof x === "string");
+    return linha([evento.toolName, alvo].filter(Boolean).join(" "));
   }
-  const m = evento.type === "message_end" ? (evento.message as { role?: string; content?: unknown } | null) : null;
+  const m = evento.type === "message_end" ? evento.message : undefined;
   if (m?.role !== "assistant" || !Array.isArray(m.content)) return undefined;
-  const texto = (m.content as { type?: string; text?: string }[])
+  const texto = m.content
     .filter((b) => b.type === "text")
     .map((b) => String(b.text))
     .join("\n");
@@ -140,8 +147,8 @@ export function atividadeDo(evento: EventoDoAgente): string | undefined {
 
 /** O que o chat precisa saber do select aberto pela `perguntar` (a de `title` igual a `args.question`); `undefined` nos demais. */
 function daPergunta(
-  evento: EventoDoAgente,
-  emExecucao: Iterable<Record<string, unknown>>,
+  evento: PedidoDeExtensao,
+  emExecucao: Iterable<Readonly<Record<string, unknown>>>,
 ): Partial<Dialogo> | undefined {
   const args = [...emExecucao].find((a) => a.question === evento.title);
   if (!args) return undefined;
@@ -150,7 +157,7 @@ function daPergunta(
     pergunta: true,
     multiSelect: Boolean(args.multiSelect),
     descricoes: opcoes.map((o) => o.description),
-    message: args.details,
+    message: args.details as string | undefined,
   };
 }
 
@@ -196,7 +203,7 @@ export interface RecuperacaoDaSubida {
 export class CondutorDeTrabalhos {
   #harness: Harness | undefined;
   private readonly vivas = new Map<Id | string, Viva>();
-  private readonly ouvintes = new Map<string, Set<(evento: EventoDoAgente) => void>>();
+  private readonly ouvintes = new Map<string, Set<(evento: EventoDaSessao) => void>>();
   /** Os processos de ticket com condutor vivo, por id, com o grupo do pi e o Ambiente que o lançou, depois de lançado. */
   private readonly ativas = new Map<
     string,
@@ -261,7 +268,7 @@ export class CondutorDeTrabalhos {
    * Quem assina recebe antes o que o retrato do JSONL pode ainda não ter: as mensagens terminadas ainda sem gravação
    * garantida e os eventos da mensagem em andamento até ali.
    */
-  assinar(sessao: string, ouvinte: (evento: EventoDoAgente) => void): () => void {
+  assinar(sessao: string, ouvinte: (evento: EventoDaSessao) => void): () => void {
     const lista = this.ouvintes.get(sessao) ?? new Set();
     this.ouvintes.set(sessao, lista.add(ouvinte));
     const viva = this.vivaDaSessao(sessao);
@@ -273,12 +280,12 @@ export class CondutorDeTrabalhos {
   }
 
   /** Entrega o evento a cada ouvinte da sessão; o erro de um ouvinte vai para o `log` e não para o processo. */
-  private repassar(sessao: string, evento: EventoDoAgente, log: string): void {
+  private repassar(sessao: string, evento: EventoDaSessao, log: string): void {
     for (const ouvinte of this.ouvintes.get(sessao) ?? []) {
       try {
         ouvinte(evento);
       } catch (error_) {
-        anotar(log, `um ouvinte da sessão falhou com o evento ${String(evento.type)}: ${mensagem(error_)}`);
+        anotar(log, `um ouvinte da sessão falhou com o evento ${evento.type}: ${mensagem(error_)}`);
       }
     }
   }
@@ -467,8 +474,8 @@ export class CondutorDeTrabalhos {
       const pendentes = new Map<string, Dialogo>();
       const expiracoes = new Map<string, NodeJS.Timeout>();
       /** Os args das chamadas da `perguntar` em execução, por `toolCallId`: o select dela é a pergunta ao Auditor. */
-      const perguntas = new Map<string, Record<string, unknown>>();
-      let ultima: Mensagem = {};
+      const perguntas = new Map<string, Readonly<Record<string, unknown>>>();
+      let ultima: MensagemDoAgente = {};
       let restante = r.limiteMin * 60_000;
       let desde = 0;
       let temporizadorDoLimite: NodeJS.Timeout | undefined;
@@ -548,8 +555,8 @@ export class CondutorDeTrabalhos {
         estaViva.desde = relogio.agora();
       };
 
-      const aoRecusar = (evento: EventoDoAgente) => {
-        const recusa = `o pi recusou o comando ${String(evento.command)}: ${String(evento.error)}`;
+      const aoRecusar = (evento: Extract<EventoDoAgente, { type: "response" }>) => {
+        const recusa = `o pi recusou o comando ${evento.command}: ${String(evento.error)}`;
         if (autonoma) {
           fim(falhaQueExigeOAuditor(recusa));
           return;
@@ -567,7 +574,7 @@ export class CondutorDeTrabalhos {
         triagem: NonNullable<PedidoDeProcesso["triarPergunta"]>,
         dialogo: string,
         chamada: string,
-        args: Record<string, unknown>,
+        args: Readonly<Record<string, unknown>>,
       ) => {
         const opcoesComRotulo = ((args.options ?? []) as { label: string; description?: string }[])
           .map((o) => ({ rotulo: o.label.trim(), descricao: o.description?.trim() ?? "" }))
@@ -597,8 +604,8 @@ export class CondutorDeTrabalhos {
           value: args.multiSelect ? JSON.stringify([decisao.resposta]) : decisao.resposta,
         });
       };
-      const aoDialogo = (evento: EventoDoAgente) => {
-        const dialogo = String(evento.id);
+      const aoDialogo = (evento: PedidoDeExtensao) => {
+        const dialogo = evento.id;
         const em = relogio.agora();
         // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
         const timeout = typeof evento.timeout === "number" ? evento.timeout : undefined;
@@ -666,13 +673,13 @@ export class CondutorDeTrabalhos {
               estaViva.eventosDaMensagemEmEscrita.push(evento);
               break;
             case "response":
-              if (evento.success === false) aoRecusar(evento);
+              if (!evento.success) aoRecusar(evento);
               break;
             case "message_end": {
               estaViva.eventosDaMensagemEmEscrita = [];
               estaViva.naoGravadas.push(evento);
-              // `message` ausente ou nulo não derruba o ouvinte: vale como mensagem sem papel.
-              const mensagem = (evento.message ?? {}) as Mensagem;
+              // `message` ausente não derruba o ouvinte: vale como mensagem sem papel.
+              const mensagem = evento.message ?? {};
               if (mensagem.role === "assistant") {
                 ultima = mensagem;
                 agenteTerminou = true;
@@ -680,13 +687,12 @@ export class CondutorDeTrabalhos {
               break;
             }
             case "tool_execution_start":
-              ferramentasRodando.add(String(evento.toolCallId));
-              if (evento.toolName === "perguntar")
-                perguntas.set(String(evento.toolCallId), evento.args as Record<string, unknown>);
+              ferramentasRodando.add(evento.toolCallId);
+              if (evento.toolName === "perguntar") perguntas.set(evento.toolCallId, evento.args);
               break;
             case "tool_execution_end":
-              ferramentasRodando.delete(String(evento.toolCallId));
-              perguntas.delete(String(evento.toolCallId));
+              ferramentasRodando.delete(evento.toolCallId);
+              perguntas.delete(evento.toolCallId);
               // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
               this.avisar(sessao, r.log);
               break;
@@ -695,7 +701,7 @@ export class CondutorDeTrabalhos {
               mudou();
               break;
             case "extension_ui_request":
-              if (DIALOGOS.has(String(evento.method))) aoDialogo(evento);
+              if (DIALOGOS.has(evento.method)) aoDialogo(evento);
               break;
             case "agent_settled":
               aoAssentar();

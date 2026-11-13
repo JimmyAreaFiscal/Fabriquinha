@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
-import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
+import { instalarPiFalso } from "../../../../../../apoio-testes/pi_falso.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { HarnessPi } from "./harness_pi.ts";
 
 const harness = new HarnessPi();

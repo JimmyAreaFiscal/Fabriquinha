@@ -25,8 +25,14 @@ import {
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
 } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import type { Harness, LancamentoDoTicket } from "../../../harness/harness.ts";
-import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
+import {
+  dirDoPiDoAuditor,
+  type Harness,
+  HarnessPi,
+  type LancamentoDoTicket,
+  type MensagemDoAgente,
+  PACOTE,
+} from "../../../sessoes/publico.ts";
 import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import {
   atividadeDo,
@@ -35,7 +41,6 @@ import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type PedidoDeProcesso,
 } from "./condutor.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
 import { recuperacaoDaSubida } from "../../../../server/composicao/servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
@@ -249,7 +254,7 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
     return Promise.resolve({ resposta: "Sim", justificativa: "issue do Sonar se corrige" });
   });
   const noChat: Record<string, unknown>[] = [];
-  const desassinar = condutor.assinar(sessao, (evento) => noChat.push(evento));
+  const desassinar = condutor.assinar(sessao, (evento) => noChat.push({ ...evento }));
   assert.equal(await fim, undefined);
   desassinar();
   // I-266.T7: quem respondeu é o Agente da execução em curso, no log e no chat; a escalada não tem resposta
@@ -487,7 +492,7 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
     );
     await dormir(300);
     const recebidos: string[] = [];
-    const pararRetrato = condutor.assinar(execucao.sessao, (evento) => recebidos.push(String(evento.type)));
+    const pararRetrato = condutor.assinar(execucao.sessao, (evento) => recebidos.push(evento.type));
     assert.deepEqual(recebidos, encerrada ? ["message_end"] : ["message_start", "message_update"]);
     const pararFalho = condutor.assinar(execucao.sessao, (evento) => {
       if (evento.type === "response") throw new Error("ouvinte indisponível");
@@ -507,16 +512,17 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
 
 test("atividade: a ferramenta com o comando ou o caminho, a primeira linha do texto, cortada em 100 caracteres", () => {
   assert.equal(
-    atividadeDo({ type: "tool_execution_start", toolName: "read", args: { path: "src/a.ts" } }),
+    atividadeDo({ type: "tool_execution_start", toolCallId: "r1", toolName: "read", args: { path: "src/a.ts" } }),
     "read src/a.ts",
   );
-  assert.equal(atividadeDo({ type: "tool_execution_start", toolName: "ls" }), "ls");
+  assert.equal(atividadeDo({ type: "tool_execution_start", toolCallId: "l1", toolName: "ls", args: {} }), "ls");
   const longo = "x".repeat(120);
-  const fala = (content: unknown) => atividadeDo({ type: "message_end", message: { role: "assistant", content } });
+  const fala = (content: MensagemDoAgente["content"]) =>
+    atividadeDo({ type: "message_end", message: { role: "assistant", content } });
   assert.equal(fala([{ type: "text", text: `\n  ${longo}\noutra` }]), `${"x".repeat(99)}…`);
   assert.equal(fala("texto solto"), undefined);
   assert.equal(fala([{ type: "toolCall" }]), undefined);
-  assert.equal(atividadeDo({ type: "message_end", message: null }), undefined);
+  assert.equal(atividadeDo({ type: "message_end" }), undefined);
   assert.equal(atividadeDo({ type: "agent_start" }), undefined);
 });
 

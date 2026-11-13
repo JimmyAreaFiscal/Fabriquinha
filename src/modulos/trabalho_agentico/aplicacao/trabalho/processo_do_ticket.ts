@@ -14,7 +14,7 @@ import {
   type UsoModeloExecucao,
 } from "../../nucleo/trabalho_agentico.ts";
 import { type Relogio, relogioDoSistema } from "../../../compartilhado/nucleo/relogio.ts";
-import { colunasDoModelo, type LinhaDeUso } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import { colunasDoModelo, type Harness, type LinhaDeUso } from "../../../sessoes/publico.ts";
 import { raizDo } from "../../../compartilhado/armazenamento/banco.ts";
 import {
   carregarTrabalhosDoTicket,
@@ -23,7 +23,6 @@ import {
   ticketsEmExecucaoSemProcesso,
 } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, pastasDoProcesso } from "../../../compartilhado/infra/registro.ts";
-import type { Harness } from "../../../harness/harness.ts";
 
 export type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 

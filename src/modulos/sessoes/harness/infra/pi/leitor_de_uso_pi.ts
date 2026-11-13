@@ -1,7 +1,7 @@
 // Leitura do Uso de uma sessão do pi (F6 §3): soma, por provedor e modelo, as entradas da sessão que caem na janela
 // do Trabalho.
 
-import type { LinhaDeUso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { LinhaDeUso } from "../../nucleo/uso.ts";
 
 /** O `usage` das mensagens, compactações e resumos de ramo do pi. */
 interface Usage {

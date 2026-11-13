@@ -12,7 +12,7 @@ import type { Recorte } from "../nucleo/metrica.ts";
 import type { TipoMetrica } from "../../etapas/definicao/tipos_declaraveis.ts";
 import { intervalo, Periodo } from "../../compartilhado/nucleo/periodo.ts";
 import type { EtapaTicket } from "../../etapas/catalogo.ts";
-import { type LinhaDeUso, textoDoCustoDe, Uso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import { type LinhaDeUso, textoDoCustoDe, Uso } from "../../sessoes/publico.ts";
 import type { ValorDaMetrica, ValorDe } from "./calculo_de_metrica.ts";
 import type { MetricaDeConformidade } from "./metricas/metrica_de_conformidade.ts";
 import type { MetricaDeExigenciasDeAlteracao } from "./metricas/metrica_de_exigencias_de_alteracao.ts";

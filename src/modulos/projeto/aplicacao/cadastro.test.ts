@@ -23,7 +23,7 @@ import {
   registrarProjeto,
   removerProjeto,
 } from "./cadastro.ts";
-import { HarnessPi } from "../../harness/pi/harness_pi.ts";
+import { HarnessPi } from "../../sessoes/publico.ts";
 import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
 
 /** O pi falso do teste responde a conferência, como o harness do serviço. */

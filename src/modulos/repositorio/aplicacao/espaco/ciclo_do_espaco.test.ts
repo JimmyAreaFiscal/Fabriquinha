@@ -24,7 +24,7 @@ import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_ho
 import { AmbienteContainer } from "../../../sandbox/infra/container/ambiente_container.ts";
 import { naFilaDoProjeto } from "../../infra/worktree/worktree.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));

@@ -2,7 +2,7 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { Recorte as RecorteDaMetrica } from "../nucleo/metrica.ts";
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../sdlc/nucleo/demanda/plano.ts";
-import type { LinhaDeUso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { LinhaDeUso } from "../../sessoes/publico.ts";
 
 export const demandaExiste = (banco: DatabaseSync, demandaId: string): boolean =>
   banco.prepare("SELECT 1 FROM demanda WHERE id = ?").get(demandaId) !== undefined;
