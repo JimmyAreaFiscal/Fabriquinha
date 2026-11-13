@@ -1,6 +1,7 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
-import type { Hospedagem, Projeto } from "../../../../modulos/projeto/nucleo/projeto.ts";
+import type { Projeto } from "../../../../modulos/demandas/publico.ts";
+import type { Hospedagem } from "../../../../modulos/repositorio/publico.ts";
 import type { Effort, Modelo } from "../../../../modulos/compartilhado/nucleo/primitivos.ts";
 import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";

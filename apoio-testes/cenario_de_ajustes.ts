@@ -11,7 +11,7 @@ import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabula
 import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";

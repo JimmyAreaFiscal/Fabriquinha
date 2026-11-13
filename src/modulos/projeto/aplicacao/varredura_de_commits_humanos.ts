@@ -9,7 +9,7 @@ import {
   registrarCommitsHumanosDoTicket as registrarCommitsHumanosDoTicketDoProjeto,
   varrerCommitsHumanos as varrerCommitsHumanosDoProjeto,
 } from "../../repositorio/publico.ts";
-import { buscarProjeto, listarProjetos, projetoDaDemanda, projetoExistente } from "../armazenamento/projetos.ts";
+import { buscarProjeto, listarProjetos, projetoDaDemanda, projetoExistente } from "../../demandas/publico.ts";
 
 /** F6 §4.2 para o commit `sha` do ticket, no projeto da demanda. */
 export async function registrarCommitsHumanosDoTicket(

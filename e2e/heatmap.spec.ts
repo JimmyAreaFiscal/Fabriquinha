@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { expect, test } from "./apoio.ts";
 
 /** O instante de `meses` meses antes de hoje (ISO). */

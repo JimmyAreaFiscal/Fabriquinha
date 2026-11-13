@@ -15,7 +15,7 @@ import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/co
 import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */

@@ -9,11 +9,9 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
+import { gravarProjeto, Projeto, registrarProjeto } from "../../../modulos/demandas/publico.ts";
 import { relogioFixo } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { gravarProjeto } from "../../../modulos/projeto/armazenamento/projetos.ts";
 import { ListaDoProjeto } from "../../contrato/projeto.ts";
-import { registrarProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
 import { consultarProjeto, estadoNaLinhaDoTempo } from "./projeto.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

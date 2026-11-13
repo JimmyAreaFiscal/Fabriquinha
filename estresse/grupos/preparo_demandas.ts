@@ -10,7 +10,7 @@ import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transico
 import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import {
   garantirWorktreeDemanda,

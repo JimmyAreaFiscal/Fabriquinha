@@ -12,7 +12,7 @@ import type { EstadoTicket } from "../../src/modulos/compartilhado/nucleo/primit
 import { encontrado } from "../../src/modulos/compartilhado/nucleo/erros.ts";
 import { escrever, raizDo } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import type { EtapaTicket, NomeGate } from "../../src/modulos/etapas/catalogo.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import type { EstadoDemanda, EstadoRodada } from "../../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { AgregadoDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";

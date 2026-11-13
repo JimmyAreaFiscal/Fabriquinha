@@ -4,8 +4,7 @@ import { configuracao } from "../../modulos/compartilhado/armazenamento/servico.
 import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
 import { listarAmbientesDoConjunto } from "../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
-import { projetoComConfiguracoesDasEtapas } from "../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
-import { listarProjetos, projetoExistente } from "../../modulos/projeto/aplicacao/cadastro.ts";
+import { listarProjetos, projetoComConfiguracoesDasEtapas, projetoExistente } from "../../modulos/demandas/publico.ts";
 import { configuracaoDoAmbiente } from "../../modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 /** A configuração do F4 §3 com a próxima busca do agendador, só ligado. */

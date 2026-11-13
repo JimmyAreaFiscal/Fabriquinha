@@ -8,7 +8,7 @@ import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arqu
 import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/modulos/sdlc/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
 import { ROTAS } from "../../src/server/api/servidor.ts";

@@ -6,14 +6,13 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { ZodError } from "zod";
 import type { DatabaseSync } from "node:sqlite";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
-import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../compartilhado/nucleo/erros.ts";
-import { caminhoArquivo } from "../../compartilhado/armazenamento/arquivos.ts";
-import { raizDo } from "../../compartilhado/armazenamento/banco.ts";
-import { dirDaExecucaoSimulada } from "../../compartilhado/infra/registro.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../../../../apoio-testes/pi_falso.ts";
+import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
+import { raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { cursorDaBase } from "../../repositorio/armazenamento/commits_humanos.ts";
+import { cursorDaBase } from "../../../repositorio/publico.ts";
 import { buscarProjeto, listarProjetos } from "../armazenamento/projetos.ts";
 import {
   cadastrarProjetoDoFormulario,
@@ -23,11 +22,14 @@ import {
   registrarProjeto,
   removerProjeto,
 } from "./cadastro.ts";
-import { HarnessPi } from "../../sessoes/publico.ts";
-import type { Modelo } from "../../compartilhado/nucleo/primitivos.ts";
+import { HarnessPi } from "../../../sessoes/publico.ts";
+import type { Modelo } from "../../../sessoes/publico.ts";
 
 /** O pi falso do teste responde a conferência, como o harness do serviço. */
 const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
+
+/** A pasta da execução simulada `id`, da Simulação que saiu (ticket 02). */
+const pastaDaExecucaoSimulada = (raiz: string, id: number): string => join(raiz, "simulacoes", String(id));
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;
@@ -361,8 +363,8 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       SELECT t.id, u.id, 'falhou', 'x' FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
   `);
   for (const id of simuladas(banco, nome)) {
-    mkdirSync(dirDaExecucaoSimulada(raiz, id), { recursive: true });
-    writeFileSync(join(dirDaExecucaoSimulada(raiz, id), "log"), "x");
+    mkdirSync(pastaDaExecucaoSimulada(raiz, id), { recursive: true });
+    writeFileSync(join(pastaDaExecucaoSimulada(raiz, id), "log"), "x");
   }
   for (const sha of [SHA_COMPARTILHADO, shaProprio]) {
     mkdirSync(join(caminhoArquivo(banco, sha), ".."), { recursive: true });
@@ -397,8 +399,8 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
     assert.equal(existsSync(pastaDe(raiz, execucaoDe(n, i === 0))), false);
     assert.equal(existsSync(sessaoNoDisco(raiz, n)), false);
   }
-  for (const id of simuladasDemo) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), false);
-  for (const id of simuladasOutro) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), true);
+  for (const id of simuladasDemo) assert.equal(existsSync(pastaDaExecucaoSimulada(raiz, id)), false);
+  for (const id of simuladasOutro) assert.equal(existsSync(pastaDaExecucaoSimulada(raiz, id)), true);
   assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), false);
   assert.equal(existsSync(caminhoArquivo(banco, SHA_COMPARTILHADO)), true);
   assert.equal(existsSync(caminhoArquivo(banco, "e".repeat(64))), true);
@@ -477,7 +479,7 @@ test("removerProjeto apaga o projeto com execução simulada histórica que fico
 
   assert.equal(buscarProjeto(banco, "demo"), undefined);
   assert.deepEqual(simuladas(banco, "demo"), []);
-  assert.equal(existsSync(dirDaExecucaoSimulada(raizDo(banco), id ?? 0)), false);
+  assert.equal(existsSync(pastaDaExecucaoSimulada(raizDo(banco), id ?? 0)), false);
   banco.close();
 });
 

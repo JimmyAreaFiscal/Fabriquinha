@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { MetricasDoMes, MetricasPorDemanda } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
-import { registrarProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../modulos/compartilhado/nucleo/relogio.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";

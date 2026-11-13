@@ -17,7 +17,6 @@ import {
 import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
 import { type EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
-import type { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
 import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
 import { carregarDemandas, situacaoDasDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
 import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
@@ -28,7 +27,7 @@ import {
 } from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import { sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
-import { projetoExistente } from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
 import { resolverModeloEffort } from "../../../modulos/sdlc/aplicacao/execucao/modelo_effort.ts";
 import { bloqueiosDaDemanda } from "../demandas/bloqueios.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";

@@ -15,7 +15,7 @@ import { condutor } from "../../../../modulos/trabalho_agentico/aplicacao/trabal
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
+import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/demandas/publico.ts";
 import {
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,

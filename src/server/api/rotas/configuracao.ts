@@ -1,6 +1,6 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
-import { removerProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { removerProjeto } from "../../../modulos/demandas/publico.ts";
 import { validarESalvarConfiguracao } from "../../../modulos/projeto/aplicacao/configuracao_do_agente.ts";
 import { eliminarAmbienteDoConjunto } from "../../../modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto_da_configuracao.ts";
 import {

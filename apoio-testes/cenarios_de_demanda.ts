@@ -6,8 +6,7 @@ import type { Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sd
 import { CICLO_DA_DEMANDA } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { validarPlano } from "../src/modulos/sdlc/nucleo/transicoes/transicoes_demanda.ts";
 import type { EstadoDemanda } from "../src/modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { gravarProjeto } from "../src/modulos/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { criarDemandaNova } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { garantirWorktreeDemanda } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";

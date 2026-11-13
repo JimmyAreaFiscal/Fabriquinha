@@ -9,7 +9,7 @@ import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { condutor } from "../../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/sdlc/nucleo/transicoes/transicoes_rodada.ts";
-import { gravarConfiguracaoSdlc } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
+import { gravarConfiguracaoSdlc } from "../../../../modulos/demandas/publico.ts";
 import { carregarDemanda, comDemanda } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
