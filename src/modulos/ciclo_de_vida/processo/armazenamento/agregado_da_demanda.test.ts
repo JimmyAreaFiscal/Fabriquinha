@@ -10,23 +10,20 @@ import type { ResultadoDaTentativa } from "../../../compartilhado/nucleo/vocabul
 import type { ProgressoEncerramento } from "../nucleo/progresso_do_encerramento.ts";
 import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
 import { registrarDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
-import { escrever, migrar } from "../../../compartilhado/armazenamento/banco.ts";
+import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
 import {
   carregarDemanda,
   carregarDemandas,
-  carregarEscopoDoProcesso,
   comDemanda,
-  criarDemandaNova,
   listarDemandas,
   situacaoDasDemandas,
 } from "./agregado_da_demanda.ts";
 import {
-  abrirTrabalhoDoAgente,
+  criarDemandaNova,
   gravarAgregadoPronto,
   comEvidencia,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { MIGRACOES } from "../../../compartilhado/armazenamento/migracoes/migracoes.ts";
-import { MIGRACOES_DE_DEMANDAS } from "../../../demandas/publico.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const ticket = (ticket_id: number, rodada_id?: number) => ({
@@ -155,8 +152,8 @@ const completo = (): AgregadoDemanda => ({
 const banco = (): DatabaseSync => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  // O histórico e as migrações de Demandas, como a composição abre o banco: a linha da demanda já tem a situação do pedido.
-  migrar(b, [...MIGRACOES, ...MIGRACOES_DE_DEMANDAS.migracoes.map(({ migracao }) => migracao)]);
+  // O histórico e as migrações dos domínios, como a composição abre o banco.
+  migrarBancoDaFabriquinha(b);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   return b;
@@ -655,17 +652,6 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
   });
 });
 
-test("carregarEscopoDoProcesso traz o ticket, a sessão e o projeto da execução, aberta ou terminada", () => {
-  const b = comBase();
-  const trabalho_id = "e-I-1-T2"; // o id que abrirTrabalhoDoAgente dá ao processo
-  abrirTrabalhoDoAgente(b, { demanda_id: "I-1", ticket_id: 2 });
-  const escopo = { sessao: `s-${trabalho_id}`, demanda_id: "I-1", ticket_id: 2, projeto: "p" };
-  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: null, ...escopo });
-  b.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = ?").run(em, trabalho_id);
-  assert.deepEqual(carregarEscopoDoProcesso(b, trabalho_id), { fim: em, ...escopo });
-  assert.equal(carregarEscopoDoProcesso(b, "inexistente"), undefined);
-});
-
 test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na mesma quantidade com 1 ou 3 ids", () => {
   const b = comBase();
   const preparacoesDe = (ids: string[]) => {
@@ -681,12 +667,9 @@ test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na 
   assert.throws(() => carregarDemandas(b, ["I-9"]), ErroDeInexistente);
 });
 
-test("situacaoDasDemandas devolve só o id e o estado das demandas do projeto pedido", () => {
+test("situacaoDasDemandas devolve só o id e o estado das demandas pedidas, na ordem pedida", () => {
   const b = comBase();
   const { estado } = carregarDemanda(b, "I-1").demanda;
-  assert.deepEqual(
-    situacaoDasDemandas(b, "p").map((linha) => ({ ...linha })),
-    [{ id: "I-1", estado }],
-  );
-  assert.deepEqual(situacaoDasDemandas(b, "outro"), []);
+  assert.deepEqual(situacaoDasDemandas(b, ["I-9", "I-1"]), [{ id: "I-1", estado }]);
+  assert.deepEqual(situacaoDasDemandas(b, []), []);
 });

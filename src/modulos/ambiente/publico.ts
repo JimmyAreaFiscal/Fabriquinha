@@ -4,6 +4,7 @@
 export {
   ConfiguracaoDoAmbiente,
   configuracaoDoAmbiente,
+  MIGRACOES_DO_AMBIENTE,
   salvarConfiguracaoDoAmbiente,
   validarESalvarConfiguracaoDoAmbiente,
 } from "./configuracao/publico.ts";

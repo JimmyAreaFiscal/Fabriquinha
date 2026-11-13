@@ -1,10 +1,10 @@
 // Revisão integral da demanda (comparacao-sdlc-implementacao.md §§3, 4, 8): inicia a revisão quando as rodadas concluem.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../etapas/publico.ts";
-import type { AgregadoDemanda } from "../nucleo/agregado/agregado_demanda.ts";
-import { iniciarRevisaoDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
-import { comDemanda } from "../armazenamento/agregado_da_demanda.ts";
-import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
+import { FABRIQUINHA } from "../../../etapas/publico.ts";
+import type { AgregadoDemanda } from "../../nucleo/agregado/agregado_demanda.ts";
+import { iniciarRevisaoDemanda } from "../../nucleo/transicoes/transicoes_demanda.ts";
+import { comDemanda } from "../../armazenamento/agregado_da_demanda.ts";
+import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 
 /** Todas as rodadas concluídas: a demanda vai a `revisar_demanda` com o `revisar_demanda` aberto. */
 export function iniciarRevisaoIntegral(

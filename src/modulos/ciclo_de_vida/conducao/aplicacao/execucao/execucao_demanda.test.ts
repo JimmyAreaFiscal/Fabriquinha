@@ -718,7 +718,7 @@ test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o
 
 test("CA-12: reinício falha o planejar com execução aberta, com a demanda em planejamento", async () => {
   const { banco } = await cenario();
-  banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
+  banco.exec("UPDATE processo_demanda SET estado = 'planejar' WHERE demanda_id = 'I-1'");
   emExecucao(banco, 3);
   comSessoesDoContexto(banco, ref(3), (estado) => {
     const sessao = { ...ref(3), id: "s-p", modo: "autonomo" as const, conversa_referencia: "p" };
@@ -754,7 +754,7 @@ test("CA-7: o motivo da falha de preparação vai ao log da execução", async (
 
 test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em execução; a demanda segue em encerramento", async () => {
   const { banco } = await cenario();
-  banco.exec(`UPDATE demanda SET estado = 'encerrar_demanda' WHERE id = 'I-1';
+  banco.exec(`UPDATE processo_demanda SET estado = 'encerrar_demanda' WHERE demanda_id = 'I-1';
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 11, 'encerrar_demanda', 'em_execucao', '${em}'),
       ('I-1', 12, 'resolver_conflito', 'em_execucao', '${em}')`);
@@ -763,7 +763,10 @@ test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em
     [11, 12].map((t) => statusDe(banco, t)?.estado),
     ["falhou", "falhou"],
   );
-  assert.equal(banco.prepare("SELECT estado FROM demanda WHERE id = 'I-1'").get()?.estado, "encerrar_demanda");
+  assert.equal(
+    banco.prepare("SELECT estado FROM processo_demanda WHERE demanda_id = 'I-1'").get()?.estado,
+    "encerrar_demanda",
+  );
 });
 
 /** Espera o pi da execução subir e devolve o grupo dele. */

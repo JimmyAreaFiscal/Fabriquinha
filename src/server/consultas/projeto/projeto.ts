@@ -21,7 +21,7 @@ import {
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
-import { type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
+import { pedidosDoProjeto, type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import { sessoesDeDemanda, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
@@ -124,7 +124,7 @@ export function consultarProjeto(
 ): ListaDoProjeto {
   const projeto = projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE);
   return lerEmSnapshot(banco, () => {
-    const todas = situacaoDasDemandas(banco, nome);
+    const todas = situacaoDasDemandas(banco, pedidosDoProjeto(banco, nome));
     const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
     const mostrarDoEstado: Partial<Record<EstadoDemanda, boolean>> = {
       concluida: filtro.concluidas,

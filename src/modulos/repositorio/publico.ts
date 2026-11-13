@@ -3,6 +3,8 @@
 // única entrada usada por fora do domínio; os subdomínios ficam atrás dela.
 export {
   alteracoesDosCommitsEmLote,
+  apagarCommitsDasDemandas,
+  apagarVarreduraDoProjeto,
   arquivosDe,
   arquivosDosCommits,
   type Commit,

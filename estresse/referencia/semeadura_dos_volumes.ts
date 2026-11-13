@@ -13,7 +13,7 @@ import { encontrado } from "../../src/modulos/compartilhado/nucleo/erros.ts";
 import { escrever, raizDo } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import type { EtapaTicket, NomeGate } from "../../src/modulos/etapas/catalogo.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { criarDemandaNova } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
 import type { EstadoDemanda, EstadoRodada } from "../../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
 import { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";

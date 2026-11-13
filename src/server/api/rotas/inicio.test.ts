@@ -73,7 +73,7 @@ test("GET /api/inicio: o Uso declarado soma ao medido do mês, e a sessão decla
   const banco = cenario();
   const agoraIso = new Date().toISOString();
   banco.exec(`
-    UPDATE demanda SET estado_alterado_em = '${agoraIso}' WHERE id = 'I-300';
+    UPDATE processo_demanda SET estado_alterado_em = '${agoraIso}' WHERE demanda_id = 'I-300';
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-conversa', '${agoraIso}', '${agoraIso}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2);`);
   const declarar = (sessao: string, custo: string) => {

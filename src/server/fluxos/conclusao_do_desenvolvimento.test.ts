@@ -9,7 +9,7 @@ const concluirDesenvolvimento = (banco: ReturnType<typeof bancoComProjeto>, id: 
 };
 
 const concluirOProcesso = (banco: ReturnType<typeof bancoComProjeto>, id: string) => () => {
-  banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(id);
+  banco.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(id);
 };
 const concluirEsperandoFalha = (banco: ReturnType<typeof bancoComProjeto>, id: string, gravar: () => void) => () => {
   concluirDesenvolvimento(banco, id, gravar);
@@ -39,6 +39,9 @@ test("atomicidade: a recusa do pedido desfaz o encerramento já gravado do proce
   const id = pedidoEnviadoDeTeste(banco);
   banco.prepare("UPDATE demanda SET situacao = 'cancelado' WHERE id = ?").run(id);
   assert.throws(concluirEsperandoFalha(banco, id, concluirOProcesso(banco, id)), /não pode passar a concluido/);
-  assert.equal(banco.prepare("SELECT estado FROM demanda WHERE id = ?").get(id)?.estado, "gate_demanda");
+  assert.equal(
+    banco.prepare("SELECT estado FROM processo_demanda WHERE demanda_id = ?").get(id)?.estado,
+    "gate_demanda",
+  );
   assert.equal(banco.isTransaction, false);
 });

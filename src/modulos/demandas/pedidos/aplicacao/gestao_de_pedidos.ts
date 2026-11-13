@@ -11,6 +11,8 @@ import { type Pedido, pedidoComConteudoEditado, pedidoNaSituacao, pedidoRegistra
 import {
   alocarIdDoPedido,
   gravarConteudoDoPedido,
+  gravarEnvioDoPedido,
+  gravarPedidoNovo,
   gravarSituacaoDoPedido,
   lerPedido,
 } from "../armazenamento/pedidos.ts";
@@ -28,7 +30,7 @@ function comCampoInvalidoComoErroDeRegra<T>(operacaoQueValidaAEntrada: () => T):
 
 /**
  * CA-1: o pedido novo do projeto, em rascunho, com o ID da sequência, e o processo dele, que `criarProcessoDoPedido`
- * cria na mesma unidade de trabalho (gravando a linha com o conteúdo do pedido): o erro de lá desfaz tudo, ID incluído.
+ * cria na mesma unidade de trabalho: o erro de lá desfaz tudo, ID incluído.
  */
 export const registrarPedido = <Processo>(
   banco: DatabaseSync,
@@ -39,7 +41,9 @@ export const registrarPedido = <Processo>(
   comCampoInvalidoComoErroDeRegra(() =>
     escrever(banco, () => {
       projetoExistente(banco, String(conteudo.projeto));
-      return criarProcessoDoPedido(pedidoRegistrado({ ...conteudo, id: alocarIdDoPedido(banco) }, autor));
+      const pedido = pedidoRegistrado({ ...conteudo, id: alocarIdDoPedido(banco) }, autor);
+      gravarPedidoNovo(banco, pedido);
+      return criarProcessoDoPedido(pedido);
     }),
   );
 
@@ -53,11 +57,14 @@ export const editarPedido = (banco: DatabaseSync, id: string, entrada: unknown, 
     }),
   );
 
-/** O rascunho fica `enviado` depois que `aceitarNoProcesso` leva o processo ao Gate da demanda, na mesma unidade de trabalho. */
+/**
+ * O rascunho fica `enviado`, com o conteúdo congelado, depois que `aceitarNoProcesso` leva o processo ao Gate da demanda,
+ * na mesma unidade de trabalho.
+ */
 export const enviarPedido = <Processo>(banco: DatabaseSync, id: string, aceitarNoProcesso: () => Processo): Processo =>
   escrever(banco, () => {
     const processo = aceitarNoProcesso();
-    gravarSituacaoDoPedido(banco, pedidoNaSituacao(lerPedido(banco, id), "enviado"));
+    gravarEnvioDoPedido(banco, pedidoNaSituacao(lerPedido(banco, id), "enviado"));
     return processo;
   });
 

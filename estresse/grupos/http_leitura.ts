@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
 import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarAnexos } from "../../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";

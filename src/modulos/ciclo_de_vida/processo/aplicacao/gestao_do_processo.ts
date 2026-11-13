@@ -85,11 +85,15 @@ export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: Conte
   comCampoInvalidoComoErroDeRegra(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
 
 /**
- * Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. Que o
- * projeto existe, quem chama confere em Demandas.
+ * Arquivar concluídas: cada demanda concluída entre as `demandas` do projeto, uma transação por demanda, como o Arquivar
+ * da demanda. Quais são as demandas do projeto, e se ele existe, quem chama pergunta a Demandas.
  */
-export const arquivarConcluidas = (banco: DatabaseSync, projeto: string, relogio: Relogio): { arquivadas: number } => {
-  const concluidas = situacaoDasDemandas(banco, projeto).filter((d) => d.estado === "concluida");
+export const arquivarConcluidas = (
+  banco: DatabaseSync,
+  demandas: readonly string[],
+  relogio: Relogio,
+): { arquivadas: number } => {
+  const concluidas = situacaoDasDemandas(banco, demandas).filter((d) => d.estado === "concluida");
   for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: relogio.agora() });
   return { arquivadas: concluidas.length };
 };

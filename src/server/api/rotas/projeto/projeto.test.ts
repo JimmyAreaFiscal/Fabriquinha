@@ -144,6 +144,7 @@ test("Arquivar concluídas: arquiva as concluídas do projeto e só elas", async
 test("os cards do mês do projeto vêm de /api/metricas com o mesmo texto do custo, só do projeto", async () => {
   const agoraIso = new Date().toISOString();
   banco.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Título', 'problema', 'd', 'em_execucao', '${agoraIso}', 'f', 's', 1, 'b-I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('I-1', 1, 'planejar', 'concluido', '${agoraIso}');
     INSERT INTO trabalho_agentico VALUES ('s-I-1', 'I-1', 1, 'autonomo', 'conv');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES

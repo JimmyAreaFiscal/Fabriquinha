@@ -145,7 +145,7 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     despacho: ["processo", "planejamento", "conducao", "etapas"],
     metricas_de_qualidade: ["etapas", "planejamento", "processo", "evidencias", "verificacoes"],
   },
-  posseDasTabelas: "inventario",
+  posseDasTabelas: "estrita",
   excecoes: [
     // O mapeador das colunas da configuração do agente ainda mora no compartilhado (Sessões e Projetos também o usam);
     // o ticket 22 o traz para o Ciclo de Vida.

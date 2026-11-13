@@ -6,4 +6,4 @@ export {
   predecessorasPendentesDosPedidos,
   registrarDependencia,
 } from "./aplicacao/gestao_de_dependencias.ts";
-export { predecessorasDosPedidosEmLote } from "./armazenamento/dependencias.ts";
+export { apagarDependenciasDosPedidos, predecessorasDosPedidosEmLote } from "./armazenamento/dependencias.ts";

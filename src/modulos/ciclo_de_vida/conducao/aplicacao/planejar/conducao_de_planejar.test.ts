@@ -15,7 +15,7 @@ import {
   reprovarGateDoPlanejamento,
 } from "../../../../../../apoio-testes/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { falharTicketEmExecucao } from "../../../processo/aplicacao/transicoes_pedidas.ts";
+import { falharTicketEmExecucao } from "../../../processo/aplicacao/transicoes/transicoes_pedidas.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
@@ -120,7 +120,7 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   await fim;
   const [descartada] = sessoes().sessoes;
   // O Auditor descarta o plano aprovado (incidente da I-259): volta ao planejamento com a instrução no ticket.
-  banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
+  banco.exec("UPDATE processo_demanda SET estado = 'planejar' WHERE demanda_id = 'I-1'");
   comDemanda(banco, "I-1", (ag) => {
     const ticketPlanejar = ag.tickets[0];
     assert.ok(ticketPlanejar);

@@ -124,7 +124,7 @@ test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam"
   projeto(fabriquinha.raiz);
   semearDemandas(fabriquinha.raiz);
   const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
-  banco.exec("UPDATE demanda SET estado = 'cancelada' WHERE id = 'I-207'");
+  banco.exec("UPDATE processo_demanda SET estado = 'cancelada' WHERE demanda_id = 'I-207'");
   banco.close();
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
   await expect(pagina.locator(".contagem")).toHaveText("2 em andamento · 0 concluídas · 0 arquivadas · 1 cancelada");

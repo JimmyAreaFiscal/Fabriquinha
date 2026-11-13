@@ -53,3 +53,8 @@ export const projetosAVarrer = (
     )
     .all(JSON.stringify(projetos), instanteAntes(relogio.agora(), 24 * 60 * 60_000))
     .map((l) => String(l.nome));
+
+/** Na remoção do projeto: o cursor da varredura dos commits humanos dele. */
+export function apagarVarreduraDoProjeto(banco: DatabaseSync, projeto: string): void {
+  banco.prepare("DELETE FROM varredura_base WHERE projeto = ?").run(projeto);
+}

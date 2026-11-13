@@ -5,8 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda } from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
 import { ocupanteDoAmbiente } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
@@ -19,6 +17,7 @@ import { eliminarAmbienteDoConjunto } from "./eliminacao_pela_configuracao.ts";
 import { listarAmbientesDoConjunto } from "../../monitoramento/aplicacao/estado_do_conjunto.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/aplicacao/configuracao_do_ambiente.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-configuracao-"));
 after(() => {
@@ -41,7 +40,7 @@ let cenarios = 0;
 async function conjuntoComUmAlocado() {
   const docker = instalarDockerFalso(join(base, `docker-${String(++cenarios)}`));
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container" });
   const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
     raiz: base,

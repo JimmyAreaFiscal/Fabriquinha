@@ -9,7 +9,6 @@ import {
   carregarDemandas,
   type EtapaTicket,
   formatarTicketRef,
-  situacaoDasDemandas,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   execucoesAbertas,
@@ -17,6 +16,7 @@ import {
   type ResumoDaSessao,
   resumosDasSessoesEmLote,
 } from "../../../modulos/sessoes/publico.ts";
+import { pedidosDoProjeto } from "../../../modulos/demandas/publico.ts";
 import type { Resultado, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
 import { montarCabecalhoDaSessao, sessaoDoTicketDoResumo } from "./chat.ts";
 
@@ -100,7 +100,7 @@ export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDeman
     filtro.demanda !== undefined
       ? [filtro.demanda]
       : filtro.projeto !== undefined
-        ? situacaoDasDemandas(banco, filtro.projeto).map((d) => d.id)
+        ? pedidosDoProjeto(banco, filtro.projeto)
         : undefined;
   const resumos = resumosDasSessoesEmLote(banco, demandasDoFiltro);
   const agregados = carregarDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);

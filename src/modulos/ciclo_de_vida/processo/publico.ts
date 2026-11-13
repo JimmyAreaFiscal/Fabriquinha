@@ -94,9 +94,9 @@ export {
   reservarTicketSelecionado,
   retomarFalhaDeInfraestruturaDoTicket,
   solicitarIntegracaoFinal,
-} from "./aplicacao/transicoes_pedidas.ts";
+} from "./aplicacao/transicoes/transicoes_pedidas.ts";
 export { submeterEvidencia } from "./aplicacao/submissao_de_evidencia.ts";
-export { iniciarRevisaoIntegral } from "./aplicacao/revisao_integral.ts";
+export { iniciarRevisaoIntegral } from "./aplicacao/transicoes/revisao_integral.ts";
 export { visaoDaDemanda } from "./aplicacao/visao_da_demanda.ts";
 export {
   arquivar,
@@ -109,18 +109,25 @@ export {
   reabrir,
   submeterEvidenciaDaEntradaExterna,
 } from "./aplicacao/gestao_do_processo.ts";
-export { cancelarProcessosEmCascata } from "./aplicacao/cancelamento_em_cascata.ts";
+export { cancelarProcessosEmCascata } from "./aplicacao/transicoes/cancelamento_em_cascata.ts";
 export { arquivarDemanda, cancelarDemanda } from "./nucleo/transicoes/cancelamento_demanda.ts";
 export {
   andamentoDasDemandasEmLote,
+  apagarDesenvolvimentoDasDemandas,
   carregarDemanda,
   carregarDemandas,
-  carregarEscopoDoProcesso,
+  demandasNosEstados,
+  gravarDemandaNova,
   listarDemandas,
   situacaoDasDemandas,
 } from "./armazenamento/agregado_da_demanda.ts";
+export { MIGRACOES_DO_CICLO_DE_VIDA } from "./armazenamento/migracao_do_estado_do_processo.ts";
 export {
-  apagarEstadoDoProcessoDasDemandas,
+  ligarLeituraDosPedidosRecebidos,
+  type PedidoRecebido,
+  pedidosRecebidosEmLote,
+} from "./armazenamento/pedidos_recebidos.ts";
+export {
   decisoesEmLote,
   lerTentativasDasDemandas,
   tentativasReprovadasEmLote,

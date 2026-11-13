@@ -27,10 +27,14 @@ const agente: Ator = { tipo: "agente", trabalho_id: "1" };
 
 const estado = (banco: DatabaseSync, id: string) => carregarDemanda(banco, id).demanda.estado;
 /** Põe a demanda no estado do processo e na situação que o fluxo daria a ele. */
-const terminarComo = (banco: DatabaseSync, id: string, estadoDoProcesso: string, situacao: string) =>
-  banco.prepare("UPDATE demanda SET estado = ?, situacao = ? WHERE id = ?").run(estadoDoProcesso, situacao, id);
-const colocarEmExecucao = (banco: DatabaseSync, id: string) =>
-  banco.prepare("UPDATE demanda SET estado = 'em_execucao', situacao = 'enviado' WHERE id = ?").run(id);
+const terminarComo = (banco: DatabaseSync, id: string, estadoDoProcesso: string, situacao: string) => {
+  banco.prepare("UPDATE processo_demanda SET estado = ? WHERE demanda_id = ?").run(estadoDoProcesso, id);
+  banco.prepare("UPDATE demanda SET situacao = ? WHERE id = ?").run(situacao, id);
+};
+const colocarEmExecucao = (banco: DatabaseSync, id: string) => {
+  banco.prepare("UPDATE processo_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(id);
+  banco.prepare("UPDATE demanda SET situacao = 'enviado' WHERE id = ?").run(id);
+};
 /** Abre uma execução sem pi no ar no ticket 1 da demanda `id`. */
 function abrirExecucao(banco: DatabaseSync, id: string, sessao: string) {
   const ref = { demanda_id: id, ticket_id: 1 };
@@ -184,7 +188,7 @@ test("CA-26 (atomicidade): a falha no processo de um dependente desfaz o pedido,
   const b = registrarPedidoDeTeste(banco, [a]);
   const c = registrarPedidoDeTeste(banco, [a]);
   const ref = abrirExecucao(banco, b, "s1");
-  banco.exec(`CREATE TRIGGER falha BEFORE UPDATE OF estado ON demanda WHEN NEW.id = '${c}' AND NEW.estado = 'cancelada'
+  banco.exec(`CREATE TRIGGER falha BEFORE UPDATE OF estado ON processo_demanda WHEN NEW.demanda_id = '${c}' AND NEW.estado = 'cancelada'
     BEGIN SELECT RAISE(ABORT, 'falhou'); END`);
   assert.throws(() => cancelarDemandaEmCascata(banco, a, AUDITOR, ctx), /falhou/);
   assert.deepEqual(

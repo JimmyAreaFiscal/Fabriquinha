@@ -2,12 +2,12 @@
 // dependentes. Quais são as dependentes é de Demandas; o fluxo do servidor (`server/fluxos/cancelamento_em_cascata.ts`)
 // lê as dependentes, chama estas funções e registra o cancelamento dos pedidos na mesma unidade de trabalho.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../nucleo/agregado/agregado_demanda.ts";
-import type { Ator } from "../../etapas/publico.ts";
-import { cancelarDemanda } from "../nucleo/transicoes/cancelamento_demanda.ts";
-import type { ContextoDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
-import { escrever } from "../../../../shared/armazenamento/banco.ts";
-import { comDemanda } from "../armazenamento/agregado_da_demanda.ts";
+import type { AgregadoDemanda } from "../../nucleo/agregado/agregado_demanda.ts";
+import type { Ator } from "../../../etapas/publico.ts";
+import { cancelarDemanda } from "../../nucleo/transicoes/cancelamento_demanda.ts";
+import type { ContextoDemanda } from "../../nucleo/transicoes/transicoes_demanda.ts";
+import { escrever } from "../../../../../shared/armazenamento/banco.ts";
+import { comDemanda } from "../../armazenamento/agregado_da_demanda.ts";
 
 /**
  * Aplica `transicao` à demanda `id` e, se ela terminou `cancelada`, cancela os processos de `dependentes` na mesma

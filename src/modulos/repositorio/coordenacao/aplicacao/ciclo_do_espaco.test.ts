@@ -12,8 +12,6 @@ import {
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { listarAmbientes } from "../../../sandbox/armazenamento/ambientes.ts";
 import { GeradorDeAmbientes } from "../../../sandbox/infra/container/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
@@ -26,6 +24,7 @@ import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));
 const hospedagem = hospedagemFalsa(temporario);
@@ -176,7 +175,7 @@ function cenarioComContainer() {
   const { c, espacoDemanda, espacoRodada } = cenario();
   const docker = instalarDockerFalso(join(temporario, `docker-${String(Math.random())}`));
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   validarESalvarConfiguracaoDoAmbiente(banco, {
     tipo: "container",
     memoria_maxima_mb: 512,

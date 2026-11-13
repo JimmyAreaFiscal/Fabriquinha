@@ -18,6 +18,7 @@ function semear(raiz: string): void {
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, tipo: string, mes: string) =>
     `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO trabalho_agentico VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
@@ -230,6 +231,7 @@ test("o custo com uma sessão sem custo e outra com custo conhecido: o mesmo tex
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M0)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'aberto', '${em(M0)}'), ('I-1', 2, 'implementar', 'aberto', '${em(M0)}');
     INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-1', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-1', 2, 'autonomo', 'c2');
@@ -261,6 +263,7 @@ function semearNumerosGrandes(raiz: string): void {
     INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');
     INSERT INTO trabalho_agentico VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');

@@ -34,3 +34,13 @@ export const gravarDependencia = (
     .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
     .run(demanda_id, depende_demanda_id);
 };
+
+/** Na remoção do projeto: as dependências que citam os `pedidos`, de um lado ou do outro. */
+export function apagarDependenciasDosPedidos(banco: DatabaseSync, pedidos: readonly string[]): void {
+  banco
+    .prepare(
+      `DELETE FROM dependencia_demanda WHERE demanda_id IN (SELECT value FROM json_each($pedidos))
+         OR depende_demanda_id IN (SELECT value FROM json_each($pedidos))`,
+    )
+    .run({ pedidos: JSON.stringify(pedidos) });
+}

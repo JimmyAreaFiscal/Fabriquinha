@@ -68,7 +68,7 @@ function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: st
 }
 
 /**
- * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40, o gate da decisão da 41, os nomes do Trabalho Agêntico da 42 nem o `pull_request` da 43): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem o estado do Processo da 52, as Tentativas da 40, o gate da decisão da 41, os nomes do Trabalho Agêntico da 42 nem o `pull_request` da 43): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
  * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
  * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
  * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
@@ -94,10 +94,16 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
   banco.exec("PRAGMA foreign_keys = OFF");
   banco.exec("BEGIN");
   try {
+    // A 52 deu ao estado da demanda a tabela do Processo, e a 53 deixou as colunas antigas sem uso: a volta as lê de lá.
+    const doProcesso = (coluna: string) =>
+      `(SELECT p.${coluna} FROM processo_demanda p WHERE p.demanda_id = demanda.id)`;
     copiar("demanda", {
-      fase: voltaDoMapeamento("estado", ESTADO_NOVO_DA_DEMANDA),
-      fase_alterada_em: "estado_alterado_em",
+      fase: voltaDoMapeamento(doProcesso("estado"), ESTADO_NOVO_DA_DEMANDA),
+      fase_alterada_em: doProcesso("estado_alterado_em"),
+      branch: doProcesso("branch"),
     });
+    // A 54 deu à Configuração do Ambiente a tabela própria: a volta a apaga, e a 45 abaixo apaga as colunas antigas.
+    banco.exec("DROP TABLE processo_demanda; DROP TABLE configuracao_ambiente;");
     copiar("rodada", { fase: voltaDoMapeamento("estado", ESTADO_NOVO_DA_RODADA) });
     copiar("ticket_demanda", {
       etapa: voltaDoMapeamento("etapa", ETAPA_NOVA),

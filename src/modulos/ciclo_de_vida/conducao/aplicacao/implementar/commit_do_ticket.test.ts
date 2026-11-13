@@ -6,12 +6,11 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ErroDeReprovacao } from "../../../../../shared/nucleo/erros.ts";
-import { migrar } from "../../../../../shared/armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import { MIGRACOES } from "../../../../../shared/armazenamento/migracoes/migracoes.ts";
 import type { ComandoNoAmbiente } from "../../../../ambiente/publico.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
+import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-commit-demanda-")));
 after(() => {
@@ -36,12 +35,13 @@ function cenario() {
   git(worktree, "commit", "-qm", "inicial");
   const banco = new DatabaseSync(":memory:");
   banco.exec("PRAGMA foreign_keys = ON");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   const t = "'2026-01-01T00:00:00.000Z'";
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '${worktree}', 'main', 'github', 'k')`);
   banco.exec(
-    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda)`,
   );
   for (const id of [1, 2])
     banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)

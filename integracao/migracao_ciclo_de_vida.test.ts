@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { iniciarRevisaoIntegral } from "../src/modulos/ciclo_de_vida/processo/aplicacao/revisao_integral.ts";
+import { iniciarRevisaoIntegral } from "../src/modulos/ciclo_de_vida/processo/aplicacao/transicoes/revisao_integral.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import type { EstadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";

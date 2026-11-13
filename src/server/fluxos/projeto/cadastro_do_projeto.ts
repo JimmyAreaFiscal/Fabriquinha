@@ -1,9 +1,9 @@
 // O fluxo do cadastro e da edição do projeto, entre Demandas e Sessões de IA: o projeto só é gravado depois de o harness
 // do serviço conferir o modelo novo ou trocado de cada etapa (F4 §9).
 import type { DatabaseSync } from "node:sqlite";
-import { cadastrarProjetoDoFormulario, editarProjetoDoFormulario } from "../../modulos/demandas/publico.ts";
-import type { Modelo } from "../../modulos/sessoes/publico.ts";
-import { condutor } from "../../modulos/ciclo_de_vida/publico.ts";
+import { cadastrarProjetoDoFormulario, editarProjetoDoFormulario } from "../../../modulos/demandas/publico.ts";
+import type { Modelo } from "../../../modulos/sessoes/publico.ts";
+import { condutor } from "../../../modulos/ciclo_de_vida/publico.ts";
 
 type FormularioDoProjeto = Parameters<typeof cadastrarProjetoDoFormulario>[1];
 

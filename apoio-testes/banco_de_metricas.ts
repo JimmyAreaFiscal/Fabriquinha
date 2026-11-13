@@ -1,11 +1,10 @@
 // Banco em memória, migrado, com duas lojas de demandas e dois meses de execuções, decisões e commits, para os testes das Métricas.
 import { DatabaseSync } from "node:sqlite";
-import { migrar } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../src/modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
 import type { Recorte } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/nucleo/metrica.ts";
 import type { OrigemDosFatos } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/leitura_dos_fatos.ts";
 import { lerPedidosDasMetricas } from "../src/server/consultas/demandas/pedidos_das_metricas.ts";
 import { intervalo } from "../src/modulos/compartilhado/nucleo/periodo.ts";
+import { migrarBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */
 export const em = (mes: string) => new Date(`${mes}-15T12:00:00`).toISOString();
@@ -23,7 +22,7 @@ export const origemDe = (banco: DatabaseSync): OrigemDosFatos => ({ banco, pedid
 export function bancoMigrado(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
   banco.exec("PRAGMA foreign_keys = ON");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   return banco;
 }
 
@@ -40,7 +39,8 @@ export function bancoDoPeriodo(): DatabaseSync {
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '${nome}')`);
   const demanda = (id: string, projeto: string, estado: string, alterada: string) => {
     b.exec(
-      `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${estado}', '${alterada}', 'f', 's', 1, 'b-${id}')`,
+      `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${estado}', '${alterada}', 'f', 's', 1, 'b-${id}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda)`,
     );
   };
   demanda("I-1", "loja", "em_execucao", em("2026-03"));
@@ -114,7 +114,8 @@ export function bancoDaDemanda(): DatabaseSync {
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   b.exec(
-    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda)`,
   );
   for (const r of [1, 2])
     b.exec(

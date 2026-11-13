@@ -209,3 +209,18 @@ export function gravarCommitHumanoPosterior(
     inserirCommitsPosteriores(banco, sha, null, autor, linhas);
   });
 }
+
+/** Na remoção do projeto: os commits dos tickets das `demandas`, os arquivos deles e os commits humanos posteriores. */
+export function apagarCommitsDasDemandas(banco: DatabaseSync, demandas: readonly string[]): void {
+  const dasDemandas = { demandas: JSON.stringify(demandas) };
+  const doLote = "(SELECT value FROM json_each($demandas))";
+  banco
+    .prepare(`DELETE FROM commit_humano_posterior WHERE demanda_id IN ${doLote} OR alterador_demanda_id IN ${doLote}`)
+    .run(dasDemandas);
+  banco
+    .prepare(
+      `DELETE FROM arquivo_commit_demanda WHERE sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN ${doLote})`,
+    )
+    .run(dasDemandas);
+  banco.prepare(`DELETE FROM commit_ticket_demanda WHERE demanda_id IN ${doLote}`).run(dasDemandas);
+}

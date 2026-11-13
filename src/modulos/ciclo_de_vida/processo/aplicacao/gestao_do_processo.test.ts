@@ -169,7 +169,7 @@ test("CA-15: depois do envio criterios_aceite está congelado", () => {
 test("CA-27: arquivar demanda concluída muda só o estado", () => {
   const b = novoBanco();
   const id = registrar(b);
-  b.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(id);
+  b.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(id);
   const antes = carregarDemanda(b, id);
   const ag = gestao.arquivar(b, id, AUDITOR, ctx);
   assert.equal(ag.demanda.estado, "arquivada");
@@ -183,15 +183,15 @@ test("arquivarConcluidas: arquiva só as concluídas do projeto, no instante do 
   const b = novoBanco();
   const concluida = registrar(b);
   const andamento = registrar(b);
-  b.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(concluida);
+  b.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(concluida);
   const relogio = relogioFixo("2026-03-01T00:00:00.000Z");
-  const projeto = "fabriquinha";
-  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio), { arquivadas: 1 });
+  const demandasDoProjeto = [andamento, concluida];
+  assert.deepEqual(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio), { arquivadas: 1 });
   const arquivada = carregarDemanda(b, concluida).demanda;
   assert.equal(arquivada.estado, "arquivada");
   assert.equal(arquivada.estado_alterado_em, "2026-03-01T00:00:00.000Z");
   assert.notEqual(carregarDemanda(b, andamento).demanda.estado, "arquivada");
-  assert.deepEqual(gestao.arquivarConcluidas(b, projeto, relogio), { arquivadas: 0 });
+  assert.deepEqual(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio), { arquivadas: 0 });
 });
 
 test("CA-28: arquivar fora de concluida é reprovado", () => {

@@ -3,7 +3,7 @@
 // de cada domínio), o SQL que toca tabela fora do dono só é listado no relatório do teste; o domínio que declarar
 // `posseDasTabelas: "estrita"` no seu arquivo em fitness/fronteiras/dominios/ reprova (o ticket 22 liga todos).
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -11,7 +11,7 @@ import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabri
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import { REGRAS_DO_AMBIENTE } from "./fronteiras/dominios/ambiente.ts";
 import { PASTA_DAS_CONSULTAS } from "./fronteiras/dominios/server.ts";
-import { PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
+import { MIGRACOES_DOS_DOMINIOS, PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
 import {
   acharDonosNaoDeclarados,
   acharToquesForaDoDono,
@@ -23,11 +23,19 @@ import { DONO_DE_CADA_TABELA } from "./fronteiras/posse_das_tabelas.ts";
 
 const SRC = resolve(import.meta.dirname, "../src");
 
-// A arquitetura de src/ com o Ambiente sintético, para os testes do motor não dependerem dos subdomínios declarados hoje.
+const FORA_DA_POSSE = [PASTA_DO_HISTORICO_DO_ESQUEMA, ...MIGRACOES_DOS_DOMINIOS];
+
+// A arquitetura de src/ com o Ambiente sintético e os demais domínios em inventário, para os testes do motor não
+// dependerem dos subdomínios nem da posse declarados hoje.
 const comAmbiente = (posseDasTabelas: "inventario" | "estrita"): Arquitetura => ({
   ...ARQUITETURA_DE_SRC,
   dominios: {
-    ...ARQUITETURA_DE_SRC.dominios,
+    ...Object.fromEntries(
+      Object.entries(ARQUITETURA_DE_SRC.dominios).map(([dominio, regras]) => [
+        dominio,
+        { ...regras, posseDasTabelas: "inventario" as const },
+      ]),
+    ),
     ambiente: { ...REGRAS_DO_AMBIENTE, subdominios: { sandboxes: [] }, posseDasTabelas },
   },
 });
@@ -73,13 +81,20 @@ test("todo dono é `shared` ou um subdomínio declarado no arquivo do domínio",
   assert.deepEqual(acharDonosNaoDeclarados(DONO_DE_CADA_TABELA, ARQUITETURA_DE_SRC), []);
 });
 
+test("toda migração de domínio fora da posse existe", () => {
+  assert.deepEqual(
+    MIGRACOES_DOS_DOMINIOS.filter((arquivo) => !existsSync(join(SRC, arquivo))),
+    [],
+  );
+});
+
 test("as consultas das telas não tocam tabela nenhuma: leem pelas fachadas (MELHORIAS §6)", () => {
-  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, [PASTA_DO_HISTORICO_DO_ESQUEMA]);
+  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, FORA_DA_POSSE);
   assert.deepEqual(toques.filter(({ arquivo }) => arquivo.startsWith(PASTA_DAS_CONSULTAS)).map(descreverToque), []);
 });
 
 test("inventário: o SQL de src/ que toca tabela fora do armazenamento do dono, reprovado só nos domínios estritos", (t) => {
-  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, [PASTA_DO_HISTORICO_DO_ESQUEMA]);
+  const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, FORA_DA_POSSE);
   t.diagnostic(`${String(toques.length)} toques de tabela fora do armazenamento do dono (modo inventário):`);
   for (const toque of toques) t.diagnostic(descreverToque(toque));
   assert.deepEqual(acharToquesNosDominiosEstritos(toques, ARQUITETURA_DE_SRC).map(descreverToque), []);

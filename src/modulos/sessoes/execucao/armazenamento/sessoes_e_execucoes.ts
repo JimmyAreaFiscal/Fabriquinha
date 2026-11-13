@@ -7,6 +7,7 @@ import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { ConfiguracaoDoModelo } from "../../modelos/publico.ts";
 import { type ContextoDaSessao, Execucao, type IdDaExecucao, type IdDaSessao, Sessao } from "../nucleo/sessao.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
+import { apagarUsoDasExecucoes, apagarUsoDeclaradoDasDemandas } from "../../metricas_de_execucao/publico.ts";
 
 /** O contexto de uma leitura: o ticket, ou a demanda inteira com `ticket_id` nulo. */
 export interface ContextoDaLeitura {
@@ -211,6 +212,27 @@ export const contextoDaExecucao = (banco: DatabaseSync, execucao: IdDaExecucao):
     )
     .get(execucao) as ContextoDaSessao | undefined;
 
+/** A execução com a sessão e o ticket dela; `fim` é nulo enquanto ela está aberta, e a inexistente dá `undefined`. */
+export function escopoDaExecucao(
+  banco: DatabaseSync,
+  execucao: IdDaExecucao,
+): (ContextoDaSessao & { fim: string | null; sessao: string }) | undefined {
+  const linha = banco
+    .prepare(
+      `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id
+         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.id = ?`,
+    )
+    .get(execucao);
+  return (
+    linha && {
+      fim: linha.fim === null ? null : String(linha.fim),
+      sessao: String(linha.sessao),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+    }
+  );
+}
+
 const hashDoToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 
 /** Grava só o hash do token da execução aberta; execução inexistente ou já encerrada não recebe token. */
@@ -284,4 +306,29 @@ export function sessaoDeCadaTicketDasDemandas(
       new Map(linhas.filter((l) => l.demanda_id === id).map((l) => [Number(l.ticket_id), String(l.id)])),
     ]),
   );
+}
+
+/**
+ * Na remoção do projeto: as sessões das `demandas`, as execuções delas e o Uso medido e declarado, na ordem das chaves
+ * estrangeiras. Devolve o que sobra para apagar no disco: as execuções e as conversas das sessões.
+ */
+export function apagarSessoesDasDemandas(
+  banco: DatabaseSync,
+  demandas: readonly string[],
+): { execucoes: string[]; sessoes: string[] } {
+  const dasDemandas = JSON.stringify(demandas);
+  const sessoesDasDemandas = "SELECT id FROM trabalho_agentico WHERE demanda_id IN (SELECT value FROM json_each(?))";
+  const execucoes = banco
+    .prepare(`SELECT id FROM processo_do_trabalho WHERE trabalho_id IN (${sessoesDasDemandas})`)
+    .all(dasDemandas)
+    .map((linha) => String(linha.id));
+  const sessoes = banco
+    .prepare(`SELECT conversa_referencia FROM trabalho_agentico WHERE id IN (${sessoesDasDemandas})`)
+    .all(dasDemandas)
+    .map((linha) => String(linha.conversa_referencia));
+  apagarUsoDasExecucoes(banco, execucoes);
+  banco.prepare(`DELETE FROM processo_do_trabalho WHERE trabalho_id IN (${sessoesDasDemandas})`).run(dasDemandas);
+  banco.prepare("DELETE FROM trabalho_agentico WHERE demanda_id IN (SELECT value FROM json_each(?))").run(dasDemandas);
+  apagarUsoDeclaradoDasDemandas(banco, demandas);
+  return { execucoes, sessoes };
 }

@@ -4,6 +4,7 @@
 export const DONO_DE_CADA_TABELA: Record<string, string> = {
   // Ambiente
   ambiente: "ambiente/sandboxes",
+  configuracao_ambiente: "ambiente/configuracao",
 
   // Sessões de IA
   trabalho_agentico: "sessoes/execucao",
@@ -21,8 +22,8 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   pull_request: "repositorio/hospedagem",
 
   // Ciclo de Vida
-  // A linha única da configuração do serviço: o agendador, o intervalo, o timeout e o limite de paralelismo são do
-  // Despacho; as colunas `ambiente_*` e `ociosidade_min` são da Configuração do Ambiente, que hoje as lê daqui.
+  // A linha única da configuração do serviço; as colunas `ambiente_*` ficaram sem uso na migração 54, que deu à
+  // Configuração do Ambiente a tabela própria.
   configuracao: "ciclo_de_vida/despacho",
   versao_plano: "ciclo_de_vida/planejamento",
   rodada: "ciclo_de_vida/planejamento",
@@ -33,6 +34,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   arquivo_previsto_rodada: "ciclo_de_vida/planejamento",
   caminho_ticket: "ciclo_de_vida/planejamento",
   criterio_citado_rodada: "ciclo_de_vida/planejamento",
+  processo_demanda: "ciclo_de_vida/processo",
   decisao_ticket: "ciclo_de_vida/processo",
   tentativa: "ciclo_de_vida/processo",
   iteracao_demanda: "ciclo_de_vida/processo",

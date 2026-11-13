@@ -2,10 +2,10 @@
 // ticket composto e o projeto. Os casos de uso do agente conferem aqui que a execução segue aberta e que o endereço pedido
 // é o do próprio ticket ou da própria demanda; ninguém além do próprio agente lê ou escreve.
 import type { DatabaseSync } from "node:sqlite";
-import { type AgregadoDemanda, carregarEscopoDoProcesso, type TicketDemanda } from "../../../processo/publico.ts";
+import { type AgregadoDemanda, pedidosRecebidosEmLote, type TicketDemanda } from "../../../processo/publico.ts";
 import { type Ator, Endereco, formatarTicketRef } from "../../../etapas/publico.ts";
 import { encontrado, ErroDeEscopo, ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
-import { type Execucao, execucaoVivaDoToken } from "../../../../sessoes/publico.ts";
+import { escopoDaExecucao, type Execucao, execucaoVivaDoToken } from "../../../../sessoes/publico.ts";
 import { exigirTrabalhoDoTicket } from "../politica_dos_agentes/trabalho_do_ticket.ts";
 
 /** A identidade do processo que age: o `id` basta, e o `Execucao` inteiro também serve. */
@@ -27,17 +27,22 @@ export type LeitorDeJson = (valor: string, opcao?: string) => Promise<unknown>;
  * O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo.
  */
 function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
-  const linha = carregarEscopoDoProcesso(banco, execucao);
+  const linha = escopoDaExecucao(banco, execucao);
   if (!linha) return undefined;
   if (linha.fim !== null) {
     throw new ErroDeEscopo(`a execução ${execucao} já terminou`, "peça ao Auditor uma nova execução");
   }
+  const pedido = encontrado(
+    pedidosRecebidosEmLote(banco, [linha.demanda_id]).get(linha.demanda_id),
+    `a demanda ${linha.demanda_id} não existe`,
+    "confira o id da demanda",
+  );
   return {
     ator: { tipo: "agente", trabalho_id: execucao },
     sessao: linha.sessao,
     demanda_id: linha.demanda_id,
     ticket_id: linha.ticket_id,
-    projeto: linha.projeto,
+    projeto: pedido.projeto,
   };
 }
 

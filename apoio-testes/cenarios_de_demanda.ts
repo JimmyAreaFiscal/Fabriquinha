@@ -6,9 +6,10 @@ import type { EvidenciaDemanda } from "../src/modulos/ciclo_de_vida/evidencias/p
 import type { Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { CICLO_DA_DEMANDA, type EstadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
 import { validarPlano } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
-import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { criarDemandaNova } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { alinharSituacaoAoEstadoGravado } from "../src/modulos/demandas/pedidos/armazenamento/migracao_da_situacao.ts";
+import { gravarPedidoNovo, gravarProjeto, type Pedido, Projeto } from "../src/modulos/demandas/publico.ts";
+import { gravarDemandaNova } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { escrever, novoId } from "../src/shared/armazenamento/banco.ts";
+import { ErroDeRegra } from "../src/shared/nucleo/erros.ts";
 import { garantirWorktreeDemanda } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
@@ -270,9 +271,49 @@ export function abrirTrabalhoDoAgente(
 }
 
 /**
+ * O pedido que o agregado montado traz, na situação que o estado e o envio dele implicam, como a migração 51 a derivou
+ * das linhas antigas e os fluxos a deixariam.
+ */
+function pedidoDoAgregado({ demanda }: AgregadoDemanda): Pedido {
+  const { id, projeto, titulo, tipo, descricao, criada_por, enviada, estado } = demanda;
+  const situacao =
+    estado === "concluida" || estado === "arquivada"
+      ? "concluido"
+      : estado === "cancelada"
+        ? "cancelado"
+        : enviada
+          ? "enviado"
+          : "rascunho";
+  return { id, projeto, titulo, tipo, descricao, criada_por, enviada, situacao };
+}
+
+/** Grava o agregado novo e o pedido dele, numa unidade de trabalho: o pedido em Demandas, o processo no Ciclo de Vida. */
+export const gravarDemandaComPedido = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
+  escrever(banco, () => {
+    gravarPedidoNovo(banco, pedidoDoAgregado(agregado));
+    return gravarDemandaNova(banco, agregado);
+  });
+
+/**
+ * Demanda nova, como o registro a cria: o ID da sequência das demandas, e `montar` monta o agregado com ele. Erro em
+ * `montar`, no ID devolvido ou na gravação desfaz a transação, sequência incluída.
+ */
+export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => AgregadoDemanda): AgregadoDemanda =>
+  escrever(banco, () => {
+    const id = `I-${String(novoId(banco, "demanda"))}`;
+    const agregado = montar(id);
+    if (agregado.demanda.id !== id) {
+      throw new ErroDeRegra(
+        `o agregado montado tem o ID ${agregado.demanda.id}, mas a sequência alocou ${id}`,
+        `monte a demanda com o id recebido (${id})`,
+      );
+    }
+    return gravarDemandaComPedido(banco, agregado);
+  });
+
+/**
  * Grava o agregado pronto com o ID que ele traz e devolve-o. A produção só grava demanda com o ID da sequência; aqui a
- * sequência é posta no ID anterior durante a gravação e volta ao que era, para o próximo ID alocado não mudar. O pedido
- * fica na situação que o estado montado implica, como os fluxos o deixariam.
+ * sequência é posta no ID anterior durante a gravação e volta ao que era, para o próximo ID alocado não mudar.
  */
 export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda {
   const numero = Number(agregado.demanda.id.replace("I-", ""));
@@ -284,12 +325,10 @@ export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDema
     )
     .run(numero - 1);
   try {
-    const gravado = criarDemandaNova(banco, () => ({
+    return criarDemandaNova(banco, () => ({
       ...agregado,
       pull_requests: (agregado as Partial<AgregadoDemanda>).pull_requests ?? [],
     })); // os cenários prontos não trazem PR
-    alinharSituacaoAoEstadoGravado(banco, gravado.demanda.id);
-    return gravado;
   } finally {
     if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'demanda'").run(anterior.valor);
     else banco.exec("DELETE FROM sequencia WHERE nome = 'demanda'");

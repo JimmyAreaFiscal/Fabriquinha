@@ -26,7 +26,10 @@ export type { AnexoEnviado, Origens } from "./aplicacao/guarda_dos_anexos.ts";
 export { avaliarEGuardarAnexos, type OrigemDosAnexos } from "./aplicacao/submissao.ts";
 export {
   type AnexoDaDemanda,
+  anexosCitadosPorEvidencia,
   anexosDaDemanda,
+  anexosDasDemandasEmLote,
+  apagarEvidenciasDasDemandas,
   evidenciasDoTipoDasDemandas,
   gravarAnexos,
   gravarEvidenciasNovasEAlteradas,

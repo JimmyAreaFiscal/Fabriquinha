@@ -29,7 +29,7 @@ test("semeia demandas com tickets, tentativas, sessões e uso, espalhadas pelos 
     const contar = (sql: string) => (banco.prepare(sql).get() as { n: number }).n;
     const porEstado = Object.fromEntries(
       banco
-        .prepare("SELECT estado, count(*) AS n FROM demanda GROUP BY estado")
+        .prepare("SELECT estado, count(*) AS n FROM processo_demanda GROUP BY estado")
         .all()
         .map((linha) => [String(linha.estado), Number(linha.n)]),
     );

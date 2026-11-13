@@ -2,33 +2,36 @@
 // trabalho da demanda, aplica a transição do agregado no instante do relógio e grava; quem pede só diz qual transição e
 // com que dados, e o Processo é o único que grava o estado do desenvolvimento.
 import type { DatabaseSync } from "node:sqlite";
-import type { Modelo } from "../../../sessoes/publico.ts";
-import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import { type Ator, type Endereco, FABRIQUINHA, type FalhaDaTentativa } from "../../etapas/publico.ts";
-import { PRIMEIRA_ETAPA_DA_RODADA } from "../nucleo/ciclos/ciclos.ts";
+import type { Modelo } from "../../../../sessoes/publico.ts";
+import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
+import { type Ator, type Endereco, FABRIQUINHA, type FalhaDaTentativa } from "../../../etapas/publico.ts";
+import { PRIMEIRA_ETAPA_DA_RODADA } from "../../nucleo/ciclos/ciclos.ts";
 import {
   type AgregadoDemanda,
   comPrDaRodada,
   type PullRequestDoEspaco,
   type TicketDemanda,
-} from "../nucleo/agregado/agregado_demanda.ts";
-import type { Gate } from "../nucleo/agregado/gate_da_demanda.ts";
-import { comDemanda } from "../armazenamento/agregado_da_demanda.ts";
-import { iniciarTentativaDoTicket, reservarTicketAberto } from "../nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
+} from "../../nucleo/agregado/agregado_demanda.ts";
+import type { Gate } from "../../nucleo/agregado/gate_da_demanda.ts";
+import { comDemanda } from "../../armazenamento/agregado_da_demanda.ts";
+import {
+  iniciarTentativaDoTicket,
+  reservarTicketAberto,
+} from "../../nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import {
   type ContextoDemanda,
   devolverTicket,
   registrarFalhaTicket,
   retomarTicketFalhoPorInfraestrutura,
   ticketDaDemanda,
-} from "../nucleo/transicoes/transicoes_demanda.ts";
-import { concluirTicketImplementar } from "../nucleo/transicoes_do_ticket/conclusao_ticket.ts";
+} from "../../nucleo/transicoes/transicoes_demanda.ts";
+import { concluirTicketImplementar } from "../../nucleo/transicoes_do_ticket/conclusao_ticket.ts";
 import {
   concluirImplementacoesRodada,
   concluirSessaoRodada,
   conferirPullRequestRodada,
   registrarCorrecoesSessao,
-} from "../nucleo/transicoes/transicoes_rodada.ts";
+} from "../../nucleo/transicoes/transicoes_rodada.ts";
 import {
   concluirEncerramento,
   concluirResolucaoConflito,
@@ -37,7 +40,7 @@ import {
   registrarIntegracao,
   registrarTentativaEncerramento,
   solicitarIntegracao,
-} from "../nucleo/transicoes/transicoes_encerramento.ts";
+} from "../../nucleo/transicoes/transicoes_encerramento.ts";
 
 /** O ticket pelo qual a transição é pedida. */
 interface TicketDaTransicao {

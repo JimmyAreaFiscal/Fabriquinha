@@ -306,7 +306,7 @@ test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale te
   const { banco } = cenario();
   const estadoDe = (id: string) => cabecalhoDaSessao(banco, id)?.sessao.estado;
   for (const estado of ["concluida", "cancelada", "arquivada"]) {
-    banco.prepare("UPDATE demanda SET estado = ? WHERE id = 'I-300'").run(estado);
+    banco.prepare("UPDATE processo_demanda SET estado = ? WHERE demanda_id = 'I-300'").run(estado);
     // Conversa de planejamento, ticket que falhou e autônoma parada: nenhuma espera mais o Auditor.
     assert.deepEqual(["s1", "s3", "s5"].map(estadoDe), ["terminada", "terminada", "terminada"], estado);
   }

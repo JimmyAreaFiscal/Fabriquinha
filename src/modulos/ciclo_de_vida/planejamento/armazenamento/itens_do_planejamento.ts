@@ -267,3 +267,19 @@ export const ticketsEmExecucaoDasEtapas = (
     )
     .all(JSON.stringify(etapas.sempre), JSON.stringify(etapas.noEstadoDaRodada))
     .map((linha) => ({ ...linha }) as unknown as VinculoDoTicket);
+
+/** Na remoção do projeto: os itens de Planejamento das `demandas`, dos filhos para os pais. */
+export function apagarItensDasDemandas(banco: DatabaseSync, demandaIds: readonly string[]): void {
+  for (const tabela of [
+    "dependencia_ticket",
+    "caminho_ticket",
+    "arquivo_previsto_rodada",
+    "arquivo_previsto_demanda",
+    "versao_plano",
+    "ticket_demanda",
+    "criterio_citado_rodada",
+    "dependencia_rodada",
+    "rodada",
+  ])
+    banco.prepare(`DELETE FROM ${tabela} WHERE ${DAS_DEMANDAS}`).run(JSON.stringify(demandaIds));
+}

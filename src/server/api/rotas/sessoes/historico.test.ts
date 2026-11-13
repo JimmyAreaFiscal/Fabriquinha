@@ -32,6 +32,7 @@ beforeEach(() => {
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
       ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'em_execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejar', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO rodada VALUES ('I-1', 1, 'Leitura', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${T0}', 1),

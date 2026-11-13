@@ -9,19 +9,13 @@ import { ErroDeInexistente, ErroDeRegra } from "../../../../shared/nucleo/erros.
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../../ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { registrarDemanda } from "../../../ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
-import { iniciarTentativaDoTicket } from "../../../ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
-import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
-  apagarProjeto,
   buscarProjeto,
   carregarProjeto,
   donoDoRepositorio,
   gravarProjeto,
   listarProjetos,
   projetoExistente,
-  ticketEmAndamentoDoProjeto,
 } from "./projetos.ts";
 
 const TABELAS = [
@@ -472,92 +466,8 @@ test("cadastro edita preparação sem substituir as demais verificações", () =
   });
 });
 
-test("execuções pendentes são isoladas por projeto; apagarProjeto devolve referências e só anexos órfãos", () => {
-  comBanco((banco) => {
-    gravarCompleta(banco);
-    banco.exec(`
-      INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
-        ('I-1', 'a', 'A', 'problema', 'descrição', 'em_execucao', 'agora', 'pi', 's', 1, 'a'),
-        ('I-2', 'b', 'B', 'problema', 'descrição', 'em_execucao', 'agora', 'pi', 's', 1, 'b');
-      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
-        ('I-1', 1, 'implementar', 'aberto', 'agora'), ('I-2', 1, 'implementar', 'em_execucao', 'agora');
-      INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 'conversa');
-      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('execucao', 's1', 'agora', NULL, 0);
-      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'a', 'Maria', 'd'), (2, 'b', 'João', 'd');
-      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'a', 't', 1, 'agora'), (2, 'b', 't', 1, 'agora');
-      INSERT INTO tarefa_usuario VALUES (1, 1), (2, 2);
-      INSERT INTO execucao_simulada (id, tarefa, usuario, status) VALUES (1, 1, 1, 'na_fila'), (2, 2, 2, 'na_fila');
-      INSERT INTO evidencia_demanda (id, demanda_id, tipo, em) VALUES ('ev1', 'I-1', 'comportamento', 'agora'), ('ev2', 'I-2', 'comportamento', 'agora');
-      INSERT INTO arquivo_evidencia VALUES
-        ('ev1', 1, 'orfao.txt', '${"a".repeat(64)}', 'text/plain', 1),
-        ('ev1', 2, 'compartilhado.txt', '${"b".repeat(64)}', 'text/plain', 1),
-        ('ev1', 3, 'usuario.txt', '${"c".repeat(64)}', 'text/plain', 1),
-        ('ev2', 1, 'compartilhado.txt', '${"b".repeat(64)}', 'text/plain', 1);
-      INSERT INTO usuario_simulado_anexo VALUES (2, 'usuario.txt', '${"c".repeat(64)}', 1);
-    `);
-    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
-    banco.exec("UPDATE processo_do_trabalho SET fim = 'depois'");
-    assert.equal(ticketEmAndamentoDoProjeto(banco, "a"), undefined);
-    banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'");
-    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
-    assert.deepEqual(
-      escrever(banco, () => apagarProjeto(banco, "a")),
-      {
-        execucoes: ["execucao"],
-        sessoes: ["conversa"],
-        simuladas: [1],
-        orfaos: ["a".repeat(64)],
-      },
-    );
-    assert.equal(buscarProjeto(banco, "a"), undefined);
-    assert.ok(buscarProjeto(banco, "b"));
-    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "b") }, { demanda_id: "I-2", ticket_id: 1 });
-    for (const tabela of TABELAS.slice(1))
-      assert.equal(
-        banco.prepare(`SELECT count(*) AS quantidade FROM ${tabela} WHERE projeto = 'a'`).get()?.quantidade,
-        0,
-      );
-    assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
-  });
-});
-
-test("apagarProjeto remove as Tentativas antes dos tickets sem deixar referências quebradas", () => {
-  comBanco((banco) => {
-    const agora = "2026-01-01T00:00:00.000Z";
-    criarDemandaNova(banco, (id) =>
-      iniciarTentativaDoTicket(
-        registrarDemanda(
-          {
-            id,
-            projeto: "a",
-            titulo: "com Tentativa",
-            descricao: "d",
-            tipo: "problema",
-          },
-          { tipo: "externo", ferramenta: "pi", sessao: "s1" },
-          { agora },
-        ),
-        { ticket_id: 1, processo_id: "exec-1" },
-        FABRIQUINHA,
-        { agora },
-      ),
-    );
-    assert.equal(banco.prepare("SELECT count(*) AS quantidade FROM tentativa").get()?.quantidade, 1);
-    escrever(banco, () => apagarProjeto(banco, "a"));
-    assert.equal(buscarProjeto(banco, "a"), undefined);
-    assert.ok(buscarProjeto(banco, "b"));
-    assert.deepEqual(banco.prepare("SELECT * FROM tentativa").all(), []);
-    assert.deepEqual(banco.prepare("SELECT * FROM ticket_demanda").all(), []);
-    assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
-  });
-});
-
-test("listarProjetos vazio e apagarProjeto inexistente não inventam registros", () => {
-  comBanco((banco) => {
-    apagarProjeto(banco, "a");
-    apagarProjeto(banco, "b");
-    assert.deepEqual(listarProjetos(banco), []);
-    assert.deepEqual(apagarProjeto(banco, "fantasma"), { execucoes: [], sessoes: [], simuladas: [], orfaos: [] });
-    assert.equal(ticketEmAndamentoDoProjeto(banco, "fantasma"), undefined);
-  });
+test("listarProjetos vazio não inventa registros", () => {
+  const { banco, fechar } = abrirBancoTemporario();
+  assert.deepEqual(listarProjetos(banco), []);
+  fechar();
 });

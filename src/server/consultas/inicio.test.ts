@@ -211,7 +211,8 @@ test("aguarda: a revisão parada vem da regra pura, com o agora do teste e sem a
   // Sem sonda: a consulta nem conhece a transição que abre a revisão integral (só o agendador a abre).
   assert.doesNotMatch(readFileSync(new URL("./inicio.ts", import.meta.url), "utf8"), /iniciarRevisaoDemanda/);
   assert.equal(
-    (banco.prepare("SELECT estado FROM demanda WHERE id = 'I-308'").get() as { estado: string }).estado,
+    (banco.prepare("SELECT estado FROM processo_demanda WHERE demanda_id = 'I-308'").get() as { estado: string })
+      .estado,
     "em_execucao",
   );
 });

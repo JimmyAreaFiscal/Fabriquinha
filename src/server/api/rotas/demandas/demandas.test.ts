@@ -116,7 +116,7 @@ test("CA-4: a I-207 aparece com o bloqueio da I-206 e o estado dela; integrada, 
   const { pedir, banco } = await cenarioDemandas();
   const i207 = () => pedir("/api/demandas").then((r) => r.json<Board>().demandas[1]);
   assert.deepEqual((await i207())?.bloqueios, [{ demanda_id: "I-206", estado: "em_execucao" }]);
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   assert.deepEqual((await i207())?.bloqueios, []);
 });
 
@@ -148,7 +148,7 @@ test("o trabalho ativo e a página marcam `pi_ativo` só quando o pi subiu, não
 
 test("o board não mostra a demanda arquivada", async () => {
   const { pedir, banco } = await cenarioDemandas();
-  banco.exec("UPDATE demanda SET estado = 'arquivada' WHERE id = 'I-207'");
+  banco.exec("UPDATE processo_demanda SET estado = 'arquivada' WHERE demanda_id = 'I-207'");
   const ids = (await pedir("/api/demandas")).json<Board>().demandas.map((d: { id: string }) => d.id);
   assert.deepEqual(ids, ["I-206"]);
 });
@@ -345,7 +345,7 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
     ],
   }));
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", false]]);
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", true]]);
 });
 

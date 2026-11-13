@@ -23,7 +23,7 @@ const EdicaoDoConteudo = z
 
 export interface Pedido extends z.infer<typeof ConteudoDoPedido> {
   readonly criada_por: z.infer<typeof AtorExterno>;
-  /** O conteúdo congela no envio, e o cancelamento depois dele não o descongela; o processo o grava ao aceitar o envio. */
+  /** O conteúdo congela no envio, e o cancelamento depois dele não o descongela. */
   readonly enviada: boolean;
   readonly situacao: SituacaoDoPedido;
 }

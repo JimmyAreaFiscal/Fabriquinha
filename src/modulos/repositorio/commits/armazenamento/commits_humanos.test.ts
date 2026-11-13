@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import { cursorDaBase, gravarVarredura, projetosAVarrer } from "./commits_humanos.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em ordem de nome", () => {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   for (const nome of ["loja", "velho", "novo"]) {
     banco
       .prepare(
@@ -31,7 +30,7 @@ test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em o
 
 test("gravarVarredura grava o cursor com a hora do Relogio injetado", () => {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   banco
     .prepare(
       `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)

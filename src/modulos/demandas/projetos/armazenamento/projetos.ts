@@ -12,7 +12,6 @@ import {
   linhaComConfiguracaoAgente,
 } from "../../../compartilhado/armazenamento/configuracao_agente.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { apagarEstadoDoProcessoDasDemandas } from "../../../ciclo_de_vida/publico.ts";
 
 type Linha = Record<string, unknown>;
 
@@ -171,114 +170,31 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
   });
 }
 
-// A remoção em cascata ainda lê e apaga as tabelas dos outros domínios por SQL (MELHORIAS §5.1): pendência do ticket 22,
-// que dá a cada dono a sua parte da remoção pela fachada dele.
-const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
-const DAS_DEMANDAS = "SELECT id FROM demanda WHERE projeto = $p";
-const DAS_TRABALHOS = `SELECT id FROM trabalho_agentico WHERE demanda_id IN (${DAS_DEMANDAS})`;
-const DAS_PROCESSOS = `SELECT id FROM processo_do_trabalho WHERE trabalho_id IN (${DAS_TRABALHOS})`;
-const DAS_EVIDENCIAS_DEMANDA = `SELECT id FROM evidencia_demanda WHERE demanda_id IN (${DAS_DEMANDAS})`;
-const DAS_AVALIACOES = "SELECT id FROM avaliacao WHERE projeto = $p";
-
-/** O primeiro ticket do projeto em execução, ou com execução de sessão aberta, se houver. */
-export function ticketEmAndamentoDoProjeto(
-  banco: DatabaseSync,
-  nome: string,
-): { demanda_id: string; ticket_id: number } | undefined {
-  return banco
-    .prepare(
-      `SELECT t.demanda_id, t.ticket_id FROM ticket_demanda t
-       WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.estado = 'em_execucao' OR EXISTS (
-         SELECT 1 FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id
-         WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id AND e.fim IS NULL))
-       ORDER BY t.rowid LIMIT 1`,
-    )
-    .get({ p: nome }) as { demanda_id: string; ticket_id: number } | undefined;
-}
-
 /**
- * Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. As
- * recusas (execução em andamento) e o apagamento no disco são do cadastro.
+ * Na remoção do projeto: as linhas do cadastro dele e as históricas da Simulação, na ordem das chaves estrangeiras; os
+ * pedidos e o que depende deles já saíram. Devolve as execuções simuladas, para o cadastro apagar as pastas delas.
  */
-export function apagarProjeto(banco: DatabaseSync, nome: string) {
+export function apagarCadastroDoProjeto(banco: DatabaseSync, nome: string): { simuladas: number[] } {
   const p = { p: nome };
+  const dasTarefas = "SELECT id FROM tarefa WHERE projeto = $p";
   const simuladas = (
-    banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS})`).all(p) as { id: number }[]
+    banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${dasTarefas})`).all(p) as { id: number }[]
   ).map((e) => e.id);
-  const execucoes = (
-    banco.prepare(`SELECT id FROM processo_do_trabalho WHERE id IN (${DAS_PROCESSOS})`).all(p) as {
-      id: string;
-    }[]
-  ).map((e) => e.id);
-  const sessoes = (
-    banco.prepare(`SELECT conversa_referencia FROM trabalho_agentico WHERE id IN (${DAS_TRABALHOS})`).all(p) as {
-      conversa_referencia: string;
-    }[]
-  ).map((s) => s.conversa_referencia);
-  const anexos = (
-    banco
-      .prepare(`SELECT DISTINCT sha256 FROM arquivo_evidencia WHERE evidencia_id IN (${DAS_EVIDENCIAS_DEMANDA})`)
-      .all(p) as { sha256: string }[]
-  ).map((a) => a.sha256);
-
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
-  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, commit humano posterior, achado) saem ou
-  // são soltas, para não deixar FK pendurada.
-  banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
-  apagar("uso_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
-  apagar("avaliacao_demanda", `avaliacao_id IN (${DAS_AVALIACOES}) OR demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("achado_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
-  apagar("avaliacao", "projeto = $p");
-  apagar("commit_humano_posterior", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
-  apagar(
-    "arquivo_commit_demanda",
-    `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,
-  );
-  apagar("commit_ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("uso_modelo_historico", `execucao_id IN (${DAS_PROCESSOS})`);
-  apagar("uso_modelo_execucao", `execucao_id IN (${DAS_PROCESSOS})`);
-  apagar("processo_do_trabalho", `trabalho_id IN (${DAS_TRABALHOS})`);
-  apagar("trabalho_agentico", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("trabalho_nao_gerenciado", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("uso_declarado", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagarEstadoDoProcessoDasDemandas(
-    banco,
-    banco
-      .prepare(DAS_DEMANDAS)
-      .all(p)
-      .map((demanda) => String(demanda.id)),
-  );
-  apagar("evidencia_demanda", `demanda_id IN (${DAS_DEMANDAS})`); // arquivo_evidencia e evidencia_historico saem por ON DELETE CASCADE
-  apagar("pull_request", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("caminho_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("arquivo_previsto_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("arquivo_previsto_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("versao_plano", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("criterio_citado_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("dependencia_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("rodada", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("dependencia_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR depende_demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("demanda_historico", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("demanda", "projeto = $p");
-  apagar("varredura_base", "projeto = $p");
-  apagar("execucao_simulada", `tarefa IN (${DAS_TAREFAS})`);
-  apagar("tarefa_usuario", `tarefa IN (${DAS_TAREFAS})`);
+  apagar("execucao_simulada", `tarefa IN (${dasTarefas})`);
+  apagar("tarefa_usuario", `tarefa IN (${dasTarefas})`);
   apagar("tarefa", "projeto = $p");
   apagar("usuario_simulado_anexo", "usuario IN (SELECT id FROM usuario_simulado WHERE projeto = $p)");
   apagar("usuario_simulado", "projeto = $p");
   apagar("projeto", "nome = $p");
-
-  const restam = new Set(
-    (
-      banco
-        .prepare(
-          `SELECT sha256 FROM arquivo_evidencia WHERE sha256 IN (SELECT value FROM json_each($anexos))
-           UNION SELECT sha256 FROM usuario_simulado_anexo WHERE sha256 IN (SELECT value FROM json_each($anexos))`,
-        )
-        .all({ anexos: JSON.stringify(anexos) }) as { sha256: string }[]
-    ).map((a) => a.sha256),
-  );
-  return { execucoes, sessoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
+  return { simuladas };
 }
+
+/** Dos anexos `sha256s`, os que um usuário simulado de outro projeto ainda cita. */
+export const anexosDeUsuariosSimulados = (banco: DatabaseSync, sha256s: readonly string[]): Set<string> =>
+  new Set(
+    banco
+      .prepare("SELECT sha256 FROM usuario_simulado_anexo WHERE sha256 IN (SELECT value FROM json_each(?))")
+      .all(JSON.stringify(sha256s))
+      .map((linha) => String(linha.sha256)),
+  );

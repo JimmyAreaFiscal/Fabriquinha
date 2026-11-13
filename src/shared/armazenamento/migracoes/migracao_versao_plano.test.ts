@@ -6,6 +6,7 @@ import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../modulos/ciclo_
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 import { origemDe } from "../../../../apoio-testes/banco_de_metricas.ts";
+import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
 
 const VERSAO_48 = VERSAO_LINHA_DE_BASE + 12;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -286,6 +287,7 @@ test("a Conformidade da demanda concluída com tickets corretivos é a mesma ant
   assert.deepEqual(antes.extras, ["src/c.ts", "src/d.ts", "src/e.ts"], "as correções são extras");
 
   migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
+  migrarBancoDaFabriquinha(banco); // a Métrica de hoje lê o banco na versão atual
 
   const depois = new MetricaDeConformidade().calcular(origemDe(banco), { demandaId: "I-1" }).get("planejar")
     ?.rodadas[0];

@@ -373,7 +373,9 @@ test("uso: falta --dados, JSON inválido, outra sessão antes do envio e demanda
   await completar(env, id);
   json(await cli(env, ["demanda", "enviar", id]));
   json(await cli(outra(env), ["demanda", "uso", id, "--dados", "uso.json"])); // depois do envio, qualquer sessão
-  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.exec(`UPDATE demanda SET estado = 'concluida' WHERE id = '${id}'`);
+  bancoDaRaiz
+    .get(env.FABRIQUINHA_ROOT)
+    ?.exec(`UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = '${id}'`);
   falha(await cli(env, ["demanda", "uso", id, "--dados", "uso.json"]), 1, /já terminou \(concluida\)/);
 });
 

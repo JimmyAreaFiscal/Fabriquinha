@@ -4,9 +4,7 @@ import { test } from "node:test";
 import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import { encerrarProcesso, iniciarProcesso, registrarUso } from "../nucleo/trabalho_agentico.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../nucleo/trabalho_agentico.ts";
-import { migrar } from "../../compartilhado/armazenamento/banco.ts";
 import { ticketsComPiAtivo } from "../../../server/consultas/sessoes/historico_demanda.ts";
-import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
@@ -18,6 +16,7 @@ import {
   sessaoDeCadaTicketDasDemandas,
   ticketDoTrabalho,
 } from "./trabalho_agentico.ts";
+import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";
@@ -26,10 +25,11 @@ const ref = { demanda_id: "I-1", ticket_id: 1 };
 const banco = (): DatabaseSync => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  migrarBancoDaFabriquinha(b);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/repo/p', 'main', 'github', 'k');
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T}), ('I-1', 2, 'implementar', 'aberto', ${T});`);
   return b;
@@ -234,6 +234,7 @@ test("o ticket dono do trabalho; id desconhecido volta sem ticket", () => {
 test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {
   const b = banco();
   b.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-2', 1, 'implementar', 'aberto', ${T})`);
   const nova = b.prepare(

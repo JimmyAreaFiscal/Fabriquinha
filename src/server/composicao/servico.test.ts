@@ -18,9 +18,8 @@ import {
   listarAmbientes,
 } from "../../modulos/sandbox/armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { escrever, migrar, novoId } from "../../modulos/compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../../modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
-import { MIGRACOES_DE_DEMANDAS } from "../../modulos/demandas/publico.ts";
+import { escrever, novoId } from "../../modulos/compartilhado/armazenamento/banco.ts";
+import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../../modulos/demandas/publico.ts";
 import { Configuracao, salvarConfiguracao } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
 import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
@@ -224,6 +223,7 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'em_execucao', '${AGORA}');
     INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
@@ -250,14 +250,14 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
     causa: "servico_reiniciado",
     motivo: "serviço reiniciado",
   });
-  assert.equal(s.banco.prepare("SELECT estado FROM demanda").get()?.estado, "em_execucao");
+  assert.equal(s.banco.prepare("SELECT estado FROM processo_demanda").get()?.estado, "em_execucao");
   await s.parar();
 });
 
 /** O banco da `raiz` na versão 36 (a linha de base), com a I-1 registrada. */
 function bancoComDemanda(raiz: string): DatabaseSync {
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
-  migrar(banco, [...MIGRACOES, ...MIGRACOES_DE_DEMANDAS.migracoes.map(({ migracao }) => migracao)]);
+  migrarBancoDaFabriquinha(banco);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO sequencia (nome, valor) VALUES ('demanda', 1);`);
@@ -289,6 +289,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
   const raiz = novaRaiz();
   const legado = bancoComDemanda(raiz);
   legado.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('I-1', '${AGORA}');`);
   legado.close();
   for (const vez of [1, 2]) {
@@ -421,6 +422,7 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
   }
   const id = `I-${String(n)}`;
   banco.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('${id}', 1, 'implementar', 'aberto', '${AGORA}', 1)`);

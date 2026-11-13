@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import { Endereco } from "../../etapas/publico.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const ESTADOS_LIDOS = ["planejar", "em_execucao", "revisar_demanda", "encerrar_demanda"] as const;
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -12,14 +11,15 @@ const T = "'2026-01-01T00:00:00.000Z'";
 const banco = () => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  migrarBancoDaFabriquinha(b);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   return b;
 };
 const demanda = (b: DatabaseSync, id: string, estado: string) => {
   b.exec(
-    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', 'p', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', 1, 'fabriquinha/${id}')`,
+    `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${id}', 'p', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda)`,
   );
 };
 let execucoes = 0;

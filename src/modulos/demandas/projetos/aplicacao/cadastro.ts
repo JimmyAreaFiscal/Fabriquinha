@@ -8,7 +8,7 @@ import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
 import { escrever, raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
 import { ErroDeRegra, ErroExterno, mensagem } from "../../../../shared/nucleo/erros.ts";
-import { EtapaTicket, formatarTicketRef } from "../../../ciclo_de_vida/publico.ts";
+import { EtapaTicket } from "../../../ciclo_de_vida/publico.ts";
 import {
   conferirProjeto,
   type Hospedagem,
@@ -17,12 +17,12 @@ import {
 } from "../../../repositorio/publico.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 import {
-  apagarProjeto,
+  anexosDeUsuariosSimulados,
+  apagarCadastroDoProjeto,
   buscarProjeto,
   donoDoRepositorio,
   gravarProjeto,
   projetoExistente,
-  ticketEmAndamentoDoProjeto,
 } from "../armazenamento/projetos.ts";
 import {
   type ConferirModeloNoHarness,
@@ -187,19 +187,17 @@ export const editarProjetoDoFormulario = (
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) => conferirEGravar(banco, formulario, editarProjeto, conferirModeloNoHarness);
 
-/** Recusa a remoção enquanto o projeto tem execução de ticket em andamento. */
-function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string): void {
-  const ticketEmAndamento = ticketEmAndamentoDoProjeto(banco, nome);
-  if (ticketEmAndamento) {
-    throw new ErroDeRegra(
-      `o projeto ${nome} tem execução em andamento no ${formatarTicketRef(ticketEmAndamento)}`,
-      "espere ela terminar ou pare a sessão, e remova de novo",
-    );
-  }
-}
+/**
+ * O que depende do projeto e não é do cadastro dele: os pedidos, as dependências e o desenvolvimento deles nos outros
+ * domínios. Quem remove o projeto apaga tudo isso na unidade de trabalho da remoção, recusando antes a execução em
+ * andamento, e devolve o que sobra para apagar no disco: as execuções, as conversas das sessões e os anexos que nenhuma
+ * evidência cita mais.
+ */
+type ApagarOQueDependeDoProjeto = () => { execucoes: string[]; sessoes: string[]; anexosSemEvidencia: string[] };
 
 /**
- * Remove o projeto e tudo o que depende dele, em qualquer estado (I-4): primeiro o banco, numa transação; depois,
+ * Remove o projeto e tudo o que depende dele, em qualquer estado (I-4): primeiro o banco, numa transação, com o que
+ * `apagarOQueDependeDoProjeto` apaga antes do cadastro; depois,
  * com o banco já commitado, as pastas de execução, as sessões do pi, os anexos que nenhum outro projeto usa e as
  * worktrees do projeto.
  * Falha no disco vira aviso: o banco não volta atrás.
@@ -210,11 +208,20 @@ function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string): void {
 export async function removerProjeto(
   banco: DatabaseSync,
   nome: string,
+  apagarOQueDependeDoProjeto: ApagarOQueDependeDoProjeto,
 ): Promise<{ projeto: Projeto; avisos: string[] }> {
   const { removido, execucoes, sessoes, simuladas, orfaos } = escrever(banco, () => {
     const removido = projetoExistente(banco, nome);
-    recusarExecucaoEmAndamento(banco, nome);
-    return { removido, ...apagarProjeto(banco, nome) };
+    const { execucoes, sessoes, anexosSemEvidencia } = apagarOQueDependeDoProjeto();
+    const { simuladas } = apagarCadastroDoProjeto(banco, nome);
+    const deUsuarioSimulado = anexosDeUsuariosSimulados(banco, anexosSemEvidencia);
+    return {
+      removido,
+      execucoes,
+      sessoes,
+      simuladas,
+      orfaos: anexosSemEvidencia.filter((sha256) => !deUsuarioSimulado.has(sha256)),
+    };
   });
 
   const raiz = raizDo(banco);

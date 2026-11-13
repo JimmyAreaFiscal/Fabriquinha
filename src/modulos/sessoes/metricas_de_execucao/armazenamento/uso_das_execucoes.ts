@@ -29,3 +29,11 @@ export function gravarUsoDasExecucoes(banco: DatabaseSync, usos: readonly UsoDaE
   );
   for (const uso of usos) gravarUso.run({ ...uso, custo: uso.custo ?? null });
 }
+
+/** Na remoção do projeto: o Uso medido das `execucoes`, o atual e o histórico. */
+export function apagarUsoDasExecucoes(banco: DatabaseSync, execucoes: readonly string[]): void {
+  for (const tabela of ["uso_modelo_historico", "uso_modelo_execucao"])
+    banco
+      .prepare(`DELETE FROM ${tabela} WHERE execucao_id IN (SELECT value FROM json_each(?))`)
+      .run(JSON.stringify(execucoes));
+}

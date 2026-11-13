@@ -28,11 +28,7 @@ export const REGRAS_DE_DEMANDAS: RegrasDoDominio = {
     pedidos: ["projetos"],
     dependencias: ["pedidos"],
   },
-  // As tabelas de Demandas ainda são tocadas por SQL de fora: `demanda`, cuja linha guarda também as colunas do processo
-  // (estado, branch, enviada), pelo agregado do sdlc (inclusive o andamento que as Métricas recebem) e pelas leituras
-  // que juntam domínios (Processo, 22; consultas, 21); `dependencia_demanda` pela leitura das predecessoras com o estado
-  // (Despacho, 20); e a remoção do projeto toca as de Pedidos (22).
-  posseDasTabelas: "inventario",
+  posseDasTabelas: "estrita",
   excecoes: [
     ...EXCECOES_DO_PROJETO_NO_CLI_DO_AGENTE,
     // provisório: remover no ticket 22, que decide o dono do mapeador das colunas da configuração do agente.

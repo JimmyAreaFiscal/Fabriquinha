@@ -13,8 +13,10 @@ export {
 } from "./nucleo/sessao.ts";
 export type { FalhaDaExecucao } from "./nucleo/falha_da_execucao.ts";
 export {
+  apagarSessoesDasDemandas,
   contextoDaExecucao,
   contextoDaSessao,
+  escopoDaExecucao,
   execucaoVivaDoToken,
   execucoesAbertas,
   execucoesEmLote,

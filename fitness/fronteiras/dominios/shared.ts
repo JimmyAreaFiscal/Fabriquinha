@@ -17,6 +17,15 @@ export const ARQUIVO_DO_RELOGIO = "shared/nucleo/relogio.ts";
 export const ARQUIVO_DO_PROCESSO = "shared/infra/processo.ts";
 /** As migrações congeladas: guardam o esquema do passado de todas as tabelas, fora da posse e da catraca de nomes de Etapa. */
 export const PASTA_DO_HISTORICO_DO_ESQUEMA = "shared/armazenamento/migracoes/";
+/**
+ * As migrações dos domínios: como o histórico do esquema, citam a tabela mãe na chave estrangeira, os estados nos CHECK e
+ * levam, uma vez, os dados de uma tabela antiga de outro dono à tabela nova.
+ */
+export const MIGRACOES_DOS_DOMINIOS = [
+  "modulos/demandas/pedidos/armazenamento/migracao_da_situacao.ts",
+  "modulos/ciclo_de_vida/processo/armazenamento/migracao_do_estado_do_processo.ts",
+  "modulos/ambiente/configuracao/armazenamento/migracao_da_configuracao.ts",
+];
 
 // O shared está no destino desde o ticket 04; não tem subdomínios.
 export const REGRAS_DO_SHARED: RegrasDoDominio = {

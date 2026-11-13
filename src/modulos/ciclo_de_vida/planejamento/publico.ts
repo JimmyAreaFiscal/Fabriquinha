@@ -13,6 +13,7 @@ export {
 } from "./nucleo/plano.ts";
 export { criarTicket, estaOcupado, GrafoDeDependencias, ticketAtualDaEtapa } from "./nucleo/item_de_trabalho.ts";
 export {
+  apagarItensDasDemandas,
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
   gravarItensNovosEMudados,

@@ -9,6 +9,7 @@ import type { DadosDoChatDemanda } from "../../../server/contrato/sessoes/chat.t
 import { ROTAS_DO_CHAT } from "../../../server/api/rotas/sessoes/chat.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 5;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -80,7 +81,7 @@ test("a migração 42 mantém as linhas das três tabelas, o uso por processo e 
 
 test("depois da migração 42 o chat da demanda concluída mostra a conversa e as FKs seguem valendo", () => {
   const { banco, raiz } = bancoNaVersao41();
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco); // a 42 e as seguintes, até a versão que o chat de hoje lê
   mkdirSync(join(raiz, "sessoes"));
   writeFileSync(
     join(raiz, "sessoes", "2026-01-01T00-00-00-000Z_s-1.jsonl"),

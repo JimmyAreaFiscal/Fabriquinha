@@ -6,8 +6,6 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
 import { listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type EspacoDeTrabalho,
@@ -22,6 +20,7 @@ import { GeradorDeAmbientes } from "../../sandboxes/infra/gerador_de_ambientes.t
 import { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";
 import { PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/aplicacao/configuracao_do_ambiente.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
 // O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
@@ -60,7 +59,7 @@ let cenarios = 0;
 function cenario() {
   const docker = instalarDockerFalso(join(base, `docker-${String(++cenarios)}`));
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   validarESalvarConfiguracaoDoAmbiente(banco, LIMITES);
   const gerador = new GeradorDeAmbientes();
   const conjunto = new ConjuntoDeAmbientes(banco, gerador, relogioDoSistema, SERVICO);

@@ -59,3 +59,11 @@ export const lerUsoDeclaradoEmLote = (banco: DatabaseSync, demandaIds: readonly 
   )
     .all(JSON.stringify(demandaIds))
     .map(usoDeclaradoDaLinha);
+
+/** Na remoção do projeto: o Uso declarado das `demandas` e as sessões da ferramenta externa que ele cita. */
+export function apagarUsoDeclaradoDasDemandas(banco: DatabaseSync, demandas: readonly string[]): void {
+  for (const tabela of ["trabalho_nao_gerenciado", "uso_declarado"])
+    banco
+      .prepare(`DELETE FROM ${tabela} WHERE demanda_id IN (SELECT value FROM json_each(?))`)
+      .run(JSON.stringify(demandas));
+}

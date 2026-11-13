@@ -49,11 +49,13 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   // Dependentes de `a`: uma aberta (registro) e outra que já terminou (concluída), que o cancelamento poupa.
   const aberta = registrarExterna(c, [a]);
   const terminada = registrarExterna(c, [a]);
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(terminada);
+  c.banco.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(terminada);
+  c.banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = ?").run(terminada);
   // Dependência de uma demanda que será arquivada.
   const feita = registrarExterna(c);
   const dependeDaFeita = registrarExterna(c, [feita]);
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(feita);
+  c.banco.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(feita);
+  c.banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = ?").run(feita);
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);

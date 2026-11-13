@@ -44,11 +44,13 @@ export {
   type Situacao,
 } from "./chat/publico.ts";
 export {
+  apagarSessoesDasDemandas,
   carregarSessoesDoContexto,
   comSessoesDoContexto,
   type ContextoDaSessao,
   contextoDaExecucao,
   contextoDaSessao,
+  escopoDaExecucao,
   criarSessao,
   encerrarExecucao,
   encerrarExecucaoComUso,

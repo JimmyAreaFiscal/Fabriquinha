@@ -193,3 +193,29 @@ export function lerAnexo(banco: DatabaseSync, chave: ChaveEvidencia, sha256: str
     conteudo: readFileSync(arquivo),
   };
 }
+
+/** O SHA-256 de cada anexo das evidências das `demandas`, sem repetir. */
+export const anexosDasDemandasEmLote = (banco: DatabaseSync, demandaIds: readonly string[]): string[] =>
+  banco
+    .prepare(
+      `SELECT DISTINCT sha256 FROM arquivo_evidencia WHERE evidencia_id IN
+         (SELECT id FROM evidencia_demanda WHERE demanda_id IN (SELECT value FROM json_each(?)))`,
+    )
+    .all(JSON.stringify(demandaIds))
+    .map((linha) => String(linha.sha256));
+
+/** Dos anexos `sha256s`, os que alguma evidência ainda cita. */
+export const anexosCitadosPorEvidencia = (banco: DatabaseSync, sha256s: readonly string[]): Set<string> =>
+  new Set(
+    banco
+      .prepare("SELECT sha256 FROM arquivo_evidencia WHERE sha256 IN (SELECT value FROM json_each(?))")
+      .all(JSON.stringify(sha256s))
+      .map((linha) => String(linha.sha256)),
+  );
+
+/** Na remoção do projeto: as evidências das `demandas`; os anexos e o histórico delas saem em cascata. */
+export function apagarEvidenciasDasDemandas(banco: DatabaseSync, demandaIds: readonly string[]): void {
+  banco
+    .prepare("DELETE FROM evidencia_demanda WHERE demanda_id IN (SELECT value FROM json_each(?))")
+    .run(JSON.stringify(demandaIds));
+}

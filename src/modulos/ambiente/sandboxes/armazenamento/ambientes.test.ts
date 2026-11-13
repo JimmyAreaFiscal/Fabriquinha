@@ -11,15 +11,14 @@ import {
   reservarAmbienteParaEliminar,
   listarAmbientes,
 } from "./ambientes.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const T1 = "2026-01-01T00:00:00.000Z";
 const T2 = "2026-01-02T00:00:00.000Z";
 
 function bancoComConjunto(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   return banco;
 }
 

@@ -1,18 +1,18 @@
 // Revisão integral com git real temporário e pi falso (CA-9 a CA-17).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { carregarDemanda, comDemanda } from "../armazenamento/agregado_da_demanda.ts";
+import type { Ator } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
+import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { relogioFixo } from "../../../../compartilhado/nucleo/relogio.ts";
+import { carregarDemanda, comDemanda } from "../../armazenamento/agregado_da_demanda.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
   REF_GLOBAL,
   comEvidencia,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { decidirGate } from "../../../etapas/gates.ts";
+} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { decidirGate } from "../../../../etapas/gates.ts";
 import { iniciarRevisaoIntegral } from "./revisao_integral.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

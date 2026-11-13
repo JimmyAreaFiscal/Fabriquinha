@@ -589,7 +589,7 @@ test("CA-34 e CA-35: arquivar só a concluída", async () => {
   assert.equal(recusa.status, 409);
   assert.match(erro(recusa), /só no estado concluida/);
   assert.equal(estado(), "gate_demanda");
-  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(r.status, 200);
   assert.equal(DemandaArquivada.parse(r.json()).demanda.demanda.estado, "arquivada");

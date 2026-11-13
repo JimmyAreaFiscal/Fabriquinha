@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { migrar } from "../../../../shared/armazenamento/banco.ts";
 import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
 import {
   alteracoesDosCommitsEmLote,
@@ -13,7 +12,7 @@ import {
   gravarCommitsPosterioresDoTicket,
   gravarCommitHumanoPosterior,
 } from "./commits_demanda.ts";
-import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (c: string) => c.repeat(40);
@@ -22,12 +21,13 @@ const em = (demanda: string, linhas: [number, number][]) => new Map([[demanda, n
 const banco = () => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  migrarBancoDaFabriquinha(b);
   b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   for (const d of ["D", "E"]) {
     b.exec(
-      `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${d}', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${d}')`,
+      `INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('${d}', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${d}');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda)`,
     );
   }
   for (const [d, n] of [

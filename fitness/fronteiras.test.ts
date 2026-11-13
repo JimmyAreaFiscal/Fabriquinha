@@ -24,6 +24,7 @@ import { ARQUIVO_DO_CONDUTOR, ARQUIVO_DO_HARNESS } from "./fronteiras/dominios/s
 import {
   ARQUIVO_DO_PROCESSO,
   ARQUIVO_DO_RELOGIO,
+  MIGRACOES_DOS_DOMINIOS,
   PASTA_DO_HISTORICO_DO_ESQUEMA,
 } from "./fronteiras/dominios/shared.ts";
 import {
@@ -575,7 +576,11 @@ test("o que as Etapas declaram é um domínio embaixo do motor, e o resto de eta
 // citando o nome falha, e arquivo da lista que deixou de citar também.
 const NOMES_DE_ETAPA = new Set<string>(EtapaTicket.options);
 const NOME_DE_ETAPA_NO_SQL = new RegExp(`'(${[...NOMES_DE_ETAPA].join("|")})'`);
-const PASTAS_LIBERADAS_PARA_NOME_DE_ETAPA = [...PASTAS_QUE_CITAM_NOME_DE_ETAPA, PASTA_DO_HISTORICO_DO_ESQUEMA];
+const PASTAS_LIBERADAS_PARA_NOME_DE_ETAPA = [
+  ...PASTAS_QUE_CITAM_NOME_DE_ETAPA,
+  PASTA_DO_HISTORICO_DO_ESQUEMA,
+  ...MIGRACOES_DOS_DOMINIOS,
+];
 
 /** O texto de um literal, de um trecho de template ou da chave de um objeto; `undefined` em qualquer outro nó. */
 function textoDoNo(no: ts.Node): string | undefined {

@@ -15,7 +15,7 @@ import { submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vi
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
 import {
   comTrabalhosDoTicket,
   gravarTokenDoProcesso,

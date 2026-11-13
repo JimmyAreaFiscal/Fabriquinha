@@ -150,7 +150,8 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   );
 
   // Controle: com A concluída (o percurso até lá é de outros casos), o mesmo ciclo inicia o planejamento de B.
-  c.banco.prepare("UPDATE demanda SET estado = 'concluida', situacao = 'concluido' WHERE id = ?").run(a);
+  c.banco.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(a);
+  c.banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = ?").run(a);
   await planejamentoIniciaEInterrompe(c, b);
 
   // Autorreferência e ciclo: rejeitados, sem aresta nova.

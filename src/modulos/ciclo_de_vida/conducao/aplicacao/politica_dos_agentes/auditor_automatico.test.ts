@@ -4,12 +4,11 @@ import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { test } from "node:test";
-import { migrar } from "../../../../../shared/armazenamento/banco.ts";
-import { MIGRACOES } from "../../../../../shared/armazenamento/migracoes/migracoes.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto, HarnessPi } from "../../../../sessoes/publico.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./condutor.ts";
+import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 
 /** A triagem com o pi da consulta trocado por `rodar`, no harness do condutor do serviço. */
 const triarCom = (rodar: typeof executar, ...argumentos: Parameters<typeof triarPergunta>) => {
@@ -153,10 +152,11 @@ test("o Uso da consulta é somado à execução do ticket que perguntou, e a con
   const T = "'2026-01-01T00:00:00.000Z'";
   const banco = new DatabaseSync(":memory:");
   banco.exec("PRAGMA foreign_keys = ON");
-  migrar(banco, MIGRACOES);
+  migrarBancoDaFabriquinha(banco);
   banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/repo/p', 'main', 'github', 'k');
     INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-7', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-7');
+    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-7', 3, 'implementar', 'em_execucao', ${T});`);
   const ticket = { demanda_id: "I-7", ticket_id: 3 };

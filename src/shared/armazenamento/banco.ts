@@ -22,7 +22,7 @@ interface MigracoesDoDominio {
  * não a posição numa lista: a migração de um domínio não muda de número quando outro domínio registra a sua. Recusa
  * buraco, versão repetida e a que cai no histórico, porque o banco aplicaria uma migração no lugar de outra.
  */
-function enfileirarDepoisDoHistorico(migracoesDosDominios: readonly MigracoesDoDominio[]): Migracao[] {
+export function enfileirarDepoisDoHistorico(migracoesDosDominios: readonly MigracoesDoDominio[]): Migracao[] {
   const registradas = migracoesDosDominios
     .flatMap(({ dominio, migracoes }) => migracoes.map((registrada) => ({ dominio, ...registrada })))
     .sort((primeira, segunda) => primeira.versao - segunda.versao);
