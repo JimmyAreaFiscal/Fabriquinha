@@ -26,7 +26,8 @@ import {
   ticketsComPiAtivo,
 } from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
-import { usoDaDemanda } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { usoDaDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { lerPedidosDasMetricas } from "./pedidos_das_metricas.ts";
 import { pendenciasDeUmaDemanda, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
 import { visaoDaDemanda } from "../../../modulos/sdlc/aplicacao/consultas/visao_da_demanda.ts";
 import { dependentesNaoConcluidosDoPedido } from "../../../modulos/demandas/publico.ts";
@@ -83,7 +84,7 @@ export function consultarDemanda(
     const achado = achadoDaDemanda(banco, id);
     const sessoes = sessaoDeCadaTicketDaDemanda(banco, id);
     const comPiAtivo = ticketsComPiAtivo(banco);
-    const { modelos, custo, textoDoCusto } = usoDaDemanda(banco, id);
+    const { modelos, custo, textoDoCusto } = usoDaDemanda({ banco, pedidos: lerPedidosDasMetricas(banco, [id]) }, id);
     const elegiveis = new Set(
       prontosParaExecutarAgora(
         new Despacho().selecionar({

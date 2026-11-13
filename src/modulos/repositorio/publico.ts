@@ -2,10 +2,13 @@
 // espaços, registra commits, publica e acompanha PRs, integra o PR da rodada e informa alterações e histórico. É a
 // única entrada usada por fora do domínio; os subdomínios ficam atrás dela.
 export {
+  alteracoesDosCommitsEmLote,
   arquivosDe,
+  arquivosDosCommits,
   type Commit,
   commitar,
   commitDoTicketDemanda,
+  commitsDosTicketsEmLote,
   cursorDaBase,
   gravarCommitDemanda,
   projetosAVarrer,

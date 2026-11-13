@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { MetricasDoMes, MetricasPorDemanda } from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import type { MetricasDoMes, MetricasPorDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarProjeto } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../modulos/compartilhado/nucleo/relogio.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";

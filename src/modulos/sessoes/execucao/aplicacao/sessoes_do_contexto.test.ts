@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
-import { resumoDaSessao } from "../armazenamento/sessoes_e_execucoes.ts";
+import { execucoesEmLote, resumoDaSessao } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type Execucao, type Sessao } from "../nucleo/sessao.ts";
 import { comSessoesDoContexto, usoEmLote } from "./sessoes_do_contexto.ts";
 
@@ -70,6 +70,50 @@ test("o Uso em lote filtra por sessão, contexto e período, e os filtros se som
     execucoesDoUso(usoEmLote(banco, { contexto: { demanda_id: "I-1", ticket_id: 1 }, periodo: fevereiro })),
     ["e2"],
   );
+  assert.deepEqual(execucoesDoUso(usoEmLote(banco, { demandas: ["I-1"], periodo: fevereiro })), ["e2", "e3"]);
+  assert.deepEqual(execucoesDoUso(usoEmLote(banco, { demandas: ["I-2"] })), []);
+});
+
+test("as execuções em lote vêm com o contexto e a duração, na ordem do início, e um fim antes do início dura 0", () => {
+  const banco = bancoComDuasSessoes();
+  banco.exec(`UPDATE processo_do_trabalho SET fim = '2026-01-10T00:00:01.500Z' WHERE id = 'e1';
+    UPDATE processo_do_trabalho SET fim = '2026-02-09T00:00:00.000Z', falha = 1 WHERE id = 'e2';
+    UPDATE processo_do_trabalho SET fim = NULL WHERE id = 'e3';`);
+  assert.deepEqual(execucoesEmLote(banco, { demandas: ["I-1"] }), [
+    {
+      id: "e1",
+      sessao: "s1",
+      demanda_id: "I-1",
+      ticket_id: 1,
+      inicio: "2026-01-10T00:00:00.000Z",
+      falha: false,
+      duracaoMs: 1500,
+    },
+    {
+      id: "e2",
+      sessao: "s1",
+      demanda_id: "I-1",
+      ticket_id: 1,
+      inicio: "2026-02-10T00:00:00.000Z",
+      falha: true,
+      duracaoMs: 0,
+    },
+    {
+      id: "e3",
+      sessao: "s2",
+      demanda_id: "I-1",
+      ticket_id: 2,
+      inicio: "2026-02-11T00:00:00.000Z",
+      falha: false,
+      duracaoMs: 0,
+    },
+  ]);
+  const deFevereiro = execucoesEmLote(banco, { demandas: ["I-1"], periodo: { inicio: "2026-02-01T00:00:00.000Z" } });
+  assert.deepEqual(
+    deFevereiro.map(({ id }) => id),
+    ["e2", "e3"],
+  );
+  assert.deepEqual(execucoesEmLote(banco, { demandas: [] }), []);
 });
 
 test("o resumo da sessão traz a sessão e as execuções dela, sem a conversa; id desconhecido volta sem resumo", () => {

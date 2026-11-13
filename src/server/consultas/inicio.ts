@@ -22,7 +22,8 @@ import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapsho
 import { ticketsComPiAtivo } from "../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../contrato/inicio.ts";
 import { sessoesDeDemanda } from "./sessoes/historico_demanda.ts";
-import { metricasDosMeses } from "../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { metricasDosMeses } from "../../modulos/ciclo_de_vida/publico.ts";
+import { lerPedidosDasMetricas } from "./demandas/pedidos_das_metricas.ts";
 import { bloqueiosDaDemanda } from "./demandas/bloqueios.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./demandas/pendencias.ts";
 
@@ -96,7 +97,9 @@ export function consultarInicio(
     const agora = relogio.agora();
     const mes = mesDoInstante(agora);
     // Um mês pedido, um mês devolvido.
-    const [doMes] = metricasDosMeses(banco, { de: mes, ate: mes }) as [DadosDoInicio["mes"]];
+    const [doMes] = metricasDosMeses({ banco, pedidos: lerPedidosDasMetricas(banco) }, { de: mes, ate: mes }) as [
+      DadosDoInicio["mes"],
+    ];
     const demandas = listarDemandas(banco, { soNaoTerminadas: true });
     // Só as sessões das demandas em andamento: calcular o estado de todas as do banco custa segundos.
     const sessoes = demandas.flatMap((ag) => sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id }));

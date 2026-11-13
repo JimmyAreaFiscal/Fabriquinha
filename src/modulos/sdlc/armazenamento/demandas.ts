@@ -8,6 +8,7 @@ import { CICLO_DA_DEMANDA } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
 import type { EstadoDemanda } from "../nucleo/ciclo_de_vida/ciclos.ts";
 import { escrever, novoId } from "../../compartilhado/armazenamento/banco.ts";
+import { instrucaoPreparada } from "../../../shared/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../compartilhado/armazenamento/snapshot.ts";
 import {
   apagarLinhasQueSumiram,
@@ -140,6 +141,24 @@ export function listarDemandas(
     );
   });
 }
+
+/** O andamento de cada demanda de `ids`, ou de todas sem `ids`: o estado do processo e o instante da última mudança. */
+export const andamentoDasDemandasEmLote = (
+  banco: DatabaseSync,
+  ids?: readonly string[],
+): Map<string, { estado: string; estadoAlteradoEm: string }> =>
+  new Map(
+    instrucaoPreparada(
+      banco,
+      `SELECT id, estado, estado_alterado_em FROM demanda
+        WHERE $ids IS NULL OR id IN (SELECT value FROM json_each($ids))`,
+    )
+      .all({ ids: ids === undefined ? null : JSON.stringify(ids) })
+      .map((linha) => [
+        String(linha.id),
+        { estado: String(linha.estado), estadoAlteradoEm: String(linha.estado_alterado_em) },
+      ]),
+  );
 
 /** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
 export const situacaoDasDemandas = (banco: DatabaseSync, projeto: string): { id: string; estado: EstadoDemanda }[] =>

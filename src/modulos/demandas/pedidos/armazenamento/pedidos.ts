@@ -2,7 +2,7 @@
 // processo, que a grava com o conteúdo recebido do pedido; as colunas do processo na mesma linha (estado, branch e o
 // `enviada`, que o processo grava ao aceitar o envio) são do Ciclo de Vida, e só ele as escreve.
 import type { DatabaseSync } from "node:sqlite";
-import { novoId } from "../../../../shared/armazenamento/banco.ts";
+import { instrucaoPreparada, novoId } from "../../../../shared/armazenamento/banco.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
 import { type Pedido, SituacaoDoPedido } from "../nucleo/pedido.ts";
 
@@ -45,6 +45,32 @@ export const situacoesDosPedidos = (banco: DatabaseSync): Map<string, SituacaoDo
       .all()
       .map((linha) => [String(linha.id), SituacaoDoPedido.parse(linha.situacao)]),
   );
+
+/** O cadastro do pedido com o histórico administrativo: o registro e a conclusão gravados, ou `null` (a demanda nova). */
+interface HistoricoDoPedido {
+  id: string;
+  projeto: string;
+  titulo: string;
+  criadaEm: string | null;
+  concluidaEm: string | null;
+}
+
+/** O histórico dos pedidos `ids`, ou de todos sem `ids`, na ordem em que foram registrados, numa leitura só. */
+export const historicoDosPedidosEmLote = (banco: DatabaseSync, ids?: readonly string[]): HistoricoDoPedido[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT d.id, d.projeto, d.titulo, h.criada_em, h.concluida_em
+       FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id
+       WHERE $ids IS NULL OR d.id IN (SELECT value FROM json_each($ids)) ORDER BY d.rowid`,
+  )
+    .all({ ids: ids === undefined ? null : JSON.stringify(ids) })
+    .map((linha) => ({
+      id: String(linha.id),
+      projeto: String(linha.projeto),
+      titulo: String(linha.titulo),
+      criadaEm: linha.criada_em === null ? null : String(linha.criada_em),
+      concluidaEm: linha.concluida_em === null ? null : String(linha.concluida_em),
+    }));
 
 export const gravarConteudoDoPedido = (banco: DatabaseSync, { id, titulo, tipo, descricao }: Pedido): void => {
   banco.prepare("UPDATE demanda SET titulo = ?, tipo = ?, descricao = ? WHERE id = ?").run(titulo, tipo, descricao, id);

@@ -27,9 +27,11 @@ export { avaliarEGuardarAnexos, type OrigemDosAnexos } from "./aplicacao/submiss
 export {
   type AnexoDaDemanda,
   anexosDaDemanda,
+  evidenciasDoTipoDasDemandas,
   gravarAnexos,
   gravarEvidenciasNovasEAlteradas,
   gravarRetiradaDasEvidencias,
   lerAnexo,
   lerEvidenciasDaDemanda,
+  primeiraEvidenciaDasDemandas,
 } from "./armazenamento/evidencia_demanda.ts";

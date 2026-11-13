@@ -7,7 +7,13 @@ import { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts"
 import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../../../sdlc/armazenamento/demandas.ts";
-import { anexosDaDemanda, gravarAnexos, lerAnexo } from "./evidencia_demanda.ts";
+import {
+  anexosDaDemanda,
+  evidenciasDoTipoDasDemandas,
+  gravarAnexos,
+  lerAnexo,
+  primeiraEvidenciaDasDemandas,
+} from "./evidencia_demanda.ts";
 import { removerProjeto } from "../../../projeto/aplicacao/cadastro.ts";
 import { comEvidencia } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 
@@ -149,4 +155,20 @@ test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => 
     { ...x, ticket_id: 1 },
   ]);
   assert.deepEqual(anexosDaDemanda(b, "I-2"), []);
+});
+
+test("em lote: a primeira evidência de cada demanda e onde e quando foi registrada cada uma de um tipo", () => {
+  const b = novoBanco();
+  b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+      VALUES ('I-1', 1, 'encerrar_rodada', 'concluido', ${T});
+    INSERT INTO evidencia_demanda (id, demanda_id, ticket_id, tipo, dados, em)
+      VALUES ('e2', 'I-1', 1, 'pr_aberto', '{}', '2026-03-01T00:00:00.000Z');
+    INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('e1', 'I-1', 'comportamento', '{}', ${T});
+    INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', ${T}, 0, 'b1');
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, tipo, dados, em) VALUES ('e3', 'I-1', 1, 'pr_aberto', '{}', ${T});`);
+  assert.deepEqual(primeiraEvidenciaDasDemandas(b, ["I-1", "I-2"]), new Map([["I-1", em]]));
+  assert.deepEqual(evidenciasDoTipoDasDemandas(b, { demandas: ["I-1", "I-2"], tipo: "pr_aberto" }), [
+    { demanda_id: "I-1", rodada_id: null, ticket_id: 1, em: "2026-03-01T00:00:00.000Z" },
+    { demanda_id: "I-1", rodada_id: 1, ticket_id: null, em },
+  ]);
 });

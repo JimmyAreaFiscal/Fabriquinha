@@ -16,4 +16,7 @@ export {
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
   gravarItensNovosEMudados,
+  planosDasDemandas,
+  type ResumoDoTicket,
+  ticketsDasDemandas,
 } from "./armazenamento/itens_do_planejamento.ts";

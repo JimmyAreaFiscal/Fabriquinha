@@ -8,5 +8,5 @@ export {
   registrarConclusaoDoPedido,
   registrarPedido,
 } from "./aplicacao/gestao_de_pedidos.ts";
-export { lerPedido, situacoesDosPedidos } from "./armazenamento/pedidos.ts";
+export { historicoDosPedidosEmLote, lerPedido, situacoesDosPedidos } from "./armazenamento/pedidos.ts";
 export { MIGRACOES_DE_DEMANDAS } from "./armazenamento/migracao_da_situacao.ts";

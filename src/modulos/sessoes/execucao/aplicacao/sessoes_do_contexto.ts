@@ -8,28 +8,19 @@ import { gravarUsoDasExecucoes, lerUsoDasExecucoes, type UsoDaExecucao } from ".
 import {
   type ContextoDaLeitura,
   execucoesDoFiltro,
+  type FiltroDasExecucoes,
   gravarSessoesEExecucoes,
   lerSessoesEExecucoes,
   type SessoesEExecucoes,
 } from "../armazenamento/sessoes_e_execucoes.ts";
-import { type ContextoDaSessao, Execucao, type IdDaSessao } from "../nucleo/sessao.ts";
+import { type ContextoDaSessao, Execucao } from "../nucleo/sessao.ts";
 
 export interface SessoesDoContexto extends SessoesEExecucoes {
   usos: UsoDaExecucao[];
 }
 
-/** O que escolhe o Uso em lote; os filtros se somam, e o período `[inicio, fim)` é o do início da execução. */
-interface FiltroDoUso {
-  sessoes?: readonly IdDaSessao[];
-  contexto?: { demanda_id: string; ticket_id?: number };
-  periodo?: { inicio: string; fim: string };
-}
-
-/**
- * O Uso medido das execuções que casam com o filtro, sem ler conversa nem sessão.
- * @testes o consumidor de produção de fora é a métrica de uso (ticket 17), que hoje lê as tabelas por SQL
- */
-export const usoEmLote = (banco: DatabaseSync, filtro: FiltroDoUso): UsoDaExecucao[] =>
+/** O Uso medido das execuções que casam com o filtro, sem ler conversa nem sessão, na ordem em que foi gravado. */
+export const usoEmLote = (banco: DatabaseSync, filtro: FiltroDasExecucoes): UsoDaExecucao[] =>
   lerEmSnapshot(banco, () => lerUsoDasExecucoes(banco, execucoesDoFiltro(banco, filtro)));
 
 /** As sessões do contexto (`ticket_id` nulo: a demanda inteira), com as execuções e o Uso delas, num snapshot só. */

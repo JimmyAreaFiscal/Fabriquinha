@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { MetricaDeConformidade } from "../../../modulos/metricas/aplicacao/metricas/metrica_de_conformidade.ts";
+import { MetricaDeConformidade } from "../../../modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/metricas/metrica_de_conformidade.ts";
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+import { origemDe } from "../../../../apoio-testes/banco_de_metricas.ts";
 
 const VERSAO_48 = VERSAO_LINHA_DE_BASE + 12;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -286,7 +287,8 @@ test("a Conformidade da demanda concluída com tickets corretivos é a mesma ant
 
   migrar(banco, MIGRACOES.slice(0, VERSAO_48 - VERSAO_LINHA_DE_BASE));
 
-  const depois = new MetricaDeConformidade().calcular(banco, { demandaId: "I-1" }).get("planejar")?.rodadas[0];
+  const depois = new MetricaDeConformidade().calcular(origemDe(banco), { demandaId: "I-1" }).get("planejar")
+    ?.rodadas[0];
   assert.deepEqual(
     { percentual: depois?.percentual, ausentes: depois?.ausentes.sort(), extras: depois?.extras.sort() },
     antes,
