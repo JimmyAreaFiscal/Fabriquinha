@@ -1,5 +1,5 @@
 // A regra única que classifica a saída de um comando de Verificação, sem I/O.
-import type { CausaDeInfraestrutura } from "../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
+import type { CausaDeInfraestrutura } from "../../etapas/publico.ts";
 
 /**
  * Saída 0 passa; estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura. Sem `codigoDeReprovacao`,
@@ -8,7 +8,7 @@ import type { CausaDeInfraestrutura } from "../../compartilhado/nucleo/vocabular
 export function classificarSaidaDeComando(
   saida: { codigo: number | null; estourou: boolean },
   codigoDeReprovacao?: number,
-): "passou" | "reprovacao" | "falha_infraestrutura" {
+): ResultadoDaVerificacao["tipo"] {
   if (saida.estourou || saida.codigo === 126 || saida.codigo === 127) return "falha_infraestrutura";
   if (saida.codigo === 0) return "passou";
   if (codigoDeReprovacao === undefined || saida.codigo === codigoDeReprovacao) return "reprovacao";
@@ -21,7 +21,10 @@ interface RelatorioDaVerificacao {
   logs: { nome: string; texto: string }[];
 }
 
-/** Os três resultados possíveis de uma Verificação; a infraestrutura não volta ao agente, a reprovação sim. */
+/**
+ * As três classes do resultado de uma Verificação (MELHORIAS §11, regra 10): sucesso (`passou`), reprovação técnica
+ * (`reprovacao`, que volta ao agente) e falha de infraestrutura (`falha_infraestrutura`, que não volta).
+ */
 export type ResultadoDaVerificacao =
   | { tipo: "passou"; relatorio?: RelatorioDaVerificacao }
   | { tipo: "reprovacao"; motivo: string; log: string }

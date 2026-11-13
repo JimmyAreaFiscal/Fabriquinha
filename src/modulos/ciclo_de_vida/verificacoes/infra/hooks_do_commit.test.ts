@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ErroDeReprovacao, ErroExterno } from "../../compartilhado/nucleo/erros.ts";
+import { ErroDeReprovacao, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { HooksDoCommit } from "./hooks_do_commit.ts";
-import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
 
 const contexto = { ambiente: new AmbienteHostLocal(), worktree: "/tmp/worktree" };
 

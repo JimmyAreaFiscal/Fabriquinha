@@ -1,6 +1,6 @@
 // Regras de fronteira do domínio Ciclo de Vida (MELHORIAS §11). Os tickets 10 a 17 mudam só este arquivo; o motor
 // (../motor.ts) explica os campos e como declarar o domínio migrado.
-import type { RegrasDoDominio } from "../motor.ts";
+import type { Excecao, RegrasDoDominio } from "../motor.ts";
 
 /** O catálogo de Etapas, que o motor lê na carga do módulo: fora de qualquer ciclo de import de valor. */
 export const ARQUIVO_DO_CATALOGO = "modulos/ciclo_de_vida/etapas/nucleo/catalogo.ts";
@@ -17,6 +17,22 @@ export const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "modulos/sdlc/aplicacao/evidencias/
 export const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
 /** Os casos de uso do agente, os únicos que a API do agente alcança. */
 export const PASTA_DOS_CASOS_DE_USO_DO_AGENTE = "modulos/etapas/agente/";
+
+// provisório: remover no ticket 22. Os caminhos antigos que o CLI do agente empacota vêm da API de Etapas, sem a fachada:
+// ela traz Verificações, que leem as fachadas de Repositório e Ambiente, e com elas o banco.
+const CAMINHOS_ANTIGOS_QUE_O_CLI_DO_AGENTE_EMPACOTA: Excecao[] = (
+  [
+    ["modulos/compartilhado/nucleo/configuracao_agente.ts", "../../"],
+    ["modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts", "../../../"],
+    ["modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts", "../../../"],
+    ["modulos/etapas/catalogo.ts", "../"],
+    ["modulos/etapas/definicao/tipos_declaraveis.ts", "../../"],
+  ] as const
+).map(([arquivo, subidaAteModulos]) => ({
+  arquivo,
+  import: `${subidaAteModulos}ciclo_de_vida/etapas/publico.ts (de fora do domínio ciclo_de_vida, só pela fachada publico.ts)`,
+  ticket: "22",
+}));
 
 export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
   migrado: true,
@@ -39,6 +55,7 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
       import: "../../../compartilhado/nucleo/primitivos.ts (um domínio migrado não importa o código antigo)",
       ticket: "22",
     },
+    ...CAMINHOS_ANTIGOS_QUE_O_CLI_DO_AGENTE_EMPACOTA,
   ],
   // O compartilhado reexporta o vocabulário e a configuração do agente da fachada, e a configuração do agente lê dele
   // `Modelo` e `Effort`: os dois somem no ticket 22.
@@ -47,6 +64,6 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
   processoDoHost: {
     pastasLiberadas: [],
     importamChildProcess: [],
-    chamadoresDiretos: ["modulos/verificacao/infra/tipos_de_verificacao/sonar.ts"],
+    chamadoresDiretos: ["modulos/ciclo_de_vida/verificacoes/infra/tipos_de_verificacao/sonar.ts"],
   },
 };

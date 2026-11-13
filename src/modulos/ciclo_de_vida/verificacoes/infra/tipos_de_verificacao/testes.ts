@@ -1,7 +1,7 @@
 // Os testes de cada linguagem do projeto em `join(worktree, caminho)` e, se a rodada pede e algum arquivo casa, o E2E dela:
 // um só registro `execucao_testes`.
 import { join, matchesGlob } from "node:path";
-import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
+import type { ProjetoAVerificar } from "../../nucleo/projeto_a_verificar.ts";
 import { VerificacaoE2E } from "./e2e.ts";
 import {
   aprovacao,
@@ -16,7 +16,7 @@ import {
 
 /** @testes tipo que o teste usa para montar a entrada */
 export interface EntradaDeTestes {
-  projeto: Projeto;
+  projeto: ProjetoAVerificar;
   /** A rodada está marcada com e2e. */
   e2e: boolean;
   /** Arquivos alterados da worktree, relativos à raiz; decidem se o E2E roda. */

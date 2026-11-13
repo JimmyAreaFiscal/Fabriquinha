@@ -1,6 +1,6 @@
 // O E2E de uma linguagem do projeto: build e execução, na pasta dela. Só o `codigo_falha` reprova; outra saída é infraestrutura.
 import { join } from "node:path";
-import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
+import type { ConfiguracaoE2E } from "../../nucleo/projeto_a_verificar.ts";
 import {
   aprovacao,
   classificarComando,
@@ -12,8 +12,6 @@ import {
   type RegistroDaVerificacao,
   VerificacaoComRegistro,
 } from "../verificacao.ts";
-
-type ConfiguracaoE2E = Projeto["verificacoes"]["e2e"][number];
 
 export class VerificacaoE2E extends VerificacaoComRegistro {
   readonly tipo = "e2e";

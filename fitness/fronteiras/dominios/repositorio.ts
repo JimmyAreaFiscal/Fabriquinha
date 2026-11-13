@@ -138,8 +138,6 @@ const CONSUMIDORES_DOS_CAMINHOS_ANTIGOS: Record<string, string[]> = {
     "../../../repositorio/aplicacao/espaco/ciclo_do_espaco.ts",
   ],
   "modulos/sdlc/nucleo/demanda/agregado_demanda.ts": ["../../../repositorio/nucleo/espaco_de_trabalho.ts"],
-  "modulos/verificacao/infra/conferencia_do_pr.ts": ["../../repositorio/infra/hospedagem/pr.ts"],
-  "modulos/verificacao/infra/tipos_de_verificacao/sonar.ts": ["../../../repositorio/infra/worktree/worktree.ts"],
   "server/consultas/demandas/demanda.ts": ["../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts"],
   "server/consultas/projeto/heatmap.ts": ["../../../modulos/repositorio/infra/git/heatmap.ts"],
   "server/consultas/projeto/projeto.ts": ["../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts"],
