@@ -54,3 +54,7 @@ export const DadosDoInicio = z.object({
   board: z.array(CartaoDoBoard),
 });
 export type DadosDoInicio = z.infer<typeof DadosDoInicio>;
+
+/** `GET /api/pendencias/quantidade`: o contador do menu, o mesmo número do `aguarda` do Início. */
+export const QuantidadeDePendencias = z.object({ quantidade: z.number().int().nonnegative() });
+export type QuantidadeDePendencias = z.infer<typeof QuantidadeDePendencias>;

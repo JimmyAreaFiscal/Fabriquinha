@@ -2,6 +2,7 @@
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda. As Etapas do
 // SDLC vêm da API antes da primeira página: as telas as desenham sem citá-las pelo nome.
 import type { EtapasDoSdlc } from "../contrato/etapas.ts";
+import type { QuantidadeDePendencias } from "../contrato/inicio.ts";
 import type { Parametros } from "./compartilhado/caminhos.ts";
 import { type Pagina, rotear } from "./caminhos.ts";
 import { definirEtapasDoSdlc } from "./apresentacao/etapas.ts";
@@ -12,7 +13,7 @@ import { montarConfiguracao } from "./telas/configuracao/configuracao-montar.ts"
 import { montarDemanda, montarDemandas } from "./telas/demandas/demandas-montar.ts";
 import { montarHeatmap } from "./telas/heatmap/heatmap-montar.ts";
 import { montarHistorico } from "./telas/historico/historico-montar.ts";
-import { contarOQueAguarda, montarInicio } from "./telas/inicio/inicio-montar.ts";
+import { montarInicio } from "./telas/inicio/inicio-montar.ts";
 import { montarMetricas } from "./telas/metricas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto/projeto-montar.ts";
 import { montarSdlc } from "./telas/sdlc/sdlc-montar.ts";
@@ -25,7 +26,10 @@ import { montarSdlc } from "./telas/sdlc/sdlc-montar.ts";
 type Montar = (main: HTMLElement, params: Parametros, sinal: AbortSignal) => void | Promise<void>;
 
 const MONTAR: Record<Pagina, Montar> = {
-  inicio: montarInicio,
+  // O Início já sabe quanto aguarda: o menu reaproveita a resposta que a tela pediu.
+  inicio: async (main, params, sinal) => {
+    desenharOQueAguarda(await montarInicio(main, params, sinal));
+  },
   projeto: montarProjeto,
   heatmap: montarHeatmap,
   metricas: montarMetricas,
@@ -43,11 +47,19 @@ let aguardando = 0;
 /** O da página na tela; trocar de página o aborta. */
 let pagina = new AbortController();
 
-/** Quanto aguarda o Auditor, para o contador do Início. */
-async function contar(): Promise<void> {
-  aguardando = await contarOQueAguarda();
+/** Redesenha a navegação com quanto aguarda o Auditor, no contador do Início. */
+function desenharOQueAguarda(quantidade: number): void {
+  aguardando = quantidade;
   cabeca.innerHTML = navegacao(rotear(location.pathname)?.pagina, aguardando);
 }
+
+/** Pede ao servidor quanto aguarda o Auditor, pela consulta leve do contador. */
+async function contar(): Promise<void> {
+  desenharOQueAguarda((await api<QuantidadeDePendencias>("/api/pendencias/quantidade")).quantidade);
+}
+
+/** Fora do Início, o menu pede o contador; no Início, a tela o entrega junto com o que desenha. */
+const contaPeloContador = (pagina: Pagina | undefined): boolean => pagina !== "inicio";
 
 /** Os caminhos que só levam ao Início: a raiz e a lista das demandas, que virou o board do Início. */
 const LEVAM_AO_INICIO: ReadonlySet<string> = new Set(["/", "/demandas"]);
@@ -62,7 +74,7 @@ function desenhar(): void {
   pagina = new AbortController();
   if (rota) Promise.resolve(MONTAR[rota.pagina](main, rota.params, pagina.signal)).catch(mostrarErro);
   else main.innerHTML = NAO_ENCONTRADA;
-  contar().catch(mostrarErro);
+  if (contaPeloContador(rota?.pagina)) contar().catch(mostrarErro);
 }
 
 // Clique comum num link da própria Fabriquinha troca a página sem recarregar; com modificador, nova aba ou download,
@@ -111,7 +123,7 @@ function atualizar(): void {
   if (rota && ATUALIZAM.has(rota.pagina)) {
     Promise.resolve(MONTAR[rota.pagina](main, rota.params, pagina.signal)).catch(mostrarErro);
   }
-  contar().catch(mostrarErro);
+  if (contaPeloContador(rota?.pagina)) contar().catch(mostrarErro);
 }
 setInterval(atualizar, 5000);
 addEventListener(MUDOU, () => {

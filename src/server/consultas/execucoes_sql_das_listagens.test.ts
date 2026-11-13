@@ -1,12 +1,13 @@
-// As listagens de demandas (o Início, o board e a página do projeto) leem em lote e resumido: o número de execuções SQL
-// de cada uma não cresce com a quantidade de demandas. A prova roda em dois bancos semeados pequenos, de tamanhos
-// diferentes, com mais demandas em andamento e mais demandas no projeto no maior.
+// As listagens de demandas (o Início, o contador de pendências do menu, o board e a página do projeto) leem em lote e
+// resumido: o número de execuções SQL de cada uma não cresce com a quantidade de demandas. A prova roda em dois bancos
+// semeados pequenos, de tamanhos diferentes, com mais demandas em andamento e mais demandas no projeto no maior.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { relogioFixo } from "../../shared/nucleo/relogio.ts";
-import { consultarInicio } from "./inicio.ts";
+import { consultarInicio } from "./inicio/inicio.ts";
+import { consultarQuantidadeDePendencias } from "./inicio/quantidade_de_pendencias.ts";
 import { consultarBoardDeDemandas } from "./demandas/board_de_demandas.ts";
 import { consultarProjeto } from "./projeto/projeto.ts";
 import { contarExecucoesSql } from "../../../estresse/referencia/contador_de_execucoes_sql.ts";
@@ -18,6 +19,7 @@ const semSessaoViva = () => undefined;
 
 const LISTAGENS: Record<string, (banco: DatabaseSync) => unknown> = {
   inicio: (banco) => consultarInicio(banco, relogio, semSessaoViva),
+  contadorDePendencias: (banco) => consultarQuantidadeDePendencias(banco, relogio, semSessaoViva),
   board: (banco) => consultarBoardDeDemandas(banco, relogio, semSessaoViva),
   projetoEmAndamento: (banco) =>
     consultarProjeto(
@@ -46,7 +48,7 @@ async function execucoesSqlDasListagens(demandas: number): Promise<Record<string
   }
 }
 
-test("o Início, o board e a página do projeto fazem as mesmas execuções SQL com 30 e com 60 demandas", async () => {
+test("o Início, o contador de pendências, o board e a página do projeto fazem as mesmas execuções SQL com 30 e com 60 demandas", async () => {
   const comTrinta = await execucoesSqlDasListagens(30);
   const comSessenta = await execucoesSqlDasListagens(60);
   assert.deepEqual(comSessenta, comTrinta);

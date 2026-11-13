@@ -1,8 +1,8 @@
 // A consulta do Início: numa leitura só (um snapshot), o mês corrente de todos os projetos, o que aguarda o Auditor, as
-// sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora; a
-// navegação conta o que aguarda pela mesma consulta.
+// sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora. Fora do
+// Início, o menu conta o que aguarda pela consulta leve de quantidade_de_pendencias.ts, com as mesmas Pendências.
 import type { DatabaseSync } from "node:sqlite";
-import { mesDoInstante, type Relogio } from "../../shared/nucleo/relogio.ts";
+import { mesDoInstante, type Relogio } from "../../../shared/nucleo/relogio.ts";
 import {
   type ResumoDaDemanda,
   CICLO_DO_TICKET,
@@ -14,14 +14,14 @@ import {
   metricasDosMeses,
   PRIMEIRA_ETAPA_DA_RODADA,
   type TicketDemanda,
-} from "../../modulos/ciclo_de_vida/publico.ts";
-import type { ModoTrabalho } from "../../modulos/sessoes/publico.ts";
-import { lerEmSnapshot } from "../../shared/armazenamento/snapshot.ts";
-import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../contrato/inicio.ts";
-import { sessoesDasDemandas, ticketsComPiAtivo } from "./sessoes/historico_demanda.ts";
-import { lerPedidosDasMetricas } from "./demandas/pedidos_das_metricas.ts";
-import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./demandas/predecessoras.ts";
-import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./demandas/pendencias.ts";
+} from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { ModoTrabalho } from "../../../modulos/sessoes/publico.ts";
+import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
+import type { CartaoDoBoard, ColunaDoBoard, DadosDoInicio } from "../../contrato/inicio.ts";
+import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { lerPedidosDasMetricas } from "../demandas/pedidos_das_metricas.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
+import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
 type TicketDoCartao = NonNullable<CartaoDoBoard["ticket"]>;
 

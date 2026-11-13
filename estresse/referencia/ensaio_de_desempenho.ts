@@ -30,6 +30,7 @@ function rotasDasTelas(alvos: AlvosDasRotas, mesAtual: string): { tela: string; 
   const dozeMeses = `de=${somarMeses(mesAtual, -11)}&ate=${mesAtual}`;
   return [
     { tela: "Início", caminho: "/api/inicio" },
+    { tela: "Menu", caminho: "/api/pendencias/quantidade" },
     { tela: "Início", caminho: "/api/despacho" },
     { tela: "Board", caminho: "/api/demandas" },
     { tela: "Demanda", caminho: `/api/demandas/${alvos.demandaEmExecucao}` },

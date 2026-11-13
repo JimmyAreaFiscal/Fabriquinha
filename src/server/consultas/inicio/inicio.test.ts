@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { cenarioDoInicio, em, rodada, ticket } from "../../../apoio-testes/cenarios/cenario_do_inicio.ts";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { Endereco } from "../../modulos/ciclo_de_vida/publico.ts";
-import { relogioDoSistema, relogioFixo } from "../../shared/nucleo/relogio.ts";
-import type { DadosDoInicio } from "../contrato/inicio.ts";
-import type { SessaoDeDemanda } from "./sessoes/historico_demanda.ts";
+import { cenarioDoInicio, em, rodada, ticket } from "../../../../apoio-testes/cenarios/cenario_do_inicio.ts";
+import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { relogioDoSistema, relogioFixo } from "../../../shared/nucleo/relogio.ts";
+import type { DadosDoInicio } from "../../contrato/inicio.ts";
+import type { SessaoDeDemanda } from "../sessoes/historico_demanda.ts";
 import { consultarInicio } from "./inicio.ts";
-import { trabalhoVivoDaSessao } from "./demandas/pendencias.ts";
+import { trabalhoVivoDaSessao } from "../demandas/pendencias.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

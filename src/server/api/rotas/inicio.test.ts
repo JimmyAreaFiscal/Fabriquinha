@@ -1,4 +1,5 @@
-// Rotas do Início: o painel das demandas em andamento e as recusas do Despacho, com o corpo conferido pelo contrato.
+// Rotas do Início: o painel das demandas em andamento, o contador de pendências do menu e as recusas do Despacho, com o
+// corpo conferido pelo contrato.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
@@ -6,7 +7,7 @@ import { cenarioDoInicio } from "../../../../apoio-testes/cenarios/cenario_do_in
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { cicloDoDespacho, configuracao, despachoDasEtapas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
-import type { DadosDoInicio } from "../../contrato/inicio.ts";
+import { type DadosDoInicio, QuantidadeDePendencias } from "../../contrato/inicio.ts";
 import { ROTAS_DO_INICIO } from "./inicio.ts";
 import { predecessorasPendentesPelasDependencias } from "../../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
@@ -36,6 +37,14 @@ test("GET /api/inicio responde com o mês corrente de todos os projetos", async 
   assert.equal(dados.mes.projeto, null);
   assert.equal(dados.aguarda.length, 10);
   assert.equal((await pedir("/api/inicio", { cookie: false })).status, 401);
+});
+
+test("GET /api/pendencias/quantidade conta o mesmo que o aguarda do Início", async () => {
+  const { pedir } = await servir(cenario());
+  assert.deepEqual(QuantidadeDePendencias.parse((await pedir("/api/pendencias/quantidade")).json()), {
+    quantidade: (await pedir("/api/inicio")).json<DadosDoInicio>().aguarda.length,
+  });
+  assert.equal((await pedir("/api/pendencias/quantidade", { cookie: false })).status, 401);
 });
 
 test("GET /api/despacho devolve as recusas do último ciclo, com os endereços em texto", async () => {

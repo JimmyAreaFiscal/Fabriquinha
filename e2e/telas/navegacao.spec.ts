@@ -150,6 +150,38 @@ test("o Início da navegação conta o que aguarda o Auditor nas demandas em and
   await expect(inicio.locator(".contador")).toHaveAttribute("title", "o que aguarda você");
 });
 
+test("o contador do menu tem rota própria, e o Início faz uma única chamada por atualização", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  const pedidos: string[] = [];
+  pagina.on("request", (pedido) => pedidos.push(new URL(pedido.url()).pathname));
+  const quantos = (caminho: string) => pedidos.filter((p) => p === caminho).length;
+  const nav = pagina.getByRole("navigation", { name: "Páginas" });
+  const contador = nav.getByRole("link", { name: /^Início/ }).locator(".contador");
+  sessaoDeDemandaAguardando(fabriquinha.raiz);
+
+  // Fora do Início, o menu conta pela rota leve, sem pedir o Início, ao abrir a página e a cada atualização (5 s).
+  await nav.getByRole("link", { name: "Métricas", exact: true }).click();
+  await expect(contador).toHaveText("1");
+  await fotografar(pagina, info, "menu-com-contador-1440");
+  pedidos.length = 0;
+  await pagina.waitForResponse("**/api/pendencias/quantidade");
+  expect([quantos("/api/inicio"), quantos("/api/pendencias/quantidade")]).toEqual([0, 1]);
+
+  // No Início, o menu reaproveita a resposta que a tela pediu: uma chamada ao abrir (a atualização seguinte está a 5 s)...
+  pedidos.length = 0;
+  await nav.getByRole("link", { name: "Início" }).click();
+  await expect(pagina.getByRole("heading", { level: 1 })).toHaveText("Início");
+  await expect(contador).toHaveText("1");
+  expect([quantos("/api/inicio"), quantos("/api/pendencias/quantidade")]).toEqual([1, 0]);
+  // ... e uma a cada atualização.
+  pedidos.length = 0;
+  await pagina.waitForResponse("**/api/inicio");
+  await expect(contador).toHaveText("1");
+  expect([quantos("/api/inicio"), quantos("/api/pendencias/quantidade")]).toEqual([1, 0]);
+});
+
 test("só o chat baixa o componente React da conversa", async ({ pagina, fabriquinha }) => {
   const pedidos: string[] = [];
   pagina.on("request", (pedido) => pedidos.push(new URL(pedido.url()).pathname));
