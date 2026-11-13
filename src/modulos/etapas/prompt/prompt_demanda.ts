@@ -1,12 +1,9 @@
 // Prompt do ticket da demanda (comparacao-sdlc-implementacao.md §§6, 8 e 11, D09): Markdown montado do agregado da
 // demanda, com o modo de trabalhar e a seção que só a Etapa lê, que a condução dela traz. Tickets e rodadas aparecem só
 // pelo endereço público.
-import { readFileSync } from "node:fs";
-import { CATALOGO_DE_ETAPAS } from "../catalogo.ts";
-import { catalogoDaEtapa } from "../definicao/evidencia_exigida.ts";
+import { catalogoDaEtapa, lerModoDeTrabalhar } from "../../ciclo_de_vida/publico.ts";
 import { secao, type SecaoDoPrompt } from "./secoes_do_prompt.ts";
 import { type ContextoDoPrompt } from "../../sdlc/nucleo/contexto_do_prompt.ts";
-import type { EtapaTicket } from "../catalogo.ts";
 import { skillsDaEtapaDemanda } from "../../sdlc/aplicacao/execucao/lancamento_do_ticket.ts";
 
 type Criterio = Record<"id" | "dado" | "quando" | "entao", string>;
@@ -28,14 +25,6 @@ const SECAO_LEITURA_ECONOMICA = secao(
   ].join("\n"),
 );
 
-/** O texto do modo de trabalhar da etapa, com os placeholders trocados pelos endereços públicos. */
-function modoDeTrabalhar(etapa: EtapaTicket, enderecos: Record<"demanda" | "rodada" | "ticket", string>): string {
-  const { instrucao } = CATALOGO_DE_ETAPAS[etapa];
-  if (instrucao === undefined) throw new Error(`a etapa ${etapa} não tem modo de trabalhar escrito no catálogo`);
-  const texto = readFileSync(instrucao, "utf8");
-  return texto.replace(/\{(demanda|rodada|ticket)\}/g, (_, nome: keyof typeof enderecos) => enderecos[nome]);
-}
-
 export function montarPromptDemanda(c: ContextoDoPrompt, secaoDaEtapa?: SecaoDoPrompt): string {
   const { ag, ticket, retomada } = c;
   const { demanda } = ag;
@@ -43,7 +32,7 @@ export function montarPromptDemanda(c: ContextoDoPrompt, secaoDaEtapa?: SecaoDoP
   const rodada = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id);
   const endRodada = rodada ? `${endDemanda}.R${String(rodada.rodada_id)}` : "(sem rodada)";
   const endTicket = `${endDemanda}.T${String(ticket.ticket_id)}`;
-  const modo = modoDeTrabalhar(ticket.etapa, { demanda: endDemanda, rodada: endRodada, ticket: endTicket });
+  const modo = lerModoDeTrabalhar(ticket.etapa, { demanda: endDemanda, rodada: endRodada, ticket: endTicket });
 
   const criterios =
     (

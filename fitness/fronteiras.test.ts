@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { test } from "node:test";
 import ts from "typescript";
-import { EtapaTicket } from "../src/modulos/etapas/catalogo.ts";
+import { EtapaTicket } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import {
   ARMAZENAMENTO_DE_EVIDENCIA,
@@ -587,7 +587,7 @@ function acharArquivosQueCitamNomeDeEtapa(src: string): string[] {
   );
 }
 
-test("nome de Etapa só em src/modulos/etapas/ e nas migrações", () => {
+test("nome de Etapa só nas pastas das Etapas e nas migrações", () => {
   assert.deepEqual(
     acharArquivosQueCitamNomeDeEtapa(SRC).filter(
       (arquivo) =>
@@ -672,9 +672,10 @@ test("a fitness do catálogo acusa a volta por valor e aceita a de tipo", (t) =>
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_DO_CATALOGO]: 'import { D } from "./planejar/definicao.ts";\nimport type { T } from "./tipo.ts";\n',
-    "modulos/etapas/planejar/definicao.ts": 'import { c } from "../../sdlc/nucleo/ciclos.ts";\n',
-    "modulos/etapas/tipo.ts": 'import { C } from "./catalogo.ts";\n',
-    "modulos/sdlc/nucleo/ciclos.ts": 'import { CATALOGO } from "../../etapas/catalogo.ts";\n',
+    "modulos/ciclo_de_vida/etapas/nucleo/planejar/definicao.ts":
+      'import { c } from "../../../../sdlc/nucleo/ciclos.ts";\n',
+    "modulos/ciclo_de_vida/etapas/nucleo/tipo.ts": 'import { C } from "./catalogo.ts";\n',
+    "modulos/sdlc/nucleo/ciclos.ts": 'import { CATALOGO } from "../../ciclo_de_vida/etapas/nucleo/catalogo.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });

@@ -72,7 +72,10 @@ test("as oito etapas montam com contexto da demanda, da rodada, do ticket e o mo
       "I-206, Busca",
       "I-206.R2, Índice",
       "I-206.T3, Fazer",
-      readFileSync(new URL(`../${etapa}/${etapa}.md`, import.meta.url), "utf8").split("\n", 1)[0] ?? "",
+      readFileSync(new URL(`../../ciclo_de_vida/etapas/nucleo/${etapa}/${etapa}.md`, import.meta.url), "utf8").split(
+        "\n",
+        1,
+      )[0] ?? "",
     ])
       assert.ok(p.includes(trecho), `${etapa}: ${trecho}`);
   }
@@ -216,7 +219,7 @@ test("seção de evidências e skills vêm do catálogo", () => {
 
 test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", () => {
   for (const etapa of NOVAS) {
-    const md = readFileSync(new URL(`../${etapa}/${etapa}.md`, import.meta.url), "utf8");
+    const md = readFileSync(new URL(`../../ciclo_de_vida/etapas/nucleo/${etapa}/${etapa}.md`, import.meta.url), "utf8");
     for (const texto of [montar(etapa), md]) {
       assert.doesNotMatch(texto, /\bT-\d|(?<![.\w])R\d/);
       // `[i]ssue` casa o comando legado sem que o `grep` de nomes legados (CA-2) ache a palavra aqui.

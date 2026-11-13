@@ -1,7 +1,8 @@
-// Grupo do estresse das etapas do agendador: uma ação por `src/modulos/etapas/<etapa>/<etapa>.md`. Cada execução monta o próprio
-// cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
-// demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
-// despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da abertura da sessão à primeira resposta do pi.
+// Grupo do estresse das etapas do agendador: uma ação por `src/modulos/ciclo_de_vida/etapas/nucleo/<etapa>/<etapa>.md`.
+// Cada execução monta o próprio cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz
+// temporária e leva a demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de
+// integracao/falsos.ts. O tempo vai do despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da
+// abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
 import {
   chmodSync,
@@ -47,14 +48,14 @@ export const SIMULTANEAS = 5;
 
 /** Uma etapa medida: `chamar` faz uma execução e devolve o tempo em ms, ou lança quando o ticket não assenta concluído. */
 export interface AcaoEtapa {
-  /** O nome da etapa, o do `.md` na pasta dela em `src/modulos/etapas/`. */
+  /** O nome da etapa, o do `.md` na pasta dela em `src/modulos/ciclo_de_vida/etapas/nucleo/`. */
   etapa: string;
   /** Orçamento de p95 em ms: 3× o maior p95 de duas medições de 20 execuções com 5 simultâneas nesta máquina (Linux, Node 22, SQLite e git locais), para não virar teste instável. */
   orcamento: number;
   chamar(): Promise<number>;
 }
 
-const PASTA_ETAPAS = join(import.meta.dirname, "../../src/modulos/etapas");
+const PASTA_ETAPAS = join(import.meta.dirname, "../../src/modulos/ciclo_de_vida/etapas/nucleo");
 const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 const agora = () => new Date().toISOString();
 
@@ -562,7 +563,7 @@ export function acoesEtapas(amb: Ambiente): AcaoEtapa[] {
   ];
 }
 
-/** As etapas de `src/modulos/etapas/` com `.md` que nenhuma ação mede; vazio quando a cobertura está completa. */
+/** As etapas com `.md` em `src/modulos/ciclo_de_vida/etapas/nucleo/` que nenhuma ação mede; vazio se todas são medidas. */
 export function semMedicao(acoes: readonly AcaoEtapa[]): string[] {
   const medidas = new Set(acoes.map((a) => a.etapa));
   return readdirSync(PASTA_ETAPAS, { recursive: true, encoding: "utf8" })

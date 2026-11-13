@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
-import { ErroDeEscopo } from "../erros.ts";
+import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
 
 test("Ator aceita os quatro tipos, cada um só com os seus dados", () => {
   assert.deepEqual(Ator.parse({ tipo: "auditor" }), AUDITOR);

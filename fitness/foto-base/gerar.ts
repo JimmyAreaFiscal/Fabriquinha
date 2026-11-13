@@ -17,7 +17,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/modulos/etapas/catalogo.ts";
+import { EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
@@ -62,12 +62,15 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  ...arquivosMarkdown("src/modulos/etapas"),
+  ...arquivosMarkdown("src/modulos/ciclo_de_vida/etapas/nucleo"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
   // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
-  const caminhoNaFotoBase = caminho.replace(/^src\/modulos\/etapas\/[^/]+\//, "src/execucao/etapas/");
+  const caminhoNaFotoBase = caminho.replace(
+    /^src\/modulos\/ciclo_de_vida\/etapas\/nucleo\/[^/]+\//,
+    "src/execucao/etapas/",
+  );
   gravarFoto(join("textos", caminhoNaFotoBase), readFileSync(join(raizDoCodigo, caminho), "utf8"));
 }
 

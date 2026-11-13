@@ -9,7 +9,7 @@ import {
   RodadaRef,
   TicketIdentidade,
 } from "./identidades.ts";
-import { ErroDeRegra } from "../erros.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 
 test("mesmo número local em demandas distintas gera identidades e branches distintas", () => {
   const a = RodadaRef.parse({ demanda_id: "I-1", rodada_id: 1 });

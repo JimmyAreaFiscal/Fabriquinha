@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ErroDeRegra } from "../erros.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { Endereco } from "./endereco.ts";
 
 test("Endereco: forma e lê de volta cada endereço", () => {
