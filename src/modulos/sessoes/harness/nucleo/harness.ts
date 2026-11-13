@@ -3,7 +3,7 @@
 // O adapter traduz os eventos e o Uso do harness para os contratos da Fabriquinha (`eventos.ts`, `uso.ts`).
 import { z } from "zod";
 import type { Ambiente, IdentificadorDoProcesso } from "../../../ambiente/publico.ts";
-import type { Effort, Modelo } from "../../modelos/publico.ts";
+import type { Effort, Modelo, PrecoDoModelo } from "../../modelos/publico.ts";
 import type { EventoDoAgente } from "./eventos.ts";
 import type { LinhaDeUso } from "./uso.ts";
 
@@ -69,6 +69,11 @@ export interface Harness {
   listarModelos(): Promise<Modelo[]>;
   /** Recusa (ErroDeRegra) o par que o harness não conhece. */
   conferirModelo(modelo: Modelo): Promise<void>;
+  /**
+   * O preço de cada modelo que o harness conhece e sabe o preço, com a origem: a fonte do catálogo de preços com que o
+   * custo não informado é estimado. Recusa (ErroDeRegra) se o harness não responde.
+   */
+  precosDosModelos(): Promise<PrecoDoModelo[]>;
   /** O arquivo da conversa da sessão `sessao` sob `raiz`, ou `undefined` se ainda não existe. */
   arquivoDaSessao(raiz: string, sessao: string): string | undefined;
   /** O Uso da sessão por provedor e modelo, só o de `[inicio, fim]` (ms); nenhum se a sessão ainda não tem arquivo. */

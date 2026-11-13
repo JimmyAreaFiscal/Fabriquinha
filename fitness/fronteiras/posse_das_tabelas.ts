@@ -13,6 +13,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   uso_modelo_historico: "sessoes/metricas_de_execucao",
   uso_declarado: "sessoes/metricas_de_execucao",
   trabalho_nao_gerenciado: "sessoes/metricas_de_execucao",
+  preco_do_modelo: "sessoes/modelos",
 
   // Repositório
   commit_ticket_demanda: "repositorio/commits",

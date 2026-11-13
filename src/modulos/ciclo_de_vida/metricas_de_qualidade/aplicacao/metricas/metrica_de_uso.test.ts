@@ -72,7 +72,7 @@ test("CA-1 e CA-18: tokens por modelo na demanda e por etapa, com o custo das ex
     },
   ]);
   assert.deepEqual(implementar.tokens, { entrada: 16, saida: 28, cacheLeitura: 40, cacheEscrita: 52, total: 136 });
-  assert.deepEqual(implementar.custo, { conhecido: 3.5, trabalhosSemCusto: 0 });
+  assert.deepEqual(implementar.custo, { conhecido: 3.5, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
   assert.deepEqual(
     implementar.modelos.map((x) => [x.modelo, x.tokens_entrada]),
     [
@@ -108,19 +108,23 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
   gravarExecucao(b, 2, "e2", 0, [["m2", 1, 1, 1, 1, 2.5]]);
   const recorte = { demandaId: "I-1" };
   const incompleto = daEtapa(calcularUso(b, recorte), "implementar");
-  assert.deepEqual(incompleto.custo, { conhecido: 2.5, trabalhosSemCusto: 1 });
+  assert.deepEqual(incompleto.custo, { conhecido: 2.5, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 });
   assert.deepEqual(
     incompleto.modelos.map((x) => x.custo),
     [null, 2.5],
   );
   gravarExecucao(b, 4, "e3", 0, [["m1", 1, 1, 1, 1, 1]]);
   b.exec("UPDATE uso_modelo_execucao SET custo = 1.5 WHERE custo IS NULL");
-  assert.deepEqual(daEtapa(calcularUso(b, recorte), "implementar").custo, { conhecido: 5, trabalhosSemCusto: 0 });
+  assert.deepEqual(daEtapa(calcularUso(b, recorte), "implementar").custo, {
+    conhecido: 5,
+    trabalhosSemCusto: 0,
+    trabalhosComCustoEstimado: 0,
+  });
   b.exec("UPDATE uso_modelo_execucao SET custo = NULL WHERE execucao_id = 'e3'");
   // O custo desconhecido some diante do conhecido: o modelo vira piso e o Trabalho sem custo é avisado.
   const parcial = daEtapa(calcularUso(b, recorte), "implementar");
   assert.equal(parcial.modelos[0]?.custo, 1.5);
-  assert.deepEqual(parcial.custo, { conhecido: 4, trabalhosSemCusto: 1 });
+  assert.deepEqual(parcial.custo, { conhecido: 4, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 });
 });
 
 test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a demanda", () => {
@@ -134,9 +138,18 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   gravarUsoDeclarado(b, "de-outra", "I-2", [linhaDeUsoDeclarado(100)]);
   const porEtapa = calcularUso(b, { demandaId: "I-1" });
   const desenho = daEtapa(porEtapa, "entender_e_desenhar");
-  assert.deepEqual(desenho.custoExterno, { conhecido: 3, trabalhosSemCusto: 1, sessoes: 1 });
-  assert.deepEqual(desenho.custo, { conhecido: 3, trabalhosSemCusto: 1 });
-  assert.deepEqual(daEtapa(porEtapa, "implementar").custo, { conhecido: 1, trabalhosSemCusto: 0 });
+  assert.deepEqual(desenho.custoExterno, {
+    conhecido: 3,
+    trabalhosSemCusto: 1,
+    trabalhosComCustoEstimado: 0,
+    sessoes: 1,
+  });
+  assert.deepEqual(desenho.custo, { conhecido: 3, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 });
+  assert.deepEqual(daEtapa(porEtapa, "implementar").custo, {
+    conhecido: 1,
+    trabalhosSemCusto: 0,
+    trabalhosComCustoEstimado: 0,
+  });
   assert.deepEqual(totalDasEtapas(porEtapa).slice(4), [4, 1]);
 });
 
@@ -148,12 +161,17 @@ test("CA-SDLC-24: custo externo soma no total externo, fora do custo interno e d
   assert.deepEqual(daEtapa(porEtapa, "entender_e_desenhar").custoExterno, {
     conhecido: 9,
     trabalhosSemCusto: 0,
+    trabalhosComCustoEstimado: 0,
     sessoes: 2,
   });
   for (const [etapa, valor] of porEtapa.entries()) {
     if (etapa === "entender_e_desenhar") continue;
-    assert.deepEqual(valor.custoExterno, { conhecido: 0, trabalhosSemCusto: 0, sessoes: 0 }, etapa);
-    assert.deepEqual(valor.custo, { conhecido: 0, trabalhosSemCusto: 0 }, etapa);
+    assert.deepEqual(
+      valor.custoExterno,
+      { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0, sessoes: 0 },
+      etapa,
+    );
+    assert.deepEqual(valor.custo, { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 }, etapa);
   }
 });
 
@@ -168,7 +186,11 @@ test("o total soma o Uso declarado da demanda, e cada execução sem custo conta
   gravarUsoDeclarado(b, "a", "I-1", [linhaDeUsoDeclarado(3)]);
   const porEtapa = calcularUso(b, { demandaId: "I-1" });
   assert.deepEqual(totalDasEtapas(porEtapa).slice(4), [7.2, 2]);
-  assert.deepEqual(daEtapa(porEtapa, "implementar").custo, { conhecido: 4.2, trabalhosSemCusto: 2 });
+  assert.deepEqual(daEtapa(porEtapa, "implementar").custo, {
+    conhecido: 4.2,
+    trabalhosSemCusto: 2,
+    trabalhosComCustoEstimado: 0,
+  });
   assert.equal(daEtapa(porEtapa, "implementar").textoDoCusto, "≥ US$ 4,20 (2 sessões sem custo)");
   assert.equal(daEtapa(porEtapa, "entender_e_desenhar").textoDoCusto, "US$ 3,00");
 });
@@ -179,6 +201,7 @@ test("CA-7: sessão declarada sem linhas não conta como sessão externa", () =>
   assert.deepEqual(daEtapa(calcularUso(b, { demandaId: "I-1" }), "entender_e_desenhar").custoExterno, {
     conhecido: 0,
     trabalhosSemCusto: 0,
+    trabalhosComCustoEstimado: 0,
     sessoes: 0,
   });
 });
@@ -190,7 +213,7 @@ test("consumo por mês: cada execução uma vez, retomada somada, custo desconhe
   assert.equal(fev.falhas, 1);
   assert.equal(fev.duracaoMs, 3 * 60_000);
   assert.deepEqual(fev.tokens, { entrada: 35, saida: 3, cacheLeitura: 6, cacheEscrita: 9, total: 53 });
-  assert.deepEqual(fev.custo, { conhecido: 3, trabalhosSemCusto: 1 });
+  assert.deepEqual(fev.custo, { conhecido: 3, trabalhosSemCusto: 1, trabalhosComCustoEstimado: 0 });
   assert.deepEqual(
     fev.modelos.map((m) => [m.modelo, m.tokens_entrada, m.custo]),
     [
@@ -200,11 +223,15 @@ test("consumo por mês: cada execução uma vez, retomada somada, custo desconhe
   );
   const mar = daEtapa(calcularUso(b, doMes("2026-03")), "implementar");
   assert.equal(mar.execucoes, 2);
-  assert.deepEqual(mar.custo, { conhecido: 12, trabalhosSemCusto: 0 });
+  assert.deepEqual(mar.custo, { conhecido: 12, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
   assert.equal(mar.duracaoMs, 30_000, "execução em andamento não tem duração");
   const jan = calcularUso(b, doMes("2026-01"));
   assert.equal(daEtapa(jan, "implementar").execucoes, 0);
-  assert.deepEqual(daEtapa(jan, "implementar").custo, { conhecido: 0, trabalhosSemCusto: 0 });
+  assert.deepEqual(daEtapa(jan, "implementar").custo, {
+    conhecido: 0,
+    trabalhosSemCusto: 0,
+    trabalhosComCustoEstimado: 0,
+  });
 });
 
 test("a soma de cada nível, da execução ao projeto, bate com o total", () => {

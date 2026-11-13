@@ -98,6 +98,8 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       fase_alterada_em: doProcesso("estado_alterado_em"),
       branch: doProcesso("branch"),
     });
+    // A 56 criou o catálogo de preços e deu ao Uso a referência do preço da estimativa: a volta apaga as duas.
+    banco.exec("ALTER TABLE uso_modelo_execucao DROP COLUMN preco_id; DROP TABLE preco_do_modelo;");
     // A 54 deu à Configuração do Ambiente a tabela própria: a volta a apaga, e a 45 abaixo apaga as colunas antigas.
     banco.exec("DROP TABLE processo_demanda; DROP TABLE configuracao_ambiente;");
     copiar("rodada", { fase: voltaDoMapeamento("estado", ESTADO_NOVO_DA_RODADA) });

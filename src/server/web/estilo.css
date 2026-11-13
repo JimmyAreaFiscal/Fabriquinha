@@ -2362,6 +2362,16 @@ svg.barras :not(.hit) {
 .etapa-metricas .kpi-valor small.sem-custo {
   color: var(--open);
 }
+/* O custo estimado pelo catálogo de preços: informativo, no tom frio, distinto do aviso do custo que falta. */
+.kpis .kpi-valor small.estimado,
+.etapa-metricas .kpi-valor small.estimado,
+.uso-modelo .vals small.estimado {
+  color: var(--claimed);
+}
+.uso-modelo .vals small.estimado {
+  font-weight: 400;
+  margin-left: 4px;
+}
 @media (max-width: 1100px) {
   .etapas {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -78,6 +78,8 @@ export interface PassoPi {
   // --- Os outros modos
   /** Tabela crua e falha opcional de `--list-models`; sem configuração vale a tabela padrão. */
   listaDeModelos?: { tabela?: string; stderr?: string; codigo?: number };
+  /** Os modelos (com o `cost` de cada um) que o RPC `get_available_models` devolve; padrão: os da tabela, com preço. */
+  catalogoDeModelos?: object[];
   /** Processo sem RPC: saída crua, término opcionalmente só depois do EOF do stdin. */
   saidaDoProcesso?: { stdout?: string; stderr?: string; codigo?: number; esperaEof?: boolean };
   /**
@@ -88,6 +90,12 @@ export interface PassoPi {
   /** O comportamento do e2e: o texto do prompt escolhe o que fazer ([ao vivo], [longo], eco:, pergunte...). */
   marcas?: boolean;
 }
+
+/** O catálogo padrão do `get_available_models`: os modelos da tabela padrão, com o preço em dólares por milhão de tokens. */
+const CATALOGO_PADRAO = [
+  { provider: "anthropic", id: "claude-opus-5-5", cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 } },
+  { provider: "anthropic", id: "claude-sonnet-5-5", cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 } },
+];
 
 interface ComandoRpc {
   type?: string;
@@ -535,6 +543,14 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
         } else if (!comando.cancelled) {
           concluir();
         }
+        break;
+      case "get_available_models":
+        emitir({
+          type: "response",
+          command: "get_available_models",
+          success: true,
+          data: { models: passo.catalogoDeModelos ?? CATALOGO_PADRAO },
+        });
         break;
       case "abort":
         emitir({ type: "response", command: "abort", success: true });

@@ -4,17 +4,61 @@ import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmS
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
+import { z } from "zod";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../../../ambiente/publico.ts";
-import type { Modelo } from "../../../modelos/publico.ts";
+import type { Modelo, PrecoDoModelo } from "../../../modelos/publico.ts";
 import type { EventoDoAgente } from "../../nucleo/eventos.ts";
 import type { Harness, LancamentoDoTicket, ProcessoDoAgente, RespostaDaConsulta } from "../../nucleo/harness.ts";
 import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { type RegistroDoPi, traduzirEventoDoPi } from "./eventos_do_pi.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
 import { confianca, PACOTE } from "./pi.ts";
+
+/** O modelo como o `get_available_models` do RPC do pi o descreve: o `cost` em dólares por milhão de tokens. */
+const ModeloDoCatalogoDoPi = z.object({
+  provider: z.string(),
+  id: z.string(),
+  cost: z.object({ input: z.number(), output: z.number(), cacheRead: z.number(), cacheWrite: z.number() }).optional(),
+});
+
+/** A resposta do RPC do pi ao `get_available_models`. */
+const RespostaDoCatalogoDoPi = z.object({
+  type: z.literal("response"),
+  command: z.literal("get_available_models"),
+  success: z.literal(true),
+  data: z.object({ models: z.array(ModeloDoCatalogoDoPi) }),
+});
+
+/** Quanto o RPC do pi pode levar para listar os modelos com o preço. */
+const LIMITE_DO_CATALOGO_MS = 30_000;
+
+/**
+ * O preço de cada modelo do catálogo do pi. O pi declara 0 nos modelos cujo preço não sabe (os das extensões sem preço
+ * configurado): o preço todo zero fica de fora, para o custo deles seguir desconhecido em vez de virar US$ 0.
+ * ponytail: as faixas (`cost.tiers`, por chamada acima de N tokens de entrada) ficam de fora; o Uso da execução soma as
+ * chamadas, e a estimativa usa o preço base. Guardar o Uso por chamada se a estimativa precisar das faixas.
+ */
+function precosDoCatalogoDoPi(modelos: readonly z.infer<typeof ModeloDoCatalogoDoPi>[]): PrecoDoModelo[] {
+  return modelos.flatMap(({ provider, id, cost }) =>
+    cost && cost.input + cost.output + cost.cacheRead + cost.cacheWrite > 0
+      ? [
+          {
+            modelo: { provedor: provider, nome: id },
+            usd_por_milhao: {
+              entrada: cost.input,
+              saida: cost.output,
+              cache_leitura: cost.cacheRead,
+              cache_escrita: cost.cacheWrite,
+            },
+            origem: "pi",
+          },
+        ]
+      : [],
+  );
+}
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
@@ -275,6 +319,28 @@ export class HarnessPi implements Harness {
     if (!(await this.modelosDoPi(par)).some((m) => m.provedor === provedor && m.nome === nome)) {
       throw new ErroDeRegra(`o modelo ${par} não existe no pi`, "escolha um par listado por pi --list-models");
     }
+  }
+
+  /**
+   * O preço de cada modelo do catálogo do pi, pelo comando `get_available_models` do RPC, num pi sem sessão que sai ao
+   * fim do stdin; `--offline` lê o catálogo que o pi já tem, sem esperar a rede.
+   */
+  async precosDosModelos(): Promise<PrecoDoModelo[]> {
+    const rpc = await executar(this.binarioPi(), ["--mode", "rpc", "--no-session", "--offline"], {
+      entrada: `${JSON.stringify({ type: "get_available_models" })}\n`,
+      limiteMs: LIMITE_DO_CATALOGO_MS,
+    });
+    const resposta = rpc.saida
+      .split("\n")
+      .map((linha) => RespostaDoCatalogoDoPi.safeParse(objetoJson(linha)).data)
+      .find((lida) => lida !== undefined);
+    if (!resposta) {
+      throw new ErroDeRegra(
+        `o pi não informou os preços dos modelos: ${rpc.erro.trim()}`,
+        "confira o pi rodando pi --mode rpc e o comando get_available_models",
+      );
+    }
+    return precosDoCatalogoDoPi(resposta.data.models);
   }
 
   /**

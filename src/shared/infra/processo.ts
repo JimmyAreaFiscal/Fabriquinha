@@ -1,8 +1,9 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
-import { spawn } from "node:child_process";
+import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Readable, Writable } from "node:stream";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 
 /** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
@@ -35,21 +36,30 @@ interface Opcoes {
   limiteMs?: number;
   /** Guarda só o fim de stdout e de stderr, pelo menos estes caracteres: saída enorme não esgota a memória. */
   ultimos?: number;
+  /** O que escrever no stdin do comando, fechado em seguida; sem ela, o comando não tem stdin. */
+  entrada?: string;
 }
 
 /**
- * Espera o comando terminar e devolve o código de saída, o stdout e o stderr. Não lê stdin, para nunca esperar
- * resposta de quem não está ali. Só lança se o programa nem chega a rodar (ex.: não está instalado).
+ * Espera o comando terminar e devolve o código de saída, o stdout e o stderr. O stdin leva só a `entrada`, e fecha:
+ * o comando nunca espera resposta de quem não está ali. Só lança se o programa nem chega a rodar (ex.: não está
+ * instalado).
  */
 export function executar(
   comando: string,
   args: readonly string[],
-  { env = process.env, cwd, limiteMs, ultimos = Infinity }: Opcoes = {},
+  { env = process.env, cwd, limiteMs, ultimos = Infinity, entrada }: Opcoes = {},
 ): Promise<Saida> {
   return new Promise((resolve, reject) => {
     // Com limite, o filho lidera um grupo novo, para o SIGKILL no grupo pegar também os netos.
     const detached = limiteMs !== undefined;
-    const filho = spawn(comando, args, { env, cwd, detached, stdio: ["ignore", "pipe", "pipe"] });
+    const filho = spawn(comando, args, {
+      env,
+      cwd,
+      detached,
+      stdio: [entrada === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    }) as ChildProcessByStdio<Writable | null, Readable, Readable>;
+    filho.stdin?.end(entrada);
     let saida = "";
     let erro = "";
     let limiteEstourado = false;

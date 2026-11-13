@@ -79,7 +79,7 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   gravarDecisaoEm(b, ["I-1", 2, 4], ["gate_pr", "aprovado", null], em("2026-02"));
   const uso = daEtapa(new MetricaDeUso().calcular(origemDe(b), doMes("2026-04")), "implementar");
   assert.equal(uso.execucoes, 1);
-  assert.deepEqual(uso.custo, { conhecido: 0, trabalhosSemCusto: 0 });
+  assert.deepEqual(uso.custo, { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
   assert.deepEqual(notaDoRecorte(b, doMes("2026-04")), { soma: 0, quantidade: 0, media: null });
   assert.deepEqual(notaDoRecorte(b, doMes("2026-02")), { soma: 9, quantidade: 2, media: 4.5 }); // a aprovada sem nota não entra na média
 });

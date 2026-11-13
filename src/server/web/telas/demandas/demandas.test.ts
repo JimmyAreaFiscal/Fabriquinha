@@ -124,7 +124,7 @@ test("o texto do servidor é escapado", () => {
 });
 
 const EM = "2026-01-01T00:00:00.000Z";
-const USO = { modelos: [], custo: { conhecido: 0, trabalhosSemCusto: 0 } };
+const USO = { modelos: [], custo: { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 } };
 
 const dadosDaPagina = (resto: Partial<PaginaDaDemanda> = {}): PaginaDaDemanda => ({
   pendencias: [],

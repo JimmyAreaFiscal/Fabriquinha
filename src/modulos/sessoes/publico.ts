@@ -19,12 +19,20 @@ export {
   type RespostaDaConsulta,
   skillDoTipo,
 } from "./harness/publico.ts";
-export { ConfiguracaoDoModelo, Effort, Modelo } from "./modelos/publico.ts";
+export {
+  ConfiguracaoDoModelo,
+  Effort,
+  gravarCatalogoDePrecos,
+  MIGRACOES_DE_SESSOES,
+  Modelo,
+} from "./modelos/publico.ts";
 export {
   acumularUso,
+  type CustoDoUso,
   gravarUsoDeclarado,
   lerUsoDeclarado,
   lerUsoDeclaradoEmLote,
+  linhaDeUsoDaExecucao,
   registrarUso,
   textoDoCusto,
   textoDoCustoDe,

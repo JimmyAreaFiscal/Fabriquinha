@@ -223,7 +223,7 @@ test("a página traz o Uso da demanda já somado e o texto do custo, com ≥ qua
   const agoraIso = new Date().toISOString();
   banco.exec(`INSERT INTO trabalho_agentico VALUES ('s-uso', 'I-206', 1, 'autonomo', 'conv');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('xu1', 's-uso', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('xu1', 'p', 'm', 10, 1, 0, 0, 4.2), ('xu1', 'p', 'n', 5, 1, 0, 0, NULL);`);
   const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(
     uso.modelos.map((m) => [m.modelo, m.tokens_entrada]),
@@ -245,7 +245,7 @@ test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sess�
     ["xu3", "NULL"],
   ] as const)
     banco.exec(`INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', 's-uso', '${agoraIso}', '${agoraIso}', 0);
-      INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 10, 1, 0, 0, ${custo})`);
+      INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${execucao}', 'p', 'm', 10, 1, 0, 0, ${custo})`);
   gravarUsoDeclarado(banco, {
     ferramenta: "claude",
     sessao: "externa",

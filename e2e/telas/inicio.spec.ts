@@ -144,7 +144,7 @@ test("a frase do mês mostra o custo com ≥ e o aviso quando uma sessão não t
     INSERT INTO trabalho_agentico VALUES ('s-com-custo', 'I-206', 1, 'autonomo', 'c1'), ('s-sem-custo', 'I-206', 2, 'autonomo', 'c2');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
       ('xc', 's-com-custo', '${agora}', '${agora}', 0), ('xs', 's-sem-custo', '${agora}', '${agora}', 0);
-    INSERT INTO uso_modelo_execucao VALUES
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES
       ('xc', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, 4.2),
       ('xs', 'anthropic', 'claude-sonnet-5-5', 2000, 500, 0, 0, NULL);
   `);

@@ -76,7 +76,11 @@ export function bancoDoPeriodo(): DatabaseSync {
   execucao("x3", "s2", "2026-03", 0, null);
   execucao("x4", "s3", "2026-03", 0, `${em("2026-03").slice(0, 14)}00:30.000Z`);
   const uso = (x: string, modelo: string, entrada: number, custo: number | null) =>
-    b.prepare("INSERT INTO uso_modelo_execucao VALUES (?, 'p', ?, ?, 1, 2, 3, ?)").run(x, modelo, entrada, custo);
+    b
+      .prepare(
+        "INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES (?, 'p', ?, ?, 1, 2, 3, ?)",
+      )
+      .run(x, modelo, entrada, custo);
   uso("x1", "a", 10, 1);
   uso("x2", "a", 20, 2); // a retomada soma uma vez, ao lado da primeira execução
   uso("x2", "b", 5, null); // custo desconhecido: nunca vira zero
@@ -155,15 +159,9 @@ export const gravarExecucao = (
     falha,
   );
   for (const [modelo, e, s, cl, ce, custo] of usos)
-    b.prepare("INSERT INTO uso_modelo_execucao VALUES (?, 'anthropic', ?, ?, ?, ?, ?, ?)").run(
-      id,
-      modelo,
-      e,
-      s,
-      cl,
-      ce,
-      custo,
-    );
+    b.prepare(
+      "INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES (?, 'anthropic', ?, ?, ?, ?, ?, ?)",
+    ).run(id, modelo, e, s, cl, ce, custo);
 };
 
 export const gravarDecisao = (b: DatabaseSync, ticket: number, id: number, resultado: string, nota: number | null) =>

@@ -152,7 +152,7 @@ test("os cards do mês do projeto vêm de /api/metricas com o mesmo texto do cus
     INSERT INTO trabalho_agentico VALUES ('s-I-1', 'I-1', 1, 'autonomo', 'conv');
     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
       ('x1', 's-I-1', '${agoraIso}', '${agoraIso}', 0), ('x2', 's-I-1', '${agoraIso}', '${agoraIso}', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('x1', 'p', 'm', 10, 1, 0, 0, 4.2), ('x2', 'p', 'm', 3, 1, 0, 0, NULL);`);
+    INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('x1', 'p', 'm', 10, 1, 0, 0, 4.2), ('x2', 'p', 'm', 3, 1, 0, 0, NULL);`);
   const mes = agoraIso.slice(0, 7);
   const [loja] = (await chamar("GET", `/api/metricas?projeto=loja&de=${mes}&ate=${mes}`)) as MetricasDoMes[];
   const [site] = (await chamar("GET", `/api/metricas?projeto=site&de=${mes}&ate=${mes}`)) as MetricasDoMes[];
