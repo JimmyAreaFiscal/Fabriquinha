@@ -233,9 +233,27 @@ export const AgregadoDemanda = z
     }
   });
 
+/**
+ * O resumo da demanda que as listagens leem (MELHORIAS §5.1, regra 5): o pedido, os itens de trabalho e o estado do
+ * desenvolvimento, sem as Evidências, as versões do Plano, os critérios citados e os arquivos previstos. Não revalida os
+ * invariantes do agregado: quem o carrega inteiro, para mudá-lo, os valida.
+ */
+export const ResumoDaDemanda = z.object(AgregadoDemanda.shape).pick({
+  demanda: true,
+  tickets: true,
+  decisoes: true,
+  rodadas: true,
+  dependencias_rodada: true,
+  dependencias_ticket: true,
+  tentativas: true,
+  encerramento: true,
+  pull_requests: true,
+});
+
 export type PullRequestDoEspaco = z.infer<typeof PullRequestDoEspaco>;
 export type RodadaDemanda = z.infer<typeof RodadaDemanda>;
 export type TicketDemanda = z.infer<typeof TicketDemanda>;
 export type Demanda = z.infer<typeof Demanda>;
 export type TipoDemanda = z.infer<typeof TipoDemanda>;
 export type AgregadoDemanda = z.infer<typeof AgregadoDemanda>;
+export type ResumoDaDemanda = z.infer<typeof ResumoDaDemanda>;

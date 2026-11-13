@@ -2,7 +2,8 @@
 // das evidências, que o repositório do agregado lê e grava pela diferença na transação dele, e os anexos, gravados na
 // transação da evidência (`comDemanda`, via `aposGravar`) por cima do armazenamento por SHA-256 de `arquivos.ts`.
 import { readFileSync } from "node:fs";
-import type { DatabaseSync, StatementSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
 import {
@@ -40,18 +41,13 @@ const TABELA_DAS_EVIDENCIAS: TabelaDoAgregado<EvidenciasRegistradas> = {
 
 /**
  * As evidências da demanda como o banco as guarda, para o agregado validar: o Ator em `autor`, sem o `id` e sem as
- * colunas nulas. `preparar` é o de quem carrega, que prepara cada SQL uma vez só ao carregar várias demandas.
+ * colunas nulas.
  */
-export function lerEvidenciasDaDemanda(
-  demandaId: string,
-  preparar: (sql: string) => StatementSync,
-): Record<string, unknown>[] {
-  return preparar("SELECT * FROM evidencia_demanda WHERE demanda_id = ? ORDER BY rowid")
-    .all(demandaId)
-    .map(({ id: _, dados, ...evidencia }) => ({
-      ...semNulos(agruparColunasDoCampo(evidencia, "autor")),
-      dados: JSON.parse(dados as string) as unknown,
-    }));
+export function lerEvidenciasDaDemanda(linhasDaDemanda: LinhasDoAgregado): Record<string, unknown>[] {
+  return linhasDaDemanda("evidencia_demanda").map(({ id: _, dados, ...evidencia }) => ({
+    ...semNulos(agruparColunasDoCampo(evidencia, "autor")),
+    dados: JSON.parse(dados as string) as unknown,
+  }));
 }
 
 /** O instante da primeira evidência de cada demanda que tem alguma, em lote. */

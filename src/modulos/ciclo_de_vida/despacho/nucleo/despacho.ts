@@ -2,7 +2,7 @@
 // paralelismo e diz, para cada item parado, por que não foi despachado. Pura: a aplicação monta a situação e reserva.
 import { z } from "zod";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   CICLO_DA_DEMANDA,
   EstadoDemanda,
   etapaDoEstado,
@@ -48,7 +48,7 @@ export type MotivoDeRecusa = z.infer<typeof MotivoDeRecusa>;
 
 /** Uma demanda em andamento com os ids das predecessoras que ainda não satisfazem a Dependência. */
 export interface DemandaParaDespacho {
-  agregado: AgregadoDemanda;
+  agregado: ResumoDaDemanda;
   predecessoras_pendentes: readonly string[];
 }
 
@@ -76,7 +76,7 @@ export const motivoDeRecusaDoItem = (
   item: Endereco,
 ): MotivoDeRecusa | undefined => [...recusas].find(([endereco]) => endereco.toString() === item.toString())?.[1];
 
-const menorAberto = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"] | undefined): TicketDemanda[] =>
+const menorAberto = (ag: ResumoDaDemanda, etapa: TicketDemanda["etapa"] | undefined): TicketDemanda[] =>
   ag.tickets
     .filter((t) => t.etapa === etapa && t.estado === "aberto")
     .sort((a, b) => a.ticket_id - b.ticket_id)
@@ -85,19 +85,19 @@ const menorAberto = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"] | undefi
 const estaVivo = (vivos: readonly Endereco[], t: TicketDemanda): boolean =>
   vivos.some((v) => v.demanda_id === t.demanda_id && v.ticket_id === t.ticket_id);
 
-const decisaoMaisRecente = (ag: AgregadoDemanda, t: TicketDemanda) =>
+const decisaoMaisRecente = (ag: ResumoDaDemanda, t: TicketDemanda) =>
   ag.decisoes.filter((d) => d.ticket_id === t.ticket_id).at(-1);
 
 const planejaADemanda = (t: TicketDemanda): boolean => CATALOGO_DE_ETAPAS[t.etapa].papel === "planeja_a_demanda";
 
-const ehPlanejamentoReprovado = (ag: AgregadoDemanda, t: TicketDemanda): boolean =>
+const ehPlanejamentoReprovado = (ag: ResumoDaDemanda, t: TicketDemanda): boolean =>
   planejaADemanda(t) && decisaoMaisRecente(ag, t)?.resultado === "reprovado";
 
 /**
  * O planejamento reprovado em execução, sem trabalho vivo e sem Tentativa nova desde a última recusa, é pronto como os
  * outros: a retomada abre a Tentativa seguinte, e é ela que o tira daqui (o agente que sai sem submeter não retoma em laço).
  */
-function aguardaRetomada(ag: AgregadoDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
+function aguardaRetomada(ag: ResumoDaDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
   const recusa = decisaoMaisRecente(ag, t);
   if (!planejaADemanda(t) || t.estado !== "em_execucao" || recusa?.resultado !== "reprovado" || estaVivo(vivos, t)) {
     return false;
@@ -122,7 +122,7 @@ function prontosDoPlanejamento(
 }
 
 /** A integração da demanda, quando o encerramento pode ser tentado, e a resolução do conflito que ela abriu. */
-function prontosDoEncerramento(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"], recusar: Recusar): TicketDemanda[] {
+function prontosDoEncerramento(ag: ResumoDaDemanda, etapa: TicketDemanda["etapa"], recusar: Recusar): TicketDemanda[] {
   const encerrar = podeTentarEncerramento(ag) ? menorAberto(ag, etapa) : [];
   // O agendador relê o PR a cada ciclo; o Auditor, não: a ação dele é o merge na plataforma.
   if (ag.encerramento?.aguardando_merge_humano) {
@@ -132,7 +132,7 @@ function prontosDoEncerramento(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"
 }
 
 /** Em `em_execucao`, um ticket por rodada livre: a rodada sem Dependência pendente e sem ticket ocupando-a. */
-function prontosDaExecucao(ag: AgregadoDemanda, recusar: Recusar): TicketDemanda[] {
+function prontosDaExecucao(ag: ResumoDaDemanda, recusar: Recusar): TicketDemanda[] {
   const { id: demandaId } = ag.demanda;
   const ticketConcluido = (ticketId: number) =>
     ag.tickets.some((t) => t.ticket_id === ticketId && t.estado === "concluido");
@@ -200,7 +200,7 @@ function avaliarDemanda(demanda: DemandaParaDespacho, vivos: readonly Endereco[]
  * Ocupa vaga do limite o ticket em execução, menos o que espera gente (o da sessão de ajustes e a âncora do Gate da
  * rodada no estado de espera dele) e o planejamento reprovado sem trabalho vivo.
  */
-function ocupaVaga(ag: AgregadoDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
+function ocupaVaga(ag: ResumoDaDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
   const gateDaEtapa = CATALOGO_DE_ETAPAS[t.etapa].gate;
   const rodadaEsperaOGateDaEtapa = ag.rodadas.some(
     (r) => r.rodada_id === t.rodada_id && gateDaEtapa?.esperaEmEstadoProprio === true && r.estado === gateDaEtapa.nome,
@@ -254,7 +254,7 @@ export class Despacho {
 
 /** A situação de uma demanda só, para quem sabe apenas se as predecessoras estão satisfeitas, não quais faltam. */
 export const situacaoDeUmaDemanda = (
-  agregado: AgregadoDemanda,
+  agregado: ResumoDaDemanda,
   predecessorasSatisfeitas: boolean,
 ): SituacaoDoDespacho => ({
   // shortcut: sem a lista das predecessoras, o id da própria demanda marca a pendência; passa a lista real quando o chamador a tiver.

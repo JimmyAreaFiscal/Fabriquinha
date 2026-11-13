@@ -3,7 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   CICLO_DA_DEMANDA,
   condutor,
   configuracao,
@@ -38,7 +38,7 @@ const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
 
 /** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
 function pendenciasDoInicio(
-  ag: AgregadoDemanda,
+  ag: ResumoDaDemanda,
   predecessoras: readonly Predecessora[],
   vivos: readonly TrabalhoVivo[],
   sessaoDoTicket: ReadonlyMap<string, string>,
@@ -71,7 +71,7 @@ function pendenciasDoInicio(
  */
 export function pendenciasDasDemandas(
   banco: DatabaseSync,
-  demandas: readonly AgregadoDemanda[],
+  demandas: readonly ResumoDaDemanda[],
   sessoes: readonly SessaoDeDemanda[],
   situacaoDa: SituacaoDaSessao,
   agora: Instante,
@@ -104,7 +104,7 @@ export function pendenciasDasDemandas(
  */
 export function pendenciasDeUmaDemanda(
   banco: DatabaseSync,
-  ag: AgregadoDemanda,
+  ag: ResumoDaDemanda,
   situacaoDa: SituacaoDaSessao,
   agora: Instante,
 ): PendenciaDoInicio[] {

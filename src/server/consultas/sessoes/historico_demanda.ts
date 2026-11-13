@@ -5,8 +5,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import {
-  type AgregadoDemanda,
-  carregarDemandas,
+  type ResumoDaDemanda,
+  resumosDasDemandas,
   type EtapaTicket,
   formatarTicketRef,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
@@ -29,20 +29,16 @@ interface FiltroSessoesDemanda {
   etapa?: EtapaTicket;
 }
 
-/** As sessões dos `resumos` que casam com o filtro, cada uma com a demanda dela em `agregadoDaDemanda`. */
+/** As sessões dos `resumos` que casam com o filtro, cada uma com o resumo da demanda dela em `resumoDaDemanda`. */
 function sessoesDosResumos(
   resumos: readonly ResumoDaSessao[],
-  agregadoDaDemanda: ReadonlyMap<string, AgregadoDemanda>,
+  resumoDaDemanda: ReadonlyMap<string, ResumoDaDemanda>,
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
   return resumos
     .map((resumo) =>
       sessaoDoTicketDoResumo(
-        encontrado(
-          agregadoDaDemanda.get(resumo.demanda_id),
-          `a demanda ${resumo.demanda_id} não foi lida`,
-          "recarregue",
-        ),
+        encontrado(resumoDaDemanda.get(resumo.demanda_id), `a demanda ${resumo.demanda_id} não foi lida`, "recarregue"),
         resumo,
       ),
     )
@@ -78,17 +74,17 @@ function sessoesDosResumos(
 }
 
 /**
- * As sessões das demandas de `agregados` no escopo (terminadas no `historico`, as demais em `ativas`), da que está assim há
+ * As sessões das `demandas` no escopo (terminadas no `historico`, as demais em `ativas`), da que está assim há
  * mais tempo para a mais recente, numa leitura das sessões em lote.
  * ponytail: calcula o estado de cada sessão pelo mesmo caminho do chat; filtrar o histórico no SQL quando pesar.
  */
 export function sessoesDasDemandas(
   banco: DatabaseSync,
-  agregados: readonly AgregadoDemanda[],
+  demandas: readonly ResumoDaDemanda[],
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
-  const agregadoDaDemanda = new Map(agregados.map((ag) => [ag.demanda.id, ag]));
-  return sessoesDosResumos(resumosDasSessoesEmLote(banco, [...agregadoDaDemanda.keys()]), agregadoDaDemanda, filtro);
+  const resumoDaDemanda = new Map(demandas.map((ag) => [ag.demanda.id, ag]));
+  return sessoesDosResumos(resumosDasSessoesEmLote(banco, [...resumoDaDemanda.keys()]), resumoDaDemanda, filtro);
 }
 
 /**
@@ -103,8 +99,8 @@ export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDeman
         ? pedidosDoProjeto(banco, filtro.projeto)
         : undefined;
   const resumos = resumosDasSessoesEmLote(banco, demandasDoFiltro);
-  const agregados = carregarDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
-  return sessoesDosResumos(resumos, new Map(agregados.map((ag) => [ag.demanda.id, ag])), filtro);
+  const demandas = resumosDasDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
+  return sessoesDosResumos(resumos, new Map(demandas.map((ag) => [ag.demanda.id, ag])), filtro);
 }
 
 /**

@@ -1,7 +1,7 @@
 // As tabelas do Processo (MELHORIAS §5.1): as Tentativas, as Decisões dos gates, o progresso do encerramento e as
 // históricas da iteração e da proposta. Este é o único arquivo que fala SQL com elas; o agregado da demanda as carrega e
 // grava por aqui, depois dos itens de Planejamento e do PR final, de que dependem.
-import type { DatabaseSync, StatementSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { type Ator, Endereco, type ResultadoDaTentativa } from "../../etapas/publico.ts";
 import {
@@ -16,6 +16,7 @@ import type { Decisao } from "../nucleo/gate.ts";
 import type { ProgressoEncerramento } from "../nucleo/progresso_do_encerramento.ts";
 import { Tentativa } from "../nucleo/tentativa.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 
 /** O estado do desenvolvimento que o Processo grava, como o agregado da demanda o guarda. */
 interface EstadoDoProcesso {
@@ -155,11 +156,9 @@ export const gravarEstadoNovoEMudado = (
   gravarLinhasNovasEMudadas(banco, TABELAS_DO_PROCESSO, antes, depois);
 };
 
-/** O estado do Processo da demanda, como está no banco, para o agregado validar; `preparar` reaproveita o SQL. */
-export function carregarEstadoDoProcesso(preparar: (sql: string) => StatementSync, demandaId: string) {
-  const filhas = (tabela: string) =>
-    preparar(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(demandaId);
-  const encerramento = preparar("SELECT * FROM encerramento_demanda WHERE demanda_id = ?").get(demandaId);
+/** O estado do Processo da demanda, como está no banco, para o agregado validar. */
+export function carregarEstadoDoProcesso(linhasDaDemanda: LinhasDoAgregado, demandaId: string) {
+  const [encerramento] = linhasDaDemanda("encerramento_demanda");
   return {
     ...(encerramento && {
       encerramento: semNulos({
@@ -169,13 +168,13 @@ export function carregarEstadoDoProcesso(preparar: (sql: string) => StatementSyn
         sha_verificado: encerramento.sha_verificado,
         aguardando_merge_humano: encerramento.aguardando_merge_humano === 1 || null,
         integracao: grupo({ sha: encerramento.integracao_sha }),
-        limpeza_pendente: filhas("limpeza_pendente_encerramento").map((limpeza) => limpeza.limpeza_pendente),
+        limpeza_pendente: linhasDaDemanda("limpeza_pendente_encerramento").map((limpeza) => limpeza.limpeza_pendente),
         conflito_pendente: grupo({ ticket_id: encerramento.conflito_ticket_id }),
         falha: grupo({ etapa: encerramento.falha_etapa, motivo: encerramento.falha_motivo }),
       }),
     }),
-    tentativas: filhas("tentativa").map(tentativaDaLinha),
-    decisoes: filhas("decisao_ticket").map((decisao) =>
+    tentativas: linhasDaDemanda("tentativa").map(tentativaDaLinha),
+    decisoes: linhasDaDemanda("decisao_ticket").map((decisao) =>
       semNulos(
         agruparColunasDoCampo(
           {

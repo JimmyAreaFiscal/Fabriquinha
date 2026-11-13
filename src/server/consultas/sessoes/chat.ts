@@ -8,7 +8,7 @@ import { encontrado } from "../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   carregarDemanda,
   condutor,
   configuracao,
@@ -92,7 +92,7 @@ export interface ChatDemanda {
 }
 
 /** A sessão do resumo com o agregado da demanda dela e o ticket; recusa a sessão de ticket que não está no agregado. */
-export function sessaoDoTicketDoResumo(ag: AgregadoDemanda, { execucoes, ...sessao }: ResumoDaSessao): SessaoDoTicket {
+export function sessaoDoTicketDoResumo(ag: ResumoDaDemanda, { execucoes, ...sessao }: ResumoDaSessao): SessaoDoTicket {
   const ticket = encontrado(
     ag.tickets.find((t) => t.ticket_id === sessao.ticket_id),
     `a sessão ${sessao.id} não existe`,
@@ -145,7 +145,7 @@ export function montarCabecalhoDaSessao(c: SessaoDoTicket, relogio: Relogio): Ca
 }
 
 /** As sessões da demanda paradas no diálogo ou na conversa: o que `pendenciasDaDemanda` pede dos trabalhos vivos. */
-function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda) {
+function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: ResumoDaDemanda) {
   return resumosDasSessoesEmLote(banco, [ag.demanda.id])
     .map((resumo) => sessaoDoTicketDoResumo(ag, resumo))
     .filter((c) => c.execucoes.length > 0)
@@ -156,7 +156,7 @@ function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda) {
 }
 
 /** As Pendências da demanda, as mesmas do Início, para o chat mostrar o que a demanda espera do Auditor. */
-function pendenciasDoChat(banco: DatabaseSync, ag: AgregadoDemanda, relogio: Relogio): PendenciaDoChat[] {
+function pendenciasDoChat(banco: DatabaseSync, ag: ResumoDaDemanda, relogio: Relogio): PendenciaDoChat[] {
   const { id } = ag.demanda;
   const predecessorasSatisfeitas =
     bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(banco, [id]), id)).length === 0;

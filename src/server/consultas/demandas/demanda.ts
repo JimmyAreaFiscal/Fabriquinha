@@ -5,9 +5,10 @@ import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
   type AgregadoDemanda,
+  type ResumoDaDemanda,
   anexosDaDemanda,
   carregarDemanda,
-  carregarDemandas,
+  resumosDasDemandas,
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
   Despacho,
@@ -38,7 +39,7 @@ export const enderecosNaDemanda = (demanda_id: string) => ({
 });
 
 /** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados em que o Gate do PR espera gente. */
-export function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+export function prDoGateDaRodada(ag: ResumoDaDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const estado = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.estado;
   if (estado === undefined || gateQueEsperaGenteNaRodada(estado) === undefined) return undefined;
   const pr = prDoEspaco(ag, rodada_id);
@@ -171,7 +172,7 @@ export function consultarDemanda(
       })),
       encerramento: passosDoEncerramento(ag),
       dependencias: predecessoras,
-      dependentes: carregarDemandas(banco, dependentesNaoConcluidosDoPedido(banco, id)).map(({ demanda: d }) => ({
+      dependentes: resumosDasDemandas(banco, dependentesNaoConcluidosDoPedido(banco, id)).map(({ demanda: d }) => ({
         demanda_id: d.id,
         titulo: d.titulo,
         estado: d.estado,
