@@ -11,8 +11,7 @@ import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdl
 import { interromperExecucaoDemanda } from "../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { cicloDoDespacho, executarAgora } from "../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { gravarProjeto, projetoExistente } from "../src/modulos/projeto/armazenamento/projetos.ts";
-import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
+import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
 import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";

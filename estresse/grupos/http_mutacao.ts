@@ -14,7 +14,7 @@ import {
 } from "../../src/modulos/sandbox/armazenamento/ambientes.ts";
 import { abrir } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
 import { carregarDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
-import { buscarProjeto } from "../../src/modulos/projeto/armazenamento/projetos.ts";
+import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";

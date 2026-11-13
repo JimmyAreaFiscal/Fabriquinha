@@ -20,7 +20,7 @@ import {
 import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../../modulos/compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../../modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
-import { registrarProjeto } from "../../modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../modulos/demandas/publico.ts";
 import { Configuracao, salvarConfiguracao } from "../../modulos/compartilhado/armazenamento/servico.ts";
 import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";

@@ -4,7 +4,7 @@ import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts"
 import { cadastrarProjetoLoja } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../modulos/compartilhado/nucleo/erros.ts";
 import { inserirAmbienteAlocado } from "../../modulos/sandbox/armazenamento/ambientes.ts";
-import { gravarProjeto, projetoExistente } from "../../modulos/projeto/armazenamento/projetos.ts";
+import { gravarProjeto, projetoExistente } from "../../modulos/demandas/publico.ts";
 import { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
 import {
   consultarEstadoDaConfiguracao,

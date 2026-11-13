@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Projeto } from "../../../../modulos/projeto/nucleo/projeto.ts";
+import type { Projeto } from "../../../../modulos/demandas/publico.ts";
 import { errosDoZod } from "../configuracao/configuracao.ts";
 import {
   adicionar,

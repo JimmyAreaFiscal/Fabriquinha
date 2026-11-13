@@ -13,7 +13,7 @@ import {
   type CondutorDeTrabalhos,
 } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { carregarDemanda, comDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import {
   garantirWorktreeDemanda,

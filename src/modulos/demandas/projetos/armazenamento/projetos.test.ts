@@ -3,15 +3,15 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
 import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../aplicacao/cadastro.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
-import { abrir, escrever } from "../../compartilhado/armazenamento/banco.ts";
-import { criarDemandaNova } from "../../sdlc/armazenamento/demandas.ts";
-import { registrarDemanda } from "../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
-import { iniciarTentativaDoTicket } from "../../sdlc/nucleo/despacho/reserva_ticket.ts";
-import { FABRIQUINHA } from "../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { abrir, escrever } from "../../../../shared/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../../sdlc/armazenamento/demandas.ts";
+import { registrarDemanda } from "../../../sdlc/nucleo/transicoes/transicoes_demanda.ts";
+import { iniciarTentativaDoTicket } from "../../../sdlc/nucleo/despacho/reserva_ticket.ts";
+import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
   apagarProjeto,
   buscarProjeto,

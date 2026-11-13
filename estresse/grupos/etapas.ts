@@ -33,7 +33,7 @@ import * as gestao from "../../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
 import { condutor } from "../../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../../src/modulos/sdlc/armazenamento/demandas.ts";
-import { registrarProjeto } from "../../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { configuracao } from "../../src/modulos/compartilhado/armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { integrarPR } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";

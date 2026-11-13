@@ -10,7 +10,7 @@ import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdl
 import type { AgregadoDemanda } from "../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 import { gravarCommitDemanda } from "../src/modulos/repositorio/armazenamento/commits_demanda.ts";
-import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
 import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "./hospedagem_falsa.ts";
