@@ -7,7 +7,7 @@ import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { predecessorasPendentes } from "../src/modulos/sdlc/nucleo/item_de_trabalho/dependencia_demanda.ts";
-import { consultarDemanda } from "../src/server/api/consultas/demandas/demanda.ts";
+import { consultarDemanda } from "../src/server/consultas/demandas/demanda.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { achadoDaDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";

@@ -1,5 +1,5 @@
 // O contrato das rotas das demandas na API: o board, a página de uma demanda e a reabertura de um ticket. Só tipos e
-// schemas; quem monta cada resposta é a consulta da tela (api/consultas/), e o cliente web depende só destes tipos.
+// schemas; quem monta cada resposta é a consulta da tela (server/consultas/), e o cliente web depende só destes tipos.
 import { z } from "zod";
 import {
   Decisao,

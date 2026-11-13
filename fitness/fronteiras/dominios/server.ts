@@ -1,5 +1,8 @@
 // Regras de fronteira do Servidor, src/server/ (MELHORIAS §6): as partes dele são módulos da matriz, cada uma com o que pode
-// importar. O ticket que mexe no servidor (05, 21) muda só este arquivo; o motor (../motor.ts) explica os campos.
+// importar. A entrega (api, cli, cli-agente, web, contrato) chama as consultas, os fluxos e as fachadas; as consultas leem
+// as fachadas no formato do contrato; os fluxos coordenam as fachadas; a composição monta tudo. Do domínio ainda não
+// migrado, a matriz libera as camadas do legado (nucleo, aplicacao...) no lugar da fachada. O ticket que mexe no servidor
+// (05, 21) muda só este arquivo; o motor (../motor.ts) explica os campos.
 import {
   MODULO_DAS_FACHADAS,
   QUALQUER_EXTERNO,
@@ -10,7 +13,8 @@ import {
 
 const MODULO_CLIENTE_WEB = "web";
 const MODULO_COMPARTILHADO_COM_O_NAVEGADOR = "web/compartilhado";
-const MODULO_DAS_CONSULTAS_DAS_TELAS = "api/consultas";
+const MODULO_DAS_CONSULTAS_DAS_TELAS = "consultas";
+const MODULO_DOS_FLUXOS = "fluxos";
 
 // O pacote de um especificador externo: `react-dom/client` → `react-dom`, `@assistant-ui/react/x` → `@assistant-ui/react`.
 const pacoteDe = (alvo: string): string =>
@@ -24,11 +28,18 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
   // Puro: importável pelo servidor e pelo navegador.
   [MODULO_COMPARTILHADO_COM_O_NAVEGADOR]: { modulosPermitidos: [], externoPermitido: () => false },
   // Os tipos e schemas da API: só o núcleo e o zod. Nenhum domínio o importa (as consultas das telas ficam em
-  // api/consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  // consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
   contrato: { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
-  // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios: a regra da aplicação, mais o contrato.
+  // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios: a regra da aplicação, mais o
+  // contrato; nem a entrega, nem os fluxos. Até o ticket 21, elas ainda leem o interior dos módulos.
   [MODULO_DAS_CONSULTAS_DAS_TELAS]: {
     modulosPermitidos: ["nucleo", "armazenamento", "infra", "aplicacao", "contrato", MODULO_DAS_FACHADAS],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+  // Os fluxos que atravessam domínios (MELHORIAS §5.3): só as fachadas (e, no legado, a aplicação e o núcleo); nem o
+  // contrato, nem a entrega, nem as consultas.
+  [MODULO_DOS_FLUXOS]: {
+    modulosPermitidos: ["nucleo", "aplicacao", MODULO_DAS_FACHADAS],
     externoPermitido: QUALQUER_EXTERNO,
   },
   api: {
@@ -38,12 +49,20 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
       MODULO_COMPARTILHADO_COM_O_NAVEGADOR,
       "contrato",
       MODULO_DAS_CONSULTAS_DAS_TELAS,
+      MODULO_DOS_FLUXOS,
       MODULO_DAS_FACHADAS,
     ],
     externoPermitido: QUALQUER_EXTERNO,
   },
   cli: {
-    modulosPermitidos: ["aplicacao", "nucleo", "contrato", MODULO_DAS_FACHADAS],
+    modulosPermitidos: [
+      "aplicacao",
+      "nucleo",
+      "contrato",
+      MODULO_DAS_CONSULTAS_DAS_TELAS,
+      MODULO_DOS_FLUXOS,
+      MODULO_DAS_FACHADAS,
+    ],
     externoPermitido: QUALQUER_EXTERNO,
   },
   // O cliente do agente roda empacotado, sem o core: só o contrato e o Node (menos o SQLite).
@@ -75,11 +94,10 @@ export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
   },
 };
 
-// `server/api/consultas/` e `server/web/compartilhado/` são módulos à parte dentro da API e da web; `contrato/`, `cli/`,
-// `cli-agente/` e `composicao/`, cada um o seu.
+// `server/web/compartilhado/` é um módulo à parte dentro da web; `api/`, `cli/`, `cli-agente/`, `contrato/`, `consultas/`,
+// `fluxos/` e `composicao/`, cada um o seu.
 export function moduloDoArquivoDoServidor(caminhoEmServer: string): string {
   const [primeiro, segundo] = caminhoEmServer.split("/");
-  if (primeiro === "api") return segundo === "consultas" ? MODULO_DAS_CONSULTAS_DAS_TELAS : "api";
   if (primeiro === MODULO_CLIENTE_WEB)
     return segundo === "compartilhado" ? MODULO_COMPARTILHADO_COM_O_NAVEGADOR : MODULO_CLIENTE_WEB;
   return primeiro ?? "";

@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import {
   gravarAgregadoPronto,
   INSTANTE_DO_CENARIO,
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { Projeto } from "../../../../modulos/projeto/nucleo/projeto.ts";
-import { relogioFixo } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
-import { gravarProjeto } from "../../../../modulos/projeto/armazenamento/projetos.ts";
-import { ListaDoProjeto } from "../../../contrato/projeto.ts";
-import { registrarProjeto } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
+} from "../../../../apoio-testes/cenarios_de_demanda.ts";
+import { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
+import { relogioFixo } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+import { gravarProjeto } from "../../../modulos/projeto/armazenamento/projetos.ts";
+import { ListaDoProjeto } from "../../contrato/projeto.ts";
+import { registrarProjeto } from "../../../modulos/projeto/aplicacao/cadastro.ts";
 import { consultarProjeto, estadoNaLinhaDoTempo } from "./projeto.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

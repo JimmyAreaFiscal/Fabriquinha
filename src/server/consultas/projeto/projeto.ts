@@ -1,7 +1,7 @@
-// As consultas da página do projeto: as demandas com as rodadas e os tickets, montadas no contrato da API
+// A consulta da página do projeto: as demandas com as rodadas e os tickets, montadas no contrato da API
 // (contrato/) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import {
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
@@ -9,28 +9,27 @@ import {
   etapaDoEstado,
   PRIMEIRA_ETAPA_DA_DEMANDA,
   EstadoDemanda,
-} from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+} from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import {
   formatarRodadaRef,
   formatarTicketRef,
-} from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { encontrado } from "../../../../modulos/compartilhado/nucleo/erros.ts";
-import { prDoEspaco } from "../../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
-import { type EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
-import type { Projeto } from "../../../../modulos/projeto/nucleo/projeto.ts";
-import type { Relogio } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
-import { carregarDemandas, situacaoDasDemandas } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasDasDemandas } from "../../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
-import { lerEmSnapshot } from "../../../../modulos/compartilhado/armazenamento/snapshot.ts";
+} from "../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { encontrado } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { prDoEspaco } from "../../../modulos/repositorio/nucleo/espaco_de_trabalho.ts";
+import { type EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
+import type { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
+import type { Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+import { carregarDemandas, situacaoDasDemandas } from "../../../modulos/sdlc/armazenamento/demandas.ts";
+import { predecessorasDasDemandas } from "../../../modulos/sdlc/armazenamento/dependencias_demanda.ts";
+import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
 import {
   sessaoDeCadaTicketDasDemandas,
   ticketsComPiAtivo,
-} from "../../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { heatmapDo } from "../../../../modulos/repositorio/infra/git/heatmap.ts";
-import type { DemandaDoProjeto, FiltroDoProjeto, Heatmap, ListaDoProjeto } from "../../../contrato/projeto.ts";
+} from "../../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import { sessoesDeDemanda } from "../sessoes/historico_demanda.ts";
-import { projetoExistente } from "../../../../modulos/projeto/aplicacao/cadastro.ts";
-import { resolverModeloEffort } from "../../../../modulos/sdlc/aplicacao/execucao/modelo_effort.ts";
+import { projetoExistente } from "../../../modulos/projeto/aplicacao/cadastro.ts";
+import { resolverModeloEffort } from "../../../modulos/sdlc/aplicacao/execucao/modelo_effort.ts";
 import { bloqueiosDaDemanda } from "../demandas/bloqueios.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
@@ -163,7 +162,3 @@ export function consultarProjeto(
     };
   });
 }
-
-/** O heatmap das alterações da base do projeto `nome` nos 12 meses até agora. */
-export const consultarHeatmapDoProjeto = (banco: DatabaseSync, nome: string, relogio: Relogio): Promise<Heatmap> =>
-  heatmapDo(projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE), relogio.agora());

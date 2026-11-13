@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
+import { EstadoDemanda } from "../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import { bloqueiosDaDemanda } from "./bloqueios.ts";
 
 test("bloqueiam as predecessoras que não satisfazem a Dependência; concluída e arquivada satisfazem", () => {

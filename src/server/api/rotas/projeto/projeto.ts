@@ -1,11 +1,8 @@
 // Rotas da página do projeto (F7 §4.2): as demandas do projeto com as rodadas e os tickets, o arquivamento das
 // concluídas e o heatmap do projeto.
 import { arquivarConcluidas } from "../../../../modulos/sdlc/aplicacao/gestao_demandas.ts";
-import {
-  consultarHeatmapDoProjeto,
-  consultarProjeto,
-  ORIENTACAO_PROJETO_INEXISTENTE,
-} from "../../consultas/projeto/projeto.ts";
+import { consultarHeatmapDoProjeto } from "../../../consultas/projeto/heatmap.ts";
+import { consultarProjeto, ORIENTACAO_PROJETO_INEXISTENTE } from "../../../consultas/projeto/projeto.ts";
 import { DemandasArquivadas, FiltroDoProjeto, Heatmap, ListaDoProjeto } from "../../../contrato/projeto.ts";
 import type { Rota } from "../../rotas.ts";
 

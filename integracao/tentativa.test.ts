@@ -24,7 +24,7 @@ import {
 } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import type { PaginaDaDemanda } from "../src/server/contrato/demanda.ts";
 import { pagina } from "../src/server/web/telas/demandas/demandas.ts";
-import { descreverEtapasDoSdlc } from "../src/server/api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../src/server/consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../src/server/web/apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());

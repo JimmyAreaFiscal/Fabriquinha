@@ -1,13 +1,13 @@
 // As consultas da tela de Métricas: as duas visões do período, lidas num snapshot só. O mês corrente vem do relógio.
 import type { DatabaseSync } from "node:sqlite";
-import { Periodo, somarMeses } from "../../../modulos/compartilhado/nucleo/periodo.ts";
-import { mesDoInstante, type Relogio } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { lerEmSnapshot } from "../../../modulos/compartilhado/armazenamento/snapshot.ts";
-import type { FiltroDeMetricas } from "../../contrato/metricas.ts";
+import { Periodo, somarMeses } from "../../modulos/compartilhado/nucleo/periodo.ts";
+import { mesDoInstante, type Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
+import type { FiltroDeMetricas } from "../contrato/metricas.ts";
 import {
   metricasDasDemandasDoPeriodo,
   metricasDosMeses,
-} from "../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+} from "../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
 
 const PeriodoDasMetricas = Periodo.refine((p) => p.ate <= somarMeses(p.de, 23), "o período tem no máximo 24 meses");
 

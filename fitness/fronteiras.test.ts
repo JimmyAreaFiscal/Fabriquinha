@@ -117,10 +117,14 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "server/cli-agente/ok.ts":
       'import { Resposta } from "../contrato/ok.ts";\nimport { readFileSync } from "node:fs";\nimport { b } from "./sub.ts";\n',
     "server/api/ok.ts":
-      'import { a } from "../../modulos/aplicacao/ok.ts";\nimport { c } from "../web/compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\nimport { t } from "./consultas/tela.ts";\n',
+      'import { a } from "../../modulos/aplicacao/ok.ts";\nimport { c } from "../web/compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\nimport { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
+    "server/cli/ok.ts": 'import { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
     // A consulta da tela junta os domínios no formato do contrato: lê o banco como a aplicação.
-    "server/api/consultas/tela.ts":
-      'import { a } from "../../../modulos/armazenamento/ok.ts";\nimport { b } from "../../../modulos/aplicacao/ok.ts";\nimport type { R } from "../../contrato/ok.ts";\n',
+    "server/consultas/tela.ts":
+      'import { a } from "../../modulos/armazenamento/ok.ts";\nimport { b } from "../../modulos/aplicacao/ok.ts";\nimport type { R } from "../contrato/ok.ts";\n',
+    // O fluxo coordena os domínios pela fachada (no legado, a aplicação).
+    "server/fluxos/fluxo.ts":
+      'import { a } from "../../modulos/aplicacao/ok.ts";\nimport { n } from "../../modulos/nucleo/ok.ts";\n',
     "server/web/ok.ts":
       'import type { N } from "../../modulos/nucleo/ok.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "./compartilhado/ok.ts";\n',
     "server/web/sub.ts": 'export type { Z } from "../../modulos/nucleo/ok.ts";\n',
@@ -165,6 +169,11 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "modulos/aplicacao/ciclo.ts": 'import { a } from "../../server/api/ciclo.ts";\n',
     "server/api/ciclo.ts": 'import { a } from "../../modulos/aplicacao/ciclo.ts";\n',
     "server/api/usa_o_banco.ts": 'import { a } from "../../modulos/armazenamento/ok.ts";\n',
+    // A consulta só lê: não chama fluxo. O fluxo não fala o contrato, não lê pela consulta nem pelo banco.
+    "server/consultas/usa_o_fluxo.ts": 'import { f } from "../fluxos/fluxo.ts";\n',
+    "server/fluxos/usa_o_contrato.ts": 'import type { R } from "../contrato/ok.ts";\n',
+    "server/fluxos/usa_a_consulta.ts": 'import { t } from "../consultas/tela.ts";\n',
+    "server/fluxos/usa_o_banco.ts": 'import { a } from "../../modulos/armazenamento/ok.ts";\n',
     // Nenhum domínio importa o contrato da API: a consulta que o devolve é da API.
     "modulos/aplicacao/usa_o_contrato.ts": 'import type { R } from "../../server/contrato/ok.ts";\n',
     "modulos/aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
@@ -187,12 +196,18 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     acharViolacoes(raiz, ARQUITETURA_DE_SRC, []).map(descrever).sort(),
     [
       "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → aplicacao",
-      "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → api/consultas → aplicacao",
+      "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → consultas → aplicacao",
+      "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → consultas → fluxos → aplicacao",
       // A definição que importa a condução põe o núcleo a depender da aplicação: além do import, fecha ciclo.
       "modulos/aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → api → web/compartilhado → nucleo → aplicacao",
       "modulos/aplicacao/ciclo.ts importa ../../server/api/ciclo.ts",
       "modulos/aplicacao/usa_o_contrato.ts importa ../../server/contrato/ok.ts",
       "server/api/usa_o_banco.ts importa ../../modulos/armazenamento/ok.ts",
+      "server/consultas/usa_o_fluxo.ts importa ../fluxos/fluxo.ts",
+      "server/consultas/usa_o_fluxo.ts importa ciclo entre módulos: consultas → fluxos → consultas",
+      "server/fluxos/usa_o_contrato.ts importa ../contrato/ok.ts",
+      "server/fluxos/usa_a_consulta.ts importa ../consultas/tela.ts",
+      "server/fluxos/usa_o_banco.ts importa ../../modulos/armazenamento/ok.ts",
       "modulos/aplicacao/sql.ts importa SQL .exec(",
       "modulos/aplicacao/sql.ts importa SQL .prepare(",
       "modulos/aplicacao/usa_o_pi.ts importa ../harness/pi/harness_pi.ts",

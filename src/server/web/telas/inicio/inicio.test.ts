@@ -6,7 +6,7 @@ import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
 import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../contrato/inicio.ts";
 import type { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
 import { inicio, ROTULO_DO_TIPO_DE_PENDENCIA, textoDoMotivoDeRecusa } from "./inicio.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());

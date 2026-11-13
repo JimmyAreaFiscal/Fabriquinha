@@ -5,7 +5,7 @@ import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
 import type { SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
 import type { Entrada } from "../chat/chat.ts";
 import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
-import { descreverEtapasDoSdlc } from "../../../api/rotas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc());
