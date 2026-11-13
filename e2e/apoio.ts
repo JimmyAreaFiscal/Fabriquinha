@@ -48,10 +48,10 @@ async function parar(servico: ChildProcess): Promise<void> {
  * F4 §7: o serviço parado deixa o pi rodando, e quem o mata é a subida seguinte, que no teste não vem. Sem isso, o pi
  * ainda escreve na raiz enquanto ela é apagada.
  */
-function matarPi(raiz: string): void {
+async function matarPi(raiz: string): Promise<void> {
   condutor.montarHarness(new HarnessPi());
   const banco = abrirBancoDaFabriquinha(raiz);
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+  await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
   banco.close();
 }
 
@@ -143,7 +143,7 @@ export const test = base.extend<{
       });
     } finally {
       for (const { servico } of atuais) await parar(servico);
-      matarPi(raiz);
+      await matarPi(raiz);
       const log = atuais.map((a) => a.stderr()).join("");
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
       fechar();

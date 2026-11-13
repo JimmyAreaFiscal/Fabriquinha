@@ -325,17 +325,20 @@ export class SessoesDeAgente {
    * lançou (o host local ou um container do conjunto). Encerrar as execuções e decidir o que isso significa para quem as
    * pediu fica com quem chama. O container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
    */
-  matarProcessosDaInstanciaAnterior(banco: DatabaseSync): void {
+  async matarProcessosDaInstanciaAnterior(banco: DatabaseSync): Promise<void> {
     const doServico = ambienteDoServico();
     const processos = execucoesAbertas(banco).flatMap(({ ambiente_id, grupo_processo }) =>
       grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
     );
-    // ponytail: o sinal não é esperado; com container o `reconciliarNaSubida` limpa o que sobrar antes de o serviço seguir.
-    for (const processo of processos) {
-      const ambiente =
-        processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
-      if (ambiente) sinalizarSemEsperar(ambiente, processo, "SIGKILL");
-    }
+    // O sinal é esperado: a recuperação da subida limpa as sandboxes antes (MELHORIAS §5.3), e o comando do
+    // sinal que ainda rodasse depois disso sobraria na sandbox que ela acabou de devolver limpa.
+    await Promise.all(
+      processos.map(async (processo) => {
+        const ambiente =
+          processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
+        await ambiente?.sinalizar(processo, "SIGKILL").catch(noLog);
+      }),
+    );
   }
 
   /** A conversa guardada da sessão: as entradas do arquivo que o harness grava, ou nenhuma antes de ele existir. */

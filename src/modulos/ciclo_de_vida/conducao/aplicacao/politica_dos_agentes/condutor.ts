@@ -54,8 +54,8 @@ export class CondutorDeTrabalhos extends SessoesDeAgente {
    * dos tickets se encerram com "serviço reiniciado", decidido aqui, que sabe quem reiniciou, e o motor falha o ticket
    * deles (`falharTicket`).
    */
-  recuperarNaSubida(banco: DatabaseSync, { falharTicket }: RecuperacaoDaSubida): void {
-    this.matarProcessosDaInstanciaAnterior(banco);
+  async recuperarNaSubida(banco: DatabaseSync, { falharTicket }: RecuperacaoDaSubida): Promise<void> {
+    await this.matarProcessosDaInstanciaAnterior(banco);
     recuperarProcessosAbertos(banco, this.avisar, this.harness, falharTicket);
   }
 }

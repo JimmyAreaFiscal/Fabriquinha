@@ -23,5 +23,5 @@ export async function recuperarAposReinicio(
   registrarErro: (erro: unknown) => void,
 ): Promise<void> {
   await conjuntoDeSandboxes?.reconciliarNaSubida().catch(registrarErro);
-  condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+  await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 }

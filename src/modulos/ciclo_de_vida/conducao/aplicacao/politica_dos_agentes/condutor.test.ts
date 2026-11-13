@@ -569,7 +569,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)})`);
 
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 
     assert.deepEqual(await daTicket.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -579,10 +579,10 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
   }
 });
 
-test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", () => {
+test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
       INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
@@ -590,7 +590,7 @@ test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", () =
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -643,7 +643,7 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
         }),
     );
 
-    condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 
     await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
     const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
@@ -660,7 +660,7 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
   }
 });
 
-test("recuperarNaSubida de processo de um container que o conjunto não conhece, ou sem conjunto, não sinaliza ninguém e ainda fecha o ticket", () => {
+test("recuperarNaSubida de processo de um container que o conjunto não conhece, ou sem conjunto, não sinaliza ninguém e ainda fecha o ticket", async () => {
   const dir = mkdtempSync(join(base, "recuperacao-"));
   const docker = instalarDockerFalso(join(dir, "docker"));
   for (const conjuntoMontado of [true, false]) {
@@ -678,7 +678,7 @@ test("recuperarNaSubida de processo de um container que o conjunto não conhece,
               dir_do_harness_do_auditor: dirDoPiDoAuditor(),
             }),
         );
-      condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+      await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
       assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
     } finally {
       montarConjuntoDoServico(() => undefined);

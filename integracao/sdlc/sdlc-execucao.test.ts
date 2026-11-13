@@ -290,7 +290,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarExecucao(criarSessao([], sessao), estado.execucoes, execucao),
   }));
-  condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida);
+  await condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);
