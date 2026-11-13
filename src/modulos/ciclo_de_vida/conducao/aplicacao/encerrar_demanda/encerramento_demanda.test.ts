@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../../processo/publico.ts";
 import type { Execucao, Sessao, UsoDaExecucao } from "../../../../sessoes/publico.ts";
 import {
   corpoDoPRFinal,

@@ -5,20 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
-import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { registrarDependencia, registrarProjeto } from "../src/modulos/demandas/publico.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
+  AUDITOR,
+  Endereco,
+  ConducaoDePlanejar,
+  decidirGate,
+  condutor,
+  type AgregadoDemanda,
   carregarDemanda,
-  comDemanda,
-} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { registrarDependencia, registrarProjeto } from "../src/modulos/demandas/publico.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
+import { anotar } from "../src/shared/infra/registro.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { limitarTempoDoPi } from "./limite_do_pi.ts";
@@ -163,7 +163,7 @@ export function cenarioDePlanejamento({
     banco,
     piFalso,
     prompts: () => piFalso.prompts().map((entrada) => entrada.prompt),
-    sessoes: () => carregarTrabalhosDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
+    sessoes: () => carregarSessoesDoContexto(banco, { demanda_id: "I-1", ticket_id: 1 }),
     status: () => carregarDemanda(banco, "I-1").tickets[0]?.estado,
   };
 }

@@ -6,20 +6,22 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach } from "node:test";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
-import { gravarCommitDemanda } from "../src/modulos/repositorio/armazenamento/commits_demanda.ts";
+import {
+  Endereco,
+  marcaDoPRRodada,
+  type AgregadoDemanda,
+  carregarDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  gravarCommitDemanda,
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../src/modulos/repositorio/publico.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "./hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "./repositorio_de_teste.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../src/modulos/ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 const em = "2026-01-01T00:00:00.000Z";

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { TipoMetrica } from "../../../../modulos/etapas/definicao/tipos_declaraveis.ts";
-import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
+import type { TipoMetrica, EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { MetricasDasDemandas, MetricasDoMes } from "../../../contrato/metricas.ts";
 import {
   cardsDoMes,

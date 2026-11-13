@@ -8,10 +8,9 @@ import {
   registrarPedidoDeTeste,
   situacaoGravada,
 } from "../../../apoio-testes/pedidos_de_teste.ts";
-import { AUDITOR } from "../../modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { lerPedido } from "../../modulos/demandas/publico.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { registrarPedidoComProcesso } from "./registro_do_pedido.ts";
 
 const contarLinhas = (banco: ReturnType<typeof bancoComProjeto>, tabela: string): unknown =>

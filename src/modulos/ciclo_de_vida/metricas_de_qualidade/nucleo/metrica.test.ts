@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CATALOGO_DE_ETAPAS } from "../../etapas/publico.ts";
-import type { TipoMetrica } from "../../etapas/publico.ts";
-import type { EtapaTicket } from "../../etapas/publico.ts";
+import { CATALOGO_DE_ETAPAS, type TipoMetrica, type EtapaTicket } from "../../etapas/publico.ts";
 
 // A tabela Etapa × Métricas do CONCEITOS.md §16: "Todas" vale para as 9 Etapas e
 // "Revisar rodada/demanda" vale para as duas.

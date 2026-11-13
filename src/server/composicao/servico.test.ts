@@ -16,15 +16,14 @@ import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   listarAmbientes,
-} from "../../modulos/sandbox/armazenamento/ambientes.ts";
-import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { escrever, novoId } from "../../modulos/compartilhado/armazenamento/banco.ts";
+  validarESalvarConfiguracaoDoAmbiente,
+} from "../../modulos/ambiente/publico.ts";
+import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../../modulos/demandas/publico.ts";
-import { Configuracao, salvarConfiguracao } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { Configuracao, salvarConfiguracao, condutor } from "../../modulos/ciclo_de_vida/publico.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../modulos/sandbox/aplicacao/configuracao_do_ambiente.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 /** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */

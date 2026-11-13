@@ -6,8 +6,8 @@ import { CATALOGO_DE_ETAPAS, type EtapaTicket, TipoEvidencia } from "../../etapa
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { type Id, Motivo, Slug, unicoPor } from "../../../../shared/nucleo/primitivos.ts";
 import { PlanoProposto } from "../../planejamento/publico.ts";
-// A hospedagem é do Repositório: ver a exceção em ciclo_de_vida.ts.
-import { Hospedagem } from "../../../repositorio/nucleo/repositorio_do_projeto.ts";
+// A hospedagem do PR é do Repositório, pela fachada.
+import { Hospedagem } from "../../../repositorio/publico.ts";
 import {
   AnaliseSeguranca,
   ArvorePRsCriteriosCustos,

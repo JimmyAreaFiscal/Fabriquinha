@@ -5,12 +5,11 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { reabrirTicket } from "../../../processo/nucleo/transicoes/transicoes_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
+import { reabrirTicket, motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../../../processo/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarProjeto, gravarProjeto } from "../../../../projeto/armazenamento/projetos.ts";
+import { carregarProjeto, gravarProjeto } from "../../../../demandas/publico.ts";
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
-import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../../../repositorio/publico.ts";
 import {

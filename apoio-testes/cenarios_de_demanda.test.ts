@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EstadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { EstadoDemanda, carregarDemanda } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,

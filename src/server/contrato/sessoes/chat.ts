@@ -1,9 +1,9 @@
 // O contrato da API do chat da sessão de ticket da demanda: a entrada de cada rota e o corpo da resposta JSON.
 // São só tipos e schemas: quem monta o valor é a aplicação, quem o valida na saída é o teste de rota.
 import { z } from "zod";
-import { Instante, Modelo, ModoTrabalho } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
-import { ProcessoDoTrabalho } from "../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import { Instante } from "../../../shared/nucleo/primitivos.ts";
+import { EtapaTicket } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { Modelo, ModoTrabalho, Execucao } from "../../../modulos/sessoes/publico.ts";
 
 const Texto = z.string();
 
@@ -43,7 +43,7 @@ const SessaoDoChat = z.object({
 });
 
 /** A execução como o chat a mostra: o motivo da falha é o da Tentativa que ela abriu. */
-const ExecucaoDoChat = ProcessoDoTrabalho.extend({ motivo: Texto.optional() });
+const ExecucaoDoChat = Execucao.extend({ motivo: Texto.optional() });
 
 /**
  * O chat de uma sessão de ticket da demanda: o cabeçalho com `origem: "demanda"` e a conversa.

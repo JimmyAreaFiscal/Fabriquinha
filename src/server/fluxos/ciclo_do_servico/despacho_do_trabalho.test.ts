@@ -9,10 +9,13 @@ import {
   cadastrarProjetoLoja,
   gravarAgregadoPronto,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { EstadoDemanda } from "../../../modulos/ciclo_de_vida/processo/publico.ts";
-import type { ConducaoDoTicket, DepsDespacho } from "../../../modulos/ciclo_de_vida/conducao/publico.ts";
-import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
+import {
+  Endereco,
+  EstadoDemanda,
+  type ConducaoDoTicket,
+  type DepsDespacho,
+  configuracao,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarDependencia } from "../../../modulos/demandas/publico.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas } from "../../consultas/demandas/predecessoras.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";

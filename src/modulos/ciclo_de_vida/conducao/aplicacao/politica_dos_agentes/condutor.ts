@@ -1,8 +1,7 @@
 // O condutor de trabalhos do serviço: as `SessoesDeAgente` de Sessões (o mecanismo que lança, conversa e encerra o pi)
 // com a política do ticket por cima: o que cada falha técnica da execução significa para a Tentativa e, na subida do
-// serviço, o ticket que ficou sem processo. Herda o mecanismo em vez de compô-lo: o servidor e o sdlc chamam o mecanismo
-// pelo condutor, e a composição obrigaria a repassar cada método ou a mudar esses chamadores (o ticket 22 decide). Os
-// tipos do chat chegam da fachada de Sessões pelo caminho antigo (provisório: remover no ticket 22).
+// serviço, o ticket que ficou sem processo. Herda o mecanismo em vez de compô-lo: o servidor e o Processo chamam o mecanismo
+// pelo condutor, e a composição obrigaria a repassar cada método a cada chamador.
 import type { DatabaseSync } from "node:sqlite";
 import {
   AUDITOR,

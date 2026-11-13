@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
-import { ErroDeRegra } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import { consultarHistorico } from "./historico.ts";
 
 const T0 = "2026-10-11T12:00:00.000Z";

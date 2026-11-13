@@ -8,7 +8,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
 import { GATES } from "../gates.ts";
-import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { carregarDemanda } from "../../../processo/publico.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import {
   ate,

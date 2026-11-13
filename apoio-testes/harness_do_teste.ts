@@ -5,7 +5,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import "../src/server/composicao/banco_da_fabriquinha.ts";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type ConfiguracaoAgente, resolverConfiguracaoAgente } from "./configuracao_agente.ts";
-import { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import { Modelo } from "../../../sessoes/publico.ts";
 
 const modeloDoTicket = { provedor: "claude-bridge", nome: "claude-sonnet-5-5" };
 const modeloDaEtapa = { provedor: "claude-bridge", nome: "claude-haiku-5-5" };

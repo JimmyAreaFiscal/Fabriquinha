@@ -3,12 +3,15 @@
 // temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeEscopo } from "../src/modulos/compartilhado/nucleo/erros.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
+import {
+  AUDITOR,
+  despachoDasEtapas,
+  interromperExecucaoDemanda,
+  cicloDoDespacho,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { ErroDeEscopo } from "../src/shared/nucleo/erros.ts";
 import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import {
   adicionarProjeto,
   AUTOR,
@@ -26,7 +29,6 @@ import {
   submeterObrigatorias,
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 import { editarPedido, registrarDependencia } from "../src/modulos/demandas/publico.ts";
@@ -47,7 +49,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
   const ref = { demanda_id: id, ticket_id: 2 };
   interromperExecucaoDemanda(c.banco, ref);
   await Promise.all(fins);
-  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).execucoes.length, 1);
+  assert.equal(carregarSessoesDoContexto(c.banco, ref).execucoes.length, 1);
 }
 
 test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", (t) => {

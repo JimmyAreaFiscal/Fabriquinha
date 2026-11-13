@@ -4,7 +4,7 @@
 import type { Locator, Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { fotografar, projeto } from "./apoio.ts";
+import { fotografar, projeto, expect, test } from "./apoio.ts";
 import {
   semearDemandaConcluida,
   semearDemandaOciosa,
@@ -13,7 +13,6 @@ import {
   semearTicketAberto,
 } from "./demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
-import { expect, test } from "./apoio.ts";
 
 /** A sessão autônoma do I-206.T3 com a execução aberta e o grupo do pi gravado: o pi roda. */
 function sessaoRodando(raiz: string): void {

@@ -3,14 +3,13 @@
 // corpo; nas rotas de SSE, até o primeiro evento. `semMedicao` confere a cobertura contra a tabela do produto.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { guardarBytes } from "../../src/modulos/compartilhado/armazenamento/arquivos.ts";
+import { type AgregadoDemanda, gravarAnexos } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { guardarBytes } from "../../src/shared/armazenamento/arquivos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarAnexos } from "../../src/modulos/ciclo_de_vida/evidencias/publico.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { ROTAS } from "../../src/server/api/servidor.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 
@@ -133,7 +132,7 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrirBancoDaFabriq
     { caminho: "desenho.html", mime: "text/html; charset=utf-8", sha256, bytes },
   ]);
 
-  comTrabalhosDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 2 }, (e) => ({
+  comSessoesDoContexto(banco, { demanda_id: DEMANDA, ticket_id: 2 }, (e) => ({
     ...e,
     sessoes: [{ demanda_id: DEMANDA, ticket_id: 2, id: SESSAO, modo: "interativo", conversa_referencia: SESSAO }],
     execucoes: [{ id: "ed-1", trabalho_id: SESSAO, inicio: em, fim: em, falha: false }],

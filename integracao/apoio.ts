@@ -9,17 +9,22 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
-import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../src/modulos/compartilhado/nucleo/erros.ts";
-import { submeterEvidencia } from "../src/modulos/ciclo_de_vida/processo/aplicacao/submissao_de_evidencia.ts";
-import { cicloDoDespacho, type Configuracao, configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import type { DepsDespacho } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
+import {
+  AUDITOR,
+  type Ator,
+  despachoDasEtapas,
+  Endereco,
+  submeterEvidencia,
+  cicloDoDespacho,
+  type Configuracao,
+  configuracao,
+  type DepsDespacho,
+  carregarDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { ErroDeRegra } from "../src/shared/nucleo/erros.ts";
 import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarUsoDeclarado } from "../src/modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
+import { gravarUsoDeclarado } from "../src/modulos/sessoes/publico.ts";
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";

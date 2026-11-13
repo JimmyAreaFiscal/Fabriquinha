@@ -11,17 +11,16 @@ import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   listarAmbientes,
-} from "../../src/modulos/sandbox/armazenamento/ambientes.ts";
+  configuracaoDoAmbiente,
+} from "../../src/modulos/ambiente/publico.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { carregarDemanda, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { configuracao } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
-import { configuracaoDoAmbiente } from "../../src/modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 /** Uma rota POST ou DELETE medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoMutacao {

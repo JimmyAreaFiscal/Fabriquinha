@@ -9,6 +9,7 @@ export {
   prDoEspaco,
   PullRequest,
 } from "./nucleo/espaco_de_trabalho.ts";
+export { branchDemanda, branchRodada, DemandaId, ocupanteDoDono } from "./nucleo/nome_do_espaco.ts";
 export { limparDemanda, pendenciasDeLimpeza, pendenciasDoEspaco, sobrasDaDemanda } from "./infra/limpeza_demanda.ts";
 export { descartarAlteracoes, removerWorktrees } from "./infra/worktree.ts";
 export {

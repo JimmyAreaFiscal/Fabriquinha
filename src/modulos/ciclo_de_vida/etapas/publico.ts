@@ -13,6 +13,7 @@ export {
   ORDEM_DO_SDLC,
 } from "./nucleo/catalogo.ts";
 export { ConfiguracaoAgente, resolverConfiguracaoAgente } from "./nucleo/configuracao_agente.ts";
+export { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./nucleo/colunas_da_configuracao_agente.ts";
 export {
   type DefinicaoDaEtapa,
   evidenciaExigida,
@@ -49,11 +50,8 @@ export { DEFINICAO_DO_REVISAR_RODADA } from "./nucleo/revisar_rodada/definicao.t
 export { AUDITOR, Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./nucleo/vocabulario/ator.ts";
 export { Endereco } from "./nucleo/vocabulario/endereco.ts";
 export {
-  branchDemanda,
-  branchRodada,
   CaminhoPrevisto,
   CriterioId,
-  DemandaId,
   formatarRodadaRef,
   formatarTicketRef,
   RodadaRef,

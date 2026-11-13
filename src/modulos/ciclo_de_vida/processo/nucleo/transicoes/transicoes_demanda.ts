@@ -7,9 +7,7 @@ import {
   type Ator,
   AtorExterno,
   AUDITOR,
-  branchDemanda,
   CATALOGO_DE_ETAPAS,
-  DemandaId,
   etapaDoPapel,
   exigirAtor,
   FABRIQUINHA,
@@ -17,6 +15,7 @@ import {
   formatarTicketRef,
   type ResultadoDaTentativa,
 } from "../../../etapas/publico.ts";
+import { branchDemanda, DemandaId } from "../../../../repositorio/publico.ts";
 import {
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,

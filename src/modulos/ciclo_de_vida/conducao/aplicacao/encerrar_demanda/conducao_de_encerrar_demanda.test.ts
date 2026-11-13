@@ -8,14 +8,16 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
-import { type AgregadoDemanda, prDaDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
+import {
+  type AgregadoDemanda,
+  prDaDemanda,
+  motivoDaFalhaDoTicket,
+  podeTentarEncerramento,
+  carregarDemanda,
+} from "../../../processo/publico.ts";
 import { FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import {
-  concluirResolucaoConflito,
-  podeTentarEncerramento,
-} from "../../../processo/nucleo/transicoes/transicoes_encerramento.ts";
+import { concluirResolucaoConflito } from "../../../processo/nucleo/transicoes/transicoes_encerramento.ts";
 import {
   gravarCommitDemanda,
   cursorDaBase,
@@ -23,8 +25,8 @@ import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "../../../../repositorio/publico.ts";
-import { registrarProjeto } from "../../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { registrarProjeto, lerPedido } from "../../../../demandas/publico.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../apoio-testes/hospedagem_falsa.ts";
 import {
@@ -38,7 +40,6 @@ import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import { concluirDesenvolvimentoNoBanco } from "../../../../../server/fluxos/conclusao_do_desenvolvimento.ts";
-import { lerPedido } from "../../../../demandas/publico.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 

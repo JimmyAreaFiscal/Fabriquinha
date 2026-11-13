@@ -8,24 +8,18 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
-import { gravarCommitDemanda } from "../../../repositorio/armazenamento/commits_demanda.ts";
-import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
+import { type AgregadoDemanda, carregarDemanda } from "../../processo/publico.ts";
+import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../repositorio/publico.ts";
+import { registrarProjeto } from "../../../demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { cicloDoDespacho, configuracao } from "../publico.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
 import { verificacaoDeTeste } from "../../../../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../../repositorio/infra/worktree/worktree-demanda.ts";
-import type { RegistroDaVerificacao } from "../../../verificacao/aplicacao/coleta_das_verificacoes.ts";
-import type { DepsDespacho } from "../../conducao/publico.ts";
-import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
-import { despachoDasEtapas } from "../../../etapas/conducoes.ts";
+import type { RegistroDaVerificacao } from "../../verificacoes/publico.ts";
+import { type DepsDespacho, despachoDasEtapas } from "../../conducao/publico.ts";
+import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const ambiente = new AmbienteHostLocal();

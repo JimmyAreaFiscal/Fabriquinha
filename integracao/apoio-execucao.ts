@@ -3,21 +3,24 @@
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  AUDITOR,
+  type Ator,
+  type RegistroDaVerificacao,
+  Endereco,
+  decidirGate,
+  despachoDasEtapas,
+  ConducaoDePlanejar,
+  condutor,
+  cicloDoDespacho,
+  type DepsDespacho,
+  interromperExecucaoDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import type { DepsDespacho } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
-import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { anotar } from "../src/shared/infra/registro.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/pi_falso.ts";
@@ -181,7 +184,7 @@ export const statusDe = (c: Cenario, ref: { demanda_id: string; ticket_id: numbe
   demanda(c, ref.demanda_id).tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado;
 export const rodadaDe = (c: Cenario, id: string, n: number) => demanda(c, id).rodadas.find((r) => r.rodada_id === n);
 export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
-  carregarTrabalhosDoTicket(c.banco, ref).execucoes;
+  carregarSessoesDoContexto(c.banco, ref).execucoes;
 
 export const agora = () => new Date().toISOString();
 

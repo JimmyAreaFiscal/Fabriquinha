@@ -3,8 +3,8 @@
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { processosAbertos } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { projeto } from "./apoio.ts";
+import { execucoesAbertas } from "../src/modulos/sessoes/publico.ts";
+import { projeto, expect, test } from "./apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {
   semearDemandaAguardandoMerge,
@@ -19,7 +19,6 @@ import {
   registrarCorrecaoDaSessao,
   semearTicketAberto,
 } from "./demandas-apoio.ts";
-import { expect, test } from "./apoio.ts";
 
 test("o quadro do projeto mostra só as demandas dele", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
@@ -391,7 +390,7 @@ test.describe("I-281 CA-3", () => {
     await expect(pagina.locator("[data-aviso]")).toHaveText("Limite de paralelismo cheio: 1 de 1 em uso");
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(1);
     const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
-    expect(processosAbertos(banco).map(({ demanda_id, ticket_id }) => `${demanda_id}.T${String(ticket_id)}`)).toEqual([
+    expect(execucoesAbertas(banco).map(({ demanda_id, ticket_id }) => `${demanda_id}.T${String(ticket_id)}`)).toEqual([
       "I-230.T1",
     ]);
     banco.close();

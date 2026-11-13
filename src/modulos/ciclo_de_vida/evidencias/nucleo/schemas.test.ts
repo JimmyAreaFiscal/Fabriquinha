@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
-import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import type { AgregadoDemanda } from "../../processo/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { schemaDoTipo } from "./formatos.ts";
-import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
+import { TipoEvidencia } from "../../etapas/publico.ts";
 import { CustosRealizados, daUltimaConcluida, type EsquemaDeEvidencia, simbolosDe } from "./schemas.ts";
 
 /** O que `fabriquinha evidencia schema <tipo>` publica: o JSON Schema de `dados` e as regras de arquivo. */

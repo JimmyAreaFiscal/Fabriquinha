@@ -8,12 +8,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after } from "node:test";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { raizDo } from "../src/modulos/compartilhado/armazenamento/banco.ts";
-import { gravarTokenDoProcesso } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { raizDo } from "../src/shared/armazenamento/banco.ts";
+import { gravarTokenDaExecucao } from "../src/modulos/sessoes/publico.ts";
 import type { RotaDoAgente } from "../src/server/api/agente/rotas.ts";
 import { servirWeb } from "../src/server/api/servidor.ts";
-import { noLog } from "../src/modulos/compartilhado/infra/registro.ts";
+import { noLog } from "../src/shared/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
@@ -26,7 +26,7 @@ import {
 } from "./cenarios_de_demanda.ts";
 
 // Os testes do cliente do agente (que não importa o armazenamento) dão o token ao processo por aqui.
-export { gravarTokenDoProcesso };
+export { gravarTokenDaExecucao };
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -77,7 +77,7 @@ export function cenarioDaApiDoAgente() {
   );
   for (const alvo of Object.values(TICKETS_DA_API_DO_AGENTE)) {
     const { trabalho_id } = abrirTrabalhoDoAgente(banco, { demanda_id: alvo.demanda, ticket_id: alvo.ticket });
-    gravarTokenDoProcesso(banco, trabalho_id, tokenDoTicket(alvo));
+    gravarTokenDaExecucao(banco, trabalho_id, tokenDoTicket(alvo));
   }
   mkdirSync(join(raiz, "worktrees", "loja", "I-206", "rodadas", "1"), { recursive: true });
   return { raiz, banco };

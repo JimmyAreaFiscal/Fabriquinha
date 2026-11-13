@@ -12,15 +12,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import {
-  branchDemanda,
-  branchRodada,
-  DemandaId,
-  RodadaRef,
-} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Slug } from "../../../../shared/nucleo/primitivos.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../sandbox/infra/ambiente.ts";
+import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
 import {
   exigirGit,
   exigirGitNoAmbiente,
@@ -29,6 +23,7 @@ import {
   type RepositorioDoProjeto,
 } from "../../git/publico.ts";
 import { podarWorktreesNoCore, preparar } from "./worktree.ts";
+import { branchDemanda, branchRodada, DemandaId, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(
@@ -49,7 +44,7 @@ export function caminhoDaWorktreeRodada(
   nome: string,
   ref: { demanda_id: string; rodada_id: number },
 ): string {
-  if (!RodadaRef.safeParse(ref).success) recusar("identidade da rodada inválida");
+  if (!RodadaDoEspaco.safeParse(ref).success) recusar("identidade da rodada inválida");
   return join(dirname(caminhoDaWorktreeDemanda(raiz, nome, ref.demanda_id)), "rodadas", String(ref.rodada_id));
 }
 

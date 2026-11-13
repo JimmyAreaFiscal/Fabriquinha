@@ -4,11 +4,9 @@
 import { z } from "zod";
 import {
   Ator,
-  branchRodada,
   CaminhoPrevisto,
   ConfiguracaoAgente,
   CriterioId,
-  DemandaId,
   type Endereco,
   etapaDoPapel,
   type EtapaTicket,
@@ -18,6 +16,7 @@ import {
   TicketIdentidade,
   TicketRef,
 } from "../../etapas/publico.ts";
+import { branchRodada, DemandaId } from "../../../repositorio/publico.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { GrafoDeDependencias, proximoIdDeRodada, proximoIdDeTicket } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Titulo } from "../../../../shared/nucleo/primitivos.ts";

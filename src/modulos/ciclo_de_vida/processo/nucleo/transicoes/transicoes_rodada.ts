@@ -4,12 +4,12 @@ import { z } from "zod";
 import {
   type Ator,
   CATALOGO_DE_ETAPAS,
-  DemandaId,
   etapaDoPapel,
   type EtapaTicket,
   exigirAtor,
   FABRIQUINHA,
 } from "../../../etapas/publico.ts";
+import { DemandaId } from "../../../../repositorio/publico.ts";
 import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "../agregado/agregado_demanda.ts";
 import {
   CICLO_DA_DEMANDA,

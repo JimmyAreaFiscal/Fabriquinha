@@ -3,14 +3,13 @@
 import { z } from "zod";
 import {
   type Ator,
-  branchDemanda,
   CausaDeInfraestrutura,
-  DemandaId,
   etapaDoPapel,
   exigirAtor,
   FABRIQUINHA,
   falhaQueExigeOAuditor,
 } from "../../../etapas/publico.ts";
+import { branchDemanda, DemandaId } from "../../../../repositorio/publico.ts";
 import {
   AgregadoDemanda,
   prDaDemanda,

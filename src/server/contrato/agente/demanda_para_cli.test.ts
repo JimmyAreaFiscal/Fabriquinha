@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Demanda } from "../../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
+import type { Demanda } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
 test("troca criada_por pela origem do CLI no mesmo lugar e preserva a ordem e os demais campos", () => {

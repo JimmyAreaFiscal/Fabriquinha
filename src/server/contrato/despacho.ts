@@ -1,7 +1,7 @@
 // O contrato do Despacho na API: por que cada item parado não foi despachado. Os Endereços saem pelo texto público (`I-1.T2`).
 import { z } from "zod";
-import { NomeGate } from "../../modulos/etapas/catalogo.ts";
-import { Motivo } from "../../modulos/compartilhado/nucleo/primitivos.ts";
+import { NomeGate } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Motivo } from "../../shared/nucleo/primitivos.ts";
 
 /** O `MotivoDeRecusa` como `GET /api/despacho` e `POST .../executar` o devolvem. */
 export const MotivoDeRecusaEmJson = z.discriminatedUnion("tipo", [

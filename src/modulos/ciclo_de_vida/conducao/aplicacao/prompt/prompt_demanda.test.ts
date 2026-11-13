@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { AgregadoDemanda, TicketDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  type TicketDemanda,
+  montarRetornoAoAgente,
+  tentativaAnteriorEmMemoria,
+} from "../../../processo/publico.ts";
 import { Endereco, EtapaTicket } from "../../../etapas/publico.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../../../processo/publico.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";

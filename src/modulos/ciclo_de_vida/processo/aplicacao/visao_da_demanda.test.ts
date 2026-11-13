@@ -8,7 +8,7 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { gravarAnexos } from "../../evidencias/publico.ts";
 import { visaoDaDemanda } from "./visao_da_demanda.ts";
 

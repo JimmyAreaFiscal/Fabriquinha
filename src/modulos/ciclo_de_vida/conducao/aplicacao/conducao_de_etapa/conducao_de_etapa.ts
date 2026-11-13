@@ -24,12 +24,12 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
 import type { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
-import { configuracao } from "../../../../compartilhado/armazenamento/servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
 import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import { limitesDasSessoes } from "../limites_das_sessoes.ts";
 
 /** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
 export interface DepsDaConducao {
@@ -37,7 +37,7 @@ export interface DepsDaConducao {
   relogio: Relogio;
   condutor: CondutorDeTrabalhos;
   registro: typeof anotar;
-  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` da configuração do serviço. */
+  /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` que a composição liga (limites_das_sessoes.ts). */
   limiteMin?: number;
 }
 
@@ -124,7 +124,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
     // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
     return iniciarExecucaoDemanda(banco, ticket, {
-      limiteMin: this.deps.limiteMin ?? configuracao(banco).timeoutMin,
+      limiteMin: this.deps.limiteMin ?? limitesDasSessoes().timeoutMin(banco),
       modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
       ...this.retomadaDe(ticket),
       montarPrompt: (contexto) => this.montarPrompt(contexto),

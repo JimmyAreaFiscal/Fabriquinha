@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { TicketDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
+import type { TicketDemanda } from "../../../processo/publico.ts";
 import { catalogoDaEtapa, EtapaTicket } from "../../../etapas/publico.ts";
 import { HarnessPi, PACOTE, skillDoTipo } from "../../../../sessoes/publico.ts";
 import { lancamentoDoTicket, skillsDaEtapaDemanda } from "./lancamento_do_ticket.ts";

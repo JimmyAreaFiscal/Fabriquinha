@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, wr
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
-import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { branchDemanda, branchRodada } from "../nucleo/nome_do_espaco.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,
@@ -17,7 +17,7 @@ import {
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
 import { naFilaDoProjeto } from "../../git/publico.ts";
-import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 

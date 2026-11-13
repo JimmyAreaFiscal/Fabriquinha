@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
-import { caminhoArquivo, guardarBytes } from "../../../compartilhado/armazenamento/arquivos.ts";
-import { carregarDemanda, comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
+import { Ator } from "../../etapas/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { caminhoArquivo, guardarBytes } from "../../../../shared/armazenamento/arquivos.ts";
+import { carregarDemanda } from "../../processo/publico.ts";
+import { comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import {
   anexosDaDemanda,
   evidenciasDoTipoDasDemandas,

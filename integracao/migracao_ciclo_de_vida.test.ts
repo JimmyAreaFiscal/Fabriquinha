@@ -3,20 +3,20 @@
 // e os Auditores levam a demanda até `concluida`. O pi e o `gh` são falsos; o git é real.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { iniciarRevisaoIntegral } from "../src/modulos/ciclo_de_vida/processo/aplicacao/transicoes/revisao_integral.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
-import type { EstadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import {
+  AUDITOR,
+  Endereco,
+  decidirGate,
+  concluirSessaoAjustes,
+  iniciarRevisaoIntegral,
+  type EstadoDemanda,
   carregarDemanda,
-  comDemanda,
-} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { configuracao } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
+  configuracao,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { integrarPR } from "../src/modulos/repositorio/publico.ts";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import {
   agregadoNoEstado,

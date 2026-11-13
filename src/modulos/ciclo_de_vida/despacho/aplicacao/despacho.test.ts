@@ -10,32 +10,28 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
-import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../../../trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
-import { carregarDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
+import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
+import {
+  criarSessao,
+  iniciarExecucao,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../../sessoes/publico.ts";
+import { registrarProjeto, registrarDependencia } from "../../../demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarDependencia } from "../../../demandas/publico.ts";
-import { type Tentativa } from "../../processo/nucleo/tentativa.ts";
-import {
-  falhaPorServicoReiniciado,
-  type ResultadoDaTentativa,
-} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
-import {
-  carregarTrabalhosDoTicket,
-  comTrabalhosDoTicket,
-} from "../../../trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda } from "../../../repositorio/infra/worktree/worktree-demanda.ts";
+import { garantirWorktreeDemanda } from "../../../repositorio/publico.ts";
 import { conferirPromptComFoto } from "../../conducao/aplicacao/prompt/fotos_retorno/conferir_foto.ts";
-import { ConducaoDeImplementar } from "../../../etapas/implementar/conducao_de_implementar.ts";
-import { ConducaoDeResolverConflito } from "../../../etapas/resolver_conflito/conducao_de_resolver_conflito.ts";
+import {
+  ConducaoDeImplementar,
+  ConducaoDeResolverConflito,
+  type DepsDespacho,
+  despachoDasEtapas,
+} from "../../conducao/publico.ts";
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
-import type { DepsDespacho } from "../../conducao/publico.ts";
-import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
-import { despachoDasEtapas } from "../../../etapas/conducoes.ts";
+import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const ambiente = new AmbienteHostLocal();
@@ -175,10 +171,10 @@ const implementar = (rodada: number, id?: number): TicketSpec => ({ etapa: "impl
 const estadoDoTicket = (banco: DatabaseSync, n: number, ticket_id: number) =>
   carregarDemanda(banco, `I-${String(n)}`).tickets.find((t) => t.ticket_id === ticket_id)?.estado;
 const aberta = (banco: DatabaseSync, n: number, ticket_id: number) =>
-  carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.filter((e) => e.fim == null)
+  carregarSessoesDoContexto(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.filter((e) => e.fim == null)
     .length;
 const execucoes = (banco: DatabaseSync, n: number, ticket_id: number) =>
-  carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
+  carregarSessoesDoContexto(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
 
 type ConduzirFalso = (banco: DatabaseSync, endereco: Endereco) => Promise<void>;
 /** Abre sessão e execução no ticket que o Despacho reservou, como a condução do `implementar`, sem subir o pi nem o git. */
@@ -186,12 +182,12 @@ const conduzirFalso: ConduzirFalso = (banco, endereco) => {
   const ref = { demanda_id: endereco.demanda_id, ticket_id: Number(endereco.ticket_id) };
   const id = randomUUID();
   const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
-  comTrabalhosDoTicket(banco, ref, (estado) => {
-    const sessoes = criarTrabalho(estado.sessoes, sessao);
+  comSessoesDoContexto(banco, ref, (estado) => {
+    const sessoes = criarSessao(estado.sessoes, sessao);
     return {
       ...estado,
       sessoes,
-      execucoes: iniciarProcesso(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
+      execucoes: iniciarExecucao(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
     };
   });
   return Promise.resolve();

@@ -1,10 +1,9 @@
 // Revisão integral com git real temporário e pi falso (CA-9 a CA-17).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Ator } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { relogioFixo } from "../../../../compartilhado/nucleo/relogio.ts";
+import { type Ator, Endereco } from "../../../etapas/publico.ts";
+import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
+import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/agregado_da_demanda.ts";
 import {
   abrirTrabalhoDoAgente,
@@ -12,7 +11,7 @@ import {
   REF_GLOBAL,
   comEvidencia,
 } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { decidirGate } from "../../../../etapas/gates.ts";
+import { decidirGate } from "../../../conducao/publico.ts";
 import { iniciarRevisaoIntegral } from "./revisao_integral.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

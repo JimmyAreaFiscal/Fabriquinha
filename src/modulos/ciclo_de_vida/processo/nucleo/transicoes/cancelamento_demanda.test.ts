@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { type Ator, AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 
 const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "../agregado/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "./cancelamento_demanda.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
-import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { motivoDaFalhaDoTicket } from "../tentativa.ts";
 
 const t0 = "2026-01-01T00:00:00Z";

@@ -1,8 +1,9 @@
 // O contrato da API do Histórico: o filtro das sessões de demanda e o corpo da resposta.
 // São só tipos e schemas: quem monta o valor é a consulta, quem o valida na saída é o teste de rota.
 import { z } from "zod";
-import { Instante, Modelo, ModoTrabalho } from "../../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EtapaTicket } from "../../../modulos/etapas/catalogo.ts";
+import { Instante } from "../../../shared/nucleo/primitivos.ts";
+import { Modelo, ModoTrabalho } from "../../../modulos/sessoes/publico.ts";
+import { EtapaTicket } from "../../../modulos/ciclo_de_vida/publico.ts";
 
 /** O escopo escolhe as ativas ou as terminadas; `demanda` é o endereço de uma demanda (`I-12` ou `12`). */
 export const FiltroDeSessoes = z.object({

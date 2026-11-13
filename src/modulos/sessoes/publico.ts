@@ -74,6 +74,5 @@ export {
   Sessao,
   sessaoDeCadaTicketDasDemandas,
   SessoesDeAgente,
-  type SessoesDoContexto,
   usoEmLote,
 } from "./execucao/publico.ts";

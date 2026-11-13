@@ -8,15 +8,17 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, type TestContext } from "node:test";
 import { hospedagemFalsa } from "../apoio-testes/hospedagem_falsa.ts";
-import { ConjuntoDeAmbientes } from "../src/modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
-import { montarConjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
+import {
+  ConjuntoDeAmbientes,
+  montarConjuntoDoServico,
+  GeradorDeAmbientes,
+  salvarConfiguracaoDoAmbiente,
+} from "../src/modulos/ambiente/publico.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
-import { GeradorDeAmbientes } from "../src/modulos/sandbox/infra/container/gerador_de_ambientes.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
-import { salvarConfiguracaoDoAmbiente } from "../src/modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
 
 /** O `gh` falso (a hospedagem já testada em `apoio-testes/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
 export function ghFalso(dir: string) {

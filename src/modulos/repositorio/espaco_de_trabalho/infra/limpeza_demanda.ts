@@ -1,9 +1,9 @@
 // Limpeza da demanda por posse (comparacao-sdlc-implementacao.md §5, CA-10 a CA-12): só worktrees e branches que a
 // Fabriquinha criou para a demanda e as rodadas; a base e qualquer branch alheia nunca entram.
 import { existsSync } from "node:fs";
-import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { branchDemanda, branchRodada } from "../nucleo/nome_do_espaco.ts";
 import type { EspacoDeTrabalho } from "../nucleo/espaco_de_trabalho.ts";
-import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
+import type { Ambiente } from "../../../ambiente/publico.ts";
 import { git } from "../../../../shared/infra/processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
 import {

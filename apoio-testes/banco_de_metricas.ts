@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Recorte } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/nucleo/metrica.ts";
 import type { OrigemDosFatos } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/leitura_dos_fatos.ts";
 import { lerPedidosDasMetricas } from "../src/server/consultas/demandas/pedidos_das_metricas.ts";
-import { intervalo } from "../src/modulos/compartilhado/nucleo/periodo.ts";
+import { intervalo } from "../src/shared/nucleo/periodo.ts";
 import { migrarBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */

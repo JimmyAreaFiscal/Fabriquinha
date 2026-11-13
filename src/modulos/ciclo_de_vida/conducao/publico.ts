@@ -51,6 +51,7 @@ export {
 export { condutor, CondutorDeTrabalhos, type RecuperacaoDaSubida } from "./aplicacao/politica_dos_agentes/condutor.ts";
 export { exigirTrabalhoDoTicket } from "./aplicacao/politica_dos_agentes/trabalho_do_ticket.ts";
 export { montarPromptDemanda } from "./aplicacao/prompt/prompt_demanda.ts";
+export { ligarLeituraDosLimitesDasSessoes } from "./aplicacao/limites_das_sessoes.ts";
 export {
   ligarLeituraDosProjetosCadastrados,
   type ProjetoConduzido,

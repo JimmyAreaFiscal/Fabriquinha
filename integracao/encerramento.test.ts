@@ -5,22 +5,21 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { formatarTicketRef } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { relogioFixo } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { reabrirTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
+import {
+  AUDITOR,
+  FABRIQUINHA,
+  formatarTicketRef,
+  marcaDoPRFinal,
+  reabrirTicket,
+  retomarFalhasDeInfraestrutura,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { relogioFixo } from "../src/shared/nucleo/relogio.ts";
 import {
   registrarFalhaEncerramento,
   registrarTentativaEncerramento,
 } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_encerramento.ts";
-import { marcaDoPRFinal } from "../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { integrarPR } from "../src/modulos/repositorio/infra/hospedagem/pr.ts";
-import {
-  caminhoDaWorktreeDemanda,
-  caminhoDaWorktreeRodada,
-} from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { integrarPR, caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/modulos/repositorio/publico.ts";
 import {
   agente,
   agora,

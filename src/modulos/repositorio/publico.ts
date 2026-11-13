@@ -36,6 +36,9 @@ export {
   PullRequest,
   removerWorktrees,
   sobrasDaDemanda,
+  branchDemanda,
+  branchRodada,
+  DemandaId,
 } from "./espaco_de_trabalho/publico.ts";
 export {
   exigirGit,

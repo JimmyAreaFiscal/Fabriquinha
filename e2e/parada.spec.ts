@@ -7,12 +7,11 @@ import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { motivoDaFalhaDoTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { motivoDaFalhaDoTicket, carregarDemanda } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { sinalNoGrupo } from "../src/modulos/compartilhado/infra/processo.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
+import { sinalNoGrupo } from "../src/shared/infra/processo.ts";
 import { expect, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
 
@@ -42,7 +41,7 @@ test.describe("I-246 CA-4", () => {
       await dormir(50);
       const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
       pgid =
-        carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+        carregarSessoesDoContexto(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
       banco.close();
     }
 
@@ -77,7 +76,7 @@ async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Pro
   while (pgid === null) {
     await dormir(50);
     const banco = abrirBancoDaFabriquinha(raiz);
-    pgid = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+    pgid = carregarSessoesDoContexto(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
     banco.close();
   }
   return pgid;
@@ -86,7 +85,7 @@ async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Pro
 /** Logo depois da saída do serviço, antes de subir de novo: o fim e o motivo já estão no banco (não é a subida que os preenche). */
 function conferirFimGravado(raiz: string): void {
   const banco = abrirBancoDaFabriquinha(raiz);
-  const { execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
+  const { execucoes } = carregarSessoesDoContexto(banco, { demanda_id: "I-216", ticket_id: 1 });
   const agregado = carregarDemanda(banco, "I-216");
   const ticket = agregado.tickets.find((t) => t.ticket_id === 1);
   banco.close();
@@ -242,7 +241,7 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
 /** As execuções do I-216.T1 gravadas no banco, lidas por outra conexão enquanto o serviço roda. */
 function execucoesDoT1(raiz: string): { grupo_processo?: number | null; fim?: string | null }[] {
   const banco = abrirBancoDaFabriquinha(raiz);
-  const { execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
+  const { execucoes } = carregarSessoesDoContexto(banco, { demanda_id: "I-216", ticket_id: 1 });
   banco.close();
   return execucoes;
 }

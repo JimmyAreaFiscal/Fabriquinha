@@ -6,16 +6,20 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { interromperExecucaoDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts";
-import { cicloDoDespacho, executarAgora } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
+import {
+  AUDITOR,
+  type Ator,
+  Endereco,
+  decidirGate,
+  despachoDasEtapas,
+  interromperExecucaoDemanda,
+  cicloDoDespacho,
+  executarAgora,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
-import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const pi = instalarPiFalso(base);
@@ -64,7 +68,7 @@ async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> 
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
   for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
   await Promise.all(fins);
-  return ids.map((id) => carregarTrabalhosDoTicket(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
+  return ids.map((id) => carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
 }
 
 const etapasEStatus = (c: Cenario, id: string) => demanda(c, id).tickets.map((t) => [t.etapa, t.estado]);
@@ -83,8 +87,8 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   const id = await demandaAprovada(c);
   const ref = { demanda_id: id, ticket_id: PLANEJAR };
   await ciclaPlanejamentos(c, [id]);
-  const [sessao] = carregarTrabalhosDoTicket(c.banco, ref).sessoes;
-  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).sessoes.length, 1);
+  const [sessao] = carregarSessoesDoContexto(c.banco, ref).sessoes;
+  assert.equal(carregarSessoesDoContexto(c.banco, ref).sessoes.length, 1);
 
   // O plano vai ao gate: o agendador não despacha nada e nenhuma rodada nasce.
   proporPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
@@ -108,7 +112,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   assert.deepEqual(await ciclaPlanejamentos(c, [id]), [2]);
 
   // Mesma sessão (e conversa) retomada com o motivo; o ticket de planejamento é o mesmo, sem outro `planejar`.
-  const estado = carregarTrabalhosDoTicket(c.banco, ref);
+  const estado = carregarSessoesDoContexto(c.banco, ref);
   assert.deepEqual(estado.sessoes, [sessao]);
   assert.deepEqual(
     estado.execucoes.map((e) => e.trabalho_id),

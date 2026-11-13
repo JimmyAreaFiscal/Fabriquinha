@@ -7,7 +7,7 @@ import { instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import { encerrar, revisar, rodadaEmRevisao } from "./apoio-execucao.ts";
 import { base, criarCenario } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
-import { configuracaoDoAmbiente } from "../src/modulos/sandbox/armazenamento/configuracao_do_ambiente.ts";
+import { configuracaoDoAmbiente } from "../src/modulos/ambiente/publico.ts";
 
 ghFalso(base);
 

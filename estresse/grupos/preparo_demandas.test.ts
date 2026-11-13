@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { type Ambiente, subirAmbiente } from "../instancia_descartavel.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";
 

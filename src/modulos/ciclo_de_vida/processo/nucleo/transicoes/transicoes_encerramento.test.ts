@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../../etapas/publico.ts";
 import { AgregadoDemanda, prDaDemanda } from "../agregado/agregado_demanda.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import {
   concluirEncerramento,
   concluirResolucaoConflito,

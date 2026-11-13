@@ -12,7 +12,7 @@ import {
   montarTicket,
 } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { carregarDemanda } from "../../../processo/publico.ts";
 import {
   enderecoDoTicketDoAgente,
   escopoDoProcessoAberto,

@@ -3,9 +3,11 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA, branchDemanda, branchRodada, formatarTicketRef, Endereco } from "../../../etapas/publico.ts";
+import { FABRIQUINHA, formatarTicketRef, Endereco } from "../../../etapas/publico.ts";
 import { encontrado, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import {
+  branchDemanda,
+  branchRodada,
   espacoDoTicket,
   arquivosDe,
   exigirGit,

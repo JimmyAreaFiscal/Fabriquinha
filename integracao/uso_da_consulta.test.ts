@@ -3,12 +3,8 @@
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { produtividadeDaRodada } from "../src/modulos/ciclo_de_vida/publico.ts";
-import {
-  carregarTrabalhosDaDemanda,
-  carregarTrabalhosDoTicket,
-} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { cicloDoDespacho, produtividadeDaRodada } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import {
   abrirPortao,
@@ -73,7 +69,7 @@ test("CA-4: o Uso da consulta do Auditor automático conta para o ticket que per
   pi.roteirizar(agenteQuePergunta);
   await ciclo(c, despacho());
 
-  const { execucoes, usos } = carregarTrabalhosDoTicket(c.banco, ticket);
+  const { execucoes, usos } = carregarSessoesDoContexto(c.banco, ticket);
   assert.deepEqual(usos, [
     {
       execucao_id: execucoes.at(-1)?.id,
@@ -115,7 +111,7 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
   abrirPortao();
   await Promise.all(fins);
 
-  const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(c.banco, id);
+  const { sessoes, execucoes, usos } = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: null });
   const daRodada = demanda(c, id).tickets.filter((x) => x.rodada_id === 1);
   const { total } = produtividadeDaRodada(sessoes, execucoes, usos, daRodada);
   assert.equal(total.tokensEntrada, 7000);
@@ -123,6 +119,6 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
   assert.equal(total.custo, 0.5);
   assert.equal(total.custoIncompleto, true, "os tickets da rodada sem Uso medido seguem sem custo");
   // Os outros pis do cenário não emitem Uso: o da consulta é o único, e está no ticket `encerrar_rodada` da rodada.
-  assert.deepEqual(carregarTrabalhosDoTicket(c.banco, encerramento).usos, usos);
+  assert.deepEqual(carregarSessoesDoContexto(c.banco, encerramento).usos, usos);
   assert.equal(usos.length, 1);
 });

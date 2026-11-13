@@ -38,7 +38,6 @@ export const REGRAS_DO_SHARED: RegrasDoDominio = {
   processoDoHost: {
     pastasLiberadas: [],
     importamChildProcess: [ARQUIVO_DO_PROCESSO],
-    // provisório: remover no ticket 22, com o caminho antigo que reexporta o executor do host.
-    chamadoresDiretos: ["modulos/compartilhado/infra/processo.ts"],
+    chamadoresDiretos: [],
   },
 };

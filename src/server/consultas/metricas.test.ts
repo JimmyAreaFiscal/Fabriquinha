@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
-import { relogioFixo } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioFixo } from "../../shared/nucleo/relogio.ts";
 import { consultarMetricasDasDemandas, consultarMetricasDosMeses } from "./metricas.ts";
 
 const relogio = relogioFixo("2026-03-15T12:00:00.000Z");

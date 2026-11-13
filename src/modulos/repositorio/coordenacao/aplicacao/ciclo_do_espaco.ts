@@ -2,9 +2,7 @@
 // Git, o Espaço de Trabalho e a Hospedagem, que não têm regra de SDLC, com o Ambiente onde o Espaço roda. Integrar o PR
 // da rodada é operação daqui; o PR final, só o humano integra.
 import { ErroDeRegra, existe, mensagem } from "../../../../shared/nucleo/erros.ts";
-import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
-import type { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
-import { conjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
+import { type Ambiente, type ConjuntoDeAmbientes, conjuntoDoServico } from "../../../ambiente/publico.ts";
 import {
   atualizarWorktreeRodada,
   espacoDaDemanda,
@@ -13,6 +11,7 @@ import {
   garantirWorktreeRodada,
   limparDemanda,
   ocupanteDoAmbiente,
+  ocupanteDoDono,
   pendenciasDoEspaco,
   type ResultadoAtualizacao,
 } from "../../espaco_de_trabalho/publico.ts";
@@ -89,7 +88,7 @@ abstract class CicloDoEspaco {
       pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
     );
     // O Ambiente só volta ao conjunto quando o Espaço acabou de verdade; com pendência, a repetição do limpar o libera.
-    if (resultado.pendentes.length === 0) await this.#conjunto?.liberar({ dono: this.espaco.dono.toString() });
+    if (resultado.pendentes.length === 0) await this.#conjunto?.liberar({ dono: ocupanteDoDono(this.espaco.dono) });
     return resultado;
   }
 }

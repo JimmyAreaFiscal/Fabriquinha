@@ -4,13 +4,11 @@ import { test } from "node:test";
 import type { AgregadoDemanda } from "../nucleo/agregado/agregado_demanda.ts";
 import type { Decisao } from "../nucleo/gate.ts";
 import type { EvidenciaDemanda } from "../../evidencias/publico.ts";
-import { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { ResultadoDaTentativa } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
+import { Ator, Endereco, type ResultadoDaTentativa } from "../../etapas/publico.ts";
 import type { ProgressoEncerramento } from "../nucleo/progresso_do_encerramento.ts";
-import { ErroDeInexistente } from "../../../compartilhado/nucleo/erros.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { registrarDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
-import { escrever } from "../../../compartilhado/armazenamento/banco.ts";
+import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import {
   carregarDemanda,
   carregarDemandas,

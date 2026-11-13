@@ -21,9 +21,8 @@ import {
   gravarConfiguracaoSdlc,
   registrarProjeto,
 } from "./cadastro.ts";
-import { HarnessPi } from "../../../sessoes/publico.ts";
+import { HarnessPi, type Modelo } from "../../../sessoes/publico.ts";
 import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
-import type { Modelo } from "../../../sessoes/publico.ts";
 
 /** O pi falso do teste responde a conferência, como o harness do serviço. */
 const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);

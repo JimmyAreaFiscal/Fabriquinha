@@ -6,21 +6,21 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Ator, AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/gate_da_demanda.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import {
-  PREFIXO_DA_RESPOSTA_AUTOMATICA,
-  type RespostaAutomatica,
-} from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
+  Ator,
+  AUDITOR,
+  Endereco,
+  marcaDoPRRodada,
+  decidirGate,
+  concluirSessaoAjustes,
+  MOTIVO_APROVACAO_AUTOMATICA_PR,
+  cicloDoDespacho,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/publico.ts";
 import {
   agente,
   agora,

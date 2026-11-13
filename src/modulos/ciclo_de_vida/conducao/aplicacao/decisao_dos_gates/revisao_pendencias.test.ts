@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AgregadoDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../../processo/publico.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
 
 const linha = (nome: string, codigoSaida: number) => ({ nome, codigoSaida });

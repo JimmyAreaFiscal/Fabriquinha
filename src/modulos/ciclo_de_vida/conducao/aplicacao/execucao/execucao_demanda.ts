@@ -49,7 +49,7 @@ import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
 import { anexosDaDemanda } from "../../../evidencias/publico.ts";
 import { anotar, noLog } from "../../../../../shared/infra/registro.ts";
-import { pastasDoProcesso } from "../../../../compartilhado/infra/registro.ts";
+import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 import { triarPergunta } from "../politica_dos_agentes/auditor_automatico.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { encerrarProcessoOrfao, type TicketRef } from "../politica_dos_agentes/processo_do_ticket.ts";

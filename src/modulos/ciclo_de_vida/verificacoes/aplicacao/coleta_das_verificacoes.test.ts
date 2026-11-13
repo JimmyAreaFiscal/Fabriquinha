@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
-import { Projeto } from "../../../projeto/nucleo/projeto.ts";
+import { Projeto } from "../../../demandas/publico.ts";
 import { coletarVerificacoes } from "./coleta_das_verificacoes.ts";
 
 const ambiente = new AmbienteHostLocal();

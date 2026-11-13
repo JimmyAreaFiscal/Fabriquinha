@@ -2,27 +2,22 @@
 // na pasta de trabalho e a demanda I-1 com a rodada 1 em `implementar` (ou, com `conflito`, em `encerrar_demanda`).
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { motivoDaFalhaDoTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
-import type { DepsDaConducao } from "../src/modulos/ciclo_de_vida/conducao/publico.ts";
-import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
 import {
+  type AgregadoDemanda,
+  Endereco,
+  type RegistroDaVerificacao,
   condutor as condutorDoServico,
   type CondutorDeTrabalhos,
-} from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
-import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
-import {
+  motivoDaFalhaDoTicket,
+  type DepsDaConducao,
   carregarDemanda,
-  comDemanda,
-} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { anotar } from "../src/shared/infra/registro.ts";
+import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/modulos/repositorio/publico.ts";
+import { AmbienteHostLocal } from "../src/modulos/ambiente/publico.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";

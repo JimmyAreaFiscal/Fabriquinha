@@ -5,11 +5,14 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { TicketRef } from "./processo_do_ticket.ts";
-import { registrarUsoDaConsulta } from "../../../../sessoes/publico.ts";
+import {
+  registrarUsoDaConsulta,
+  type Modelo,
+  type PerguntaDoAgente,
+  type RespostaAPergunta,
+} from "../../../../sessoes/publico.ts";
 import { condutor } from "./condutor.ts";
-import type { Modelo, PerguntaDoAgente, RespostaAPergunta } from "../../../../sessoes/publico.ts";
-import type { EtapaTicket } from "../../../etapas/publico.ts";
-import { oAgenteDecideOGate } from "../../../etapas/publico.ts";
+import { type EtapaTicket, oAgenteDecideOGate } from "../../../etapas/publico.ts";
 
 interface ContextoDaPergunta {
   /** Endereço público do ticket (`I-12.T3`), a etapa e o título da demanda. */

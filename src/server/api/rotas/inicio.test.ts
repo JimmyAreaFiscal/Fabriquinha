@@ -4,12 +4,10 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { cenarioDoInicio } from "../../../../apoio-testes/cenario_do_inicio.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
-import { cicloDoDespacho } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { configuracao } from "../../../modulos/ciclo_de_vida/despacho/publico.ts";
+import { cicloDoDespacho, configuracao, despachoDasEtapas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
 import type { DadosDoInicio } from "../../contrato/inicio.ts";
 import { ROTAS_DO_INICIO } from "./inicio.ts";
-import { despachoDasEtapas } from "../../../modulos/etapas/conducoes.ts";
 import { predecessorasPendentesPelasDependencias } from "../../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();

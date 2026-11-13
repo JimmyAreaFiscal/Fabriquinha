@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { TipoPendencia } from "../../../../modulos/ciclo_de_vida/processo/nucleo/agregado/pendencia.ts";
+import type { TipoPendencia } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import {
   barraDeEstado,
   type Cabecalho,

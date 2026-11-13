@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
 import { cadastrarProjetoLoja } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { ErroDeInexistente } from "../../../modulos/compartilhado/nucleo/erros.ts";
+import { ErroDeInexistente } from "../../../shared/nucleo/erros.ts";
 import { gravarProjeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
 import { ConfiguracaoSdlcDoProjeto } from "../../contrato/sdlc.ts";
 import { consultarConfiguracaoSdlc } from "./sdlc.ts";

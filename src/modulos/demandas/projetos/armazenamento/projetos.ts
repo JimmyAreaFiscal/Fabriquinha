@@ -5,12 +5,8 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { ErroDeRegra, encontrado } from "../../../../shared/nucleo/erros.ts";
-// provisório: remover no ticket 22, que decide o dono do mapeador das colunas da configuração do agente (o ticket, a
-// etapa do projeto e a execução o usam).
-import {
-  colunasDaConfiguracaoAgente,
-  linhaComConfiguracaoAgente,
-} from "../../../compartilhado/armazenamento/configuracao_agente.ts";
+// O mapeador das colunas da configuração do agente é do Ciclo de Vida, dono da Configuração do Agente.
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "../../../ciclo_de_vida/publico.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 
 type Linha = Record<string, unknown>;

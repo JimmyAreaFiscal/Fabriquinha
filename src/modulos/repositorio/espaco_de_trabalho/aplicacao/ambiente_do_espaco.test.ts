@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AmbienteContainer } from "../../../sandbox/infra/container/ambiente_container.ts";
-import type { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
-import { ambienteDoServico, montarConjuntoDoServico } from "../../../sandbox/aplicacao/ambiente_do_servico.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import {
+  type AmbienteContainer,
+  type ConjuntoDeAmbientes,
+  ambienteDoServico,
+  montarConjuntoDoServico,
+} from "../../../ambiente/publico.ts";
 import { type EspacoDeTrabalho, espacoDaRodada } from "../nucleo/espaco_de_trabalho.ts";
 import { ambienteDoEspaco, ocupanteDoAmbiente } from "./ambiente_do_espaco.ts";
 
@@ -15,7 +17,7 @@ test("ocupanteDoAmbiente: o dono por extenso e a pasta das worktrees do projeto,
 });
 
 test("ambienteDoEspaco devolve o Ambiente alocado ao Espaço e, sem ele, o Ambiente do serviço", () => {
-  const espaco = { dono: Endereco.daDemanda("I-1") } as EspacoDeTrabalho;
+  const espaco = { dono: { demanda_id: "I-1" } } as EspacoDeTrabalho;
   const doServico = ambienteDoServico();
   assert.equal(ambienteDoEspaco(espaco), doServico);
   const container = {} as AmbienteContainer;

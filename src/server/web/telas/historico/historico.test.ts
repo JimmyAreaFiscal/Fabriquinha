@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ProcessoDoTrabalho } from "../../../../modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import type { Execucao } from "../../../../modulos/sessoes/publico.ts";
 import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
 import type { SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
 import type { Entrada } from "../chat/chat.ts";
@@ -89,7 +89,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   assert.equal(listaDoHistorico([], "", AGORA), '<p class="muted">Nenhuma sessão com esses filtros.</p>');
 });
 
-const execucao = (e: Partial<ProcessoDoTrabalho>): ProcessoDoTrabalho => ({
+const execucao = (e: Partial<Execucao>): Execucao => ({
   id: "e1",
   trabalho_id: "a1/b2",
   inicio: "2026-10-12T13:00:00.000Z",
@@ -105,7 +105,7 @@ const msg = (message: Record<string, unknown>, extra: Partial<Entrada> = {}): En
 });
 
 /** A sessão no formato do chat da demanda: só o que a prévia lê. */
-const dados = (conversa: Entrada[], execucoes: ProcessoDoTrabalho[]): DadosDoChatDemanda =>
+const dados = (conversa: Entrada[], execucoes: Execucao[]): DadosDoChatDemanda =>
   ({ origem: "demanda", sessao: {}, execucoes, conversa }) as unknown as DadosDoChatDemanda;
 
 test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {

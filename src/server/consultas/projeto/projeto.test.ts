@@ -10,7 +10,7 @@ import {
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarProjeto, Projeto, registrarProjeto } from "../../../modulos/demandas/publico.ts";
-import { relogioFixo } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { ListaDoProjeto } from "../../contrato/projeto.ts";
 import { consultarProjeto, estadoNaLinhaDoTempo } from "./projeto.ts";
 

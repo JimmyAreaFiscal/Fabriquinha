@@ -1,7 +1,6 @@
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { schemaDoTipo } from "../../../evidencias/publico.ts";
+import { schemaDoTipo, type EsquemaDeEvidencia } from "../../../evidencias/publico.ts";
 import { TipoEvidencia, CATALOGO_ETAPAS } from "../../../etapas/publico.ts";
-import type { EsquemaDeEvidencia } from "../../../evidencias/publico.ts";
 
 /** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
 const TIPOS_QUE_O_AGENTE_SUBMETE: readonly TipoEvidencia[] = [

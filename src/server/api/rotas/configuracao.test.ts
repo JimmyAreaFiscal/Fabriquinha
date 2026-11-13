@@ -13,9 +13,9 @@ import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_tempo
 import { instalarDockerFalso } from "../../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 import { buscarProjeto, gravarProjeto, Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
-import { relogioDoSistema } from "../../../modulos/compartilhado/nucleo/relogio.ts";
-import { inserirAmbienteAlocado, liberarAmbiente } from "../../../modulos/sandbox/armazenamento/ambientes.ts";
-import { cursorDaBase } from "../../../modulos/repositorio/armazenamento/commits_humanos.ts";
+import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../../../modulos/ambiente/publico.ts";
+import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";

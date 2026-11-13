@@ -4,18 +4,23 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarTrabalho, registrarUso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
 import {
-  carregarTrabalhosDoTicket,
-  comTrabalhosDoTicket,
-} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { metricasDosMeses, produtividadeDaRodada, usoDaDemanda } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+  retomarSessao,
+  registrarUso,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../src/modulos/sessoes/publico.ts";
+import {
+  metricasDosMeses,
+  produtividadeDaRodada,
+  usoDaDemanda,
+  type EtapaTicket,
+  carregarDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { metricasDasEtapas } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/registro_das_metricas.ts";
 import type { MetricaDeUso } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/metricas/metrica_de_uso.ts";
 import type { ValorDe } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/calculo_de_metrica.ts";
-import { mesDoInstante } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import type { EtapaTicket } from "../src/modulos/etapas/catalogo.ts";
+import { mesDoInstante } from "../src/shared/nucleo/relogio.ts";
 import {
   abrirPortao,
   agente,
@@ -37,12 +42,12 @@ interface Ref {
 }
 /** Grava o uso de uma execução já existente do ticket: [modelo, entrada, custo (undefined = desconhecido)]. */
 const usar = (
-  c: Parameters<typeof comTrabalhosDoTicket>[0],
+  c: Parameters<typeof comSessoesDoContexto>[0],
   ref: Ref,
   execucao_id: string,
   usos: [string, number, number?][],
 ) =>
-  comTrabalhosDoTicket(c, ref, (estado) => ({
+  comSessoesDoContexto(c, ref, (estado) => ({
     ...estado,
     usos: usos.reduce(
       (acc, [modelo_nome, tokens_entrada, custo]) =>
@@ -69,14 +74,14 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   await ciclo(c, despacho());
 
   // A primeira tentativa foi do agendador; a retomada é uma execução nova na mesma sessão.
-  const { sessoes, execucoes } = carregarTrabalhosDoTicket(c.banco, ref);
+  const { sessoes, execucoes } = carregarSessoesDoContexto(c.banco, ref);
   assert.equal(sessoes.length, 1);
   const [sessao] = sessoes;
   const [primeira] = execucoes;
   assert.ok(sessao && primeira);
-  comTrabalhosDoTicket(c.banco, ref, (estado) => ({
+  comSessoesDoContexto(c.banco, ref, (estado) => ({
     ...estado,
-    execucoes: retomarTrabalho(estado.sessoes, estado.execucoes, {
+    execucoes: retomarSessao(estado.sessoes, estado.execucoes, {
       id: "retomada",
       trabalho_id: sessao.id,
       inicio: agora(),
@@ -91,7 +96,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     ["a", 20, 2],
   ]); // o último repete o registro: não soma de novo
 
-  const depois = carregarTrabalhosDoTicket(c.banco, ref);
+  const depois = carregarSessoesDoContexto(c.banco, ref);
   assert.deepEqual(depois.sessoes, [sessao], "uma só sessão, com a mesma conversa");
   assert.deepEqual(
     depois.execucoes.map((e) => e.id),
@@ -155,7 +160,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     await decidirComoRevisor(c, id, { resultado: "aprovado" }, 2);
   });
 
-  const execucaoDe = (ref: Ref) => carregarTrabalhosDoTicket(c.banco, ref).execucoes[0]?.id ?? "";
+  const execucaoDe = (ref: Ref) => carregarSessoesDoContexto(c.banco, ref).execucoes[0]?.id ?? "";
   usar(c.banco, r1, execucaoDe(r1), [["a", 10, 1]]);
   usar(c.banco, r2, execucaoDe(r2), [
     ["a", 20],
@@ -169,7 +174,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
   const vizinha = await demandaEmExecucao(c, [{ tickets: 1 }]);
   const refVizinha = ticketDe(c, vizinha, 1);
-  comTrabalhosDoTicket(c.banco, refVizinha, (estado) => ({
+  comSessoesDoContexto(c.banco, refVizinha, (estado) => ({
     ...estado,
     sessoes: [{ ...refVizinha, id: "s-vizinha", modo: "autonomo", conversa_referencia: "conv" }],
     execucoes: [{ id: "e-vizinha", trabalho_id: "s-vizinha", inicio: agora(), fim: agora(), falha: true }],

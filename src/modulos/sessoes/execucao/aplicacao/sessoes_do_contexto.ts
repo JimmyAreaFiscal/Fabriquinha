@@ -15,7 +15,7 @@ import {
 } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type ContextoDaSessao, Execucao } from "../nucleo/sessao.ts";
 
-export interface SessoesDoContexto extends SessoesEExecucoes {
+interface SessoesDoContexto extends SessoesEExecucoes {
   usos: UsoDaExecucao[];
 }
 

@@ -27,9 +27,9 @@ const PACOTES_DO_NAVEGADOR = new Set(["react-dom", "@assistant-ui/react", "markd
 export const MATRIZ_DO_SERVIDOR: Record<string, RegraDoModulo> = {
   // Puro: importável pelo servidor e pelo navegador.
   [MODULO_COMPARTILHADO_COM_O_NAVEGADOR]: { modulosPermitidos: [], externoPermitido: () => false },
-  // Os tipos e schemas da API: só o núcleo e o zod. Nenhum domínio o importa (as consultas das telas ficam em
-  // consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
-  contrato: { modulosPermitidos: ["nucleo"], externoPermitido: (alvo) => alvo === "zod" },
+  // Os tipos e schemas da API: só os schemas dos domínios (pelas fachadas), o núcleo e o zod. Nenhum domínio o importa
+  // (as consultas das telas ficam em consultas/), e o cliente web só o importa como tipo (fora de `modulosPermitidos` dele).
+  contrato: { modulosPermitidos: ["nucleo", MODULO_DAS_FACHADAS], externoPermitido: (alvo) => alvo === "zod" },
   // As consultas que montam a visão de uma tela no formato do contrato, juntando os domínios (MELHORIAS §6): só as
   // fachadas, o contrato e o shared (o núcleo e a leitura num snapshot); nem o código antigo, nem a entrega, nem os
   // fluxos. Não falam SQL (o motor cobra o `.prepare(`, e a posse das tabelas, o nome de tabela).

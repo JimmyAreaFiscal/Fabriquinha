@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import { relogioDoSistema } from "../../../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import type { MetricasDoMes } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarProjeto } from "../../../../modulos/demandas/publico.ts";

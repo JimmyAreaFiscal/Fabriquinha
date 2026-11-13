@@ -1,8 +1,8 @@
 // O contrato da API do agente (`/api/agente/*`): as entradas e as respostas dos sete comandos do agente e o erro, no
 // formato do CLI do agente. Só tipos e schemas; o endpoint e o cliente empacotado compartilham este arquivo.
 import { z } from "zod";
-import { TipoEvidencia } from "../../../modulos/etapas/definicao/tipos_declaraveis.ts";
-import { Projeto } from "../../../modulos/projeto/nucleo/projeto.ts";
+import { TipoEvidencia } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { Projeto } from "../../../modulos/demandas/publico.ts";
 
 const EnderecoDoTicket = z.string().min(1);
 const Veredito = z.enum(["atende", "nao_atende"]);

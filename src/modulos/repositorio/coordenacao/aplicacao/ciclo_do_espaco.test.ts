@@ -12,18 +12,20 @@ import {
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
-import { listarAmbientes } from "../../../sandbox/armazenamento/ambientes.ts";
-import { GeradorDeAmbientes } from "../../../sandbox/infra/container/gerador_de_ambientes.ts";
-import { ConjuntoDeAmbientes } from "../../../sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
+import {
+  listarAmbientes,
+  GeradorDeAmbientes,
+  ConjuntoDeAmbientes,
+  AmbienteHostLocal,
+  AmbienteContainer,
+  validarESalvarConfiguracaoDoAmbiente,
+} from "../../../ambiente/publico.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../espaco_de_trabalho/publico.ts";
-import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
-import { AmbienteContainer } from "../../../sandbox/infra/container/ambiente_container.ts";
 import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../../sandbox/aplicacao/configuracao_do_ambiente.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));

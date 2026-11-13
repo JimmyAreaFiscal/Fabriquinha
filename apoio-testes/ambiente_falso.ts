@@ -3,14 +3,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { spawn } from "node:child_process";
 import { createRequire, syncBuiltinESMExports } from "node:module";
-import type {
-  Ambiente,
-  ComandoNoAmbiente,
-  IdentificadorDoProcesso,
-  ProcessoNoAmbiente,
-  SaidaDoComando,
-} from "../src/modulos/sandbox/infra/ambiente.ts";
-import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import {
+  type Ambiente,
+  type ComandoNoAmbiente,
+  type IdentificadorDoProcesso,
+  type ProcessoNoAmbiente,
+  type SaidaDoComando,
+  AmbienteHostLocal,
+} from "../src/modulos/ambiente/publico.ts";
 
 export interface ComandoRegistrado {
   via: "executar" | "lancar";

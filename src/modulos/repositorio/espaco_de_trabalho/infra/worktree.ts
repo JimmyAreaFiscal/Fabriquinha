@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../../../shared/nucleo/erros.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 import { git, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../sandbox/infra/ambiente.ts";
+import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
 import {
   envCompletoDoServico,
   exigirGitNoAmbiente,

@@ -14,12 +14,10 @@ import {
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
-import type { Ator } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { type Ator, type TipoEvidencia, Endereco } from "../../etapas/publico.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { SubmissaoDeEvidencia } from "../../evidencias/publico.ts";
-import type { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
-import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { carregarDemanda } from "../armazenamento/agregado_da_demanda.ts";
 import { submeterEvidencia } from "./submissao_de_evidencia.ts";
 

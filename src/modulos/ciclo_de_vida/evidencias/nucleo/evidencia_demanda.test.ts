@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../processo/publico.ts";
 import { comEvidencia } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { type Ator, FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import { type Ator, FABRIQUINHA, TIPOS_DA_DEMANDA } from "../../etapas/publico.ts";
 import { pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { TIPOS_DA_DEMANDA } from "../../../etapas/entender_e_desenhar/definicao.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const autora: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };

@@ -5,8 +5,8 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { type Ator, AUDITOR } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../compartilhado/nucleo/erros.ts";
+import { type Ator, AUDITOR, TipoEvidencia, CATALOGO_ETAPAS, Endereco } from "../../etapas/publico.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type Avaliacao,
   agregadoDaRodada,
@@ -16,9 +16,6 @@ import {
   type SubmissaoDeEvidencia,
 } from "./avaliacao.ts";
 import { conferirQuantidadeENomes, SCHEMA_DA_EVIDENCIA, schemaDoTipo } from "./formatos.ts";
-import { TipoEvidencia } from "../../../etapas/definicao/tipos_declaraveis.ts";
-import { CATALOGO_ETAPAS } from "../../../etapas/definicao/evidencia_exigida.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { validarPlano } from "../../processo/nucleo/transicoes/transicoes_demanda.ts";
 
 test("todo tipo tem entrada em SCHEMA_DA_EVIDENCIA, inclusive os que n\u00e3o tinham schema", () => {

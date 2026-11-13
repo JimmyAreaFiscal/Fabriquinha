@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ComandoRodado } from "../../../evidencias/publico.ts";
-import { Projeto } from "../../../../projeto/nucleo/projeto.ts";
+import { Projeto } from "../../../../demandas/publico.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";
 

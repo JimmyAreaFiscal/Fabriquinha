@@ -3,9 +3,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, falhaPorServicoReiniciado, Endereco } from "../../../etapas/publico.ts";
-import { reabrirTicket } from "../../../processo/nucleo/transicoes/transicoes_demanda.ts";
-import { comReaberturaDoAuditor } from "../../../processo/publico.ts";
-import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import {
+  reabrirTicket,
+  comReaberturaDoAuditor,
+  carregarDemanda,
+  falharTicketEmExecucao,
+} from "../../../processo/publico.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import {
   aprovarGateDoPlanejamento,
   cenarioDePlanejamento,
@@ -15,7 +19,6 @@ import {
   reprovarGateDoPlanejamento,
 } from "../../../../../../apoio-testes/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { falharTicketEmExecucao } from "../../../processo/aplicacao/transicoes/transicoes_pedidas.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";

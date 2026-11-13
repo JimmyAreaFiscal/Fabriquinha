@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../../../processo/nucleo/agregado/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../../../processo/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
 import { marcaDoPRRodada, montarPRRodada, tituloDoPRRodada } from "./pr_rodada.ts";
-import type { ProdutividadeRodada } from "../../../../../metricas/aplicacao/produtividade_rodada.ts";
+import type { ProdutividadeRodada } from "../../../../metricas_de_qualidade/publico.ts";
 
 const em = "2026-01-01T10:00:00Z";
 const ticket = (ticket_id: number, etapa: string, status = "concluido", titulo?: string) => ({

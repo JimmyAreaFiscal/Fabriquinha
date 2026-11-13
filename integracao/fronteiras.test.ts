@@ -6,7 +6,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import type { Ator } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { buscarProjeto, gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";

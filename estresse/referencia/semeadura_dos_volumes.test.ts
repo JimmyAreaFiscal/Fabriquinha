@@ -3,8 +3,8 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarTrabalhosDaDemanda } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";
 
 const AGORA = new Date("2026-11-12T12:00:00.000Z");
@@ -65,9 +65,10 @@ test("semeia demandas com tickets, tentativas, sessões e uso, espalhadas pelos 
 
     assert.equal(alvos.projeto, "loja");
     assert.equal(carregarDemanda(banco, alvos.demandaEmExecucao).demanda.estado, "em_execucao");
-    const sessaoTerminada = carregarTrabalhosDaDemanda(banco, alvos.demandaEmExecucao).execucoes.find(
-      (execucao) => execucao.trabalho_id === alvos.sessaoTerminada,
-    );
+    const sessaoTerminada = carregarSessoesDoContexto(banco, {
+      demanda_id: alvos.demandaEmExecucao,
+      ticket_id: null,
+    }).execucoes.find((execucao) => execucao.trabalho_id === alvos.sessaoTerminada);
     assert.ok(sessaoTerminada?.fim);
     assert.deepEqual(readdirSync(join(raiz, "sessoes", alvos.sessaoTerminada)), [
       `2026-01-01T00-00-00-000Z_${alvos.sessaoTerminada}.jsonl`,

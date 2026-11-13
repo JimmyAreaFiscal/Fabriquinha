@@ -15,7 +15,7 @@ export {
   PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
   type ServicoDoConjunto,
 } from "./sandboxes/publico.ts";
-// provisório: remover no ticket 22. O SQL do inventário, que só os testes de fora do domínio usam para montar cenário.
+// O SQL do inventário, que só os testes de fora do domínio usam para montar cenário.
 export {
   alocarAmbienteLivreDaImagem,
   eliminarAmbiente,

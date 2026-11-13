@@ -3,18 +3,15 @@ import { z } from "zod";
 import {
   Ator,
   AtorExterno,
-  branchDemanda,
-  branchRodada,
   CaminhoPrevisto,
   ConfiguracaoAgente,
   CriterioId,
-  DemandaId,
   etapaDoPapel,
   EtapaTicket,
 } from "../../../etapas/publico.ts";
 import { CICLO_DA_DEMANDA, EstadoDemanda, EstadoRodada, EstadoTicket } from "../ciclos/ciclos.ts";
 import { ProgressoEncerramento } from "../progresso_do_encerramento.ts";
-import { PullRequest, prDoEscopo } from "../../../../repositorio/publico.ts";
+import { branchDemanda, branchRodada, DemandaId, PullRequest, prDoEscopo } from "../../../../repositorio/publico.ts";
 import { Decisao } from "../gate.ts";
 import { donoDe, EvidenciaDemanda } from "../../../evidencias/publico.ts";
 import { GrafoDeDependencias, OrigemDaVersao } from "../../../planejamento/publico.ts";

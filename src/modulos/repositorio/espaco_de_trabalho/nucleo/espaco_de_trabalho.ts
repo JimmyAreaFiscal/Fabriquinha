@@ -2,14 +2,9 @@
 // É a única regra da pasta: o ticket com rodada usa o Espaço da rodada, o outro, o da demanda.
 import { resolve } from "node:path";
 import { z } from "zod";
-import {
-  branchDemanda,
-  branchRodada,
-  DemandaId,
-} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { Slug } from "../../../../shared/nucleo/primitivos.ts";
+import { Id, Slug } from "../../../../shared/nucleo/primitivos.ts";
 import type { RepositorioDoProjeto } from "../../git/publico.ts";
+import { branchDemanda, branchRodada, DemandaId } from "./nome_do_espaco.ts";
 
 /** O PR do Espaço: lido de um lugar só (`pull_request`), por rodada ou, sem rodada, o final da demanda. */
 export const PullRequest = z.object({
@@ -21,7 +16,7 @@ export const PullRequest = z.object({
 
 /** @testes tipo que o teste usa para conferir o resultado */
 export const EspacoDeTrabalho = z.object({
-  dono: z.custom<Endereco>((valor) => valor instanceof Endereco),
+  dono: z.object({ demanda_id: DemandaId, rodada_id: Id.optional() }),
   branch: z.string().min(1),
   base: z.string().min(1),
   pasta: z.string().min(1),
@@ -41,7 +36,7 @@ export function espacoDaDemanda(
   raiz: string,
 ): EspacoDeTrabalho {
   return {
-    dono: Endereco.daDemanda(demanda),
+    dono: { demanda_id: demanda },
     branch: branchDemanda(demanda),
     base: projeto.branch_base,
     pasta: resolve(pastaDaDemanda(raiz, projeto.nome, demanda), "demanda"),
@@ -56,7 +51,7 @@ export function espacoDaRodada(
   raiz: string,
 ): EspacoDeTrabalho {
   return {
-    dono: Endereco.daRodada(demanda, rodada),
+    dono: { demanda_id: demanda, rodada_id: rodada },
     branch: branchRodada(demanda, rodada),
     base: branchDemanda(demanda),
     pasta: resolve(pastaDaDemanda(raiz, projeto.nome, demanda), "rodadas", String(rodada)),

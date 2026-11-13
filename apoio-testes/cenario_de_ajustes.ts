@@ -7,22 +7,20 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { AUDITOR, type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import {
+  AUDITOR,
+  type Ator,
+  Endereco,
+  decidirGate,
+  concluirSessaoAjustes,
+  type AgregadoDemanda,
+  carregarDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
-import { decidirGate } from "../src/modulos/etapas/gates.ts";
-import { concluirSessaoAjustes } from "../src/modulos/etapas/ajustar_resultado/sessao_ajustes.ts";
-import {
-  carregarDemanda,
-  comDemanda,
-} from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { AmbienteHostLocal } from "../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../src/modulos/repositorio/publico.ts";
+import { AmbienteHostLocal } from "../src/modulos/ambiente/publico.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "./pi_falso.ts";

@@ -2,12 +2,14 @@
 // as que cada domínio registra. Todo processo que abre o banco (serviço, CLI, testes) passa por aqui: quem abrisse sem as
 // migrações dos domínios acharia o banco numa versão mais nova que a que conhece. Por isso é aqui também que a composição
 // liga ao Ciclo de Vida o que ele lê de Demandas como dado: os projetos cadastrados e o conteúdo dos pedidos (MELHORIAS §11,
-// regra 2).
+// regra 2), e à Condução os limites das sessões, da configuração do serviço do Despacho.
 import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DO_AMBIENTE } from "../../modulos/ambiente/publico.ts";
 import {
+  configuracao,
+  ligarLeituraDosLimitesDasSessoes,
   ligarLeituraDosPedidosRecebidos,
   ligarLeituraDosProjetosCadastrados,
   MIGRACOES_DO_CICLO_DE_VIDA,
@@ -22,6 +24,10 @@ import {
 
 ligarLeituraDosProjetosCadastrados({ buscarProjeto, carregarProjeto, projetoExistente });
 ligarLeituraDosPedidosRecebidos({ lerPedidosEmLote });
+ligarLeituraDosLimitesDasSessoes({
+  timeoutMin: (banco) => configuracao(banco).timeoutMin,
+  ociosidadeMin: (banco) => configuracao(banco).ociosidadeMin,
+});
 
 const MIGRACOES_DOS_DOMINIOS = [MIGRACOES_DE_DEMANDAS, MIGRACOES_DO_CICLO_DE_VIDA, MIGRACOES_DO_AMBIENTE];
 

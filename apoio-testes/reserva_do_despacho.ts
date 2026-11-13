@@ -1,9 +1,11 @@
 // O teste que entrega o ticket direto à Condução, sem passar pelo ciclo do agendador, o reserva antes, como o Despacho:
 // a Condução recebe o ticket já reservado.
 import type { DatabaseSync } from "node:sqlite";
-import { reservarTicketParaAFabriquinha } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import type { Endereco } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
+import {
+  reservarTicketParaAFabriquinha,
+  type Endereco,
+  carregarDemanda,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import { predecessorasPendentesDosPedidos } from "../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 

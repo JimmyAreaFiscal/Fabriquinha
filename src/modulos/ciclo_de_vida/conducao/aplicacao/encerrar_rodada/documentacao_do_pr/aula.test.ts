@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { AgregadoDemanda, type TicketDemanda } from "../../../../processo/nucleo/agregado/agregado_demanda.ts";
+import { AgregadoDemanda, type TicketDemanda } from "../../../../processo/publico.ts";
 import { type EvidenciaDemanda } from "../../../../evidencias/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
 import { AmbienteHostLocal, type ComandoNoAmbiente } from "../../../../../ambiente/publico.ts";

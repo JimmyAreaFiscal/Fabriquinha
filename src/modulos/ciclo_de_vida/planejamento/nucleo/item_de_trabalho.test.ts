@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
+import { AgregadoDemanda } from "../../processo/publico.ts";
 import { AUDITOR, Endereco, FABRIQUINHA } from "../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {

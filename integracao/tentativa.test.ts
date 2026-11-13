@@ -15,13 +15,13 @@ import {
   montarTicket,
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import type { Tentativa } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
+import { Endereco, type Tentativa } from "../src/modulos/ciclo_de_vida/publico.ts";
 import {
-  comTrabalhosDoTicket,
-  gravarTokenDoProcesso,
-} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+  criarSessao,
+  iniciarExecucao,
+  comSessoesDoContexto,
+  gravarTokenDaExecucao,
+} from "../src/modulos/sessoes/publico.ts";
 import type { PaginaDaDemanda } from "../src/server/contrato/demanda.ts";
 import { pagina } from "../src/server/web/telas/demandas/demandas.ts";
 import { descreverEtapasDoSdlc } from "../src/server/consultas/etapas.ts";
@@ -60,8 +60,8 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
   }
   assert.ok(!colunas("processo_do_trabalho").includes("erro"));
 
-  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id: 3 }, (estado) => {
-    const sessoes = criarTrabalho(estado.sessoes, {
+  comSessoesDoContexto(banco, { demanda_id: "I-206", ticket_id: 3 }, (estado) => {
+    const sessoes = criarSessao(estado.sessoes, {
       id: "s-exec-3",
       demanda_id: "I-206",
       ticket_id: 3,
@@ -69,9 +69,9 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
       conversa_referencia: "s-exec-3",
     });
     const execucao = { id: "exec-3", trabalho_id: "s-exec-3", inicio: INSTANTE_DO_CENARIO, falha: false };
-    return { ...estado, sessoes, execucoes: iniciarProcesso(sessoes, estado.execucoes, execucao) };
+    return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
   });
-  gravarTokenDoProcesso(banco, "exec-3", "token-exec-3");
+  gravarTokenDaExecucao(banco, "exec-3", "token-exec-3");
   const { pedir, porta } = await servir(banco);
   const { codigo, saida } = await new Promise<{ codigo: number; saida: string }>((resolve) => {
     execFile(

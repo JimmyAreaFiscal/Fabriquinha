@@ -5,9 +5,7 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { Slug } from "../../../../shared/nucleo/primitivos.ts";
 import { ConfiguracaoAgente, EtapaTicket } from "../../../ciclo_de_vida/publico.ts";
-// provisório: remover no ticket 22. O Hospedagem vem do caminho antigo do Repositório, sem a fachada: o CLI do agente
-// (pacote-pi) empacota o Projeto, e a fachada levaria o banco e o git para dentro do pacote.
-import { Hospedagem } from "../../../repositorio/nucleo/repositorio_do_projeto.ts";
+import { Hospedagem } from "../../../repositorio/publico.ts";
 
 const Comando = z.string().trim().min(1);
 const Texto = z.string().min(1);

@@ -11,25 +11,28 @@ import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { ConducaoDePlanejar } from "../src/modulos/etapas/planejar/conducao_de_planejar.ts";
-import { conjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { enviarDemanda } from "../src/modulos/etapas/conducao/mensagem_do_auditor.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
-  carregarTrabalhosDoTicket,
-  gravarTokenDoProcesso,
-} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
-import { anotar, pastasDoProcesso, noLog } from "../src/modulos/compartilhado/infra/registro.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../src/modulos/repositorio/infra/worktree/worktree.ts";
+  despachoDasEtapas,
+  ConducaoDePlanejar,
+  enviarDemanda,
+  condutor,
+  Endereco,
+  AUDITOR,
+  retomarFalhasDeInfraestrutura,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
+import { conjuntoDoServico } from "../src/modulos/ambiente/publico.ts";
+import {
+  carregarSessoesDoContexto,
+  gravarTokenDaExecucao,
+  dirDoPiDoAuditor,
+  PACOTE,
+} from "../src/modulos/sessoes/publico.ts";
+import { anotar, noLog } from "../src/shared/infra/registro.ts";
+import { pastasDoProcesso } from "../src/modulos/ciclo_de_vida/conducao/nucleo/pastas_do_processo.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import { caminhoDaWorktreeRodada, exigirGit } from "../src/modulos/repositorio/publico.ts";
 import { iniciarServico } from "../src/server/composicao/servico.ts";
-import { raizDo } from "../src/modulos/compartilhado/armazenamento/banco.ts";
+import { raizDo } from "../src/shared/armazenamento/banco.ts";
 import { servirWeb } from "../src/server/api/servidor.ts";
 import {
   atual,
@@ -282,8 +285,8 @@ async function iniciarConversaDoPlanejamento(c: Cenario) {
     condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
-  await esperar(() => carregarTrabalhosDoTicket(c.banco, ticket).sessoes.length === 1, "a sessão do planejamento");
-  const [sessao] = carregarTrabalhosDoTicket(c.banco, ticket).sessoes;
+  await esperar(() => carregarSessoesDoContexto(c.banco, ticket).sessoes.length === 1, "a sessão do planejamento");
+  const [sessao] = carregarSessoesDoContexto(c.banco, ticket).sessoes;
   assert.ok(sessao);
   return { ticket, sessao: sessao.id, fim };
 }
@@ -426,7 +429,7 @@ test(
     const arquivo = readdirSync(join(c.raiz, "sessoes", sessao)).find((nome) => nome.endsWith(`_${sessao}.jsonl`));
     assert.ok(arquivo);
     const noJsonl = usoDoJsonlPorModelo(join(c.raiz, "sessoes", sessao, arquivo));
-    const gravado = carregarTrabalhosDoTicket(c.banco, ticket).usos.filter((u) => u.execucao_id === execucao.id);
+    const gravado = carregarSessoesDoContexto(c.banco, ticket).usos.filter((u) => u.execucao_id === execucao.id);
     assert.deepEqual(gravado.map((u) => `${u.modelo_provedor}/${u.modelo_nome}`).sort(), [...noJsonl.keys()].sort());
     for (const u of gravado) {
       assert.deepEqual(
@@ -793,7 +796,7 @@ test(
     c.banco
       .prepare("INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', ?, 0)")
       .run(relogioDoSistema.agora());
-    gravarTokenDoProcesso(c.banco, "e1", "token-do-processo");
+    gravarTokenDaExecucao(c.banco, "e1", "token-do-processo");
 
     // Como o `conduzir` faz: a pasta do processo vira link para a do Ambiente, e a saída nasce dentro dela.
     const { dir } = pastasDoProcesso(c.raiz, "e1");

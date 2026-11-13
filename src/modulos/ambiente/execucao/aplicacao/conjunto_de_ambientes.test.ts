@@ -5,21 +5,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
-import { listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
+import { listarAmbientes, GeradorDeAmbientes } from "../../sandboxes/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type EspacoDeTrabalho,
   espacoDaDemanda,
   espacoDaRodada,
-} from "../../../repositorio/nucleo/espaco_de_trabalho.ts";
-import { ocupanteDoAmbiente } from "../../../repositorio/aplicacao/espaco/ambiente_do_espaco.ts";
-import { Projeto } from "../../../projeto/nucleo/projeto.ts";
+  ocupanteDoAmbiente,
+} from "../../../repositorio/publico.ts";
+import { Projeto } from "../../../demandas/publico.ts";
 import { relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { pastasDoAmbiente } from "../../sandboxes/infra/pastas_do_ambiente.ts";
-import { GeradorDeAmbientes } from "../../sandboxes/infra/gerador_de_ambientes.ts";
 import { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";
 import { PACOTE } from "../../../sessoes/publico.ts";
-import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/aplicacao/configuracao_do_ambiente.ts";
+import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/publico.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));

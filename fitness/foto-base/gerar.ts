@@ -16,11 +16,7 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type {
-  AgregadoDemanda,
-  TicketDemanda,
-} from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { type AgregadoDemanda, type TicketDemanda, EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import {
   comSessoesDoContexto,
@@ -34,7 +30,7 @@ import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fa
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
-import { publicarPRDe } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
+import { publicarPRDe } from "../../src/modulos/repositorio/publico.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
 

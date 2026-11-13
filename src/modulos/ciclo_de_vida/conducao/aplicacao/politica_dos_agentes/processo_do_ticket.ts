@@ -7,7 +7,7 @@ import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/rel
 import { encerrarExecucaoOrfa, execucoesAbertas, type Harness, type Sessao } from "../../../../sessoes/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { ticketsEmExecucaoDasEtapas } from "../../../planejamento/publico.ts";
-import { pastasDoProcesso } from "../../../../compartilhado/infra/registro.ts";
+import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 
 export type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
 

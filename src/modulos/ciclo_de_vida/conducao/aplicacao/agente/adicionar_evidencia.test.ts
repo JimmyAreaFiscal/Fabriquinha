@@ -16,7 +16,7 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { carregarDemanda } from "../../../processo/publico.ts";
 import { createHash } from "node:crypto";
 import { adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";
 

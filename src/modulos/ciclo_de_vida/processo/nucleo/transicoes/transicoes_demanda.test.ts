@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { comEvidencia, comPlanoSubmetido } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { clonarAgregadoDemanda as structuredClone } from "../../../../../../apoio-testes/clonar_agregado_demanda.ts";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
+import {
+  type Ator,
+  AUDITOR,
+  FABRIQUINHA,
+  Endereco,
+  falhaQueExigeOAuditor,
+  falhaPorServicoReiniciado,
+} from "../../../etapas/publico.ts";
 import { AgregadoDemanda } from "../agregado/agregado_demanda.ts";
 import { GATE_DA_DEMANDA, GATES } from "../../../conducao/publico.ts";
-import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
   comTentativaAberta,
   desdeAReabertura,
@@ -13,12 +19,8 @@ import {
   POLITICA_DE_TENTATIVAS,
   tentativasDoTicket,
 } from "../tentativa.ts";
-import {
-  falhaQueExigeOAuditor,
-  falhaPorServicoReiniciado,
-} from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
-import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/nucleo/despacho.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
+import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
 import {
   enviarDemanda,
   devolverTicket,

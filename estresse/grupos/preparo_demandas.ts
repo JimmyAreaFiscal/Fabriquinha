@@ -5,21 +5,17 @@
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
+import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import {
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
-import { exigirGit } from "../../src/modulos/repositorio/infra/worktree/worktree.ts";
+import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada, exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/modulos/sandbox/infra/host_local/ambiente_host_local.ts";
+import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -217,7 +213,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
   function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
     const sessao = `sd-${String(proximo())}`;
-    comTrabalhosDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
+    comSessoesDoContexto(banco, { demanda_id, ticket_id }, (e) => ({
       ...e,
       sessoes: [{ demanda_id, ticket_id, id: sessao, modo: "interativo", conversa_referencia: sessao }],
       execucoes: [

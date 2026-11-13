@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { espacoDaDemanda, espacoDaRodada, espacoDoTicket, EspacoDeTrabalho } from "./espaco_de_trabalho.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { EtapaTicket } from "../../../etapas/catalogo.ts";
+import { EtapaTicket } from "../../../ciclo_de_vida/publico.ts";
 
 const projeto = { nome: "proj", branch_base: "main" };
 const ag = { demanda: { id: "I-7" } } as Parameters<typeof espacoDoTicket>[0];
@@ -12,14 +11,14 @@ for (const etapa of ETAPAS_COM_ESPACO) {
   test(`${etapa}: sem rodada_id usa o Espaço da demanda, com rodada_id o da rodada`, () => {
     const semRodada = espacoDoTicket(ag, { rodada_id: undefined }, projeto, "/r");
     assert.deepEqual(semRodada, {
-      dono: Endereco.daDemanda("I-7"),
+      dono: { demanda_id: "I-7" },
       branch: "fabriquinha/I-7",
       base: "main",
       pasta: "/r/worktrees/proj/I-7/demanda",
     });
     const comRodada = espacoDoTicket(ag, { rodada_id: 3 }, projeto, "/r");
     assert.deepEqual(comRodada, {
-      dono: Endereco.daRodada("I-7", 3),
+      dono: { demanda_id: "I-7", rodada_id: 3 },
       branch: "fabriquinha/I-7-3",
       base: "fabriquinha/I-7",
       pasta: "/r/worktrees/proj/I-7/rodadas/3",

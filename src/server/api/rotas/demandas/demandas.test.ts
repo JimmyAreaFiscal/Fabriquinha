@@ -1,12 +1,10 @@
 // Rotas de leitura das demandas (CA-1 a CA-12 e CA-37) contra o servidor web de verdade.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Endereco } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { guardarBytes } from "../../../../modulos/compartilhado/armazenamento/arquivos.ts";
+import { Endereco, metricasDasDemandasDoPeriodo, gravarAnexos } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { guardarBytes } from "../../../../shared/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAnexos } from "../../../../modulos/ciclo_de_vida/evidencias/publico.ts";
-import { gravarUsoDeclarado } from "../../../../modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
-import { metricasDasDemandasDoPeriodo } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { gravarUsoDeclarado } from "../../../../modulos/sessoes/publico.ts";
 import { cenarioDemandas } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
 import { origemDe } from "../../../../../apoio-testes/banco_de_metricas.ts";

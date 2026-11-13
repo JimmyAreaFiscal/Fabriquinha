@@ -1,9 +1,8 @@
 // Commit, arquivos e commits posteriores do ticket da demanda (comparacao-sdlc-implementacao.md §8, §10.1).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { escrever } from "../../../../shared/armazenamento/banco.ts";
+import { escrever, instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
-import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 const donoDe = (banco: DatabaseSync, sha: string) =>
   banco.prepare("SELECT demanda_id, ticket_id FROM commit_ticket_demanda WHERE sha = ?").get(sha);

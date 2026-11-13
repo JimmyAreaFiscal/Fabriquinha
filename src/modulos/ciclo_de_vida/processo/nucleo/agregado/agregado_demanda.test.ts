@@ -3,8 +3,7 @@ import { test } from "node:test";
 import { AgregadoDemanda, Demanda, prDaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { Decisao } from "../gate.ts";
 import { donoDe, EvidenciaDemanda } from "../../../evidencias/publico.ts";
-import { AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+import { AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const demanda = (m: Record<string, unknown> = {}) => ({

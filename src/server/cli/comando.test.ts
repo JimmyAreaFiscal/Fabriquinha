@@ -6,9 +6,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
-import { ErroDeRegra } from "../../modulos/compartilhado/nucleo/erros.ts";
-import { schemaDoTipo } from "../../modulos/ciclo_de_vida/evidencias/publico.ts";
-import { relogioFixo } from "../../modulos/compartilhado/nucleo/relogio.ts";
+import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import { schemaDoTipo } from "../../modulos/ciclo_de_vida/publico.ts";
+import { relogioFixo } from "../../shared/nucleo/relogio.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 
 const pasta = mkdtempSync(join(tmpdir(), "fabriquinha-comando-"));

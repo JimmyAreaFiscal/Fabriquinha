@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { HarnessPi, PACOTE } from "../src/modulos/sessoes/publico.ts";
 import { skillsDaEtapaDemanda } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/lancamento_do_ticket.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
 
 const harness = new HarnessPi();
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));

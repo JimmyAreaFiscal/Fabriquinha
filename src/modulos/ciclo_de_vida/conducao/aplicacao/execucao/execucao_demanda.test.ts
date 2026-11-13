@@ -10,7 +10,13 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import type { AgregadoDemanda } from "../../../processo/nucleo/agregado/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  montarRetornoAoAgente,
+  tentativaAnteriorEmMemoria,
+  motivoDaFalhaDoTicket,
+  carregarDemanda,
+} from "../../../processo/publico.ts";
 import {
   type ConfiguracaoAgente,
   Endereco,
@@ -18,15 +24,14 @@ import {
   falhaInterrompidaPeloAuditor,
 } from "../../../etapas/publico.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria, motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { pastasDoProcesso } from "../../../../compartilhado/infra/registro.ts";
+import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 import { ConducaoDeImplementar } from "../implementar/conducao_de_implementar.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
-import { registrarProjeto } from "../../../../projeto/aplicacao/cadastro.ts";
+import { registrarProjeto } from "../../../../demandas/publico.ts";
 import { gravarCommitDemanda, garantirWorktreeDemanda } from "../../../../repositorio/publico.ts";
-import { carregarDemanda, comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import {
   criarSessao,

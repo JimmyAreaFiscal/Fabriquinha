@@ -3,11 +3,9 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { motivoDaFalhaDoTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
+import { type AgregadoDemanda, motivoDaFalhaDoTicket, carregarDemanda } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { carregarDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "./apoio.ts";
 

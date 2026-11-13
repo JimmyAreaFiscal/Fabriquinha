@@ -35,10 +35,12 @@ export { ProgressoEncerramento } from "./nucleo/progresso_do_encerramento.ts";
 export { Decisao, type EntradaDoGate, type EntradaReprovada } from "./nucleo/gate.ts";
 export {
   AgregadoDemanda,
+  Demanda,
   prDaDemanda,
   type PullRequestDoEspaco,
-  type RodadaDemanda,
+  RodadaDemanda,
   TicketDemanda,
+  TipoDemanda,
 } from "./nucleo/agregado/agregado_demanda.ts";
 export {
   ancoraNaDemanda,

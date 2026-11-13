@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
 import type { ConjuntoDeAmbientes } from "../../../modulos/ambiente/publico.ts";
-import { condutor } from "../../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { condutor } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { recuperacaoDaSubida, recuperarAposReinicio } from "./recuperacao_apos_reinicio.ts";
 
 /** Anota a ordem: o Ambiente pelo conjunto de sandboxes, Sessões e o Ciclo de Vida pelo condutor. */

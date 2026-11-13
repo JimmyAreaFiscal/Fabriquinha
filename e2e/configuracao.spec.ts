@@ -4,7 +4,7 @@ import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { inserirAmbienteAlocado, liberarAmbiente } from "../src/modulos/sandbox/armazenamento/ambientes.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../src/modulos/ambiente/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 

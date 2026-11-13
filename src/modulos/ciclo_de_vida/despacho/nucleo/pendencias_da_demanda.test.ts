@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
-import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import {
+  AgregadoDemanda,
   type AcaoEsperada,
-  motivoDaRevisaoParada,
   type Pendencia,
   type TipoPendencia,
   type TrabalhoVivo,
-} from "../../processo/nucleo/agregado/pendencia.ts";
+} from "../../processo/publico.ts";
+import { FABRIQUINHA, Endereco } from "../../etapas/publico.ts";
+import { motivoDaRevisaoParada } from "../../processo/nucleo/agregado/pendencia.ts";
 import { pendenciasDaDemanda } from "./pendencias_da_demanda.ts";
 
 const instante = (minuto: number) => new Date(Date.UTC(2026, 0, 1, 0, minuto)).toISOString();

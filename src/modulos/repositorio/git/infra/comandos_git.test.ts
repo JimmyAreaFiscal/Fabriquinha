@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import type { Ambiente, ComandoNoAmbiente, SaidaDoComando } from "../../../sandbox/infra/ambiente.ts";
+import type { Ambiente, ComandoNoAmbiente, SaidaDoComando } from "../../../ambiente/publico.ts";
 import { exigirGitNoAmbiente, gitNoAmbiente } from "./comandos_git.ts";
 import { preparar } from "../../espaco_de_trabalho/infra/worktree.ts";
 

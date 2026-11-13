@@ -7,8 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ErroDeReprovacao } from "../../../../../shared/nucleo/erros.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import type { ComandoNoAmbiente } from "../../../../ambiente/publico.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { type ComandoNoAmbiente, AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_do_ticket.ts";
 import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 

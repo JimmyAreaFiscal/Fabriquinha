@@ -8,28 +8,27 @@ import {
   executarAgora,
   type MotivoDeRecusa,
   retomarFalhasDeInfraestrutura,
-} from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
+  Endereco,
+  AUDITOR,
+  condutor,
+  comTentativaAberta,
+  motivoDaFalhaDoTicket,
+  tentativasDoTicket,
+  reabrirTicket,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  comTentativaAberta,
-  motivoDaFalhaDoTicket,
-  tentativasDoTicket,
-} from "../src/modulos/ciclo_de_vida/processo/nucleo/tentativa.ts";
-import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { reabrirTicket } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
-import { criarTrabalho, iniciarProcesso } from "../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+  criarSessao,
+  iniciarExecucao,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import {
-  carregarTrabalhosDoTicket,
-  comTrabalhosDoTicket,
-} from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/infra/worktree/worktree-demanda.ts";
+import { caminhoDaWorktreeRodada } from "../src/modulos/repositorio/publico.ts";
 import {
   abrirPortao,
   agente,
@@ -203,7 +202,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   assert.equal(statusDe(c, ref), "concluido");
   assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
   assert.equal(execucoesDe(c, ref).length, 2);
-  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).sessoes.length, 1);
+  assert.equal(carregarSessoesDoContexto(c.banco, ref).sessoes.length, 1);
   const evidencias = ag.evidencias.filter((e) => e.ticket_id === ref.ticket_id);
   assert.deepEqual(
     evidencias.map((e) => e.tipo).sort(),
@@ -269,12 +268,12 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   assert.equal(historico.length, 2);
   assert.match(motivoDaExecucao(c, id, historico[0]?.id) ?? "", /1|falha do pi falso/);
   assert.match(motivoDaExecucao(c, id, historico[1]?.id) ?? "", /tempo limite/);
-  assert.equal(carregarTrabalhosDoTicket(c.banco, t1).sessoes.length, 1);
+  assert.equal(carregarSessoesDoContexto(c.banco, t1).sessoes.length, 1);
   bloqueado();
 
   // Reinício do serviço: execução aberta de uma instância anterior falha, sem avançar; as anteriores seguem no histórico.
   reabrir(c, t1, "mais uma vez");
-  const sessao = carregarTrabalhosDoTicket(c.banco, t1).sessoes[0];
+  const sessao = carregarSessoesDoContexto(c.banco, t1).sessoes[0];
   assert.ok(sessao);
   const execucao = { id: randomUUID(), trabalho_id: sessao.id, inicio: new Date().toISOString(), falha: false };
   comDemanda(c.banco, id, (ag) => ({
@@ -287,9 +286,9 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
       execucao.inicio,
     ),
   }));
-  comTrabalhosDoTicket(c.banco, t1, (estado) => ({
+  comSessoesDoContexto(c.banco, t1, (estado) => ({
     ...estado,
-    execucoes: iniciarProcesso(criarTrabalho([], sessao), estado.execucoes, execucao),
+    execucoes: iniciarExecucao(criarSessao([], sessao), estado.execucoes, execucao),
   }));
   condutor.recuperarNaSubida(c.banco, recuperacaoDaSubida);
   assert.equal(statusDe(c, t1), "falhou");

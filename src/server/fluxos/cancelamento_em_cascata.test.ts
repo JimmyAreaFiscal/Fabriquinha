@@ -10,14 +10,9 @@ import {
   registrarPedidoDeTeste,
   situacaoGravada,
 } from "../../../apoio-testes/pedidos_de_teste.ts";
-import { AUDITOR, type Ator } from "../../modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, type Ator, condutor, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import {
-  carregarTrabalhosDoTicket,
-  comTrabalhosDoTicket,
-} from "../../modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../modulos/sessoes/publico.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "./cancelamento_em_cascata.ts";
 
 const ctx = CONTEXTO_DOS_PEDIDOS;
@@ -38,7 +33,7 @@ const colocarEmExecucao = (banco: DatabaseSync, id: string) => {
 /** Abre uma execução sem pi no ar no ticket 1 da demanda `id`. */
 function abrirExecucao(banco: DatabaseSync, id: string, sessao: string) {
   const ref = { demanda_id: id, ticket_id: 1 };
-  comTrabalhosDoTicket(banco, ref, (x) => ({
+  comSessoesDoContexto(banco, ref, (x) => ({
     ...x,
     sessoes: [{ id: sessao, ...ref, modo: "autonomo", conversa_referencia: "c" }],
     execucoes: [{ id: `e-${sessao}`, trabalho_id: sessao, inicio: ctx.agora, falha: false }],
@@ -85,7 +80,7 @@ test("CA-17: reprovar a demanda interrompe a execução aberta do dependente can
   const a = pedidoEnviadoDeTeste(banco);
   const ref = abrirExecucao(banco, registrarPedidoDeTeste(banco, [a]), "s1");
   decidirGateDaDemanda(banco, a, reprovar, AUDITOR);
-  assert.ok(carregarTrabalhosDoTicket(banco, ref).execucoes[0]?.fim);
+  assert.ok(carregarSessoesDoContexto(banco, ref).execucoes[0]?.fim);
 });
 
 test("CA-18 a CA-20: a entrada inválida, o autor e a demanda em registro são recusados sem mudar nada", () => {
@@ -133,8 +128,8 @@ test("CA-22: a execução órfã de um dependente é interrompida e fica com o f
   const ref = abrirExecucao(banco, registrarPedidoDeTeste(banco, [a]), "s1");
   const refAlheia = abrirExecucao(banco, registrarPedidoDeTeste(banco), "s2");
   cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
-  assert.equal(carregarTrabalhosDoTicket(banco, refAlheia).execucoes[0]?.fim, null);
-  assert.ok(carregarTrabalhosDoTicket(banco, ref).execucoes[0]?.fim);
+  assert.equal(carregarSessoesDoContexto(banco, refAlheia).execucoes[0]?.fim, null);
+  assert.ok(carregarSessoesDoContexto(banco, ref).execucoes[0]?.fim);
 });
 
 test("ordem: as execuções abertas só são interrompidas depois do commit do cancelamento", (t) => {
@@ -169,17 +164,17 @@ test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
   const banco = bancoComProjeto();
   const a = pedidoEnviadoDeTeste(banco);
   const ref = { demanda_id: a, ticket_id: 1 };
-  comTrabalhosDoTicket(banco, ref, (x) => ({
+  comSessoesDoContexto(banco, ref, (x) => ({
     ...x,
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
     execucoes: [{ id: "e1", trabalho_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
   }));
   decidirGateDaDemanda(banco, a, aprovar, AUDITOR);
-  const antes = { processo: carregarDemanda(banco, a), execucoes: carregarTrabalhosDoTicket(banco, ref).execucoes };
+  const antes = { processo: carregarDemanda(banco, a), execucoes: carregarSessoesDoContexto(banco, ref).execucoes };
   const { demanda } = cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
   assert.deepEqual(demanda.decisoes, antes.processo.decisoes);
   assert.deepEqual(demanda.evidencias, antes.processo.evidencias);
-  assert.deepEqual(carregarTrabalhosDoTicket(banco, ref).execucoes, antes.execucoes);
+  assert.deepEqual(carregarSessoesDoContexto(banco, ref).execucoes, antes.execucoes);
 });
 
 test("CA-26 (atomicidade): a falha no processo de um dependente desfaz o pedido, os dependentes e os processos", () => {
@@ -199,7 +194,7 @@ test("CA-26 (atomicidade): a falha no processo de um dependente desfaz o pedido,
       ["entender_e_desenhar", "rascunho"],
     ],
   );
-  assert.equal(carregarTrabalhosDoTicket(banco, ref).execucoes[0]?.fim, null);
+  assert.equal(carregarSessoesDoContexto(banco, ref).execucoes[0]?.fim, null);
 });
 
 test("atomicidade: a falha ao gravar a situação dos pedidos desfaz o cancelamento dos processos", () => {

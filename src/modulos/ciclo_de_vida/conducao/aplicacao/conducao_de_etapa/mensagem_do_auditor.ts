@@ -5,7 +5,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 import { formatarTicketRef, etapaDoPapel } from "../../../etapas/publico.ts";
-import { configuracao } from "../../../../compartilhado/armazenamento/servico.ts";
 import { contextoDaSessao } from "../../../../sessoes/publico.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
@@ -16,6 +15,7 @@ import {
   pendenciaDaSessao,
 } from "../chat_do_auditor/sessao_do_ticket.ts";
 import { retomarSessaoAjustes } from "../ajustar_resultado/sessao_ajustes.ts";
+import { limitesDasSessoes } from "../limites_das_sessoes.ts";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
 type ModoEnvio = "prompt" | "steer" | "follow_up";
@@ -26,7 +26,7 @@ export function enviarDemanda(
   id: string,
   texto: string,
   modo: ModoEnvio,
-  limiteMin = configuracao(banco).ociosidadeMin,
+  limiteMin = limitesDasSessoes().ociosidadeMin(banco),
   relogio: Relogio = relogioDoSistema,
 ): boolean {
   const ref = contextoDaSessao(banco, id);

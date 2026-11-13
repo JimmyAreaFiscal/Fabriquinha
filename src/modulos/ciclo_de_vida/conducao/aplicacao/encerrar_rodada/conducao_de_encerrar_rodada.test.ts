@@ -11,8 +11,7 @@ import {
   BRANCH_RODADA,
 } from "../../../../../../apoio-testes/cenario_de_encerramento_rodada.ts";
 import { Endereco } from "../../../etapas/publico.ts";
-import { motivoDaFalhaDoTicket } from "../../../processo/publico.ts";
-import { carregarDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
+import { motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";

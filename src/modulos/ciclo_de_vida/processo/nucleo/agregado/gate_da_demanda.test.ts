@@ -4,14 +4,18 @@ import { clonarAgregadoDemanda } from "../../../../../../apoio-testes/clonar_agr
 import { comEvidencia, comPlanoSubmetido } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import type { Decisao } from "../gate.ts";
-import { type NomeGate } from "../../../../etapas/catalogo.ts";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
+import {
+  type NomeGate,
+  type Ator,
+  AUDITOR,
+  FABRIQUINHA,
+  Endereco,
+  falhaQueExigeOAuditor,
+} from "../../../etapas/publico.ts";
+import { ErroDeEscopo, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate_da_demanda.ts";
 import { GATE_DA_DEMANDA, GATES } from "../../../conducao/publico.ts";
-import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { comTentativaAberta, motivoDaFalhaDoTicket } from "../tentativa.ts";
-import { falhaQueExigeOAuditor } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
 import {
   enviarDemanda,
   reabrirTicket,

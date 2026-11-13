@@ -3,15 +3,18 @@
 import { z } from "zod";
 import {
   Decisao,
-  Demanda,
   RodadaDemanda,
   TicketDemanda,
+  EstadoTicket,
+  EstadoDemanda,
+  EstadoRodada,
+  EtapaTicket,
+  type AcaoEsperada,
+  type TipoPendencia,
+  Demanda,
   TipoDemanda,
-} from "../../modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
-import { EstadoTicket, Instante } from "../../modulos/compartilhado/nucleo/primitivos.ts";
-import { EstadoDemanda, EstadoRodada } from "../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
-import { EtapaTicket } from "../../modulos/etapas/catalogo.ts";
-import type { AcaoEsperada, TipoPendencia } from "../../modulos/sdlc/nucleo/demanda/pendencia.ts";
+} from "../../modulos/ciclo_de_vida/publico.ts";
+import { Instante } from "../../shared/nucleo/primitivos.ts";
 
 const TIPOS_DE_PENDENCIA = [
   "gate_humano",

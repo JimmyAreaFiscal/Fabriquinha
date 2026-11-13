@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { descreverEtapasDoSdlc } from "../../consultas/etapas.ts";
-import { EstadoDemanda, EstadoRodada } from "../../../modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
+import { EstadoDemanda, EstadoRodada } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   aparenciaDoEstado,
   colunasDoAndamento,

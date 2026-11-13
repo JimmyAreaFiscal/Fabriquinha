@@ -1,13 +1,15 @@
 // O prompt do ticket como a condução da Etapa dele o monta, com a seção que só ela lê: o que os testes do prompt e a foto
 // da base conferem. As conduções só montam o prompt aqui; nada lê o banco nem lança o agente.
 import { DatabaseSync } from "node:sqlite";
-import { anotar } from "../src/modulos/compartilhado/infra/registro.ts";
-import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";
-import { ConducaoAgentica } from "../src/modulos/etapas/conducao/conducao_de_etapa.ts";
-import { montarConducoesDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { montarPromptDemanda } from "../src/modulos/etapas/prompt/prompt_demanda.ts";
+import { anotar } from "../src/shared/infra/registro.ts";
+import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
+import {
+  ConducaoAgentica,
+  montarConducoesDasEtapas,
+  montarPromptDemanda,
+  condutor,
+} from "../src/modulos/ciclo_de_vida/publico.ts";
 import type { ContextoDoPrompt } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/prompt/contexto_do_prompt.ts";
-import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 
 const CONDUCOES_DO_PROMPT = montarConducoesDasEtapas({
   banco: new DatabaseSync(":memory:"),

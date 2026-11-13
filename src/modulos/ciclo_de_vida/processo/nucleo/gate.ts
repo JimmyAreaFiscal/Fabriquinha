@@ -5,13 +5,13 @@
 import { z } from "zod";
 import {
   Ator,
-  DemandaId,
   type DefinicaoDoCatalogo,
   type Endereco,
   type EtapaTicket,
   exigirAtor,
   NomeGate,
 } from "../../etapas/publico.ts";
+import { DemandaId } from "../../../repositorio/publico.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { Id, Instante, Motivo } from "../../../../shared/nucleo/primitivos.ts";
 

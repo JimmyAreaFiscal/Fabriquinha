@@ -3,7 +3,7 @@
 import { resolve } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { git, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
-import type { Ambiente } from "../../../sandbox/infra/ambiente.ts";
+import type { Ambiente } from "../../../ambiente/publico.ts";
 
 /** `<raiz>/worktrees/<projeto>` (F5 §3): fora do repositório, para o test runner dele não varrer worktrees. */
 export const pastaDasWorktreesDoProjeto = (raiz: string, projeto: string): string =>

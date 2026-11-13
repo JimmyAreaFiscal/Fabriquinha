@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Ator, AUDITOR, FABRIQUINHA } from "../../etapas/publico.ts";
-import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
+import { AgregadoDemanda, type ContextoDemanda } from "../../processo/publico.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import type { ContextoDemanda } from "../../processo/publico.ts";
 import { reservarTicketAberto } from "../../processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import { exigirSelecaoDoDespacho } from "./reserva_ticket.ts";
 

@@ -24,7 +24,7 @@ import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioDoSistema, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../../etapas/publico.ts";
+import { falhaPorServicoReiniciado, falhaQueExigeOAuditor, type EtapaTicket } from "../../../etapas/publico.ts";
 import {
   dirDoPiDoAuditor,
   type Harness,
@@ -33,7 +33,6 @@ import {
   type MensagemDoAgente,
   PACOTE,
 } from "../../../../sessoes/publico.ts";
-import type { EtapaTicket } from "../../../etapas/publico.ts";
 import {
   atividadeDo,
   condutor,

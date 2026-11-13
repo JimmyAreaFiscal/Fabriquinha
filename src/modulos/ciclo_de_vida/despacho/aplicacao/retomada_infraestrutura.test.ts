@@ -8,18 +8,18 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarDemanda, comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
-import { Endereco } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import { POLITICA_DE_TENTATIVAS } from "../../processo/nucleo/tentativa.ts";
+import { carregarDemanda, POLITICA_DE_TENTATIVAS } from "../../processo/publico.ts";
+import { comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import {
+  Endereco,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
   type ResultadoDaTentativa,
-} from "../../../compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import { relogioFixo } from "../../../compartilhado/nucleo/relogio.ts";
-import { registrarProjeto } from "../../../projeto/aplicacao/cadastro.ts";
+} from "../../etapas/publico.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+import { registrarProjeto } from "../../../demandas/publico.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { Modelo } from "../../../sessoes/publico.ts";
 
 const falhouEm = "2026-01-01T00:00:00.000Z";
 const minutosDepois = (minutos: number) => relogioFixo(new Date(Date.parse(falhouEm) + minutos * 60_000).toISOString());

@@ -6,7 +6,7 @@ import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { relogioFixo } from "../../../modulos/compartilhado/nucleo/relogio.ts";
+import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { consultarBoardDeDemandas } from "./board_de_demandas.ts";
 

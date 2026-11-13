@@ -5,18 +5,23 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, FABRIQUINHA } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { Endereco } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
-import type { ResultadoDaTentativa } from "../../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/resultado_da_tentativa.ts";
-import type { EstadoTicket } from "../../src/modulos/compartilhado/nucleo/primitivos.ts";
-import { encontrado } from "../../src/modulos/compartilhado/nucleo/erros.ts";
-import { escrever, raizDo } from "../../src/modulos/compartilhado/armazenamento/banco.ts";
-import type { EtapaTicket, NomeGate } from "../../src/modulos/etapas/catalogo.ts";
+import {
+  AUDITOR,
+  FABRIQUINHA,
+  Endereco,
+  type ResultadoDaTentativa,
+  type EstadoTicket,
+  type EtapaTicket,
+  type NomeGate,
+  type EstadoDemanda,
+  type EstadoRodada,
+  AgregadoDemanda,
+} from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { encontrado } from "../../src/shared/nucleo/erros.ts";
+import { escrever, raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
-import type { EstadoDemanda, EstadoRodada } from "../../src/modulos/ciclo_de_vida/processo/nucleo/ciclos/ciclos.ts";
-import { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/processo/nucleo/agregado/agregado_demanda.ts";
-import { comTrabalhosDoTicket } from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
+import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 
 export interface VolumeSintetico {
   nome: string;
@@ -288,7 +293,7 @@ function semearDemanda(
 function semearTrabalhosDaDemanda(banco: DatabaseSync, { id, tentativasPorTicket }: DemandaSemeada): void {
   for (const [ticket_id, tentativas] of tentativasPorTicket) {
     const sessao = `sessao-${id}-T${String(ticket_id)}`;
-    comTrabalhosDoTicket(banco, { demanda_id: id, ticket_id }, (trabalhos) => ({
+    comSessoesDoContexto(banco, { demanda_id: id, ticket_id }, (trabalhos) => ({
       sessoes: [
         ...trabalhos.sessoes,
         { demanda_id: id, ticket_id, id: sessao, modo: "autonomo", conversa_referencia: sessao },

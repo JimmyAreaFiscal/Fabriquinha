@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { branchDemanda, branchRodada } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/identidades.ts";
+import { branchDemanda, branchRodada } from "../nucleo/nome_do_espaco.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarRepositorioDeTeste,
@@ -20,8 +20,7 @@ import {
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada, garantirWorktreeDemanda } from "./worktree-demanda.ts";
 import { podarWorktreesNoCore } from "./worktree.ts";
-import { AmbienteHostLocal } from "../../../sandbox/infra/host_local/ambiente_host_local.ts";
-import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../sandbox/infra/ambiente.ts";
+import { AmbienteHostLocal, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
 
 const ambiente = new AmbienteHostLocal();
 
