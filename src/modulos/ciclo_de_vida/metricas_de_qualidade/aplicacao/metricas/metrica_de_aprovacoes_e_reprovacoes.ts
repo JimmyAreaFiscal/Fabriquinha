@@ -3,7 +3,9 @@ import type { EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 import { type EscopoDosFatos, lerDecisoesDoRecorte } from "../leitura_dos_fatos.ts";
 
-type DecisoesDoRecorte = ReturnType<typeof lerDecisoesDoRecorte>;
+interface DecisoesDoRecorte {
+  decisoes: ReturnType<typeof lerDecisoesDoRecorte>;
+}
 
 export class MetricaDeAprovacoesEReprovacoes extends MetricaPorEtapa<
   DecisoesDoRecorte,
@@ -16,10 +18,10 @@ export class MetricaDeAprovacoesEReprovacoes extends MetricaPorEtapa<
   } as const;
 
   protected lerFatos(escopo: EscopoDosFatos): DecisoesDoRecorte {
-    return lerDecisoesDoRecorte(escopo);
+    return { decisoes: lerDecisoesDoRecorte(escopo) };
   }
 
-  formula(decisoes: DecisoesDoRecorte) {
+  formula({ decisoes }: DecisoesDoRecorte) {
     return (etapa: EtapaTicket) => {
       const daEtapa = decisoes.filter((d) => d.etapa === etapa);
       const reprovacoes = daEtapa.filter((d) => d.reprovada).length;

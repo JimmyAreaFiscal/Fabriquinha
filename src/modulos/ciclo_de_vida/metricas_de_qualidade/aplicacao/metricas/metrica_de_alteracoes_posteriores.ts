@@ -3,7 +3,9 @@ import type { EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 import { type EscopoDosFatos, lerCommitsDoRecorte } from "../leitura_dos_fatos.ts";
 
-type CommitsDoRecorte = ReturnType<typeof lerCommitsDoRecorte>;
+interface CommitsDoRecorte {
+  commits: ReturnType<typeof lerCommitsDoRecorte>;
+}
 
 export class MetricaDeAlteracoesPosteriores extends MetricaPorEtapa<
   CommitsDoRecorte,
@@ -16,10 +18,10 @@ export class MetricaDeAlteracoesPosteriores extends MetricaPorEtapa<
   } as const;
 
   protected lerFatos(escopo: EscopoDosFatos): CommitsDoRecorte {
-    return lerCommitsDoRecorte(escopo);
+    return { commits: lerCommitsDoRecorte(escopo) };
   }
 
-  formula(commits: CommitsDoRecorte) {
+  formula({ commits }: CommitsDoRecorte) {
     return (etapa: EtapaTicket) => {
       const daEtapa = commits.filter((c) => c.etapa === etapa);
       return {

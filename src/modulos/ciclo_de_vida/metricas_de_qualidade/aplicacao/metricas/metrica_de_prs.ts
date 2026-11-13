@@ -6,8 +6,10 @@ import { noPeriodo } from "../../nucleo/metrica.ts";
 import { MetricaDoSdlc } from "../calculo_de_metrica.ts";
 import { type EscopoDosFatos, ticketsCitados } from "../leitura_dos_fatos.ts";
 
-/** Os PRs abertos no recorte: se a rodada de cada um foi aprovada na Etapa que publica o PR. */
-type FatosDosPrs = { mergeado: boolean }[];
+/** Os PRs abertos no recorte, um por rodada, no instante do primeiro: se a rodada foi aprovada na Etapa que publica o PR. */
+interface FatosDosPrs {
+  prs: { demanda_id: string; em: string; mergeado: boolean }[];
+}
 
 export class MetricaDePrs extends MetricaDoSdlc<"prs", FatosDosPrs, { abertos: number; mergeados: number }> {
   readonly definicao = { tipo: "prs", rotulo: "PRs", fonte: "PR aberto e Gate do PR das rodadas" } as const;
@@ -20,15 +22,19 @@ export class MetricaDePrs extends MetricaDoSdlc<"prs", FatosDosPrs, { abertos: n
     const etapaQuePublicaOPr = etapaDoPapel("publica_o_pr_da_rodada");
     const prsAbertos = evidenciasDoTipoDasDemandas(escopo.banco, { demandas: escopo.demandas, tipo: "pr_aberto" });
     // As Decisões são só das demandas com PR, e os tickets delas já vêm com os dos PRs.
-    const ticketDe = ticketsCitados(escopo.banco, prsAbertos);
+    const ticketDe = ticketsCitados(escopo);
     const porRodada = Map.groupBy(prsAbertos, (pr) => {
       const rodadaId = pr.rodada_id ?? (pr.ticket_id === null ? null : ticketDe(pr.demanda_id, pr.ticket_id).rodada_id);
       return `${pr.demanda_id}\0${String(rodadaId)}`;
     });
-    const abertosNoRecorte = [...porRodada].filter(([, daRodada]) =>
-      noPeriodo((daRodada.map((pr) => pr.em).toSorted() as [string])[0], escopo.periodo),
-    );
-    const demandasComPr = [...new Set(abertosNoRecorte.flatMap(([, daRodada]) => daRodada.map((pr) => pr.demanda_id)))];
+    const abertosNoRecorte = [...porRodada]
+      .map(([rodada, daRodada]) => ({
+        rodada,
+        demanda_id: (daRodada[0] as { demanda_id: string }).demanda_id,
+        em: (daRodada.map((pr) => pr.em).toSorted() as [string])[0],
+      }))
+      .filter(({ em }) => noPeriodo(em, escopo.periodo));
+    const demandasComPr = [...new Set(abertosNoRecorte.map(({ demanda_id }) => demanda_id))];
     const aprovadas = new Set(
       decisoesEmLote(escopo.banco, { demandas: demandasComPr }).flatMap((decisao) => {
         const ticket = ticketDe(decisao.demanda_id, decisao.ticket_id);
@@ -38,10 +44,12 @@ export class MetricaDePrs extends MetricaDoSdlc<"prs", FatosDosPrs, { abertos: n
           : [];
       }),
     );
-    return abertosNoRecorte.map(([rodada]) => ({ mergeado: aprovadas.has(rodada) }));
+    return {
+      prs: abertosNoRecorte.map(({ rodada, demanda_id, em }) => ({ demanda_id, em, mergeado: aprovadas.has(rodada) })),
+    };
   }
 
-  formula(prs: FatosDosPrs) {
+  formula({ prs }: FatosDosPrs) {
     return { abertos: prs.length, mergeados: prs.filter((pr) => pr.mergeado).length };
   }
 }

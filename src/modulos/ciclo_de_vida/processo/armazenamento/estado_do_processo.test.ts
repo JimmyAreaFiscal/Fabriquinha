@@ -20,7 +20,9 @@ test("as Tentativas reprovadas das demandas em lote, só com o ticket, e o perí
   const banco = bancoDaDemanda();
   banco.exec(`INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo)
     VALUES ('I-1', 4, 1, '2026-02-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', 'sucesso')`);
-  assert.deepEqual(tentativasReprovadasEmLote(banco, { demandas: ["I-1"] }), [{ demanda_id: "I-1", ticket_id: 2 }]);
+  assert.deepEqual(tentativasReprovadasEmLote(banco, { demandas: ["I-1"] }), [
+    { demanda_id: "I-1", ticket_id: 2, inicio: "2026-01-01T00:00:00.000Z" },
+  ]);
   assert.deepEqual(tentativasReprovadasEmLote(banco, { demandas: ["I-1"], periodo: doMes("2026-02") }), []);
   assert.deepEqual(tentativasReprovadasEmLote(banco, { demandas: [] }), []);
 });

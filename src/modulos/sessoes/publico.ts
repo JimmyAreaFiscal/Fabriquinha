@@ -31,6 +31,7 @@ export {
   type CustoDoUso,
   gravarUsoDeclarado,
   lerUsoDeclarado,
+  lerUsoDasExecucoes,
   lerUsoDeclaradoEmLote,
   linhaDeUsoDaExecucao,
   registrarUso,
@@ -82,5 +83,4 @@ export {
   Sessao,
   sessaoDeCadaTicketDasDemandas,
   SessoesDeAgente,
-  usoEmLote,
 } from "./execucao/publico.ts";

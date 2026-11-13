@@ -3,7 +3,9 @@ import type { EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 import { type EscopoDosFatos, lerDecisoesDoRecorte } from "../leitura_dos_fatos.ts";
 
-type DecisoesDoRecorte = ReturnType<typeof lerDecisoesDoRecorte>;
+interface DecisoesDoRecorte {
+  decisoes: ReturnType<typeof lerDecisoesDoRecorte>;
+}
 
 export class MetricaDeNotaHumana extends MetricaPorEtapa<
   DecisoesDoRecorte,
@@ -18,10 +20,10 @@ export class MetricaDeNotaHumana extends MetricaPorEtapa<
   readonly definicao = { tipo: "nota_humana", rotulo: "Nota humana", fonte: "Gate do PR" } as const;
 
   protected lerFatos(escopo: EscopoDosFatos): DecisoesDoRecorte {
-    return lerDecisoesDoRecorte(escopo);
+    return { decisoes: lerDecisoesDoRecorte(escopo) };
   }
 
-  formula(decisoes: DecisoesDoRecorte) {
+  formula({ decisoes }: DecisoesDoRecorte) {
     return (etapa: EtapaTicket) => {
       // Só o PR aprovado tem nota: a reprovação não conta.
       const notas = decisoes.flatMap((d) => (d.etapa === etapa && !d.reprovada && d.nota !== null ? [d.nota] : []));

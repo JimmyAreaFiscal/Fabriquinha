@@ -20,6 +20,7 @@ interface SessoesDoContexto extends SessoesEExecucoes {
 }
 
 /** O Uso medido das execuções que casam com o filtro, sem ler conversa nem sessão, na ordem em que foi gravado. */
+/** @testes o teste exercita os filtros direto; a produção o usa só dentro do módulo */
 export const usoEmLote = (banco: DatabaseSync, filtro: FiltroDasExecucoes): UsoDaExecucao[] =>
   lerEmSnapshot(banco, () => lerUsoDasExecucoes(banco, execucoesDoFiltro(banco, filtro)));
 

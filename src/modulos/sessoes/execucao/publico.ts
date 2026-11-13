@@ -27,6 +27,6 @@ export {
   resumosDasSessoesEmLote,
   sessaoDeCadaTicketDasDemandas,
 } from "./armazenamento/sessoes_e_execucoes.ts";
-export { carregarSessoesDoContexto, comSessoesDoContexto, usoEmLote } from "./aplicacao/sessoes_do_contexto.ts";
+export { carregarSessoesDoContexto, comSessoesDoContexto } from "./aplicacao/sessoes_do_contexto.ts";
 export { encerrarExecucaoComUso, encerrarExecucaoOrfa, registrarUsoDaConsulta } from "./aplicacao/encerramento.ts";
 export { type PedidoDeProcesso, SessoesDeAgente } from "./aplicacao/sessoes_de_agente.ts";

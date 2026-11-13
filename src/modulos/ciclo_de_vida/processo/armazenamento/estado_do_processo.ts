@@ -237,14 +237,14 @@ export const decisoesEmLote = (
       em: linha.em as string,
     }));
 
-/** As Tentativas reprovadas das demandas, em lote, só com o ticket; com `periodo`, as iniciadas em `[inicio, fim)`. */
+/** As Tentativas reprovadas das demandas, em lote, só com o ticket e o início; com `periodo`, as iniciadas em `[inicio, fim)`. */
 export const tentativasReprovadasEmLote = (
   banco: DatabaseSync,
   filtro: { demandas: readonly string[]; periodo?: { inicio?: string; fim?: string } },
-): { demanda_id: string; ticket_id: number }[] =>
+): { demanda_id: string; ticket_id: number; inicio: string }[] =>
   instrucaoPreparada(
     banco,
-    `SELECT demanda_id, ticket_id FROM tentativa
+    `SELECT demanda_id, ticket_id, inicio FROM tentativa
        WHERE resultado_tipo = 'reprovacao' AND demanda_id IN (SELECT value FROM json_each($demandas))
          AND ($inicio IS NULL OR inicio >= $inicio) AND ($fim IS NULL OR inicio < $fim)
        ORDER BY rowid`,
@@ -254,7 +254,11 @@ export const tentativasReprovadasEmLote = (
       inicio: filtro.periodo?.inicio ?? null,
       fim: filtro.periodo?.fim ?? null,
     })
-    .map((linha) => ({ demanda_id: linha.demanda_id as string, ticket_id: linha.ticket_id as number }));
+    .map((linha) => ({
+      demanda_id: linha.demanda_id as string,
+      ticket_id: linha.ticket_id as number,
+      inicio: linha.inicio as string,
+    }));
 
 /**
  * Apaga todo o estado do Processo das demandas (a remoção do projeto), antes dos itens de Planejamento e das próprias

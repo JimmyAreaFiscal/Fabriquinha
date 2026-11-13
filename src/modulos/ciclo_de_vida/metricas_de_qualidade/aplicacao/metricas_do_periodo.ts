@@ -1,36 +1,29 @@
-// As Métricas da tela de Métricas, do Início e do Projeto: as de cada Etapa (`metricasDasEtapas`) por mês e por Demanda,
-// as do SDLC inteiro (`metricasDoSdlc`) por mês, e a soma do Uso em cada nível de agrupamento. O Uso da demanda calcula
-// só a Métrica de Uso.
+// As Métricas da tela de Métricas, do Início e do Projeto: as de cada Etapa por mês e as que a tabela mostra por Demanda,
+// as do SDLC inteiro por mês, e a soma do Uso em cada nível de agrupamento. Cada Métrica lê os fatos dela uma vez para o
+// período inteiro e os reparte por mês ou por demanda, sem ler de novo. O Uso da demanda calcula só a Métrica de Uso.
 import { intervalo } from "../../../../shared/nucleo/periodo.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
-import {
-  type CustoDoUso,
-  type LinhaDeUso,
-  textoDoCustoDe,
-  Uso,
-  type UsoDaExecucao,
-  usoEmLote,
-} from "../../../sessoes/publico.ts";
+import { type CustoDoUso, type LinhaDeUso, textoDoCustoDe, Uso, type UsoDaExecucao } from "../../../sessoes/publico.ts";
 import type { EtapaTicket, TipoMetrica } from "../../etapas/publico.ts";
-import type { Recorte } from "../nucleo/metrica.ts";
 import { Periodo } from "../nucleo/periodo.ts";
-import type { ValorDaMetrica, ValorDe } from "./calculo_de_metrica.ts";
+import { DEMANDA_DO_FATO, type ParteDoFato, type ValorDaMetrica, type ValorDe } from "./calculo_de_metrica.ts";
 import {
   type EscopoDosFatos,
   escopoDoRecorte,
   lerExecucoesDoRecorte,
   lerUsoDeclaradoDoRecorte,
+  lerUsoDoRecorte,
   type OrigemDosFatos,
 } from "./leitura_dos_fatos.ts";
-import type { MetricaDeConformidade } from "./metricas/metrica_de_conformidade.ts";
-import type { MetricaDeExigenciasDeAlteracao } from "./metricas/metrica_de_exigencias_de_alteracao.ts";
-import type { MetricaDeNotaHumana } from "./metricas/metrica_de_nota_humana.ts";
+import { MetricaDeConformidade } from "./metricas/metrica_de_conformidade.ts";
+import { MetricaDeExigenciasDeAlteracao } from "./metricas/metrica_de_exigencias_de_alteracao.ts";
+import { MetricaDeNotaHumana } from "./metricas/metrica_de_nota_humana.ts";
 import { MetricaDeUso, usoDeclaradoDe, usoPorExecucao } from "./metricas/metrica_de_uso.ts";
-import type { MetricaDeAprovacoesEReprovacoes } from "./metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
+import { MetricaDeAprovacoesEReprovacoes } from "./metricas/metrica_de_aprovacoes_e_reprovacoes.ts";
 import type { MetricaDeDemandas } from "./metricas/metrica_de_demandas.ts";
 import type { MetricaDePrs } from "./metricas/metrica_de_prs.ts";
 import type { MetricaDeTickets } from "./metricas/metrica_de_tickets.ts";
-import { metricasDasEtapas, metricasDoSdlc, type TipoMetricaDoSdlc } from "./registro_das_metricas.ts";
+import { metricasDasEtapasPorParte, metricasDoSdlcPorParte, type TipoMetricaDoSdlc } from "./registro_das_metricas.ts";
 
 interface Soma {
   execucoes: number;
@@ -143,10 +136,6 @@ export interface MetricasPorDemanda {
 
 const soma = (ns: number[]) => ns.reduce((s, n) => s + n, 0);
 
-/** Os valores das Métricas de todas as Etapas do recorte, na ordem do fluxo. */
-const metricasDoRecorte = (origem: OrigemDosFatos, recorte: Recorte): MetricasDaEtapa[] =>
-  [...metricasDasEtapas(origem, recorte)].map(([etapa, metricas]) => ({ etapa, metricas }));
-
 /** O valor da Métrica de `tipo` em cada Etapa que a declara. */
 function valoresDe<Valor>(etapas: readonly MetricasDaEtapa[], tipo: TipoMetrica): Valor[] {
   return etapas.flatMap((e) => e.metricas.filter((m) => m.definicao.tipo === tipo).map((m) => m.valor as Valor));
@@ -195,19 +184,6 @@ const somarModelos = (usos: readonly ValorDe<MetricaDeUso>[]): LinhaDeUso[] =>
 /** O Uso de todas as Etapas por modelo. */
 const somarModelosDasEtapas = (etapas: readonly MetricasDaEtapa[]): LinhaDeUso[] =>
   somarModelos(valoresDe<ValorDe<MetricaDeUso>>(etapas, "uso"));
-
-/** As Reprovações do Gate da demanda e as exigências de alteração (os demais Gates e as Tentativas), de todas as Etapas. */
-const reprovacoesDas = (etapas: readonly MetricasDaEtapa[]): number =>
-  soma(
-    valoresDe<ValorDe<MetricaDeAprovacoesEReprovacoes>>(etapas, "aprovacoes_e_reprovacoes").map((v) => v.reprovacoes),
-  ) +
-  soma(valoresDe<ValorDe<MetricaDeExigenciasDeAlteracao>>(etapas, "exigencias_de_alteracao").map((v) => v.reprovacoes));
-
-const conformidadeDas = (etapas: readonly MetricasDaEtapa[]): number | null =>
-  valoresDe<ValorDe<MetricaDeConformidade>>(etapas, "conformidade_com_o_plano")[0]?.percentual ?? null;
-
-const notaDas = (etapas: readonly MetricasDaEtapa[]): number | null =>
-  valoresDe<ValorDe<MetricaDeNotaHumana>>(etapas, "nota_humana")[0]?.media ?? null;
 
 /** O Uso das execuções, cada uma um Trabalho: cada linha do Uso medido pertence a uma só execução. */
 const usoDe = (execs: ExecucaoNoPeriodo[], uso: Map<string, UsoDaExecucao[]>): Uso =>
@@ -258,20 +234,25 @@ export function metricasDosMeses(origem: OrigemDosFatos, filtro: Periodo): Metri
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const meses = Array.from({ length: mesesEntre(de, ate) }, (_, i) => intervalo(de, i));
   const escopo = escopoDoRecorte(origem, { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto });
-  const noMes = <T>(linhas: T[], em: (l: T) => string) =>
-    Map.groupBy(linhas, (l) => meses.find((m) => em(l) >= m.inicio && em(l) < m.fim)?.mes);
-  const execucoes = noMes(lerExecucoesNoPeriodo(escopo), (e) => e.inicio);
-  const uso = Map.groupBy(
-    usoEmLote(escopo.banco, { demandas: escopo.demandas, periodo: escopo.periodo }),
-    (u) => u.execucao_id,
-  );
-  const declarado = noMes(lerUsoDeclaradoDoRecorte(escopo), (d) => d.em);
+  // Os fatos vêm do período do escopo, que os meses cobrem sem buraco.
+  const mesDoInstante = (instante: string) =>
+    encontrado(
+      meses.find((m) => instante >= m.inicio && instante < m.fim),
+      `o instante ${instante} está fora do período`,
+      "leia os fatos com o período do escopo",
+    ).mes;
+  const mesDoFato: ParteDoFato = (fato) => mesDoInstante(fato.em);
+  const execucoes = Map.groupBy(lerExecucoesNoPeriodo(escopo), (e) => mesDoInstante(e.inicio));
+  const uso = Map.groupBy(lerUsoDoRecorte(escopo), (u) => u.execucao_id);
+  const declarado = Map.groupBy(lerUsoDeclaradoDoRecorte(escopo), mesDoFato);
+  const etapasPorMes = metricasDasEtapasPorParte(escopo, mesDoFato);
+  const doSdlcPorMes = metricasDoSdlcPorParte(escopo, mesDoFato);
 
-  return meses.map(({ mes, inicio, fim }) => {
+  return meses.map(({ mes }) => {
     const execs = execucoes.get(mes) ?? [];
     const usoDeclaradoDoMes = usoDeclaradoDe(declarado.get(mes) ?? []);
-    const etapas = metricasDoRecorte(origem, { inicio, fim, projeto });
-    const doSdlc = metricasDoSdlc(origem, { inicio, fim, projeto });
+    const etapas = [...etapasPorMes.daParte(mes)].map(([etapa, metricas]) => ({ etapa, metricas }));
+    const doSdlc = doSdlcPorMes.daParte(mes);
     return {
       mes,
       projeto,
@@ -285,17 +266,50 @@ export function metricasDosMeses(origem: OrigemDosFatos, filtro: Periodo): Metri
   });
 }
 
+/** O valor da Métrica em cada Etapa que a declara, na ordem do fluxo. */
+const valoresDasEtapas = <Valor>(porEtapa: Map<EtapaTicket, Valor>): Valor[] => [...porEtapa.values()];
+
+/**
+ * As Métricas que a tabela por demanda mostra, cada uma lendo os fatos dela uma vez para o período inteiro, e o que a
+ * tabela tira de cada uma: o Uso somado, as Reprovações do Gate da demanda com as exigências de alteração (os demais
+ * Gates e as Tentativas), a conformidade com o plano e a média da nota humana.
+ */
+function metricasDaTabelaPorDemanda(escopo: EscopoDosFatos) {
+  const uso = new MetricaDeUso().calcularPorParte(escopo, DEMANDA_DO_FATO);
+  const aprovacoes = new MetricaDeAprovacoesEReprovacoes().calcularPorParte(escopo, DEMANDA_DO_FATO);
+  const exigencias = new MetricaDeExigenciasDeAlteracao().calcularPorParte(escopo, DEMANDA_DO_FATO);
+  const conformidade = new MetricaDeConformidade().calcularPorParte(escopo, DEMANDA_DO_FATO);
+  const nota = new MetricaDeNotaHumana().calcularPorParte(escopo, DEMANDA_DO_FATO);
+  const conformidadeDe = (porEtapa: ValorDe<MetricaDeConformidade>[]) => porEtapa[0]?.percentual ?? null;
+  const notaDe = (porEtapa: ValorDe<MetricaDeNotaHumana>[]) => porEtapa[0]?.media ?? null;
+  return {
+    daDemanda: (demanda: string) => ({
+      ...somarUso(valoresDasEtapas(uso.daParte(demanda))),
+      reprovacoes:
+        soma(valoresDasEtapas(aprovacoes.daParte(demanda)).map((v) => v.reprovacoes)) +
+        soma(valoresDasEtapas(exigencias.daParte(demanda)).map((v) => v.reprovacoes)),
+      conformidade: conformidadeDe(valoresDasEtapas(conformidade.daParte(demanda))),
+      nota: notaDe(valoresDasEtapas(nota.daParte(demanda))),
+    }),
+    doPeriodo: () => ({
+      ...somarUso(valoresDasEtapas(uso.doRecorte())),
+      conformidade: conformidadeDe(valoresDasEtapas(conformidade.doRecorte())),
+      nota: notaDe(valoresDasEtapas(nota.doRecorte())),
+    }),
+  };
+}
+
 /** Uma linha por demanda com execução iniciada ou Uso declarado no período; `estado` é a atual e o resto só conta o período. */
 export function metricasDasDemandasDoPeriodo(origem: OrigemDosFatos, filtro: Periodo): MetricasPorDemanda {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
-  const periodo = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto };
-  const escopo = escopoDoRecorte(origem, periodo);
+  const escopo = escopoDoRecorte(origem, { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto });
   const pedidos = new Map(escopo.pedidos.map((pedido) => [pedido.id, pedido]));
   // A demanda só com Uso declarado no período também é linha, com 0 execuções: a soma das linhas é o rodapé.
   const comFatoNoPeriodo = new Set([
-    ...lerUsoDeclaradoDoRecorte(escopo).map((declarado) => declarado.demanda),
+    ...lerUsoDeclaradoDoRecorte(escopo).map((declarado) => declarado.demanda_id),
     ...lerExecucoesDoRecorte(escopo).map((execucao) => execucao.demanda_id),
   ]);
+  const tabela = metricasDaTabelaPorDemanda(escopo);
   const demandas = [...comFatoNoPeriodo]
     .map((id) => {
       const {
@@ -307,22 +321,8 @@ export function metricasDasDemandasDoPeriodo(origem: OrigemDosFatos, filtro: Per
         `a demanda ${id} não está entre os pedidos`,
         "passe os pedidos de todas as demandas do recorte",
       );
-      const etapas = metricasDoRecorte(origem, { ...periodo, demandaId: id });
-      return {
-        demanda: id,
-        projeto: doPedido,
-        titulo,
-        estado,
-        ...somarUsoDasEtapas(etapas),
-        reprovacoes: reprovacoesDas(etapas),
-        conformidade: conformidadeDas(etapas),
-        nota: notaDas(etapas),
-      };
+      return { demanda: id, projeto: doPedido, titulo, estado, ...tabela.daDemanda(id) };
     })
     .toSorted((a, b) => a.demanda.localeCompare(b.demanda, "pt-BR", { numeric: true }));
-  const etapas = metricasDoRecorte(origem, periodo);
-  return {
-    demandas,
-    total: { ...somarUsoDasEtapas(etapas), conformidade: conformidadeDas(etapas), nota: notaDas(etapas) },
-  };
+  return { demandas, total: tabela.doPeriodo() };
 }

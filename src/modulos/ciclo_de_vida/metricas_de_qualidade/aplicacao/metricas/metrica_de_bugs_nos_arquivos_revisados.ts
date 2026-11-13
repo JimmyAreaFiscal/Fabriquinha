@@ -3,7 +3,9 @@ import { CATALOGO_DE_ETAPAS, type EtapaTicket } from "../../../etapas/publico.ts
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 import { type EscopoDosFatos, lerCommitsDoRecorte } from "../leitura_dos_fatos.ts";
 
-type CommitsDoRecorte = ReturnType<typeof lerCommitsDoRecorte>;
+interface CommitsDoRecorte {
+  commits: ReturnType<typeof lerCommitsDoRecorte>;
+}
 
 export class MetricaDeBugsNosArquivosRevisados extends MetricaPorEtapa<
   CommitsDoRecorte,
@@ -16,10 +18,10 @@ export class MetricaDeBugsNosArquivosRevisados extends MetricaPorEtapa<
   } as const;
 
   protected lerFatos(escopo: EscopoDosFatos): CommitsDoRecorte {
-    return lerCommitsDoRecorte(escopo);
+    return { commits: lerCommitsDoRecorte(escopo) };
   }
 
-  formula(commits: CommitsDoRecorte) {
+  formula({ commits }: CommitsDoRecorte) {
     // shortcut: o banco guarda as linhas alteradas por commit, não por arquivo; a revisão da rodada conta os commits das rodadas e a da demanda, todos.
     return (etapa: EtapaTicket) => ({
       alteradasPorHumanos: commits

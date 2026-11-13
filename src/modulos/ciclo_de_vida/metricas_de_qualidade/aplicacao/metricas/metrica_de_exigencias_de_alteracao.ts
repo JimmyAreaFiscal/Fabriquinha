@@ -23,9 +23,9 @@ function revisaoDaDecisao(etapa: EtapaTicket): EtapaTicket | undefined {
 
 /** As Etapas dos tickets das Decisões reprovadas e as rodadas dos tickets das Tentativas reprovadas do recorte. */
 interface FatosDasExigencias {
-  etapasDasDecisoesReprovadas: string[];
-  /** `null` fora de rodada: as vezes em que o agente teve de corrigir a entrega. */
-  rodadasDasTentativasReprovadas: (number | null)[];
+  decisoesReprovadas: { demanda_id: string; em: string; etapa: string }[];
+  /** `rodadaId` `null` fora de rodada: as vezes em que o agente teve de corrigir a entrega. */
+  tentativasReprovadas: { demanda_id: string; em: string; rodadaId: number | null }[];
 }
 
 export class MetricaDeExigenciasDeAlteracao extends MetricaPorEtapa<FatosDasExigencias, { reprovacoes: number }> {
@@ -37,23 +37,23 @@ export class MetricaDeExigenciasDeAlteracao extends MetricaPorEtapa<FatosDasExig
 
   protected lerFatos(escopo: EscopoDosFatos): FatosDasExigencias {
     const reprovadas = tentativasReprovadasEmLote(escopo.banco, { demandas: escopo.demandas, periodo: escopo.periodo });
-    const ticketDe = ticketsCitados(escopo.banco, reprovadas);
+    const ticketDe = ticketsCitados(escopo);
     return {
-      etapasDasDecisoesReprovadas: lerDecisoesDoRecorte(escopo)
+      decisoesReprovadas: lerDecisoesDoRecorte(escopo)
         .filter((decisao) => decisao.reprovada)
-        .map((decisao) => decisao.etapa),
-      rodadasDasTentativasReprovadas: reprovadas.map(
-        ({ demanda_id, ticket_id }) => ticketDe(demanda_id, ticket_id).rodada_id,
-      ),
+        .map(({ demanda_id, em, etapa }) => ({ demanda_id, em, etapa })),
+      tentativasReprovadas: reprovadas.map(({ demanda_id, ticket_id, inicio }) => ({
+        demanda_id,
+        em: inicio,
+        rodadaId: ticketDe(demanda_id, ticket_id).rodada_id,
+      })),
     };
   }
 
-  formula({ etapasDasDecisoesReprovadas, rodadasDasTentativasReprovadas }: FatosDasExigencias) {
+  formula({ decisoesReprovadas, tentativasReprovadas }: FatosDasExigencias) {
     const revisoes = [
-      ...etapasDasDecisoesReprovadas.map((etapa) => revisaoDaDecisao(etapa as EtapaTicket)),
-      ...rodadasDasTentativasReprovadas.map((rodadaId) =>
-        REVISAO_DO_ESCOPO.get(rodadaId === null ? "demanda" : "rodada"),
-      ),
+      ...decisoesReprovadas.map(({ etapa }) => revisaoDaDecisao(etapa as EtapaTicket)),
+      ...tentativasReprovadas.map(({ rodadaId }) => REVISAO_DO_ESCOPO.get(rodadaId === null ? "demanda" : "rodada")),
     ];
     return (etapa: EtapaTicket) => ({ reprovacoes: revisoes.filter((revisao) => revisao === etapa).length });
   }
