@@ -249,7 +249,7 @@ test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () =>
     };
   };
   const viva = { execucao: "e", ocupado: true, desde: "2026-02-01T00:00:00.000Z", dialogos: [] };
-  const dialogo = { type: "extension_ui_request", id: "d", em: "2026-02-02T00:00:00.000Z" };
+  const dialogo = { type: "extension_ui_request" as const, id: "d", method: "select", em: "2026-02-02T00:00:00.000Z" };
 
   assert.deepEqual(estadoEDesdeDaSessao(carregada("s2"), { ...viva, dialogos: [dialogo] }), [
     "aguardando_humano",
@@ -347,7 +347,7 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
     ],
   );
   const recebidos: Record<string, unknown>[] = [];
-  const cancelar = chat.assinar((evento) => recebidos.push(evento));
+  const cancelar = chat.assinar((evento) => recebidos.push({ ...evento }));
   condutor.avisar("s1", join(c.raiz, "log"));
   cancelar();
   condutor.avisar("s1", join(c.raiz, "log"));
@@ -470,7 +470,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   const ao_vivo: Record<string, unknown>[] = [];
   const chat = abrirChatDemanda(banco, sessao);
   assert.equal(chat?.cabecalho.sessao.estado, "rodando");
-  const cancelar = chat.assinar((e) => ao_vivo.push(e));
+  const cancelar = chat.assinar((e) => ao_vivo.push({ ...e }));
 
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   const cab = cabecalhoDaSessao(banco, sessao);

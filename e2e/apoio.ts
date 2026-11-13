@@ -13,7 +13,7 @@ import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_fa
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
+import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import { abrir } from "../src/modulos/compartilhado/armazenamento/banco.ts";
 import { registrarProjeto } from "../src/modulos/projeto/aplicacao/cadastro.ts";
 

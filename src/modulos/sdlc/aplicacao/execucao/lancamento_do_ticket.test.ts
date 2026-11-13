@@ -6,8 +6,7 @@ import { test } from "node:test";
 import type { TicketDemanda } from "../../nucleo/demanda/agregado_demanda.ts";
 import { catalogoDaEtapa } from "../../../etapas/definicao/evidencia_exigida.ts";
 import { EtapaTicket } from "../../../etapas/catalogo.ts";
-import { HarnessPi } from "../../../harness/pi/harness_pi.ts";
-import { PACOTE, skillDoTipo } from "../../../harness/pi/pi.ts";
+import { HarnessPi, PACOTE, skillDoTipo } from "../../../sessoes/publico.ts";
 import { lancamentoDoTicket, skillsDaEtapaDemanda } from "./lancamento_do_ticket.ts";
 
 // O pi do Auditor do teste não tem trust.json: a confiança fica no padrão, sem ler a da máquina.

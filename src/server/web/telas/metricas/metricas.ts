@@ -5,7 +5,7 @@
 import type { EstadoDemanda } from "../../../../modulos/sdlc/nucleo/ciclo_de_vida/ciclos.ts";
 import type { EtapaTicket } from "../../../../modulos/etapas/catalogo.ts";
 import type { TipoMetrica } from "../../../../modulos/etapas/definicao/tipos_declaraveis.ts";
-import type { LinhaDeUso } from "../../../../modulos/compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { LinhaDeUso } from "../../../../modulos/sessoes/publico.ts";
 import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../../contrato/metricas.ts";
 import { caminhoDaDemanda, compacto, custo, duracao, escapar, plural as pluralDe } from "../../apresentacao/render.ts";
 import { aparenciaDoEstado, etapaDoSdlc, etapasNaOrdemDoFluxo } from "../../apresentacao/etapas.ts";

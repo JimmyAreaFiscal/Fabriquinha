@@ -149,7 +149,7 @@ test("trabalhoVivoDaSessao: o diálogo traz a pergunta do processo vivo; a conve
   };
   const comPergunta = () => ({
     ...viva(),
-    dialogos: [{ type: "extension_ui_request", title: "Qual ordem?", em: em(9) }],
+    dialogos: [{ type: "extension_ui_request" as const, id: "d", method: "select", title: "Qual ordem?", em: em(9) }],
   });
   assert.deepEqual(trabalhoVivoDaSessao(sessao, comPergunta), {
     ticket: Endereco.doTicket("I-303", 5),

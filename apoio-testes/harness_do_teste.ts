@@ -2,6 +2,6 @@
 // sem a composição, e o `npm test` e o `npm run integracao` carregam este módulo antes de cada arquivo (`--import`). É o
 // pi (o falso, quando o teste aponta `FABRIQUINHA_PI` para ele); quem precisa de outro monta o seu.
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
+import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 
 condutor.montarHarness(new HarnessPi());

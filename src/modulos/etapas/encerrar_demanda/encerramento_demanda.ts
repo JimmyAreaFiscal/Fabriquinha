@@ -10,7 +10,7 @@ import type {
   TrabalhoGerenciado,
   UsoModeloExecucao,
 } from "../../trabalho_agentico/nucleo/trabalho_agentico.ts";
-import { Uso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import { Uso } from "../../sessoes/publico.ts";
 import { lista, neutro } from "../../repositorio/aplicacao/corpo_do_pr.ts";
 import { produtividadeDaRodada } from "../../metricas/aplicacao/produtividade_rodada.ts";
 

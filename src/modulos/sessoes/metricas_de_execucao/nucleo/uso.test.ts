@@ -1,7 +1,8 @@
 // Uso: a soma por modelo, o custo desconhecido e a contagem de Trabalhos sem custo.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type LinhaDeUso, textoDoCusto, Uso } from "./uso.ts";
+import type { LinhaDeUso } from "../../harness/publico.ts";
+import { textoDoCusto, Uso } from "./uso.ts";
 
 const linhaDeUso = (modelo: string, custo: number | null, tokens = 10): LinhaDeUso => ({
   modelo,

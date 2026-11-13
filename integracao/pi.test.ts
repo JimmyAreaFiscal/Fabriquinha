@@ -7,8 +7,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
-import { PACOTE } from "../src/modulos/harness/pi/pi.ts";
+import { HarnessPi, PACOTE } from "../src/modulos/sessoes/publico.ts";
 import { skillsDaEtapaDemanda } from "../src/modulos/sdlc/aplicacao/execucao/lancamento_do_ticket.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
 import { type Ator } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
-import { HarnessPi } from "../src/modulos/harness/pi/harness_pi.ts";
+import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import * as gestao from "../src/modulos/sdlc/aplicacao/gestao_demandas.ts";
 import { buscarProjeto, gravarProjeto } from "../src/modulos/projeto/armazenamento/projetos.ts";
 import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";

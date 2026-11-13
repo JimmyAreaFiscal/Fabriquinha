@@ -23,7 +23,7 @@ import {
   carregarTrabalhosDoTicket,
   gravarTokenDoProcesso,
 } from "../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/harness/pi/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
 import { anotar, pastasDoProcesso, noLog } from "../src/modulos/compartilhado/infra/registro.ts";
 import { Endereco } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 import { AUDITOR } from "../src/modulos/compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";

@@ -9,7 +9,7 @@ import {
 } from "../../armazenamento/metricas_demanda.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../../etapas/catalogo.ts";
-import { type LinhaDeUso, textoDoCusto, Uso } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import { type LinhaDeUso, textoDoCusto, Uso } from "../../../sessoes/publico.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
 
 /** A linha de `uso_modelo_execucao` como Uso; o banco não guarda as chamadas do uso medido, por isso 0. */

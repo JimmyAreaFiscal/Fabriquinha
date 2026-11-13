@@ -11,7 +11,7 @@ import { hospedagemFalsa } from "../apoio-testes/hospedagem_falsa.ts";
 import { ConjuntoDeAmbientes } from "../src/modulos/sandbox/aplicacao/conjunto_de_ambientes/conjunto.ts";
 import { montarConjuntoDoServico } from "../src/modulos/sandbox/aplicacao/ambiente_do_servico.ts";
 import { gravarProjeto, projetoExistente } from "../src/modulos/projeto/armazenamento/projetos.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/harness/pi/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
 import { GeradorDeAmbientes } from "../src/modulos/sandbox/infra/container/gerador_de_ambientes.ts";
 import { Projeto } from "../src/modulos/projeto/nucleo/projeto.ts";
 import { relogioDoSistema } from "../src/modulos/compartilhado/nucleo/relogio.ts";

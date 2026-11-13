@@ -5,7 +5,7 @@ import { resolverConfiguracaoAgente } from "../../../compartilhado/nucleo/config
 import type { Projeto } from "../../../projeto/nucleo/projeto.ts";
 import { CATALOGO_DE_ETAPAS } from "../../../etapas/catalogo.ts";
 import type { EtapaTicket } from "../../../etapas/catalogo.ts";
-import type { LancamentoDoTicket } from "../../../harness/harness.ts";
+import type { LancamentoDoTicket } from "../../../sessoes/publico.ts";
 
 /** As skills da etapa nova: as das capacidades do catálogo; o harness leva só as que o pacote dele tem. */
 export const skillsDaEtapaDemanda = (etapa: EtapaTicket): readonly string[] =>

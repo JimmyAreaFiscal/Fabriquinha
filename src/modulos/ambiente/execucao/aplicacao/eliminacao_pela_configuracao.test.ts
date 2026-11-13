@@ -17,7 +17,7 @@ import { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { eliminarAmbienteDoConjunto } from "./eliminacao_pela_configuracao.ts";
 import { listarAmbientesDoConjunto } from "../../monitoramento/aplicacao/estado_do_conjunto.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../harness/pi/pi.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/aplicacao/configuracao_do_ambiente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-configuracao-"));

@@ -1,14 +1,15 @@
-// O CLI do agente (pacote-pi/bin/fabriquinha) empacotado a partir de src/server/cli-agente. O arquivo não vai ao git;
-// a versão dele é o hash do código-fonte, gravada ao lado, para o serviço regerar só quando o código muda.
+// O CLI do agente (pacote-pi/bin/fabriquinha) empacotado a partir de src/server/cli-agente, na montagem do serviço. O
+// arquivo não vai ao git; a versão dele é o hash do código-fonte, gravada ao lado, para o serviço regerar só quando o
+// código muda.
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { PACOTE } from "./pi.ts";
+import { PACOTE } from "../../modulos/sessoes/publico.ts";
 
 const DESTINO_DO_CLI_DO_AGENTE = join(PACOTE, "bin", "fabriquinha");
-const ENTRADA_DO_CLI_DO_AGENTE = fileURLToPath(new URL("../../../server/cli-agente/principal.ts", import.meta.url));
+const ENTRADA_DO_CLI_DO_AGENTE = fileURLToPath(new URL("../cli-agente/principal.ts", import.meta.url));
 
 function hashDoCodigoFonte(arquivosDeEntrada: string[]): string {
   const hash = createHash("sha256");

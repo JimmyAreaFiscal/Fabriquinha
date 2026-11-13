@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { LinhaDeUso } from "../../compartilhado/nucleo/vocabulario_do_sdlc/uso.ts";
+import type { LinhaDeUso } from "../../sessoes/publico.ts";
 import { gravarUsoDeclarado, lerUsoDeclarado, usoDeclaradoNoPeriodo } from "./uso_declarado.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
