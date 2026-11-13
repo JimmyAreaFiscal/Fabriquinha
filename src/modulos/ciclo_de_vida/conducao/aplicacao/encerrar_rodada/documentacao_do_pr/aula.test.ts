@@ -9,7 +9,8 @@ import { after, test } from "node:test";
 import { AgregadoDemanda, type TicketDemanda } from "../../../../processo/publico.ts";
 import { type EvidenciaDemanda } from "../../../../evidencias/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
-import { AmbienteHostLocal, type ComandoNoAmbiente } from "../../../../../ambiente/publico.ts";
+import { type ComandoNoAmbiente } from "../../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { faixas, gerarAula, linhasMudadas, type Trecho } from "./aula.ts";
 
 /** O host local registrando cada comando que recebe, para provar que o git passou pelo Ambiente. */

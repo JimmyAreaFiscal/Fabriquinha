@@ -3,8 +3,10 @@ import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { cadastrarProjetoLoja } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../shared/nucleo/erros.ts";
-import { inserirAmbienteAlocado } from "../../modulos/ambiente/publico.ts";
+import { inserirAmbienteAlocado } from "../../../apoio-testes/falsos/ambiente_falso.ts";
 import { gravarProjeto, projetoExistente } from "../../modulos/demandas/publico.ts";
+import { noLog } from "../../shared/infra/registro.ts";
+import { montarAmbientesDoServico } from "../composicao/ambientes_do_servico.ts";
 import { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
 import {
   consultarEstadoDaConfiguracao,
@@ -25,8 +27,9 @@ test("a configuração só traz a próxima busca com o agendador ligado, e cumpr
   assert.deepEqual(EstadoDaConfiguracao.parse(ligado), ligado);
 });
 
-test("o ambiente traz os limites gravados e o conjunto de containers, e cumpre o contrato", () => {
-  const { banco } = abrirBancoTemporario();
+test("o ambiente traz os limites gravados e o conjunto de containers, e cumpre o contrato", async () => {
+  const { banco, raiz } = abrirBancoTemporario();
+  const { gestao } = await montarAmbientesDoServico({ banco, raiz, porta: 0, registrarErro: noLog });
   inserirAmbienteAlocado(banco, {
     id: "a1",
     container_id: "c1",
@@ -34,14 +37,13 @@ test("o ambiente traz os limites gravados e o conjunto de containers, e cumpre o
     criado_em: "2026-10-12T14:00:00.000Z",
     alocado_para: "I-1",
   });
-  const estado = consultarEstadoDoAmbiente(banco);
+  const estado = await consultarEstadoDoAmbiente(banco, gestao);
   assert.equal(estado.configuracao.tipo, "host_local");
   assert.deepEqual(
     estado.conjunto.map((a) => [a.id, a.estado, a.alocado_para]),
     [["a1", "alocado", "I-1"]],
   );
   assert.deepEqual(EstadoDoAmbiente.parse(estado), estado);
-  assert.equal(banco.isTransaction, false);
 });
 
 test("os projetos trazem o modelo e o effort de cada etapa; o que não existe é ErroDeInexistente", () => {

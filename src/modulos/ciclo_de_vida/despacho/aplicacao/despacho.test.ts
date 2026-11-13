@@ -35,13 +35,11 @@ import {
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import {
   AmbienteHostLocal,
-  ConjuntoDeAmbientes,
-  GeradorDeAmbientes,
   inserirAmbienteAlocado,
-  montarConjuntoDoServico,
-  validarESalvarConfiguracaoDoAmbiente,
-} from "../../../ambiente/publico.ts";
-import { relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+  ligarGestaoDeAmbientesDoTeste,
+} from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
@@ -346,15 +344,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
   const { c, banco, config } = await cenario(3);
   banco.prepare("UPDATE projeto SET imagem_do_ambiente = 'alpine' WHERE nome = 'loja'").run();
-  validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
   instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
-  inserirAmbienteAlocado(banco, {
-    id: "amb-ocupado",
-    container_id: "c-ocupado",
-    imagem: "alpine",
-    alocado_para: "I-9",
-    criado_em: em,
-  });
   const servico = {
     raiz: c.raiz,
     porta_da_api: 4999,
@@ -362,10 +352,14 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
     pacote_do_harness: PACOTE,
     dir_do_harness_do_auditor: c.raiz,
   };
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, servico);
-  montarConjuntoDoServico(() => conjunto);
-  t.after(() => {
-    montarConjuntoDoServico(() => undefined);
+  const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
+  inserirAmbienteAlocado(banco, {
+    id: "amb-ocupado",
+    container_id: "c-ocupado",
+    imagem: "alpine",
+    alocado_para: "I-9",
+    criado_em: em,
   });
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
 

@@ -21,7 +21,7 @@ import {
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../../repositorio/publico.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "../../gates.ts";
-import { AmbienteHostLocal } from "../../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

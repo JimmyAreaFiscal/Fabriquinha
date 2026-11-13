@@ -1,3 +1,33 @@
+// A Configuração do Ambiente, na linha única de `configuracao_ambiente`. Quem monta a gestão de Ambientes (o servidor) a lê
+// e a grava aqui e a entrega à montagem; o Ambiente não a lê do banco.
+import type { DatabaseSync } from "node:sqlite";
+import { ConfiguracaoDoAmbiente } from "../nucleo/configuracao_do_ambiente.ts";
+
+const COLUNAS = [
+  "tipo",
+  "memoria_maxima_mb",
+  "cpus",
+  "ociosidade_para_eliminar_min",
+  "conjunto",
+  "capacidade_do_conjunto",
+  "minimo_do_conjunto",
+] as const satisfies readonly (keyof ConfiguracaoDoAmbiente)[];
+
+/** O Ambiente em que o trabalho roda, os limites de cada container e os do conjunto. Fora de `Configuracao`, que a web grava inteira. */
+export function configuracaoDoAmbiente(banco: DatabaseSync): ConfiguracaoDoAmbiente {
+  // O node:sqlite devolve objetos sem protótipo; a cópia dá um objeto comum.
+  return ConfiguracaoDoAmbiente.parse({
+    ...banco.prepare(`SELECT ${COLUNAS.join(", ")} FROM configuracao_ambiente`).get(),
+  });
+}
+
+/** Grava a configuração do Ambiente inteira, já validada por quem a recebeu. */
+export function salvarConfiguracaoDoAmbiente(banco: DatabaseSync, a: ConfiguracaoDoAmbiente): void {
+  banco
+    .prepare(`UPDATE configuracao_ambiente SET ${COLUNAS.map((coluna) => `${coluna} = ?`).join(", ")}`)
+    .run(...COLUNAS.map((coluna) => a[coluna]));
+}
+
 // A migração 54, do Ambiente (MELHORIAS §5.1 e §8): a Configuração do Ambiente ganha tabela própria, de linha única. Até a
 // versão 53 ela morava nas colunas `ambiente_*` da `configuracao`, que é do Despacho; a migração copia os valores, e as
 // colunas antigas ficam lá sem uso, com o que tinham: nada se apaga.
@@ -28,8 +58,8 @@ ALTER TABLE configuracao_ambiente ADD COLUMN capacidade_do_conjunto INTEGER CHEC
 ALTER TABLE configuracao_ambiente ADD COLUMN minimo_do_conjunto INTEGER NOT NULL DEFAULT 0 CHECK (typeof(minimo_do_conjunto) = 'integer' AND minimo_do_conjunto >= 0);
 `;
 
-/** As migrações do Ambiente, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. */
-export const MIGRACOES_DO_AMBIENTE = {
+/** As migrações da Configuração do Ambiente, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. */
+export const MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE = {
   dominio: "ambiente",
   migracoes: [
     { versao: 54, migracao: MIGRACAO_54_CONFIGURACAO_DO_AMBIENTE },

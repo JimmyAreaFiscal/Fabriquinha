@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ErroDeReprovacao, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { HooksDoCommit } from "./hooks_do_commit.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const contexto = { ambiente: new AmbienteHostLocal(), worktree: "/tmp/worktree" };
 

@@ -14,24 +14,20 @@ import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco/banco
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
-  inserirAmbienteAlocado,
   AmbienteContainer,
-  GeradorDeAmbientes,
-  ConjuntoDeAmbientes,
-  montarConjuntoDoServico,
-} from "../../../../ambiente/publico.ts";
+  AmbienteHostLocal,
+  gestaoQueSoUsa,
+} from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { type Relogio, relogioDoSistema, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
+import { type Relogio, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor, type EtapaTicket } from "../../../etapas/publico.ts";
 import {
-  dirDoPiDoAuditor,
   type Harness,
   HarnessPi,
   type LancamentoDoTicket,
   type MensagemDoAgente,
-  PACOTE,
 } from "../../../../sessoes/publico.ts";
 import {
   atividadeDo,
@@ -615,39 +611,16 @@ function ticketComProcessoAberto(banco: DatabaseSync, ambienteId: string, grupoP
     .run(EM, grupoProcesso, ambienteId);
 }
 
-const execsNoContainer = (docker: ReturnType<typeof instalarDockerFalso>, container: string) =>
-  docker.registro().filter(([comando, alvo]) => comando === "exec" && alvo === container);
-
-test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker exec no container) e fecha o ticket como serviço reiniciado", async () => {
+test("recuperarNaSubida não sinaliza o pi que rodou num container, que a montagem da gestão de Ambientes já limpou, e fecha o ticket como serviço reiniciado", async () => {
   const dir = mkdtempSync(join(base, "recuperacao-"));
   const docker = instalarDockerFalso(join(dir, "docker"));
-  const { id: container_id } = docker.semearContainer({});
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    inserirAmbienteAlocado(banco, {
-      id: "amb-1",
-      container_id,
-      imagem: "alpine",
-      criado_em: EM,
-      alocado_para: "I-1",
-    });
     ticketComProcessoAberto(banco, "amb-1", 4321);
-    montarConjuntoDoServico(
-      () =>
-        new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
-          raiz: dir,
-          porta_da_api: 3000,
-          home_do_usuario: dir,
-          pacote_do_harness: PACOTE,
-          dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-        }),
-    );
 
     await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
 
-    await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
-    const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
-    assert.match(String(roteiro), /^kill -KILL .*\/pids\/4321 /);
+    assert.deepEqual(docker.registro(), []);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM tentativa").get(), {
       resultado_tipo: "falha_infraestrutura",
@@ -655,37 +628,8 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
       motivo: "serviço reiniciado",
     });
   } finally {
-    montarConjuntoDoServico(() => undefined);
     fechar();
   }
-});
-
-test("recuperarNaSubida de processo de um container que o conjunto não conhece, ou sem conjunto, não sinaliza ninguém e ainda fecha o ticket", async () => {
-  const dir = mkdtempSync(join(base, "recuperacao-"));
-  const docker = instalarDockerFalso(join(dir, "docker"));
-  for (const conjuntoMontado of [true, false]) {
-    const { banco, fechar } = abrirBancoTemporario();
-    try {
-      ticketComProcessoAberto(banco, "amb-sumido", 4321);
-      if (conjuntoMontado)
-        montarConjuntoDoServico(
-          () =>
-            new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
-              raiz: dir,
-              porta_da_api: 3000,
-              home_do_usuario: dir,
-              pacote_do_harness: PACOTE,
-              dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-            }),
-        );
-      await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
-      assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
-    } finally {
-      montarConjuntoDoServico(() => undefined);
-      fechar();
-    }
-  }
-  assert.deepEqual(docker.registro(), []);
 });
 
 test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessão em curso", async () => {
@@ -696,6 +640,7 @@ test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessã
     },
   } as unknown as Harness;
   const condutorQueRecusa = new CondutorDeTrabalhos(harnessQueRecusa);
+  condutorQueRecusa.montarAmbientes(gestaoQueSoUsa(new AmbienteHostLocal()));
   await assert.rejects(
     condutorQueRecusa.iniciar({
       execucao: { id: "s-recusada", sessao: "s-recusada", modo: "consulta" },

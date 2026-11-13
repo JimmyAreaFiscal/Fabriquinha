@@ -20,7 +20,8 @@ import {
   AUDITOR,
   retomarFalhasDeInfraestrutura,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { conjuntoDoServico } from "../../src/modulos/ambiente/publico.ts";
+import type { GestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
+import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import {
   carregarSessoesDoContexto,
   gravarTokenDaExecucao,
@@ -72,11 +73,15 @@ const despachoComVerificacoesReais = despachoDasEtapas({ implementacao: implemen
 const PLANEJAMENTO_QUE_SAI_SOZINHO: PassoPi = { uso: null, sai: { codigo: 0 } };
 
 /** O cenário com o projeto de teste e o Ambiente `container` ligado, e o pi falso da imagem dele. */
-function cenarioEmContainer(t: TestContext, portaDaApi?: number) {
+/** A gestão de Ambientes do cenário em andamento: os testes deste arquivo rodam um por vez. */
+let gestaoDoCenario: GestaoDeAmbientes | undefined;
+
+async function cenarioEmContainer(t: TestContext, portaDaApi?: number) {
   const c = criarCenario(t, "loja", raizCompartilhadaComODocker());
   projetoDeTesteEmContainer(c);
-  const pi = ligarContainerAoCenario(t, c, portaDaApi);
-  return { c, pi };
+  const { pi, gestao } = await ligarContainerAoCenario(t, c, portaDaApi);
+  gestaoDoCenario = gestao;
+  return { c, pi, gestao };
 }
 
 /**
@@ -114,7 +119,7 @@ test(
   "CA-1: a Rodada inteira (implementar, revisar_rodada e encerrar_rodada) roda no container e o PR é aberto pelo core",
   COM_DOCKER,
   async (t) => {
-    const { c, pi } = cenarioEmContainer(t);
+    const { c, pi } = await cenarioEmContainer(t);
     const processosDoHost = amostrarProcessosDoHost(t);
 
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
@@ -154,8 +159,9 @@ test(
 function ambienteAlocadoPara(c: Cenario, dono: string) {
   const [linha] = c.banco.prepare("SELECT id FROM ambiente WHERE alocado_para = ?").all(dono) as { id: string }[];
   assert.ok(linha, `o Espaço ${dono} tem container alocado`);
-  const ambiente = conjuntoDoServico()?.ambientePorId(linha.id);
-  assert.ok(ambiente);
+  const ambiente = gestaoDoCenario?.ambienteDo(dono);
+  assert.ok(ambiente instanceof AmbienteContainer);
+  assert.equal(ambiente.id, linha.id);
   return ambiente;
 }
 
@@ -169,7 +175,7 @@ function processosNoContainerDaRodada(c: Cenario): string {
 
 /** O motivo do hook de commit: o último estado do ticket `implementar` depois de um ciclo em que o hook se comporta como `caso`. */
 async function implementarComHook(
-  { c, pi }: ReturnType<typeof cenarioEmContainer>,
+  { c, pi }: Awaited<ReturnType<typeof cenarioEmContainer>>,
   caso: "reprova" | "trava",
   limiteCommitMs: number,
 ) {
@@ -193,7 +199,7 @@ test(
   "hook de commit que sai com código 1: o ticket registra Tentativa de reprovação com a saída do hook",
   COM_DOCKER,
   async (t) => {
-    const cenario = cenarioEmContainer(t);
+    const cenario = await cenarioEmContainer(t);
     const tentativa = await implementarComHook(cenario, "reprova", 60_000);
     assert.equal(tentativa.resultado?.tipo, "reprovacao");
     assert.match(String((tentativa.resultado as { motivo?: string }).motivo), /hook: reprovado de propósito/);
@@ -204,7 +210,7 @@ test(
   "hook de commit que não termina no limite: o hook é morto no container e a Tentativa é falha de infraestrutura",
   COM_DOCKER,
   async (t) => {
-    const cenario = cenarioEmContainer(t);
+    const cenario = await cenarioEmContainer(t);
     const tentativa = await implementarComHook(cenario, "trava", 5000);
     assert.equal(tentativa.resultado?.tipo, "falha_infraestrutura");
     assert.doesNotMatch(processosNoContainerDaRodada(cenario.c), /sleep 3600/);
@@ -301,8 +307,8 @@ test(
   "CA-4: chat com o pi no container: mensagem e diálogo pelo SSE e retomada com o mesmo session-id",
   COM_DOCKER,
   async (t) => {
-    const { c, pi } = cenarioEmContainer(t);
-    const { porta, pedir } = await servir(c.banco);
+    const { c, pi, gestao } = await cenarioEmContainer(t);
+    const { porta, pedir } = await servir(c.banco, true, undefined, gestao);
     pi.roteirizar([
       PI_QUE_PERGUNTA,
       { resposta: "resposta à mensagem", modelo: MODELO_B, uso: null },
@@ -397,7 +403,7 @@ test(
   "CA-5: o Uso gravado da execução no container é a soma, por modelo, das mensagens do JSONL da sessão",
   COM_DOCKER,
   async (t) => {
-    const { c, pi } = cenarioEmContainer(t);
+    const { c, pi } = await cenarioEmContainer(t);
     pi.roteirizar([
       PI_QUE_PERGUNTA,
       {
@@ -461,7 +467,7 @@ test(
   "CA-2: o env de um comando no container não leva o HOME do host nem variável de hospedagem, do Sonar ou do ssh-agent",
   COM_DOCKER,
   async (t) => {
-    const { c } = cenarioEmContainer(t);
+    const { c } = await cenarioEmContainer(t);
     writeFileSync(join(c.repo, ".env"), "VARIAVEL_DO_ENV_DO_PROJETO=valor-do-projeto\n");
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
@@ -537,7 +543,7 @@ test(
   "o container enxerga só as sessões e execuções do próprio Espaço, e recebe cópias do pi, do .claude e do .codex",
   COM_DOCKER,
   async (t) => {
-    const { c } = cenarioEmContainer(t);
+    const { c } = await cenarioEmContainer(t);
     for (const [pasta, arquivo] of [
       [".claude", "CLAUDE.md"],
       [".codex", "config.toml"],
@@ -587,7 +593,7 @@ test(
 );
 
 test("CA-3: o cancelamento da demanda mata o pi dentro do container", COM_DOCKER, async (t) => {
-  const { c, pi } = cenarioEmContainer(t);
+  const { c, pi } = await cenarioEmContainer(t);
   const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
   const container = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString()).container_id;
   pi.roteirizar([{ termina: "nunca", uso: null }]);
@@ -608,7 +614,7 @@ test(
   "CA-3: o reinício do serviço com o pi vivo no container falha o ticket por infraestrutura, o retoma e devolve o container limpo",
   COM_DOCKER,
   async (t) => {
-    const { c } = cenarioEmContainer(t);
+    const { c } = await cenarioEmContainer(t);
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ref = ticketDe(c, id, 1);
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
@@ -676,17 +682,15 @@ test(
 );
 
 test("uma segunda demanda no container reaproveitado cria a worktree dela", COM_DOCKER, async (t) => {
-  const { c } = cenarioEmContainer(t);
+  const { c } = await cenarioEmContainer(t);
   await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
   // Os Espaços da primeira demanda acabaram: o conjunto limpa os containers dela e os devolve livres.
-  const alocados = c.banco
-    .prepare("SELECT container_id, alocado_para FROM ambiente WHERE estado = 'alocado'")
-    .all() as {
+  const alocados = c.banco.prepare("SELECT id, container_id FROM ambiente WHERE estado = 'alocado'").all() as {
+    id: string;
     container_id: string;
-    alocado_para: string;
   }[];
   assert.ok(alocados.length > 0);
-  for (const { alocado_para } of alocados) await conjuntoDoServico()?.liberar({ dono: alocado_para });
+  for (const { id } of alocados) await gestaoDoCenario?.limpar(id);
 
   const segunda = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
 
@@ -705,7 +709,7 @@ test(
   "o container não altera o que o git do host lê a partir do clone (commondir, config, hooks e worktrees do usuário), e o git do usuário e o push do core não executam nada",
   COM_DOCKER,
   async (t) => {
-    const { c } = cenarioEmContainer(t);
+    const { c } = await cenarioEmContainer(t);
     // Uma worktree do usuário, que já existe quando o container é criado.
     const worktreeDoUsuario = join(c.dir, "worktree-do-usuario");
     git(c.repo, "worktree", "add", "-q", "-b", "do-usuario", worktreeDoUsuario);
@@ -767,7 +771,7 @@ test(
       apiDoAgente.close();
     });
     const porta = (apiDoAgente.address() as AddressInfo).port;
-    const { c, pi } = cenarioEmContainer(t, porta);
+    const { c, pi, gestao } = await cenarioEmContainer(t, porta);
     apiDoAgente.on(
       "request",
       servirWeb({
@@ -775,6 +779,8 @@ test(
         raiz: raizDo(c.banco),
         porta,
         agendador: { proximaBusca: () => new Date() },
+        // A gestão do cenário: uma segunda montagem conferiria o conjunto do Docker da máquina.
+        ambientes: { gestao, configurar: () => undefined },
         relogio: relogioDoSistema,
         registrarErro: noLog,
       }),
@@ -851,7 +857,7 @@ test(
   async (t) => {
     const portaDaApi = await escutarNoHost(t);
     const outraPorta = await escutarNoHost(t);
-    const { c, pi } = cenarioEmContainer(t, portaDaApi);
+    const { c, pi } = await cenarioEmContainer(t, portaDaApi);
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
 
     // O pi grava na saída do processo, que o core lê do host.
@@ -918,7 +924,7 @@ test(
   "nenhum token do GitHub entra no container: nem no env, nem nas cópias do pi, do .claude e do .codex, nem nas montagens",
   COM_DOCKER,
   async (t) => {
-    const { c } = cenarioEmContainer(t);
+    const { c } = await cenarioEmContainer(t);
     definirNoEnvDoCore(t, { GH_TOKEN: TOKEN_DO_GITHUB, GITHUB_TOKEN: TOKEN_DO_GITHUB });
     writeFileSync(
       join(c.repo, ".env"),
@@ -995,7 +1001,7 @@ test(
     });
     const portaDaApi = (hospedagemQueExigeLogin.address() as AddressInfo).port;
     const registroDoDocker = registrarChamadasAoDocker(t, join(base, "docker-do-push"));
-    const { c, pi } = cenarioEmContainer(t, portaDaApi);
+    const { c, pi } = await cenarioEmContainer(t, portaDaApi);
 
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, uso: null }]);

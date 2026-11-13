@@ -8,12 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { instanteDepois, type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { anotar, noLog } from "../../../../shared/infra/registro.ts";
-import {
-  type Ambiente,
-  ambienteDoServico,
-  conjuntoDoServico,
-  type IdentificadorDoProcesso,
-} from "../../../ambiente/publico.ts";
+import type { Ambiente, GestaoDeAmbientes, IdentificadorDoProcesso } from "../../../ambiente/publico.ts";
 import {
   atividadeDo,
   daPergunta,
@@ -107,6 +102,7 @@ function sinalizarSemEsperar(
 
 export class SessoesDeAgente {
   #harness: Harness | undefined;
+  #ambientes: GestaoDeAmbientes | undefined;
   private readonly vivas = new Map<number | string, Viva>();
   private readonly ouvintes = new OuvintesDasSessoes();
   /** Os processos de ticket com condutor vivo, por id, com o grupo do pi e o Ambiente que o lançou, depois de lançado. */
@@ -135,6 +131,20 @@ export class SessoesDeAgente {
 
   montarHarness(harness: Harness): void {
     this.#harness = harness;
+  }
+
+  /** O Ambiente do serviço, onde roda o pi do pedido que não traz o seu, e quem sinaliza os processos dele na subida. */
+  get #ambienteDoServico(): Ambiente {
+    return existe(
+      this.#ambientes,
+      "o condutor não tem a gestão de Ambientes",
+      "monte a gestão de Ambientes pela composição do serviço",
+    ).ambienteDo();
+  }
+
+  /** Recebe da composição a gestão de Ambientes montada. */
+  montarAmbientes(ambientes: GestaoDeAmbientes): void {
+    this.#ambientes = ambientes;
   }
 
   /**
@@ -321,24 +331,17 @@ export class SessoesDeAgente {
   }
 
   /**
-   * F4 §7: toda execução aberta é de uma instância anterior. Mata o grupo do harness de cada uma, pelo Ambiente que a
-   * lançou (o host local ou um container do conjunto). Encerrar as execuções e decidir o que isso significa para quem as
-   * pediu fica com quem chama. O container do processo morto é limpo e devolvido pelo `reconciliarNaSubida` do conjunto.
+   * F4 §7: toda execução aberta é de uma instância anterior. Mata o grupo do harness de cada uma que rodou no Ambiente
+   * do serviço. Encerrar as execuções e decidir o que isso significa para quem as pediu fica com quem chama. O processo
+   * que rodou num container já morreu: a montagem da gestão de Ambientes, na subida, limpa todo container que o reinício
+   * deixou alocado, matando o que rodava nele.
    */
   async matarProcessosDaInstanciaAnterior(banco: DatabaseSync): Promise<void> {
-    const doServico = ambienteDoServico();
+    const doServico = this.#ambienteDoServico;
     const processos = execucoesAbertas(banco).flatMap(({ ambiente_id, grupo_processo }) =>
-      grupo_processo === null ? [] : [{ ambiente_id, grupo_processo }],
+      grupo_processo === null || ambiente_id !== doServico.id ? [] : [{ ambiente_id, grupo_processo }],
     );
-    // O sinal é esperado: a recuperação da subida limpa as sandboxes antes (MELHORIAS §5.3), e o comando do
-    // sinal que ainda rodasse depois disso sobraria na sandbox que ela acabou de devolver limpa.
-    await Promise.all(
-      processos.map(async (processo) => {
-        const ambiente =
-          processo.ambiente_id === doServico.id ? doServico : conjuntoDoServico()?.ambientePorId(processo.ambiente_id);
-        await ambiente?.sinalizar(processo, "SIGKILL").catch(noLog);
-      }),
-    );
+    await Promise.all(processos.map((processo) => doServico.sinalizar(processo, "SIGKILL").catch(noLog)));
   }
 
   /** A conversa guardada da sessão: as entradas do arquivo que o harness grava, ou nenhuma antes de ele existir. */
@@ -564,7 +567,7 @@ export class SessoesDeAgente {
       let agenteTerminou = false;
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
-      const ambienteDoPi = r.ambiente ?? ambienteDoServico();
+      const ambienteDoPi = r.ambiente ?? this.#ambienteDoServico;
       const pi = this.lancarSemPrenderASessao(sessao, () =>
         this.harness.lancar(ambienteDoPi, r.lancamento, { cwd: r.cwd, log: r.log, variaveisDoServico }, (evento) => {
           if (agenteTerminou) estaViva.naoGravadas = [];

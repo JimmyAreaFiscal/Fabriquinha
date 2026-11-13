@@ -1,4 +1,5 @@
 // Rotas das métricas (F7 §4.2) chamadas como o servidor as chama, contra um banco de verdade.
+import type { AmbientesDoServico } from "../rotas.ts";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -38,6 +39,7 @@ async function chamar(endereco: string): Promise<unknown> {
       valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        ambientes: undefined as unknown as AmbientesDoServico,
         relogio: relogioDoSistema,
         params,
         query: url.searchParams,

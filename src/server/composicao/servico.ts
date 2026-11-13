@@ -1,7 +1,6 @@
 // O serviço de longa duração (F4 §2, §4, §7): a porta como trava de instância única e o web (F7 §4), o reinício que
 // encerra as execuções de uma instância anterior, o agendador e o "Executar agora" da demanda.
 import { rmSync } from "node:fs";
-import { homedir } from "node:os";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -10,20 +9,16 @@ import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
 import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
-import { dirDoPiDoAuditor, gravarCatalogoDePrecos, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
+import { gravarCatalogoDePrecos, HarnessPi } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
 import { condutor, configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
-import {
-  AmbienteHostLocal,
-  type ConjuntoDeAmbientes,
-  conjuntoDoTipoConfigurado,
-  montarAmbienteDoServico,
-  montarConjuntoDoServico,
-} from "../../modulos/ambiente/publico.ts";
+import { ligarGestaoDeAmbientes } from "../../modulos/repositorio/publico.ts";
+import type { AmbientesDoServico } from "../api/rotas.ts";
+import { montarAmbientesDoServico } from "./ambientes_do_servico.ts";
 
 /** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
 export const harnessDoServico = new HarnessPi();
@@ -60,8 +55,6 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   await garantirPacoteDoAgente(join(pastaDoPacote, "fabriquinha")).catch((erro: unknown) => {
     throw new ErroDeRegra(`não foi possível gerar o CLI do agente (pacote-pi/bin/fabriquinha): ${mensagem(erro)}`);
   });
-  // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
-  montarAmbienteDoServico(new AmbienteHostLocal());
   condutor.montarHarness(harnessDoServico);
   const relogio = relogioDoSistema;
   const noLogDoServico = (erro: unknown): void => {
@@ -96,21 +89,21 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   });
   const { port: porta } = web.address() as AddressInfo;
   condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
-  /** O conjunto de Ambientes do tipo configurado; com `host_local` não há conjunto. */
-  const conjuntoDoBanco = conjuntoDoTipoConfigurado(relogio, {
-    raiz,
-    porta_da_api: porta,
-    home_do_usuario: homedir(),
-    pacote_do_harness: PACOTE,
-    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-  });
   let aberto: DatabaseSync | undefined;
+  let ambientesMontados: AmbientesDoServico | undefined;
   try {
     aberto = abrirBancoDaFabriquinha(raiz);
-    const bancoAberto = aberto;
-    // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
-    montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
-    await recuperarAposReinicio(aberto, conjuntoDoBanco(aberto), noLogDoServico);
+    // A montagem confere as sandboxes com o docker antes da recuperação, que mata os processos da instância anterior.
+    ambientesMontados = await montarAmbientesDoServico({
+      banco: aberto,
+      raiz,
+      porta,
+      registrarErro: noLogDoServico,
+      relogio,
+    });
+    condutor.montarAmbientes(ambientesMontados.gestao);
+    ligarGestaoDeAmbientes(ambientesMontados.gestao);
+    await recuperarAposReinicio(aberto);
     web.on(
       "request",
       servirWeb({
@@ -118,16 +111,19 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
         raiz,
         porta,
         agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
+        ambientes: ambientesMontados,
         relogio,
         registrarErro: noLogDoServico,
       }),
     );
   } catch (error_) {
+    await ambientesMontados?.gestao.parar();
     aberto?.close();
     web.close();
     throw error_;
   }
   const banco = aberto;
+  const ambientes = ambientesMontados.gestao;
   // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
   // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
   // ponytail: o preço que o pi passa a declarar depois da subida só entra na subida seguinte; reler na batida do relógio
@@ -138,12 +134,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       gravarCatalogoDePrecos(banco, precos, relogio.agora());
     })
     .catch(noLogDoServico);
-  const conjuntoConfigurado = (): ConjuntoDeAmbientes | undefined => conjuntoDoBanco(banco);
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
-
-  /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
-  let eliminacaoDeOciosos: Promise<void> | undefined;
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
@@ -157,14 +149,6 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     batida = Date.parse(relogio.agora());
     try {
       const c = configuracao(banco);
-      const conjunto = conjuntoConfigurado();
-      if (conjunto && !eliminacaoDeOciosos)
-        eliminacaoDeOciosos = conjunto
-          .eliminarOciosos(relogio.agora())
-          .catch(noLogDoServico)
-          .finally(() => {
-            eliminacaoDeOciosos = undefined;
-          });
       // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
       if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
@@ -214,7 +198,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
-      await eliminacaoDeOciosos;
+      await ambientes.parar();
       await gravacaoDoCatalogo;
       await condutor.aguardarTodos(LIMITE_PARADA_MS);
       banco.close();

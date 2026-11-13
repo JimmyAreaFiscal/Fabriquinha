@@ -17,7 +17,7 @@ import { anotar } from "../../src/shared/infra/registro.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
-import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
+import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";

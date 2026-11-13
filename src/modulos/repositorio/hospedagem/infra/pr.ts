@@ -9,7 +9,8 @@ import { z } from "zod";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { comoInstante, type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
-import { executar, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
+import { executar } from "../../../../shared/infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import { exigirGit, naFilaDoProjeto, type RepositorioDoProjeto } from "../../git/publico.ts";
 
 /** Um PR da branch da demanda, como a hospedagem o lista. */

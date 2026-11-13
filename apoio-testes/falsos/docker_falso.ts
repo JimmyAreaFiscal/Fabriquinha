@@ -2,7 +2,7 @@
 // O docker falso dos testes. Duas faces no mesmo arquivo:
 // - importado, `instalarDockerFalso(dir)` põe um executável `docker` à frente no PATH e guarda o estado e o registro em `dir`;
 // - executado como o `docker` (`import.meta.main`), simula imagens e containers: `image inspect`, `build`, `pull`, `run`,
-//   `create`, `start`, `ps`, `inspect`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
+//   `create`, `start`, `ps`, `inspect`, `stats`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
 //   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
@@ -10,7 +10,8 @@
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
-// `ps` e `inspect` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>" e `inspect` imprime o JSON.
+// `ps`, `inspect` e `stats` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>", `inspect` imprime o
+// JSON e `stats` imprime "<id>\t<CPU>\t<memória>" de cada container pedido, com o uso semeado (sem ele, o de um parado).
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -41,6 +42,8 @@ export interface ContainerFalso {
   montagens: string[];
   /** Os `--add-host` do `run` (`nome:ip`). */
   hospedeiros: string[];
+  /** O que o `docker stats` mostra dele, como o docker de verdade escreve (`12.50%`, `256MiB / 2GiB`). */
+  uso?: { cpu: string; memoria: string };
 }
 
 export interface DockerFalso {
@@ -51,7 +54,14 @@ export interface DockerFalso {
   /** As imagens que existem agora. */
   imagens: () => string[];
   /** Cria um container já rodando, como o que outro programa subiu na máquina. */
-  semearContainer: (semente: { id?: string; imagem?: string; rotulos?: Record<string, string> }) => ContainerFalso;
+  semearContainer: (semente: {
+    id?: string;
+    imagem?: string;
+    rotulos?: Record<string, string>;
+    uso?: ContainerFalso["uso"];
+  }) => ContainerFalso;
+  /** Troca o que o `docker stats` mostra do container `id`. */
+  mudarUso: (id: string, uso: NonNullable<ContainerFalso["uso"]>) => void;
   /** Cria uma imagem que já está na máquina. */
   semearImagem: (nome: string) => void;
   /** O `HOME` do container `id` no host: onde as cópias feitas por `tar` foram extraídas. */
@@ -88,7 +98,7 @@ export function instalarDockerFalso(dir: string): DockerFalso {
   symlinkSync(import.meta.filename, join(dir, "bin", "docker"));
   process.env.PATH = `${join(dir, "bin")}:${process.env.PATH ?? ""}`;
   process.env.FALSO_DOCKER_DIR = dir;
-  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, rotulos }) => {
+  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, rotulos, uso }) => {
     const container: ContainerFalso = {
       id: id ?? randomBytes(32).toString("hex"),
       imagem: imagem ?? "alpine",
@@ -99,6 +109,7 @@ export function instalarDockerFalso(dir: string): DockerFalso {
       comandos: [],
       montagens: [],
       hospedeiros: [],
+      uso,
     };
     gravarContainer(dir, container);
     return container;
@@ -112,6 +123,10 @@ export function instalarDockerFalso(dir: string): DockerFalso {
     containers: () => lerContainers(dir),
     imagens: () => readdirSync(imagens).map((arquivo) => Buffer.from(arquivo, "hex").toString()),
     semearContainer,
+    mudarUso: (id, uso) => {
+      const container = lerContainers(dir).find((candidato) => candidato.id === id);
+      if (container) gravarContainer(dir, { ...container, uso });
+    },
     homeDoContainer: (id) => homeDoContainer(dir, id),
     semearImagem: (nome) => {
       writeFileSync(join(imagens, codificar(nome)), "");
@@ -253,6 +268,10 @@ function executarDockerFalso(): void {
         },
       ]),
     );
+  } else if (comando === "stats") {
+    const { resto } = tirarOpcoes(args, ["--format"]);
+    for (const container of resto.map((id) => achar(id)))
+      console.log(`${container.id}\t${container.uso?.cpu ?? "0.00%"}\t${container.uso?.memoria ?? "0B / 0B"}`);
   } else if (comando === "exec") {
     const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file"]);
     const container = achar(resto[0] ?? "");

@@ -14,11 +14,14 @@ import { instalarDockerFalso } from "../../../../apoio-testes/falsos/docker_fals
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/falsos/pi_falso.ts";
 import { buscarProjeto, gravarProjeto, Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
-import { inserirAmbienteAlocado, liberarAmbiente } from "../../../modulos/ambiente/publico.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
+import type { AmbientesDoServico } from "../rotas.ts";
 import { ROTAS } from "../servidor.ts";
+import { montarAmbientesDoServico } from "../../composicao/ambientes_do_servico.ts";
+import { noLog } from "../../../shared/infra/registro.ts";
 
 // realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-config-")));
@@ -65,8 +68,11 @@ function clone(): string {
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 let banco: DatabaseSync;
-beforeEach(() => {
-  banco = abrirBancoTemporario().banco;
+let ambientes: AmbientesDoServico;
+beforeEach(async () => {
+  const aberto = abrirBancoTemporario();
+  banco = aberto.banco;
+  ambientes = await montarAmbientesDoServico({ banco, raiz: aberto.raiz, porta: 0, registrarErro: noLog });
   piFalso.roteirizar([modelos]);
 });
 
@@ -82,6 +88,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
       valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => PROXIMA },
+        ambientes,
         relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
@@ -505,7 +512,10 @@ test("ambiente: a lista traz só o conjunto da Fabriquinha; eliminar remove o li
   const sonarqube = docker.semearContainer({ imagem: "sonarqube" });
   const doUsuario = docker.semearContainer({ imagem: "postgres" });
   const livre = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "a-livre" } });
-  const alocado = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "a-alocado" } });
+  const alocado = docker.semearContainer({
+    rotulos: { "fabriquinha.ambiente": "a-alocado" },
+    uso: { cpu: "50.00%", memoria: "512MiB / 2GiB" },
+  });
   for (const [id, container_id, alocado_para] of [
     ["a-livre", livre.id, "I-2"],
     ["a-alocado", alocado.id, "I-1"],
@@ -526,6 +536,22 @@ test("ambiente: a lista traz só o conjunto da Fabriquinha; eliminar remove o li
       { id: "a-livre", estado: "livre" },
       { id: "a-alocado", estado: "alocado" },
     ],
+  );
+
+  assert.equal(
+    docker.registro().some(([comando]) => comando === "stats"),
+    false,
+    "no host_local, o docker não mede",
+  );
+  const comoContainer = { ...AMBIENTE_PADRAO, tipo: "container" };
+  const medido = (await chamar("POST", "/api/ambiente", comoContainer)) as { conjunto: { medido?: unknown }[] };
+  assert.deepEqual(
+    medido.conjunto.map((ambiente) => ambiente.medido),
+    [
+      { cpus: 0, memoria_mb: 0 },
+      { cpus: 0.5, memoria_mb: 512 },
+    ],
+    "a configuração gravada vale na pergunta seguinte da gestão, e a lista traz o medido",
   );
 
   const [status, erro] = (await chamar("DELETE", "/api/ambiente/a-alocado")) as [number, string];

@@ -12,12 +12,13 @@ import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarDockerFalso } from "../../../apoio-testes/falsos/docker_falso.ts";
+import { salvarConfiguracaoDoAmbiente } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
+import { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   listarAmbientes,
-  validarESalvarConfiguracaoDoAmbiente,
-} from "../../modulos/ambiente/publico.ts";
+} from "../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
@@ -527,7 +528,12 @@ test("executarAgora: com o limite global ocupado, devolve o motivo e não inicia
   await s.parar();
 });
 
-const AMBIENTE_EM_CONTAINER = { tipo: "container", memoria_maxima_mb: 512, cpus: 1, ociosidade_para_eliminar_min: 30 };
+const AMBIENTE_EM_CONTAINER = ConfiguracaoDoAmbiente.parse({
+  tipo: "container",
+  memoria_maxima_mb: 512,
+  cpus: 1,
+  ociosidade_para_eliminar_min: 30,
+});
 
 test("com tipo host_local, o padrão, subir, bater o relógio e parar não chamam o docker", async (t) => {
   const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-host-local-")));
@@ -543,7 +549,7 @@ test("com tipo container, a subida elimina o órfão com rótulo e nunca toca o 
   const orfao = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "orfao" } });
   const sonar = docker.semearContainer({ imagem: "sonarqube" });
   const { raiz, banco } = abrirBancoTemporario();
-  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   banco.close();
   const s = await subir(raiz);
   await s.parar();
@@ -559,7 +565,7 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
   const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-ociosos-")));
   const minuto = relogio(t);
   const { raiz, banco } = abrirBancoTemporario();
-  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   for (const [id, alocadoPara] of [
     ["ocioso", "I-1"],
     ["em-uso", "I-2"],
@@ -591,7 +597,7 @@ test("com tipo container e o docker fora do ar, o serviço sobe e a batida do re
   const erros = t.mock.method(console, "error", () => undefined);
   const minuto = relogio(t);
   const { raiz, banco } = abrirBancoTemporario();
-  validarESalvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   banco.close();
   const s = await subir(raiz);
   minuto();

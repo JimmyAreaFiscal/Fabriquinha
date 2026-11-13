@@ -12,6 +12,7 @@ import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { gravarTokenDaExecucao } from "../../src/modulos/sessoes/publico.ts";
 import type { RotaDoAgente } from "../../src/server/api/agente/rotas.ts";
+import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "../banco/banco_temporario.ts";
@@ -109,6 +110,7 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz: raizDo(banco), porta, registrarErro: noLog });
   servidor.on(
     "request",
     servirWeb({
@@ -116,6 +118,7 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
       raiz: raizDo(banco),
       porta,
       agendador: { proximaBusca: () => new Date() },
+      ambientes,
       relogio: relogioDoSistema,
       registrarErro: noLog,
       rotasDoAgente: rotas,
@@ -125,6 +128,7 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
+    await ambientes.gestao.parar();
   });
   return async function pedir(
     metodo: "GET" | "POST",

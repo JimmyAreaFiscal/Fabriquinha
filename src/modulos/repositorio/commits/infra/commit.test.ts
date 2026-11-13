@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../../../shared/nucleo/erros.ts";
-import { AmbienteHostLocal, AmbienteContainer } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal, AmbienteContainer } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { arquivosDe, commitar } from "./commit.ts";
 
 const ambiente = new AmbienteHostLocal();

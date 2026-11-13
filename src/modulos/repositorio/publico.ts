@@ -29,6 +29,7 @@ export {
   espacoDoTicket,
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
+  ligarGestaoDeAmbientes,
   ocupanteDoAmbiente,
   pendenciasDeLimpeza,
   prDoEscopo,

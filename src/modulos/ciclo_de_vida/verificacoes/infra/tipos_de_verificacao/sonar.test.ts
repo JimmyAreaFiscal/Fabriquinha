@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { analisarSonar, arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "./sonar.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sonar-")));

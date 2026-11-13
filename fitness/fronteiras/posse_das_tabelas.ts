@@ -4,7 +4,8 @@
 export const DONO_DE_CADA_TABELA: Record<string, string> = {
   // Ambiente
   ambiente: "ambiente/sandboxes",
-  configuracao_ambiente: "ambiente/configuracao",
+  // A Configuração do Ambiente é de quem monta a gestão de Ambientes (o servidor), que não tem tabela: fica no shared.
+  configuracao_ambiente: "shared",
 
   // Sessões de IA
   trabalho_agentico: "sessoes/execucao",

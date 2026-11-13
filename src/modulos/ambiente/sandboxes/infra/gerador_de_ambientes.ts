@@ -8,7 +8,9 @@ import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
 import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { executar, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { executar } from "../../../../shared/infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import {
   DOCKERFILE_DAS_REGRAS_DE_REDE,
   IMAGEM_DAS_REGRAS_DE_REDE,
@@ -22,18 +24,13 @@ const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
 const PASTA_DE_TRABALHO = "/trabalho";
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
+/** A medição do uso, que a tela de Configuração espera: o docker travado só deixa o medido de fora, sem segurar a tela. */
+const LIMITE_DA_MEDICAO_MS = 10_000;
 
 /** Onde, em relação ao `HOME` do container, mora a cópia do pi do Auditor. */
 export const DIR_DO_PI_NO_HOME = ".pi/agent";
 /** O token do GitHub, que sai das cópias para o container e do `.env` do projeto que o container recebe. */
 export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
-
-/**
- * A pasta de `<raiz_git>/.git` onde ficam as pastas administrativas das worktrees da Fabriquinha: o Ambiente que não
- * escreve em todo o `.git` do clone escreve nela (além de `objects`, `refs` e `logs`), e cada entrada de `worktrees` da
- * Fabriquinha é um link para cá. Uma worktree que o usuário criar fora da Fabriquinha fica fora do alcance dele.
- */
-export const PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA = "fabriquinha-worktrees";
 
 /** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile>` ou o nome da imagem do projeto. */
 type ImagemDoAmbiente = string;
@@ -70,6 +67,29 @@ export interface Copias {
   dir_do_pi: string;
   /** O home do usuário: o `.claude` e o `.codex` dele, se existem, vão para o home do container. */
   home_do_usuario: string;
+}
+
+/** CPU e memória de um Ambiente: `cpus` em núcleos (1,5 é um núcleo e meio), como os limites da Configuração do Ambiente. */
+export interface Recursos {
+  cpus: number;
+  memoria_mb: number;
+}
+
+/** Quantos MB tem cada unidade em que o `docker stats` escreve a memória usada. */
+const MB_POR_UNIDADE_DO_DOCKER = { B: 1 / 1048576, KiB: 1 / 1024, MiB: 1, GiB: 1024, TiB: 1048576 } as const;
+
+/** Uma linha do `docker stats` (`<id>\t52.50%\t256MiB / 2GiB`): o id do container e o uso dele. */
+function usoDaLinhaDoStats(linha: string): [string, Recursos] {
+  const [containerId = "", cpu = "", memoria = ""] = linha.split("\t");
+  const percentual = /^(\d+(?:\.\d+)?)%$/.exec(cpu);
+  const usada = /^(\d+(?:\.\d+)?)(B|KiB|MiB|GiB|TiB) \//.exec(memoria);
+  if (!percentual || !usada)
+    throw new ErroDeRegra(`o docker stats respondeu o que não se lê: ${linha}`, "confira a versão do Docker");
+  const unidade = usada[2] as keyof typeof MB_POR_UNIDADE_DO_DOCKER;
+  return [
+    containerId,
+    { cpus: Number(percentual[1]) / 100, memoria_mb: Number(usada[1]) * MB_POR_UNIDADE_DO_DOCKER[unidade] },
+  ];
 }
 
 interface ContainerCriado {
@@ -325,6 +345,16 @@ export class GeradorDeAmbientes {
     } catch (erro) {
       if (!/No such container/i.test(String(erro))) throw erro;
     }
+  }
+
+  /** O uso de CPU e de memória de cada container, medido agora pelo docker numa chamada só; sem container, nem chama. */
+  async medirUso(containerIds: readonly string[]): Promise<Map<string, Recursos>> {
+    if (containerIds.length === 0) return new Map();
+    const saida = await rodarDocker(
+      ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}", ...containerIds],
+      Math.min(this.#limiteDoComandoMs, LIMITE_DA_MEDICAO_MS),
+    );
+    return new Map(saida.split("\n").filter(Boolean).map(usoDaLinhaDoStats));
   }
 
   /** Só os containers com o rótulo `fabriquinha.ambiente`, parados ou não. */

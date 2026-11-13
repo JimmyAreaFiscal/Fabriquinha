@@ -4,6 +4,7 @@
 // integracao/falsos.ts. O tempo vai do despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da
 // abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
+import { ligarGestaoDeAmbientesNosModulos } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import {
   chmodSync,
   mkdirSync,
@@ -134,8 +135,10 @@ function prepararProcesso(amb: Ambiente): void {
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
   piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
-  // As etapas rodam neste processo, sem a composição do serviço: o condutor recebe o harness do pi como ela o monta.
+  // As etapas rodam neste processo, sem a composição do serviço: o condutor recebe o harness do pi como ela o monta, e o
+  // Repositório e as Sessões, a gestão de Ambientes do host local.
   condutor.montarHarness(new HarnessPi());
+  ligarGestaoDeAmbientesNosModulos();
   pastaDosCenarios = join(raiz, "cenarios");
   mkdirSync(pastaDosCenarios);
 }

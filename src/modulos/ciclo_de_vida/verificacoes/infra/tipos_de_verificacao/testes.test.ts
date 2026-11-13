@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { ComandoRodado } from "../../../evidencias/publico.ts";
 import { Projeto } from "../../../../demandas/publico.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";
 
 const ambiente = new AmbienteHostLocal();

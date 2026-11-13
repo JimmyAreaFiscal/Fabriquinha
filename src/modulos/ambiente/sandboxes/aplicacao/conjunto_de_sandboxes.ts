@@ -1,11 +1,11 @@
 // O conjunto compartilhado de sandboxes em container (CONCEITOS.md §7 e §13): aloca um container a cada ocupante
-// (exclusivo enquanto ele o usa), limpa e devolve ao conjunto quando ele o libera e, no conjunto variável, elimina os que
+// (exclusivo enquanto ele o usa), limpa e devolve ao conjunto quando ele acaba e, no conjunto variável, elimina os que
 // ficam ociosos até o mínimo; o fixo os mantém. Na capacidade, um parado cede a vaga ao novo e, sem parado, o conjunto
 // informa a indisponibilidade (MELHORIAS §8, regra 4).
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que cria e elimina os containers. A alocação devolvida é a
 // referência que a Execução usa para rodar comandos no container.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra, ErroExterno, existe } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import {
@@ -18,8 +18,8 @@ import {
   listarAmbientes,
   reservarAmbienteParaEliminar,
 } from "../armazenamento/ambientes.ts";
-import { configuracaoDoAmbiente } from "../../configuracao/publico.ts";
-import type { Copias, GeradorDeAmbientes, Montagens } from "../infra/gerador_de_ambientes.ts";
+import type { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
+import type { Copias, GeradorDeAmbientes, Montagens, Recursos } from "../infra/gerador_de_ambientes.ts";
 import { recolherParaOEspaco } from "../infra/pastas_do_ambiente.ts";
 
 const MS_POR_MINUTO = 60_000;
@@ -65,45 +65,55 @@ export interface ProjetoDoAmbiente {
   imagem_do_ambiente?: string;
 }
 
-/** O tipo configurado tem conjunto de containers? `host_local` não tem: o trabalho roda no Ambiente do serviço. */
-export function tipoConfiguradoTemConjunto(banco: DatabaseSync): boolean {
-  switch (configuracaoDoAmbiente(banco).tipo) {
-    case "host_local":
-      return false;
-    case "container":
-      return true;
-  }
+/** Um container do conjunto como a lista o mostra: o gravado e, no Ambiente `container`, o uso medido agora pelo docker. */
+export interface SituacaoDoAmbiente extends AmbienteGravado {
+  /** Ausente no `host_local`, que nunca chama o docker, ou quando o docker não responde. */
+  medido?: Recursos;
 }
 
 export class ConjuntoDeSandboxes {
   readonly #banco: DatabaseSync;
   readonly #gerador: GeradorDeAmbientes;
+  /** A Configuração do Ambiente de quem monta, perguntada a cada uso: a mudança pela tela vale na pergunta seguinte. */
+  readonly #configuracao: () => ConfiguracaoDoAmbiente;
   readonly #relogio: Relogio;
-  /** Sem ele o conjunto só elimina containers (a tela de Configuração com `host_local`); `alocar` exige. */
-  readonly #servico: ServicoDoConjunto | undefined;
+  readonly #servico: ServicoDoConjunto;
   /** Os containers que um `alocar` está criando e que o banco ainda não tem: ocupam vaga desde a decisão de criar. */
   #criacoesEmAndamento = 0;
 
   constructor(
     banco: DatabaseSync,
     gerador: GeradorDeAmbientes,
+    configuracao: () => ConfiguracaoDoAmbiente,
+    servico: ServicoDoConjunto,
     relogio: Relogio = relogioDoSistema,
-    servico?: ServicoDoConjunto,
   ) {
     this.#banco = banco;
     this.#gerador = gerador;
+    this.#configuracao = configuracao;
     this.#relogio = relogio;
     this.#servico = servico;
   }
 
   /** A alocação que o ocupante já tem, ou `undefined`. */
-  alocacaoDe({ dono }: Pick<OcupanteDoAmbiente, "dono">): AmbienteGravado | undefined {
-    return buscarAmbienteAlocadoPara(this.#banco, dono);
+  alocacaoDe(ocupante: string): AmbienteGravado | undefined {
+    return buscarAmbienteAlocadoPara(this.#banco, ocupante);
   }
 
-  /** O container `id` do conjunto (alocado ou não), ou `undefined` se ele não está no banco. */
-  sandboxPorId(id: string): AmbienteGravado | undefined {
-    return listarAmbientes(this.#banco).find((candidato) => candidato.id === id);
+  /**
+   * O conjunto vivo, do mais antigo ao mais novo, com o uso medido de cada container numa chamada só ao docker, no
+   * Ambiente `container`; no `host_local` o docker nunca é chamado. O docker que não responde só deixa o medido de fora.
+   */
+  async listar(): Promise<SituacaoDoAmbiente[]> {
+    const gravados = listarAmbientes(this.#banco);
+    if (this.#configuracao().tipo === "host_local") return gravados;
+    const medidos = await this.#gerador
+      .medirUso(gravados.map(({ container_id }) => container_id))
+      .catch(() => new Map<string, Recursos>());
+    return gravados.map((gravado) => {
+      const medido = medidos.get(gravado.container_id);
+      return medido ? { ...gravado, medido } : gravado;
+    });
   }
 
   /**
@@ -113,20 +123,10 @@ export class ConjuntoDeSandboxes {
    */
   async alocar(
     { dono: alocadoPara, pasta_das_worktrees_do_projeto }: OcupanteDoAmbiente,
-    projeto: ProjetoDoAmbiente,
+    projeto: Required<ProjetoDoAmbiente>,
   ): Promise<AmbienteGravado> {
-    const servico = this.servicoObrigatorio(); // antes de criar qualquer container
-    const imagemDoProjeto = projeto.imagem_do_ambiente;
-    if (imagemDoProjeto === undefined)
-      throw new ErroDeRegra(
-        `o projeto ${projeto.nome} não tem imagem do Ambiente`,
-        "informe a imagem do Ambiente na Configuração do projeto",
-      );
-    const imagem = await this.#gerador.garantirImagem({
-      nome: projeto.nome,
-      raiz_git: projeto.raiz_git,
-      imagem_do_ambiente: imagemDoProjeto,
-    });
+    const servico = this.#servico;
+    const imagem = await this.#gerador.garantirImagem(projeto);
     // Tudo daqui até o retorno é síncrono, então dois alocar ao mesmo tempo nunca pegam o mesmo livre.
     const jaAlocado = buscarAmbienteAlocadoPara(this.#banco, alocadoPara);
     if (jaAlocado) return jaAlocado;
@@ -154,7 +154,7 @@ export class ConjuntoDeSandboxes {
    * indisponibilidade.
    */
   #reservarVagaNoConjunto(): AmbienteGravado | undefined {
-    const capacidade = configuracaoDoAmbiente(this.#banco).capacidade_do_conjunto;
+    const capacidade = this.#configuracao().capacidade_do_conjunto;
     const vivos = listarAmbientes(this.#banco);
     let paradoQueCedeAVaga: AmbienteGravado | undefined;
     if (capacidade !== null && vivos.length + this.#criacoesEmAndamento >= capacidade) {
@@ -171,17 +171,19 @@ export class ConjuntoDeSandboxes {
     return paradoQueCedeAVaga;
   }
 
-  /** Limpa o container do ocupante e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. */
-  async liberar({ dono }: Pick<OcupanteDoAmbiente, "dono">): Promise<void> {
-    const ambiente = buscarAmbienteAlocadoPara(this.#banco, dono);
-    if (ambiente) await this.#limparEDevolver(ambiente);
+  /** Limpa o container `id` alocado e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. O que não está alocado fica como está. */
+  async limpar(id: string): Promise<void> {
+    const alocado = listarAmbientes(this.#banco).find(
+      (candidato) => candidato.id === id && candidato.estado === "alocado",
+    );
+    if (alocado) await this.#limparEDevolver(alocado);
   }
 
   async #limparEDevolver(ambiente: AmbienteGravado): Promise<void> {
     let estadoDepoisDaLiberacao: "livre" | "sujo" = "livre";
     try {
       // As sessões e execuções do ocupante saem do container antes de ele servir a outro ocupante.
-      recolherParaOEspaco(this.servicoObrigatorio().raiz, ambiente.id, String(ambiente.alocado_para));
+      recolherParaOEspaco(this.#servico.raiz, ambiente.id, String(ambiente.alocado_para));
       await this.#gerador.limpar(ambiente);
     } catch {
       estadoDepoisDaLiberacao = "sujo";
@@ -203,7 +205,7 @@ export class ConjuntoDeSandboxes {
    * conjunto abaixo do mínimo: o sujo sai primeiro, depois o mais antigo. O fixo mantém os que criou.
    */
   async eliminarOciosos(agora: Instante): Promise<void> {
-    const { conjunto, ociosidade_para_eliminar_min, minimo_do_conjunto } = configuracaoDoAmbiente(this.#banco);
+    const { conjunto, ociosidade_para_eliminar_min, minimo_do_conjunto } = this.#configuracao();
     if (conjunto === "fixo") return;
     const limiteMs = ociosidade_para_eliminar_min * MS_POR_MINUTO;
     const vivos = listarAmbientes(this.#banco);
@@ -242,13 +244,9 @@ export class ConjuntoDeSandboxes {
       await this.#limparEDevolver(alocado);
   }
 
-  /** O que o conjunto sabe do serviço; sem ele, só elimina containers. */
-  servicoObrigatorio(): ServicoDoConjunto {
-    return existe(
-      this.#servico,
-      "o conjunto de Ambientes não conhece a raiz da Fabriquinha",
-      "monte o conjunto pela composição do serviço",
-    );
+  /** O que o conjunto sabe do serviço: a raiz, a porta da API e o harness que o `AmbienteContainer` usa. */
+  get servico(): ServicoDoConjunto {
+    return this.#servico;
   }
 
   async #criarAlocado(
@@ -258,13 +256,7 @@ export class ConjuntoDeSandboxes {
     montagens: Montagens,
     copias: Copias,
   ): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(
-      imagem,
-      configuracaoDoAmbiente(this.#banco),
-      portaDaApi,
-      montagens,
-      copias,
-    );
+    const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, montagens, copias);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,

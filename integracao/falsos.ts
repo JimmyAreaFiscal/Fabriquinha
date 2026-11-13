@@ -1,5 +1,6 @@
 // Falso da suíte de integração do SDLC: a hospedagem (`gh` na frente do PATH, com o estado dos PRs num JSON). O pi falso
 // é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
+import { execFileSync } from "node:child_process";
 import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { once } from "node:events";
@@ -8,15 +9,15 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, type TestContext } from "node:test";
 import { hospedagemFalsa } from "../apoio-testes/falsos/hospedagem_falsa.ts";
+import { type GestaoDeAmbientes, montarGestaoDeAmbientes } from "../src/modulos/ambiente/publico.ts";
+import { noLog } from "../src/shared/infra/registro.ts";
 import {
-  ConjuntoDeAmbientes,
-  montarConjuntoDoServico,
-  GeradorDeAmbientes,
+  configuracaoDoAmbiente,
   salvarConfiguracaoDoAmbiente,
-} from "../src/modulos/ambiente/publico.ts";
+} from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
+import { AmbienteContainer, ligarGestaoDeAmbientesNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
-import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 
@@ -77,23 +78,44 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
   );
 }
 
-/** O gerador de verdade, que lembra os containers que criou: o teste elimina só os dele, e não os do serviço. */
-class GeradorQueLembraOsContainers extends GeradorDeAmbientes {
-  readonly criados: Awaited<ReturnType<GeradorDeAmbientes["criar"]>>[] = [];
-
-  override async criar(...argumentos: Parameters<GeradorDeAmbientes["criar"]>) {
-    const criado = await super.criar(...argumentos);
-    this.criados.push(criado);
-    return criado;
-  }
-}
-
 /**
- * Liga o Ambiente `container` do serviço: o conjunto de containers do cenário, o `auth.json` do pi que o container
- * recebe e o pi falso na imagem, que devolve. Ao fim do teste, elimina os containers que o cenário criou.
- * `portaDaApi` é a única porta do host que o container alcança; só o teste da rede põe um servidor nela.
+ * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
+ * Configuração lida do banco), o `auth.json` do pi que o container recebe e o pi falso na imagem, que devolve com a
+ * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
+ * container alcança; só o teste da rede põe um servidor nela.
  */
-export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
+export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
+  writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
+  // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.
+  const montada = await montarGestaoDeAmbientes({
+    banco: c.banco,
+    configuracao: () => configuracaoDoAmbiente(c.banco),
+    servico: {
+      raiz: c.raiz,
+      porta_da_api: portaDaApi,
+      home_do_usuario: c.raiz,
+      pacote_do_harness: PACOTE,
+      dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+    },
+    registrarErro: noLog,
+  });
+  // A gestão do serviço, que lembra os containers que alocou: o teste elimina só os dele, e não os do serviço, mesmo
+  // depois de o cenário fechar o banco.
+  const containersDoCenario = new Set<string>();
+  const gestao: GestaoDeAmbientes = {
+    listar: () => montada.listar(),
+    async alocar(ocupante, projeto) {
+      const ambiente = await montada.alocar(ocupante, projeto);
+      if (ambiente instanceof AmbienteContainer) containersDoCenario.add(ambiente.container_id);
+      return ambiente;
+    },
+    ambienteDo: (ocupante) => montada.ambienteDo(ocupante),
+    limpar: (id) => montada.limpar(id),
+    deletar: (id) => montada.deletar(id),
+    parar: () => montada.parar(),
+  };
+  // Montada no host_local, a gestão não confere o conjunto com o docker: no Docker de verdade, a conferência eliminaria
+  // como órfãos os containers do serviço que roda na máquina. O `container` só vale depois da montagem.
   salvarConfiguracaoDoAmbiente(c.banco, {
     tipo: "container",
     memoria_maxima_mb: 1024,
@@ -103,23 +125,15 @@ export function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi =
     capacidade_do_conjunto: null,
     minimo_do_conjunto: 0,
   });
-  writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
-  // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.
-  const gerador = new GeradorQueLembraOsContainers();
-  const conjunto = new ConjuntoDeAmbientes(c.banco, gerador, relogioDoSistema, {
-    raiz: c.raiz,
-    porta_da_api: portaDaApi,
-    home_do_usuario: c.raiz,
-    pacote_do_harness: PACOTE,
-    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-  });
-  montarConjuntoDoServico(() => conjunto);
+  ligarGestaoDeAmbientesNosModulos(gestao);
   const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git", "objects", "pi-falso"));
   t.after(async () => {
-    montarConjuntoDoServico(() => undefined);
-    for (const criado of gerador.criados) await gerador.eliminar(criado);
+    ligarGestaoDeAmbientesNosModulos();
+    await montada.parar();
+    for (const containerId of containersDoCenario)
+      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" });
   });
-  return piDoContainer;
+  return { pi: piDoContainer, gestao };
 }
 
 /**

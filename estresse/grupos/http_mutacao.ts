@@ -7,12 +7,8 @@ import { Buffer } from "node:buffer";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROTAS } from "../../src/server/api/servidor.ts";
-import {
-  inserirAmbienteAlocado,
-  liberarAmbiente,
-  listarAmbientes,
-  configuracaoDoAmbiente,
-} from "../../src/modulos/ambiente/publico.ts";
+import { configuracaoDoAmbiente } from "../../src/shared/armazenamento/configuracao_do_ambiente.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { carregarDemanda, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";

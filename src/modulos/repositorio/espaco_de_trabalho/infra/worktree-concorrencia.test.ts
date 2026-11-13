@@ -18,7 +18,7 @@ import {
   garantirWorktreeRodada,
 } from "./worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

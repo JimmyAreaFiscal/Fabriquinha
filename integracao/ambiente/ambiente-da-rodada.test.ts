@@ -8,8 +8,12 @@ import type { AddressInfo } from "node:net";
 import { once } from "node:events";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { montarAmbienteDoServico } from "../../src/modulos/ambiente/publico.ts";
+import {
+  AmbienteFalso,
+  espiarProcessosForaDoAmbiente,
+  gestaoQueSoUsa,
+  ligarGestaoDeAmbientesNosModulos,
+} from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { despachoDasEtapas } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { gravarProjeto, Projeto, projetoExistente } from "../../src/modulos/demandas/publico.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "../apoio-execucao.ts";
@@ -55,10 +59,11 @@ const despachoComVerificacoesReais = despachoDasEtapas({
 
 test("CA-4: git da worktree, Preparação, Verificações e pi de cada ticket da rodada passam pelo Ambiente", async (t) => {
   const ambiente = new AmbienteFalso();
-  montarAmbienteDoServico(ambiente);
+  ligarGestaoDeAmbientesNosModulos(gestaoQueSoUsa(ambiente));
   const espiao = espiarProcessosForaDoAmbiente();
   t.after(() => {
     espiao.parar();
+    ligarGestaoDeAmbientesNosModulos();
   });
 
   const c = criarCenario(t);

@@ -1,5 +1,6 @@
 // Rota das sessões (F7 §4.2) chamada como o servidor a chama, contra um banco de verdade: as ativas e as terminadas do
 // Histórico lidas das tabelas da demanda, as migradas pelo backfill inclusive.
+import type { AmbientesDoServico } from "../../rotas.ts";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -71,6 +72,7 @@ async function sessoes(query: string): Promise<unknown> {
     valor = await rota.tratar({
       banco,
       agendador: { proximaBusca: () => new Date() },
+      ambientes: undefined as unknown as AmbientesDoServico,
       relogio: relogioDoSistema,
       params: {},
       query: new URLSearchParams(query),

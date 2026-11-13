@@ -19,7 +19,7 @@ import { verificacaoDeTeste } from "../../../../../apoio-testes/verificacoes_de_
 import { criarRepositorioDeTeste, commitarArquivo } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../verificacoes/publico.ts";
 import { type DepsDespacho, despachoDasEtapas } from "../../conducao/publico.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const ambiente = new AmbienteHostLocal();

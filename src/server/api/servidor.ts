@@ -14,7 +14,7 @@ import { autenticarAgente } from "./agente/autenticacao.ts";
 import { rotasDeEvidenciaAdd } from "./agente/evidencia.ts";
 import { erroDaApiDoAgente, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente, rotasDoAgente } from "./agente/rotas.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
-import type { Agendador, Rota } from "./rotas.ts";
+import type { Agendador, AmbientesDoServico, Rota } from "./rotas.ts";
 import { ROTAS_DO_CHAT } from "./rotas/sessoes/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_ETAPAS } from "./rotas/etapas.ts";
@@ -150,6 +150,7 @@ interface Web {
   raiz: string;
   porta: number;
   agendador: Agendador;
+  ambientes: AmbientesDoServico;
   relogio: Relogio;
   /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
   registrarErro: (erro: unknown) => void;
@@ -166,6 +167,7 @@ export function servirWeb({
   raiz,
   porta,
   agendador,
+  ambientes,
   relogio,
   registrarErro,
   rotasDoAgente: rotasDaApiDoAgente = ROTAS_DO_AGENTE,
@@ -215,6 +217,7 @@ export function servirWeb({
       const valor: unknown = await rota.tratar({
         banco,
         agendador,
+        ambientes,
         relogio,
         params,
         query: url.searchParams,

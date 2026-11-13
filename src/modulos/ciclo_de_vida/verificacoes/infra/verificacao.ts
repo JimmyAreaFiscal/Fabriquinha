@@ -1,5 +1,6 @@
 // A Verificação: uma checagem determinística da worktree, sem banco, com o resultado de três classes. `coletar` guarda
 // o registro completo (falhas, dados e logs) que o fechamento do ticket ainda grava como Evidência; `executar` o reduz.
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +12,8 @@ import {
   type TipoVerificacao,
 } from "../../etapas/publico.ts";
 import { classificarSaidaDeComando, type ResultadoDaVerificacao } from "../nucleo/verificacao.ts";
-import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../../../ambiente/publico.ts";
+import { ambienteSemCredenciais } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../ambiente/publico.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
 export type Falha =

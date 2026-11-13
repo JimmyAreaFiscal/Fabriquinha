@@ -14,6 +14,7 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.
 import { somarMeses } from "../../src/shared/nucleo/periodo.ts";
 import { mesDoInstante, relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
+import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { harnessDoServico } from "../../src/server/composicao/servico.ts";
 import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
@@ -53,6 +54,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const { port: porta } = servidor.address() as AddressInfo;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
   servidor.on(
     "request",
     servirWeb({
@@ -60,6 +62,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
       raiz,
       porta,
       agendador: { proximaBusca: () => new Date() },
+      ambientes,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),
@@ -71,6 +74,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
+    await ambientes.gestao.parar();
   };
   return { acesso: { base: new URL(linkDeEntrada).origin, cookie }, encerrar };
 }

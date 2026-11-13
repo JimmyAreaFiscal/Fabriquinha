@@ -11,14 +11,16 @@ import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
 import { abrigarNoAmbiente, DIR_DO_PI_NO_HOME, PADRAO_DE_TOKEN_DO_GITHUB } from "../../../sandboxes/publico.ts";
 import {
-  type Ambiente,
   chavesDeProvedorDoLlm,
-  type ComandoNoAmbiente,
   CREDENCIAL_QUE_NUNCA_ENTRA_NO_AMBIENTE_ISOLADO,
   ehCredencialDeHospedagemOuSonar,
-  type IdentificadorDoProcesso,
-  type ProcessoNoAmbiente,
-  type SaidaDoComando,
+} from "../../../../../shared/infra/isolamento_do_ambiente.ts";
+import type {
+  Ambiente,
+  ComandoNoAmbiente,
+  IdentificadorDoProcesso,
+  ProcessoNoAmbiente,
+  SaidaDoComando,
 } from "../ambiente.ts";
 
 /** No container: um arquivo por processo, com o grupo de processos dele. */

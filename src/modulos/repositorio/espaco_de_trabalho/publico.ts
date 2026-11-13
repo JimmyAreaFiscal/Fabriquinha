@@ -1,5 +1,10 @@
 // API do subdomínio Espaço de Trabalho (MELHORIAS §10): cria, atualiza e limpa as worktrees.
-export { ambienteDoEspaco, ocupanteDoAmbiente } from "./aplicacao/ambiente_do_espaco.ts";
+export {
+  ambienteDoEspaco,
+  gestaoDeAmbientes,
+  ligarGestaoDeAmbientes,
+  ocupanteDoAmbiente,
+} from "./aplicacao/ambiente_do_espaco.ts";
 export {
   espacoDaDemanda,
   espacoDaRodada,

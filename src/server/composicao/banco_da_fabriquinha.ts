@@ -7,7 +7,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
-import { MIGRACOES_DO_AMBIENTE } from "../../modulos/ambiente/publico.ts";
+import { MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
 import { MIGRACOES_DE_SESSOES } from "../../modulos/sessoes/publico.ts";
 import { concluirDesenvolvimento } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import {
@@ -37,7 +37,7 @@ ligarLeituraDosLimitesDasSessoes({
 const MIGRACOES_DOS_DOMINIOS = [
   MIGRACOES_DE_DEMANDAS,
   MIGRACOES_DO_CICLO_DE_VIDA,
-  MIGRACOES_DO_AMBIENTE,
+  MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE,
   MIGRACOES_DE_SESSOES,
 ];
 

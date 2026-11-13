@@ -15,7 +15,8 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
-import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { GeradorDeAmbientes } from "./gerador_de_ambientes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;
@@ -308,6 +309,52 @@ test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou n�
   assert.equal(listados.length, antes + 1);
   assert.ok(listados.some((c) => c.id === criado.id && c.container_id === criado.container_id));
   assert.ok(docker.containers().length > listados.length);
+});
+
+test("medirUso lê numa chamada só o uso de CPU e de memória dos containers pedidos, em CPUs e MB", async () => {
+  const ocupado = docker.semearContainer({ uso: { cpu: "52.50%", memoria: "256MiB / 2GiB" } });
+  const pesado = docker.semearContainer({ uso: { cpu: "150.00%", memoria: "1.5GiB / 4GiB" } });
+  const parado = docker.semearContainer({ uso: { cpu: "0.00%", memoria: "512KiB / 1GiB" } });
+  const zerado = docker.semearContainer({});
+  const chamadasAntes = docker.registro().length;
+
+  const uso = await gerador.medirUso([ocupado.id, pesado.id, parado.id, zerado.id]);
+
+  assert.deepEqual(
+    uso,
+    new Map([
+      [ocupado.id, { cpus: 0.525, memoria_mb: 256 }],
+      [pesado.id, { cpus: 1.5, memoria_mb: 1536 }],
+      [parado.id, { cpus: 0, memoria_mb: 0.5 }],
+      [zerado.id, { cpus: 0, memoria_mb: 0 }],
+    ]),
+  );
+  assert.deepEqual(docker.registro().slice(chamadasAntes), [
+    [
+      "stats",
+      "--no-stream",
+      "--format",
+      "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}",
+      ocupado.id,
+      pesado.id,
+      parado.id,
+      zerado.id,
+    ],
+  ]);
+});
+
+test("medirUso sem container não chama o docker, e o docker que falha ou responde o que não se lê é uma falha", async () => {
+  const chamadasAntes = docker.registro().length;
+  assert.deepEqual(await gerador.medirUso([]), new Map());
+  assert.equal(docker.registro().length, chamadasAntes);
+  await assert.rejects(gerador.medirUso(["inexistente"]), /docker stats falhou: .*No such container/s);
+  for (const uso of [
+    { cpu: "--", memoria: "1MiB / 2MiB" },
+    { cpu: "1.00%", memoria: "1PiB / 2PiB" },
+  ]) {
+    const estranho = docker.semearContainer({ uso });
+    await assert.rejects(gerador.medirUso([estranho.id]), /o docker stats respondeu o que não se lê/);
+  }
 });
 
 test("limpar roda no container o que mata os processos e esvazia /tmp e a pasta de trabalho", async () => {

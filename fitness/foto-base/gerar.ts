@@ -28,6 +28,7 @@ import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { publicarPRDe } from "../../src/modulos/repositorio/publico.ts";
@@ -254,6 +255,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
   servidor.on(
     "request",
     servirWeb({
@@ -261,6 +263,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       raiz: raizDo(banco),
       porta,
       agendador: { proximaBusca: () => new Date() },
+      ambientes,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),
@@ -269,6 +272,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     raiz,
     banco,
     servidor,
+    ambientes,
     env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-7" },
   };
 }
@@ -303,7 +307,8 @@ const saidasDoCli = [
   await rodarCli(completo.env, ["demanda", "ver", "I-206"]),
 ];
 gravarFoto("cli/aula-e-demanda", saidasDoCli.join("\n"));
-for (const { servidor } of [completo, semRevisao]) {
+for (const { servidor, ambientes } of [completo, semRevisao]) {
+  await ambientes.gestao.parar();
   servidor.closeAllConnections();
   servidor.close();
 }

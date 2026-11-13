@@ -15,7 +15,7 @@ import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada, exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

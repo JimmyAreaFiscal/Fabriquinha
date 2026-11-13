@@ -4,7 +4,9 @@
 import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
+import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
 import type { MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import { Id } from "../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import type { Parametros } from "../web/compartilhado/caminhos.ts";
@@ -15,9 +17,16 @@ export interface Agendador {
   /** O "Executar agora" (F4 §4) do ticket de uma demanda, que só o serviço sabe iniciar; devolve o motivo quando o Despacho o recusa. Opcional para os testes das outras rotas. */
   executarAgora?(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined>;
 }
+/** O que o serviço expõe do Ambiente ao web: a gestão que ele montou e a gravação da Configuração com que a montou. */
+export interface AmbientesDoServico {
+  gestao: GestaoDeAmbientes;
+  /** Grava a Configuração do Ambiente, já validada; a gestão a lê na pergunta seguinte. */
+  configurar(configuracao: ConfiguracaoDoAmbiente): void;
+}
 export interface Pedido {
   banco: DatabaseSync;
   agendador: Agendador;
+  ambientes: AmbientesDoServico;
   relogio: Relogio;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;

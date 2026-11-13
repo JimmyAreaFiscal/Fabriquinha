@@ -42,7 +42,11 @@ import {
 } from "../../../../sessoes/publico.ts";
 import { criarRepositorioDeTeste } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { AmbienteHostLocal, montarAmbienteDoServico } from "../../../../ambiente/publico.ts";
+import {
+  AmbienteHostLocal,
+  gestaoQueSoUsa,
+  ligarGestaoDeAmbientesNosModulos,
+} from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
@@ -973,7 +977,9 @@ test("I-287: o prompt leva worktree, saída e anexos pelo caminho que o Ambiente
   // Um caminho diferente na forma e igual no disco: o pi falso ainda lança na worktree.
   const noAmbiente = (caminhoNoHost: string): string =>
     caminhoNoHost.replace(c.raiz, join(c.raiz, "..", basename(c.raiz)));
-  montarAmbienteDoServico(Object.assign(new AmbienteHostLocal(), { caminhoNoAmbiente: noAmbiente }));
+  ligarGestaoDeAmbientesNosModulos(
+    gestaoQueSoUsa(Object.assign(new AmbienteHostLocal(), { caminhoNoAmbiente: noAmbiente })),
+  );
   try {
     const { id, fim } = iniciarExecucaoDemanda(banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 });
     await fim;
@@ -984,6 +990,6 @@ test("I-287: o prompt leva worktree, saída e anexos pelo caminho que o Ambiente
     assert.ok(prompt.includes(`\`${noAmbiente(join(c.raiz, "arquivos", sha.slice(0, 2), sha))}\``));
     assert.ok(!prompt.includes("fabriquinha.db"));
   } finally {
-    montarAmbienteDoServico(new AmbienteHostLocal());
+    ligarGestaoDeAmbientesNosModulos();
   }
 });

@@ -4,7 +4,7 @@ import { ConfiguracaoAgente, EtapaTicket } from "../../modulos/ciclo_de_vida/pub
 import { Modelo } from "../../modulos/sessoes/publico.ts";
 import { ComandosDePreparacao, Projeto } from "../../modulos/demandas/publico.ts";
 import { Hospedagem } from "../../modulos/repositorio/publico.ts";
-import { ConfiguracaoDoAmbiente } from "../../modulos/ambiente/publico.ts";
+import { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 
 /** `GET` e `POST /api/configuracao`: a configuração do F4 §3 e a próxima busca do agendador, só ligado. */
 export const EstadoDaConfiguracao = z.strictObject({
@@ -24,6 +24,8 @@ const AmbienteDoConjunto = z.strictObject({
   alocado_para: z.string().nullable(),
   criado_em: z.string(),
   liberado_em: z.string().nullable(),
+  /** O uso de CPU (em núcleos) e de memória medido agora; ausente no host local ou quando o docker não responde. */
+  medido: z.strictObject({ cpus: z.number(), memoria_mb: z.number() }).optional(),
 });
 
 /** `GET` e `POST /api/ambiente`: o tipo e os limites gravados, e o conjunto de containers da Fabriquinha. */

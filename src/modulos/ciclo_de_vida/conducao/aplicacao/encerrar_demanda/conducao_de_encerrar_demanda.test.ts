@@ -38,7 +38,7 @@ import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 

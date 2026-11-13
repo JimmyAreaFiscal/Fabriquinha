@@ -17,7 +17,7 @@ import { garantirWorktreeDemanda } from "../../src/modulos/repositorio/publico.t
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
-import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
+import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

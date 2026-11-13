@@ -4,8 +4,10 @@ import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../../../shared/nucleo/erros.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
-import { git, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
+import { git } from "../../../../shared/infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../ambiente/publico.ts";
 import {
   envCompletoDoServico,
   exigirGitNoAmbiente,

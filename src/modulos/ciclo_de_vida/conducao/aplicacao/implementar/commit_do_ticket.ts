@@ -1,4 +1,5 @@
 // Commit do ticket da demanda (comparacao-sdlc-implementacao.md §6), idempotente pela marca `[I-n.Tm]` na mensagem.
+import { LIMITE_COMANDO_MS } from "../../../../../shared/nucleo/primitivos.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { PRIMEIRA_ETAPA_DA_RODADA, type TicketDemanda } from "../../../processo/publico.ts";
 import { formatarTicketRef } from "../../../etapas/publico.ts";
@@ -13,7 +14,7 @@ import {
   gravarCommitDemanda,
   registrarCommitsHumanosDoTicket,
 } from "../../../../repositorio/publico.ts";
-import { type Ambiente, LIMITE_COMANDO_MS } from "../../../../ambiente/publico.ts";
+import { type Ambiente } from "../../../../ambiente/publico.ts";
 import type { ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];

@@ -4,6 +4,9 @@ import { z } from "zod";
 // As mensagens do zod em português, como o resto da Fabriquinha: o web as mostra ao lado de cada campo (F7 §4.4).
 z.config(z.locales.ptBR());
 
+/** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor, no host e no Ambiente do Espaço. */
+export const LIMITE_COMANDO_MS = 30 * 60_000;
+
 export const palavras = (texto: string): number => texto.match(/\S+/g)?.length ?? 0;
 
 /** Para `.refine` de listas: o campo `campo` não se repete entre os itens. */

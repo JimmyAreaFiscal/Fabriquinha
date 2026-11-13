@@ -127,7 +127,9 @@ const integrar = (p) => {
   const origem = git(process.cwd(), "remote", "get-url", "origin");
   const tmp = mkdtempSync(join(tmpdir(), "hospedagem-merge-"));
   try {
-    git(tmp, "clone", "-q", origem, "c");
+    // Sem --no-local, o clone de um bare local cria hardlinks e falha ("hardlink different from source") quando um
+    // push simultâneo grava a quarentena de objetos no mesmo bare.
+    git(tmp, "clone", "-q", "--no-local", origem, "c");
     const c = join(tmp, "c");
     git(c, "checkout", "-q", p.base);
     git(c, "merge", "-q", "--no-ff", "-m", "Merge PR " + p.id, "origin/" + p.head);

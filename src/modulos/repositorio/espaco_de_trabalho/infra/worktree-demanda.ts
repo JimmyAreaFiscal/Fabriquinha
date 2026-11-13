@@ -14,7 +14,8 @@ import {
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Slug } from "../../../../shared/nucleo/primitivos.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../ambiente/publico.ts";
 import {
   exigirGit,
   exigirGitNoAmbiente,

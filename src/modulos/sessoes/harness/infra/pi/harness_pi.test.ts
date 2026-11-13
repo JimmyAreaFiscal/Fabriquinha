@@ -15,7 +15,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
 import { instalarPiFalso } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { HarnessPi, divisorJsonl } from "./harness_pi.ts";
 import { PACOTE } from "./pi.ts";

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
 import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,

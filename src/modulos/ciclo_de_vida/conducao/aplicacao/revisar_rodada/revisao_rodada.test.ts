@@ -21,7 +21,7 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { decidirGate } from "../gates.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

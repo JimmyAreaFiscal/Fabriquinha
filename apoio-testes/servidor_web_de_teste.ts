@@ -10,7 +10,11 @@ import { type MotivoDeRecusa, gravarAnexos } from "../src/modulos/ciclo_de_vida/
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { raizDo } from "../src/shared/armazenamento/banco.ts";
+import { montarAmbientesDoServico } from "../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../src/server/api/servidor.ts";
+import type { AmbientesDoServico } from "../src/server/api/rotas.ts";
+import type { GestaoDeAmbientes } from "../src/modulos/ambiente/publico.ts";
+import { salvarConfiguracaoDoAmbiente } from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { noLog } from "../src/shared/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "./banco/banco_temporario.ts";
 import {
@@ -46,8 +50,17 @@ export async function cenarioDemandas() {
   return { banco, ...(await servir(banco)), conteudos };
 }
 
-/** O servidor web de verdade sobre `banco`, numa porta livre, com um agendador falso que só anota o que lhe pedem. */
-export async function servir(banco: DatabaseSync, comExecutarDemanda = true, recusaDoDespacho?: MotivoDeRecusa) {
+/**
+ * O servidor web de verdade sobre `banco`, numa porta livre, com um agendador falso que só anota o que lhe pedem. A
+ * gestão de Ambientes é a do cenário, quando ele já tem uma (no Docker de verdade, uma segunda montagem conferiria o
+ * conjunto da máquina); sem ela, uma montada sobre `banco`, que o fechamento para.
+ */
+export async function servir(
+  banco: DatabaseSync,
+  comExecutarDemanda = true,
+  recusaDoDespacho?: MotivoDeRecusa,
+  gestaoDoCenario?: GestaoDeAmbientes,
+) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
   const agendador = {
     proximaBusca: () => new Date(),
@@ -61,6 +74,14 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
+  const ambientes: AmbientesDoServico = gestaoDoCenario
+    ? {
+        gestao: gestaoDoCenario,
+        configurar: (configuracao) => {
+          salvarConfiguracaoDoAmbiente(banco, configuracao);
+        },
+      }
+    : await montarAmbientesDoServico({ banco, raiz: raizDo(banco), porta, registrarErro: noLog });
   servidor.on(
     "request",
     servirWeb({
@@ -68,6 +89,7 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
       raiz: raizDo(banco),
       porta,
       agendador,
+      ambientes,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),
@@ -76,6 +98,7 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true, rec
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
+    if (!gestaoDoCenario) await ambientes.gestao.parar();
     if (banco.isOpen) banco.close(); // o teste pode já ter fechado o banco do cenário dele
   });
   const token = new URL(readFileSync(join(raizDo(banco), "web.url"), "utf8")).searchParams.get("token");

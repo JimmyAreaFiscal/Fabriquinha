@@ -82,6 +82,22 @@ test("ps com o filtro lista só os containers com o rótulo; sem filtro, todos",
   assert.ok(docker("ps").stdout.includes(semRotulo.id));
 });
 
+test("stats mostra o uso semeado ou mudado de cada container pedido, o de um parado sem semente, e falha com o que não existe", () => {
+  const semeado = falso.semearContainer({ uso: { cpu: "12.50%", memoria: "256MiB / 2GiB" } });
+  const semUso = falso.semearContainer({});
+  const formato = "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}";
+  assert.equal(
+    docker("stats", "--no-stream", "--format", formato, semeado.id, semUso.id).stdout,
+    `${semeado.id}\t12.50%\t256MiB / 2GiB\n${semUso.id}\t0.00%\t0B / 0B\n`,
+  );
+  falso.mudarUso(semUso.id, { cpu: "3.00%", memoria: "1GiB / 2GiB" });
+  falso.mudarUso("inexistente", { cpu: "1.00%", memoria: "1MiB / 1MiB" });
+  assert.equal(docker("stats", "--no-stream", semUso.id).stdout, `${semUso.id}\t3.00%\t1GiB / 2GiB\n`);
+  const deQuemNaoExiste = docker("stats", "--no-stream", "inexistente");
+  assert.equal(deQuemNaoExiste.status, 1);
+  assert.match(deQuemNaoExiste.stderr, /No such container/);
+});
+
 test("rm tira o container; um que não existe falha", () => {
   const { id } = falso.semearContainer({});
   assert.equal(docker("rm", "-f", id).status, 0);

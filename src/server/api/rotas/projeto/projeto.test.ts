@@ -1,5 +1,6 @@
 // Rotas da página do projeto (F7 §4.2), as demandas, o Arquivar concluídas e o heatmap, chamadas como o servidor as
 // chama, contra um banco de verdade.
+import type { AmbientesDoServico } from "../../rotas.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -48,6 +49,7 @@ async function chamar(metodo: string, endereco: string): Promise<unknown> {
       valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        ambientes: undefined as unknown as AmbientesDoServico,
         relogio: relogioDoSistema,
         params,
         query: url.searchParams,

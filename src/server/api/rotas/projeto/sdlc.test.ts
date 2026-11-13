@@ -1,4 +1,5 @@
 // Rotas da configuração SDLC chamadas como o servidor as chama, contra um banco de verdade.
+import type { AmbientesDoServico } from "../../rotas.ts";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
@@ -29,6 +30,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
       valor = await rota.tratar({
         banco,
         agendador: { proximaBusca: () => new Date() },
+        ambientes: undefined as unknown as AmbientesDoServico,
         relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),

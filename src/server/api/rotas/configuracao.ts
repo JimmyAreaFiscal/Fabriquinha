@@ -1,7 +1,7 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
 import { condutor, validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { eliminarAmbienteDoConjunto, validarESalvarConfiguracaoDoAmbiente } from "../../../modulos/ambiente/publico.ts";
+import { ConfiguracaoDoAmbiente } from "../../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
   consultarEstadoDaConfiguracao,
   consultarEstadoDoAmbiente,
@@ -44,15 +44,15 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/ambiente",
-    tratar: ({ banco }) => consultarEstadoDoAmbiente(banco),
+    tratar: ({ banco, ambientes }) => consultarEstadoDoAmbiente(banco, ambientes.gestao),
     resposta: EstadoDoAmbiente,
   },
   {
     metodo: "POST",
     caminho: "/api/ambiente",
-    tratar: ({ banco, corpo }) => {
-      validarESalvarConfiguracaoDoAmbiente(banco, corpo);
-      return consultarEstadoDoAmbiente(banco);
+    tratar: ({ banco, ambientes, corpo }) => {
+      ambientes.configurar(ConfiguracaoDoAmbiente.parse(corpo));
+      return consultarEstadoDoAmbiente(banco, ambientes.gestao);
     },
     resposta: EstadoDoAmbiente,
   },
@@ -60,7 +60,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     metodo: "DELETE",
     caminho: "/api/ambiente/:id",
     resposta: SemCorpoEmJson,
-    tratar: ({ banco, params }) => eliminarAmbienteDoConjunto(banco, String(params.id)),
+    tratar: ({ ambientes, params }) => ambientes.gestao.deletar(String(params.id)),
   },
   {
     metodo: "GET",
