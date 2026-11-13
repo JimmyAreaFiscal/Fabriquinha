@@ -2,6 +2,7 @@
 // (ferramenta, sessao). A sessão repetida em outro contexto é contada uma vez só, no que a informou primeiro (regra 6).
 import type { DatabaseSync } from "node:sqlite";
 import type { LinhaDeUso } from "../../harness/publico.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 /** `demanda_id` é o identificador opaco do contexto que declarou o Uso. */
 export interface UsoDeclarado {
@@ -35,15 +36,26 @@ export function gravarUsoDeclarado(banco: DatabaseSync, uso: UsoDeclarado): { de
   return { demandaDona };
 }
 
+const usoDeclaradoDaLinha = (linha: Record<string, unknown>): UsoDeclarado => ({
+  ferramenta: String(linha.ferramenta),
+  sessao: String(linha.sessao),
+  demanda_id: String(linha.demanda_id),
+  linhas: JSON.parse(String(linha.linhas)) as LinhaDeUso[],
+});
+
 /** O Uso declarado das sessões cujo dono é o contexto, na ordem em que foram gravadas. */
-export function lerUsoDeclarado(banco: DatabaseSync, demandaId: string): UsoDeclarado[] {
-  return banco
+export const lerUsoDeclarado = (banco: DatabaseSync, demandaId: string): UsoDeclarado[] =>
+  banco
     .prepare("SELECT ferramenta, sessao, demanda_id, linhas FROM uso_declarado WHERE demanda_id = ? ORDER BY rowid")
     .all(demandaId)
-    .map((l) => ({
-      ferramenta: String(l.ferramenta),
-      sessao: String(l.sessao),
-      demanda_id: String(l.demanda_id),
-      linhas: JSON.parse(String(l.linhas)) as LinhaDeUso[],
-    }));
-}
+    .map(usoDeclaradoDaLinha);
+
+/** O Uso declarado das sessões cujo dono é um dos contextos, em lote, na ordem em que foram gravadas. */
+export const lerUsoDeclaradoEmLote = (banco: DatabaseSync, demandaIds: readonly string[]): UsoDeclarado[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT ferramenta, sessao, demanda_id, linhas FROM uso_declarado
+       WHERE demanda_id IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+  )
+    .all(JSON.stringify(demandaIds))
+    .map(usoDeclaradoDaLinha);

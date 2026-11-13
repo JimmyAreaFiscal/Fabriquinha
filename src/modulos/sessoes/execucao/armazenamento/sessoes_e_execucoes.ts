@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { ConfiguracaoDoModelo } from "../../modelos/publico.ts";
 import { type ContextoDaSessao, Execucao, type IdDaExecucao, type IdDaSessao, Sessao } from "../nucleo/sessao.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 /** O contexto de uma leitura: o ticket, ou a demanda inteira com `ticket_id` nulo. */
 export interface ContextoDaLeitura {
@@ -105,32 +106,78 @@ export function gravarSessoesEExecucoes(
   );
 }
 
-/** As execuções do filtro, para o Uso em lote: das sessões, do contexto e com início no período `[inicio, fim)`. */
-export function execucoesDoFiltro(
-  banco: DatabaseSync,
-  filtro: {
-    sessoes?: readonly IdDaSessao[];
-    contexto?: { demanda_id: string; ticket_id?: number };
-    periodo?: { inicio: string; fim: string };
-  },
-): IdDaExecucao[] {
-  return banco
-    .prepare(
-      `SELECT e.id FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id
-        WHERE ($sessoes IS NULL OR s.id IN (SELECT value FROM json_each($sessoes)))
-          AND ($demanda_id IS NULL OR s.demanda_id = $demanda_id)
-          AND ($ticket_id IS NULL OR s.ticket_id = $ticket_id)
-          AND ($inicio IS NULL OR e.inicio >= $inicio) AND ($fim IS NULL OR e.inicio < $fim)
-        ORDER BY e.rowid`,
-    )
-    .all({
-      sessoes: filtro.sessoes === undefined ? null : JSON.stringify(filtro.sessoes),
-      demanda_id: filtro.contexto?.demanda_id ?? null,
-      ticket_id: filtro.contexto?.ticket_id ?? null,
-      inicio: filtro.periodo?.inicio ?? null,
-      fim: filtro.periodo?.fim ?? null,
-    })
+/** O que escolhe as execuções em lote; os filtros se somam, e o período `[inicio, fim)` é o do início da execução. */
+export interface FiltroDasExecucoes {
+  sessoes?: readonly IdDaSessao[];
+  contexto?: { demanda_id: string; ticket_id?: number };
+  /** Os contextos de várias demandas de uma vez (as Métricas pedem as de um projeto ou de todos). */
+  demandas?: readonly string[];
+  periodo?: { inicio?: string; fim?: string };
+}
+
+/**
+ * O FROM e o WHERE do filtro e os parâmetros deles. Só entra a restrição do filtro presente: um `$x IS NULL OR` impediria
+ * o SQLite de partir da sessão, da demanda ou do período pelo índice.
+ */
+function sqlDoFiltro(filtro: FiltroDasExecucoes): { sql: string; parametros: Record<string, SQLInputValue> } {
+  const condicoes: string[] = [];
+  const parametros: Record<string, SQLInputValue> = {};
+  const restringir = (condicao: string, nome: string, valor: SQLInputValue | undefined) => {
+    if (valor === undefined) return;
+    condicoes.push(condicao);
+    parametros[nome] = valor;
+  };
+  const emJson = (lista: readonly string[] | undefined) => (lista === undefined ? undefined : JSON.stringify(lista));
+  restringir("s.id IN (SELECT value FROM json_each($sessoes))", "sessoes", emJson(filtro.sessoes));
+  restringir("s.demanda_id IN (SELECT value FROM json_each($demandas))", "demandas", emJson(filtro.demandas));
+  restringir("s.demanda_id = $demanda_id", "demanda_id", filtro.contexto?.demanda_id);
+  restringir("s.ticket_id = $ticket_id", "ticket_id", filtro.contexto?.ticket_id);
+  restringir("e.inicio >= $inicio", "inicio", filtro.periodo?.inicio);
+  restringir("e.inicio < $fim", "fim", filtro.periodo?.fim);
+  const onde = condicoes.length > 0 ? condicoes.join(" AND ") : "1";
+  return {
+    sql: `FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE ${onde}`,
+    parametros,
+  };
+}
+
+/** As execuções do filtro, para o Uso em lote, na ordem em que foram criadas. */
+export function execucoesDoFiltro(banco: DatabaseSync, filtro: FiltroDasExecucoes): IdDaExecucao[] {
+  const { sql, parametros } = sqlDoFiltro(filtro);
+  return instrucaoPreparada(banco, `SELECT e.id ${sql} ORDER BY e.rowid`)
+    .all(parametros)
     .map(({ id }) => String(id));
+}
+
+/** Uma execução lida em lote, com o contexto da sessão dela e quanto durou. */
+interface ExecucaoDoLote extends ContextoDaSessao {
+  id: IdDaExecucao;
+  sessao: IdDaSessao;
+  inicio: string;
+  falha: boolean;
+  /** 0 enquanto não terminou; um relógio que volta não deixa negativa. */
+  duracaoMs: number;
+}
+
+/** As execuções do filtro com o contexto e a duração, sem ler conversa nem Uso, na ordem do início. */
+export function execucoesEmLote(banco: DatabaseSync, filtro: FiltroDasExecucoes): ExecucaoDoLote[] {
+  const { sql, parametros } = sqlDoFiltro(filtro);
+  return instrucaoPreparada(
+    banco,
+    `SELECT e.id, e.trabalho_id, s.demanda_id, s.ticket_id, e.inicio, e.falha,
+         MAX(0, ROUND((julianday(COALESCE(e.fim, e.inicio)) - julianday(e.inicio)) * 86400000)) AS duracao_ms
+       ${sql} ORDER BY e.inicio, e.id`,
+  )
+    .all(parametros)
+    .map((linha) => ({
+      id: String(linha.id),
+      sessao: String(linha.trabalho_id),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+      inicio: String(linha.inicio),
+      falha: linha.falha === 1,
+      duracaoMs: Number(linha.duracao_ms),
+    }));
 }
 
 /** Uma execução sem fim, com o contexto da sessão dela, o grupo do harness e o Ambiente que a lançou. */

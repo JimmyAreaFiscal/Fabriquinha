@@ -1,13 +1,11 @@
 // As consultas da tela de Métricas: as duas visões do período, lidas num snapshot só. O mês corrente vem do relógio.
 import type { DatabaseSync } from "node:sqlite";
-import { Periodo, somarMeses } from "../../modulos/compartilhado/nucleo/periodo.ts";
+import { somarMeses } from "../../shared/nucleo/periodo.ts";
 import { mesDoInstante, type Relogio } from "../../modulos/compartilhado/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../modulos/compartilhado/armazenamento/snapshot.ts";
 import type { FiltroDeMetricas } from "../contrato/metricas.ts";
-import {
-  metricasDasDemandasDoPeriodo,
-  metricasDosMeses,
-} from "../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { metricasDasDemandasDoPeriodo, metricasDosMeses, Periodo } from "../../modulos/ciclo_de_vida/publico.ts";
+import { lerPedidosDasMetricas } from "../../modulos/sdlc/armazenamento/pedidos_das_metricas.ts";
 
 const PeriodoDasMetricas = Periodo.refine((p) => p.ate <= somarMeses(p.de, 23), "o período tem no máximo 24 meses");
 
@@ -19,8 +17,12 @@ function periodoDoFiltro({ projeto, ate, de }: FiltroDeMetricas, relogio: Relogi
 
 /** As Métricas de cada Etapa e os fatos de cada mês do período do `filtro`. */
 export const consultarMetricasDosMeses = (banco: DatabaseSync, filtro: FiltroDeMetricas, relogio: Relogio) =>
-  lerEmSnapshot(banco, () => metricasDosMeses(banco, periodoDoFiltro(filtro, relogio)));
+  lerEmSnapshot(banco, () =>
+    metricasDosMeses({ banco, pedidos: lerPedidosDasMetricas(banco) }, periodoDoFiltro(filtro, relogio)),
+  );
 
 /** Uma linha por demanda com execução no período do `filtro`, mais o rodapé. */
 export const consultarMetricasDasDemandas = (banco: DatabaseSync, filtro: FiltroDeMetricas, relogio: Relogio) =>
-  lerEmSnapshot(banco, () => metricasDasDemandasDoPeriodo(banco, periodoDoFiltro(filtro, relogio)));
+  lerEmSnapshot(banco, () =>
+    metricasDasDemandasDoPeriodo({ banco, pedidos: lerPedidosDasMetricas(banco) }, periodoDoFiltro(filtro, relogio)),
+  );

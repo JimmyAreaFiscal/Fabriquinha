@@ -6,9 +6,10 @@ import { guardarBytes } from "../../../../modulos/compartilhado/armazenamento/ar
 import { comDemanda } from "../../../../modulos/sdlc/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../../../modulos/sdlc/armazenamento/evidencia_demanda.ts";
 import { gravarUsoDeclarado } from "../../../../modulos/trabalho_agentico/armazenamento/uso_declarado.ts";
-import { metricasDasDemandasDoPeriodo } from "../../../../modulos/metricas/aplicacao/metricas_do_periodo.ts";
+import { metricasDasDemandasDoPeriodo } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { cenarioDemandas } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
+import { origemDe } from "../../../../../apoio-testes/banco_de_metricas.ts";
 
 interface Anexo {
   nome: string;
@@ -265,9 +266,10 @@ test("a página mostra o mesmo custo da linha da demanda em Métricas: uma sess�
   });
   const { uso } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   // O Uso declarado entra no mês do registro da demanda, que o cenário fixa no passado.
-  const linha = metricasDasDemandasDoPeriodo(banco, { de: "2000-01", ate: agoraIso.slice(0, 7) }).demandas.find(
-    (d) => d.demanda === "I-206",
-  );
+  const linha = metricasDasDemandasDoPeriodo(origemDe(banco), {
+    de: "2000-01",
+    ate: agoraIso.slice(0, 7),
+  }).demandas.find((d) => d.demanda === "I-206");
   assert.equal(uso.textoDoCusto, "≥ US$ 7,20 (2 sessões sem custo)");
   assert.equal(linha?.textoDoCusto, uso.textoDoCusto);
 });

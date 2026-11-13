@@ -1,8 +1,9 @@
-// Abertura do banco, unidade de trabalho, executor de migrações e sequência de IDs (F2 §2, §3.1, §3.2, §3.4, §3.7).
+// Abertura do banco, unidade de trabalho, executor de migrações, sequência de IDs (F2 §2, §3.1, §3.2, §3.4, §3.7) e as
+// instruções preparadas uma vez por conexão.
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { ESQUEMA_V36, type Migracao, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes/migracoes.ts";
 
@@ -181,4 +182,18 @@ export function novoId(banco: DatabaseSync, nomeDaSequencia: string): number {
     )
     .get(nomeDaSequencia) as { valor: number };
   return linha.valor;
+}
+
+const instrucoesPorConexao = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+
+/**
+ * A instrução do `sql` nesta conexão, preparada uma vez só: a leitura em lote que se repete (a tela de Métricas lê o
+ * mesmo SQL de cada mês e de cada demanda) não paga a compilação a cada chamada.
+ */
+export function instrucaoPreparada(banco: DatabaseSync, sql: string): StatementSync {
+  const daConexao = instrucoesPorConexao.get(banco) ?? new Map<string, StatementSync>();
+  instrucoesPorConexao.set(banco, daConexao);
+  const instrucao = daConexao.get(sql) ?? banco.prepare(sql);
+  daConexao.set(sql, instrucao);
+  return instrucao;
 }

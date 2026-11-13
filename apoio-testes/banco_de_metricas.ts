@@ -2,7 +2,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { migrar } from "../src/modulos/compartilhado/armazenamento/banco.ts";
 import { MIGRACOES } from "../src/modulos/compartilhado/armazenamento/migracoes/migracoes.ts";
-import type { Recorte } from "../src/modulos/metricas/nucleo/metrica.ts";
+import type { Recorte } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/nucleo/metrica.ts";
+import type { OrigemDosFatos } from "../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/leitura_dos_fatos.ts";
+import { lerPedidosDasMetricas } from "../src/modulos/sdlc/armazenamento/pedidos_das_metricas.ts";
 import { intervalo } from "../src/modulos/compartilhado/nucleo/periodo.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */
@@ -14,6 +16,9 @@ export const doMes = (mes: string): Recorte => {
   const { inicio, fim } = intervalo(mes);
   return { inicio, fim };
 };
+
+/** De onde as Métricas leem neste banco: ele e os pedidos de todas as demandas, lidos agora. */
+export const origemDe = (banco: DatabaseSync): OrigemDosFatos => ({ banco, pedidos: lerPedidosDasMetricas(banco) });
 
 export function bancoMigrado(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");

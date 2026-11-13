@@ -13,6 +13,7 @@ import {
   type TabelaDoAgregado,
 } from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
 import type { EvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 /** As evidências registradas de uma demanda, como a diferença do agregado as compara. */
 interface EvidenciasRegistradas {
@@ -52,6 +53,36 @@ export function lerEvidenciasDaDemanda(
       dados: JSON.parse(dados as string) as unknown,
     }));
 }
+
+/** O instante da primeira evidência de cada demanda que tem alguma, em lote. */
+export const primeiraEvidenciaDasDemandas = (banco: DatabaseSync, demandaIds: readonly string[]): Map<string, string> =>
+  new Map(
+    instrucaoPreparada(
+      banco,
+      `SELECT demanda_id, MIN(em) AS em FROM evidencia_demanda
+         WHERE demanda_id IN (SELECT value FROM json_each(?)) GROUP BY demanda_id`,
+    )
+      .all(JSON.stringify(demandaIds))
+      .map((linha) => [String(linha.demanda_id), String(linha.em)]),
+  );
+
+/** Onde e quando cada evidência do `tipo` das demandas foi registrada, em lote e sem os dados dela. */
+export const evidenciasDoTipoDasDemandas = (
+  banco: DatabaseSync,
+  filtro: { demandas: readonly string[]; tipo: string },
+): { demanda_id: string; rodada_id: number | null; ticket_id: number | null; em: string }[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT demanda_id, rodada_id, ticket_id, em FROM evidencia_demanda
+       WHERE tipo = $tipo AND demanda_id IN (SELECT value FROM json_each($demandas)) ORDER BY rowid`,
+  )
+    .all({ tipo: filtro.tipo, demandas: JSON.stringify(filtro.demandas) })
+    .map((linha) => ({
+      demanda_id: String(linha.demanda_id),
+      rodada_id: linha.rodada_id === null ? null : Number(linha.rodada_id),
+      ticket_id: linha.ticket_id === null ? null : Number(linha.ticket_id),
+      em: String(linha.em),
+    }));
 
 /**
  * Apaga as evidências que estavam em `antes` e não estão em `depois`. A evidência é filha do ticket e da rodada (FKs

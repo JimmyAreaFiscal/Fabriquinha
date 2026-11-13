@@ -15,6 +15,7 @@ import {
 import type { Decisao } from "../nucleo/gate.ts";
 import type { ProgressoEncerramento } from "../nucleo/progresso_do_encerramento.ts";
 import { Tentativa } from "../nucleo/tentativa.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 /** O estado do desenvolvimento que o Processo grava, como o agregado da demanda o guarda. */
 interface EstadoDoProcesso {
@@ -202,6 +203,59 @@ export const lerTentativasDasDemandas = (banco: DatabaseSync, demandaIds: readon
         .all(JSON.stringify(demandaIds))
         .map(tentativaDaLinha),
     );
+
+/** Uma Decisão de gate lida em lote: o ticket dela, o resultado, a nota (`null` sem nota) e quando foi tomada. */
+interface ResumoDaDecisao {
+  demanda_id: string;
+  ticket_id: number;
+  resultado: "aprovado" | "reprovado";
+  nota: number | null;
+  em: string;
+}
+
+/** As Decisões das demandas, em lote e sem carregar o agregado; com `periodo`, só as tomadas em `[inicio, fim)`. */
+export const decisoesEmLote = (
+  banco: DatabaseSync,
+  filtro: { demandas: readonly string[]; periodo?: { inicio?: string; fim?: string } },
+): ResumoDaDecisao[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT demanda_id, ticket_id, resultado, nota, em FROM decisao_ticket
+       WHERE demanda_id IN (SELECT value FROM json_each($demandas))
+         AND ($inicio IS NULL OR em >= $inicio) AND ($fim IS NULL OR em < $fim)
+       ORDER BY rowid`,
+  )
+    .all({
+      demandas: JSON.stringify(filtro.demandas),
+      inicio: filtro.periodo?.inicio ?? null,
+      fim: filtro.periodo?.fim ?? null,
+    })
+    .map((linha) => ({
+      demanda_id: linha.demanda_id as string,
+      ticket_id: linha.ticket_id as number,
+      resultado: linha.resultado as ResumoDaDecisao["resultado"],
+      nota: linha.nota as number | null,
+      em: linha.em as string,
+    }));
+
+/** As Tentativas reprovadas das demandas, em lote, só com o ticket; com `periodo`, as iniciadas em `[inicio, fim)`. */
+export const tentativasReprovadasEmLote = (
+  banco: DatabaseSync,
+  filtro: { demandas: readonly string[]; periodo?: { inicio?: string; fim?: string } },
+): { demanda_id: string; ticket_id: number }[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT demanda_id, ticket_id FROM tentativa
+       WHERE resultado_tipo = 'reprovacao' AND demanda_id IN (SELECT value FROM json_each($demandas))
+         AND ($inicio IS NULL OR inicio >= $inicio) AND ($fim IS NULL OR inicio < $fim)
+       ORDER BY rowid`,
+  )
+    .all({
+      demandas: JSON.stringify(filtro.demandas),
+      inicio: filtro.periodo?.inicio ?? null,
+      fim: filtro.periodo?.fim ?? null,
+    })
+    .map((linha) => ({ demanda_id: linha.demanda_id as string, ticket_id: linha.ticket_id as number }));
 
 /**
  * Apaga todo o estado do Processo das demandas (a remoção do projeto), antes dos itens de Planejamento e das próprias

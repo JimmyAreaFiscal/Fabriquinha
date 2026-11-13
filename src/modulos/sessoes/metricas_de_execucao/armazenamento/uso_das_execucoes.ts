@@ -3,12 +3,15 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { UsoDaExecucao } from "../nucleo/uso_da_execucao.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 /** O Uso das execuções `execucoes`, na ordem em que foi gravado; custo NULL é desconhecido e volta sem a chave, nunca zero. */
 export const lerUsoDasExecucoes = (banco: DatabaseSync, execucoes: readonly string[]): UsoDaExecucao[] =>
   z.array(UsoDaExecucao).parse(
-    banco
-      .prepare("SELECT * FROM uso_modelo_execucao WHERE execucao_id IN (SELECT value FROM json_each(?)) ORDER BY rowid")
+    instrucaoPreparada(
+      banco,
+      "SELECT * FROM uso_modelo_execucao WHERE execucao_id IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+    )
       .all(JSON.stringify(execucoes))
       .map(({ custo, ...uso }) => (custo === null ? uso : { ...uso, custo })),
   );

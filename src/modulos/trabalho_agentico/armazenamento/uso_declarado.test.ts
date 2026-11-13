@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import type { LinhaDeUso } from "../../sessoes/publico.ts";
-import { gravarUsoDeclarado, lerUsoDeclarado, usoDeclaradoNoPeriodo } from "./uso_declarado.ts";
+import { type LinhaDeUso, lerUsoDeclaradoEmLote } from "../../sessoes/publico.ts";
+import { gravarUsoDeclarado, lerUsoDeclarado } from "./uso_declarado.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -51,34 +51,13 @@ test("a sessão que outra demanda já informou não muda de dona nem de linhas",
   assert.deepEqual(lerUsoDeclarado(b, "I-1")[0]?.linhas, [linha(1)]);
 });
 
-test("o Uso declarado do período, no mês do registro da demanda e filtrado por projeto", () => {
+test("o Uso declarado em lote: o das sessões de qualquer um dos contextos, na ordem em que foi gravado", () => {
   const b = novoBanco();
-  b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
-    VALUES ('q', '/repo/q', 'main', 'github', 'k2');
-    INSERT INTO demanda VALUES ('I-3', 'q', 't', 'problema', 'd', 'em_execucao', '2026-02-01T00:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-3');`);
-  gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1)] });
-  gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s2", demanda_id: "I-3", linhas: [linha(2)] });
-  const janeiro = { inicio: "2026-01-01T00:00:00.000Z", fim: "2026-02-01T00:00:00.000Z", projeto: null };
-  assert.deepEqual(usoDeclaradoNoPeriodo(b, janeiro), [
-    {
-      demanda: "I-1",
-      projeto: "p",
-      titulo: "t",
-      estado: "em_execucao",
-      em: "2026-01-01T00:00:00.000Z",
-      linhas: [linha(1)],
-    },
-  ]);
-  const fevereiro = { inicio: janeiro.fim, fim: "2026-03-01T00:00:00.000Z", projeto: "q" };
-  assert.deepEqual(usoDeclaradoNoPeriodo(b, fevereiro), [
-    {
-      demanda: "I-3",
-      projeto: "q",
-      titulo: "t",
-      estado: "em_execucao",
-      em: "2026-02-01T00:00:00.000Z",
-      linhas: [linha(2)],
-    },
-  ]);
-  assert.deepEqual(usoDeclaradoNoPeriodo(b, { ...fevereiro, projeto: "p" }), []);
+  const doI2 = { ferramenta: "claude", sessao: "s2", demanda_id: "I-2", linhas: [linha(2)] };
+  const doI1 = { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1)] };
+  gravarUsoDeclarado(b, doI2);
+  gravarUsoDeclarado(b, doI1);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-1", "I-2"]), [doI2, doI1]);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-1"]), [doI1]);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, []), []);
 });

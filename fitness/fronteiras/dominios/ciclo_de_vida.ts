@@ -54,7 +54,7 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     verificacoes: ["etapas"],
     conducao: ["processo", "evidencias", "verificacoes", "etapas"],
     despacho: ["processo", "planejamento", "conducao"],
-    metricas_de_qualidade: ["planejamento", "processo", "evidencias", "verificacoes"],
+    metricas_de_qualidade: ["etapas", "planejamento", "processo", "evidencias", "verificacoes"],
   },
   posseDasTabelas: "inventario",
   excecoes: [

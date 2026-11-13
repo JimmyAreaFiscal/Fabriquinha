@@ -36,6 +36,8 @@ export {
   apagarEstadoDoProcessoDasDemandas,
   apagarEstadoQueSumiu,
   carregarEstadoDoProcesso,
+  decisoesEmLote,
   gravarEstadoNovoEMudado,
   lerTentativasDasDemandas,
+  tentativasReprovadasEmLote,
 } from "./armazenamento/estado_do_processo.ts";

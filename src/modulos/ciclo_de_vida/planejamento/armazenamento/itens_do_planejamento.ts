@@ -15,6 +15,8 @@ import {
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
 } from "../../../compartilhado/armazenamento/configuracao_agente.ts";
+import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../nucleo/plano.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 interface VinculoDaRodada {
   readonly demanda_id: string;
@@ -185,4 +187,65 @@ export function carregarItensDoPlanejamento(preparar: (sql: string) => Statement
       dados: JSON.parse(dados as string) as unknown,
     })),
   };
+}
+
+/** Um ticket lido em lote, só com a Etapa, a rodada (`null` em ticket de demanda), o estado e os instantes dele. */
+export interface ResumoDoTicket {
+  demanda_id: string;
+  ticket_id: number;
+  etapa: string;
+  rodada_id: number | null;
+  estado: string;
+  estado_alterado_em: string;
+  /** Só o backfill grava `criado_em` e `concluido_em`: o ticket novo os tem `null`. */
+  criado_em: string | null;
+  concluido_em: string | null;
+}
+
+const DAS_DEMANDAS = "demanda_id IN (SELECT value FROM json_each(?))";
+
+/** Os tickets das demandas, em lote e sem carregar o agregado, na ordem em que foram criados. */
+export const ticketsDasDemandas = (banco: DatabaseSync, demandaIds: readonly string[]): ResumoDoTicket[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT demanda_id, ticket_id, etapa, rodada_id, estado, estado_alterado_em, criado_em, concluido_em
+       FROM ticket_demanda WHERE ${DAS_DEMANDAS} ORDER BY rowid`,
+  )
+    .all(JSON.stringify(demandaIds))
+    .map((linha) => ({
+      demanda_id: linha.demanda_id as string,
+      ticket_id: linha.ticket_id as number,
+      etapa: linha.etapa as string,
+      rodada_id: linha.rodada_id as number | null,
+      estado: linha.estado as string,
+      estado_alterado_em: linha.estado_alterado_em as string,
+      criado_em: linha.criado_em as string | null,
+      concluido_em: linha.concluido_em as string | null,
+    }));
+
+/**
+ * O Plano de cada demanda, montado das versões gravadas: o original é a da aprovação do planejamento, as outras são as
+ * correções. Fica de fora a demanda sem plano aprovado, como a antiga sem evidência `plano` que recebeu correção depois.
+ */
+export function planosDasDemandas(banco: DatabaseSync, demandaIds: readonly string[]): Map<string, Plano> {
+  const versoes = instrucaoPreparada(
+    banco,
+    `SELECT demanda_id, origem, dados FROM versao_plano WHERE ${DAS_DEMANDAS} ORDER BY demanda_id, numero`,
+  )
+    .all(JSON.stringify(demandaIds))
+    .map((linha) => ({
+      demanda_id: String(linha.demanda_id),
+      origem: linha.origem,
+      dados: JSON.parse(String(linha.dados)) as unknown,
+    }));
+  const planos = new Map<string, Plano>();
+  for (const [demandaId, [original, ...correcoes]] of Map.groupBy(versoes, (versao) => versao.demanda_id)) {
+    if (original?.origem !== "aprovacao_do_planejamento") continue;
+    const plano = new Plano(
+      lerPlanoGravado(original.dados),
+      correcoes.map((correcao) => CorrecaoDoPlano.parse(correcao.dados)),
+    );
+    planos.set(demandaId, plano);
+  }
+  return planos;
 }

@@ -17,6 +17,7 @@ export {
   contextoDaSessao,
   execucaoVivaDoToken,
   execucoesAbertas,
+  execucoesEmLote,
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
   resumoDaSessao,

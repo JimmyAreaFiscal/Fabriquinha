@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
+import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 
 const donoDe = (banco: DatabaseSync, sha: string) =>
   banco.prepare("SELECT demanda_id, ticket_id FROM commit_ticket_demanda WHERE sha = ?").get(sha);
@@ -82,6 +83,81 @@ export function commitDoTicketDemanda(banco: DatabaseSync, demandaId: string, ti
     });
   return { ...c, arquivos };
 }
+
+/** O commit de um ticket lido em lote, com as linhas que ele adicionou e as que uma pessoa alterou depois, na base. */
+interface AlteracoesDoCommit {
+  sha: string;
+  demanda_id: string;
+  ticket_id: number;
+  em: string;
+  linhasAdicionadas: number;
+  linhasAlteradasPorHumanos: number;
+}
+
+/** Os commits dos tickets das demandas, em lote, com as alterações de cada um; com `periodo`, os feitos em `[inicio, fim)`. */
+export const alteracoesDosCommitsEmLote = (
+  banco: DatabaseSync,
+  filtro: { demandas: readonly string[]; periodo?: { inicio?: string; fim?: string } },
+): AlteracoesDoCommit[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT c.sha, c.demanda_id, c.ticket_id, c.em,
+         (SELECT COALESCE(SUM(a.adicionadas), 0) FROM arquivo_commit_demanda a WHERE a.sha = c.sha) AS adicionadas,
+         (SELECT COALESCE(SUM(r.linhas), 0) FROM commit_humano_posterior r
+           WHERE r.demanda_id = c.demanda_id AND r.ticket_origem_id = c.ticket_id AND r.ticket_id IS NULL) AS por_humanos
+       FROM commit_ticket_demanda c
+       WHERE c.demanda_id IN (SELECT value FROM json_each($demandas))
+         AND ($inicio IS NULL OR c.em >= $inicio) AND ($fim IS NULL OR c.em < $fim)
+       ORDER BY c.rowid`,
+  )
+    .all({
+      demandas: JSON.stringify(filtro.demandas),
+      inicio: filtro.periodo?.inicio ?? null,
+      fim: filtro.periodo?.fim ?? null,
+    })
+    .map((linha) => ({
+      sha: String(linha.sha),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+      em: String(linha.em),
+      linhasAdicionadas: Number(linha.adicionadas),
+      linhasAlteradasPorHumanos: Number(linha.por_humanos),
+    }));
+
+/** Os commits dos tickets das demandas, em lote e sem os arquivos, na ordem em que foram gravados. */
+export const commitsDosTicketsEmLote = (
+  banco: DatabaseSync,
+  demandas: readonly string[],
+): { sha: string; demanda_id: string; ticket_id: number; em: string }[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT sha, demanda_id, ticket_id, em FROM commit_ticket_demanda
+       WHERE demanda_id IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+  )
+    .all(JSON.stringify(demandas))
+    .map((linha) => ({
+      sha: String(linha.sha),
+      demanda_id: String(linha.demanda_id),
+      ticket_id: Number(linha.ticket_id),
+      em: String(linha.em),
+    }));
+
+/** Os arquivos dos commits `shas`, em lote, na ordem em que foram gravados; o caminho anterior só vem na renomeação. */
+export const arquivosDosCommits = (
+  banco: DatabaseSync,
+  shas: readonly string[],
+): { sha: string; caminho: string; caminhoAnterior: string | null }[] =>
+  instrucaoPreparada(
+    banco,
+    `SELECT sha, caminho, caminho_anterior FROM arquivo_commit_demanda
+       WHERE sha IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+  )
+    .all(JSON.stringify(shas))
+    .map((linha) => ({
+      sha: String(linha.sha),
+      caminho: String(linha.caminho),
+      caminhoAnterior: linha.caminho_anterior === null ? null : String(linha.caminho_anterior),
+    }));
 
 /** As linhas reescritas por ticket de origem, agrupadas pela demanda dele (origem → quantidade). */
 export type LinhasPorDemanda = Map<string, Map<number, number>>;

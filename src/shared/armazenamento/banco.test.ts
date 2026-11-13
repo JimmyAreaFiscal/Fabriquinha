@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, mock, test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { abrir, escrever, migrar, novoId } from "./banco.ts";
+import { abrir, escrever, instrucaoPreparada, migrar, novoId } from "./banco.ts";
 import { MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes/migracoes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-banco-"));
@@ -492,4 +492,14 @@ test("novoId() segue a sequência do tipo e só roda dentro da transação", () 
   );
   assert.throws(() => novoId(banco, "demanda"), /fora de transação/);
   banco.close();
+});
+
+test("a instrução preparada é a mesma a cada pedido do mesmo SQL na mesma conexão, e outra em outra conexão", () => {
+  const banco = new DatabaseSync(":memory:");
+  const outra = new DatabaseSync(":memory:");
+  const instrucao = instrucaoPreparada(banco, "SELECT 1 AS um");
+  assert.equal(instrucaoPreparada(banco, "SELECT 1 AS um"), instrucao);
+  assert.notEqual(instrucaoPreparada(banco, "SELECT 2 AS dois"), instrucao);
+  assert.notEqual(instrucaoPreparada(outra, "SELECT 1 AS um"), instrucao);
+  assert.deepEqual({ ...instrucao.get() }, { um: 1 });
 });
