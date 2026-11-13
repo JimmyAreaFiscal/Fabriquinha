@@ -16,6 +16,7 @@ export {
   apagarItensDasDemandas,
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
+  carregarResumoDosItensDoPlanejamento,
   gravarItensNovosEMudados,
   planosDasDemandas,
   type ResumoDoTicket,

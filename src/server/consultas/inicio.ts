@@ -4,13 +4,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { mesDoInstante, type Relogio } from "../../shared/nucleo/relogio.ts";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   CICLO_DO_TICKET,
   type EstadoDemanda,
   estadoDaRodadaNaEtapa,
   formatarRodadaRef,
   formatarTicketRef,
-  listarDemandas,
+  listarResumosDasDemandas,
   metricasDosMeses,
   PRIMEIRA_ETAPA_DA_RODADA,
   type TicketDemanda,
@@ -63,7 +63,7 @@ const COLUNA_DO_ESTADO: Partial<Record<EstadoDemanda, ColunaDoBoard>> = {
 };
 
 /** Os cartões da demanda: um por rodada que não concluiu, na execução; senão, um só, o da demanda. */
-function cartoesDaDemanda(ag: AgregadoDemanda, bloqueios: string[], apoio: ApoioDosTickets): CartaoDoBoard[] {
+function cartoesDaDemanda(ag: ResumoDaDemanda, bloqueios: string[], apoio: ApoioDosTickets): CartaoDoBoard[] {
   const { id: demanda, projeto, titulo, estado } = ag.demanda;
   const identificacao = { demanda, projeto, titulo, bloqueios };
   const abertas = ag.rodadas.filter((r) => r.estado !== "concluida");
@@ -96,7 +96,7 @@ export function consultarInicio(
     const [doMes] = metricasDosMeses({ banco, pedidos: lerPedidosDasMetricas(banco) }, { de: mes, ate: mes }) as [
       DadosDoInicio["mes"],
     ];
-    const demandas = listarDemandas(banco, { soNaoTerminadas: true });
+    const demandas = listarResumosDasDemandas(banco, { soNaoTerminadas: true });
     // Só as sessões das demandas em andamento, lidas em lote: calcular o estado de todas as do banco custa segundos. Ficam
     // na ordem das demandas, e as de cada demanda, da que está assim há mais tempo para a mais recente.
     const sessoesDaDemanda = Map.groupBy(sessoesDasDemandas(banco, demandas, { escopo: "ativas" }), (s) => s.demanda);

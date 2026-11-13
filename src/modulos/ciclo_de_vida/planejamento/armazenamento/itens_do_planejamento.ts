@@ -1,7 +1,7 @@
 // As tabelas de Planejamento (MELHORIAS §5.1): rodadas, tickets, dependências internas, critérios citados, arquivos
 // previstos e versões do Plano. Este é o único arquivo que fala SQL com elas; o agregado da demanda as carrega e grava
 // por aqui, no meio das tabelas dele (todas dependem só de `demanda`, e as do Processo dependem delas).
-import type { DatabaseSync, StatementSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 import {
   type Ator,
   type ConfiguracaoAgente,
@@ -19,6 +19,7 @@ import {
 } from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../nucleo/plano.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 
 interface VinculoDaRodada {
   readonly demanda_id: string;
@@ -169,22 +170,30 @@ export const gravarItensNovosEMudados = (
   gravarLinhasNovasEMudadas(banco, TABELAS_DO_PLANEJAMENTO, antes, depois);
 };
 
-/** Os itens de Planejamento da demanda, como estão no banco, para o agregado validar; `preparar` reaproveita o SQL. */
-export function carregarItensDoPlanejamento(preparar: (sql: string) => StatementSync, demandaId: string) {
-  const filhas = (tabela: string) =>
-    preparar(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(demandaId);
+/**
+ * Os itens de Planejamento que as listagens das demandas pedem, como estão no banco: as rodadas, os tickets e as
+ * dependências entre eles, sem os critérios citados, os arquivos previstos e as versões do Plano.
+ */
+export function carregarResumoDosItensDoPlanejamento(linhasDaDemanda: LinhasDoAgregado) {
   return {
-    rodadas: filhas("rodada").map((rodada) => ({ ...rodada, e2e: rodada.e2e === 1 })),
-    dependencias_rodada: filhas("dependencia_rodada"),
-    criterios_citados: filhas("criterio_citado_rodada"),
-    tickets: filhas("ticket_demanda").map((ticket) =>
+    rodadas: linhasDaDemanda("rodada").map((rodada) => ({ ...rodada, e2e: rodada.e2e === 1 })),
+    dependencias_rodada: linhasDaDemanda("dependencia_rodada"),
+    tickets: linhasDaDemanda("ticket_demanda").map((ticket) =>
       semNulos(linhaComConfiguracaoAgente(agruparColunasDoCampo(ticket, "criado_por"))),
     ),
-    dependencias_ticket: filhas("dependencia_ticket"),
-    caminhos_ticket: filhas("caminho_ticket"),
-    arquivos_previstos_rodada: filhas("arquivo_previsto_rodada"),
-    arquivos_previstos_demanda: filhas("arquivo_previsto_demanda"),
-    versoes_plano: filhas("versao_plano").map(({ dados, ...versao }) => ({
+    dependencias_ticket: linhasDaDemanda("dependencia_ticket"),
+  };
+}
+
+/** Os itens de Planejamento da demanda, como estão no banco, para o agregado validar. */
+export function carregarItensDoPlanejamento(linhasDaDemanda: LinhasDoAgregado) {
+  return {
+    ...carregarResumoDosItensDoPlanejamento(linhasDaDemanda),
+    criterios_citados: linhasDaDemanda("criterio_citado_rodada"),
+    caminhos_ticket: linhasDaDemanda("caminho_ticket"),
+    arquivos_previstos_rodada: linhasDaDemanda("arquivo_previsto_rodada"),
+    arquivos_previstos_demanda: linhasDaDemanda("arquivo_previsto_demanda"),
+    versoes_plano: linhasDaDemanda("versao_plano").map(({ dados, ...versao }) => ({
       ...semNulos(agruparColunasDoCampo(versao, "autor")),
       dados: JSON.parse(dados as string) as unknown,
     })),

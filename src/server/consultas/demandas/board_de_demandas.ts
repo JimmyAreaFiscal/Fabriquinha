@@ -3,7 +3,11 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
-import { type AgregadoDemanda, CICLO_DA_DEMANDA, listarDemandas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import {
+  type ResumoDaDemanda,
+  CICLO_DA_DEMANDA,
+  listarResumosDasDemandas,
+} from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
@@ -11,7 +15,7 @@ import { enderecosNaDemanda, prDoGateDaRodada } from "./demanda.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "./pendencias.ts";
 
 /** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
-const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>): BoardDeDemandas["trabalho"] =>
+const emExecucao = (ag: ResumoDaDemanda, comPiAtivo: ReadonlySet<string>): BoardDeDemandas["trabalho"] =>
   ag.tickets
     .filter((t) => t.estado === "em_execucao")
     .map((t) => {
@@ -31,7 +35,7 @@ export function consultarBoardDeDemandas(
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
 ): BoardDeDemandas {
   return lerEmSnapshot(banco, () => {
-    const todas = listarDemandas(banco);
+    const todas = listarResumosDasDemandas(banco);
     const comPiAtivo = ticketsComPiAtivo(banco);
     const predecessoras = predecessorasDasDemandas(
       banco,

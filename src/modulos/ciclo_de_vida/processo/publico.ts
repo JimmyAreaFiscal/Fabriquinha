@@ -38,6 +38,7 @@ export {
   Demanda,
   prDaDemanda,
   type PullRequestDoEspaco,
+  type ResumoDaDemanda,
   RodadaDemanda,
   TicketDemanda,
   TipoDemanda,
@@ -117,10 +118,10 @@ export {
   andamentoDasDemandasEmLote,
   apagarDesenvolvimentoDasDemandas,
   carregarDemanda,
-  carregarDemandas,
   demandasNosEstados,
   gravarDemandaNova,
-  listarDemandas,
+  listarResumosDasDemandas,
+  resumosDasDemandas,
   situacaoDasDemandas,
 } from "./armazenamento/agregado_da_demanda.ts";
 export { MIGRACOES_DO_CICLO_DE_VIDA } from "./armazenamento/migracao_do_estado_do_processo.ts";

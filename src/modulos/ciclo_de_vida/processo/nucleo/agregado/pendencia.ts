@@ -1,7 +1,7 @@
 // A Pendência (CONCEITOS.md §11): tudo o que está parado esperando o Auditor. É sempre derivada do estado dos outros
 // conceitos, nunca gravada. Aqui fica o que o estado do desenvolvimento segura; o despacho parado, que pergunta à regra do
 // Despacho, ele acrescenta (`despacho/nucleo/pendencias_da_demanda.ts`). Esperar uma Dependência não é Pendência.
-import type { AgregadoDemanda, PullRequestDoEspaco } from "./agregado_demanda.ts";
+import type { ResumoDaDemanda, PullRequestDoEspaco } from "./agregado_demanda.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
 import { Endereco, etapaDoPapel } from "../../../etapas/publico.ts";
 import type { Instante } from "../../../../../shared/nucleo/primitivos.ts";
@@ -49,7 +49,7 @@ const TOLERANCIA_REVISAO_PARADA_MS = 2 * 60_000;
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function motivoDaRevisaoParada(
-  ag: AgregadoDemanda,
+  ag: ResumoDaDemanda,
   agora: Instante,
 ): { motivo: string; desde: Instante } | undefined {
   const { estado, estado_alterado_em } = ag.demanda;
@@ -83,7 +83,7 @@ export function motivoDaRevisaoParada(
  * depois, pelo Despacho; quem junta as demandas ordena por `desde`.
  */
 export function pendenciasDoProcesso(
-  ag: AgregadoDemanda,
+  ag: ResumoDaDemanda,
   vivos: readonly TrabalhoVivo[],
   prs: readonly PullRequestDoEspaco[],
   agora: Instante = relogioDoSistema.agora(),

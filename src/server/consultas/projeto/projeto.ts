@@ -5,8 +5,8 @@ import { encontrado } from "../../../shared/nucleo/erros.ts";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
-  type AgregadoDemanda,
-  carregarDemandas,
+  type ResumoDaDemanda,
+  resumosDasDemandas,
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
   EstadoDemanda,
@@ -23,7 +23,7 @@ import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
 import { pedidosDoProjeto, type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
-import { sessoesDeDemanda, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
+import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
@@ -39,7 +39,7 @@ const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
  * ponytail: a cancelada num gate aparece no estado do ticket, o de antes; um histórico de estados a acertaria.
  */
 /** @testes função pura da consulta, testada sem banco */
-export function estadoNaLinhaDoTempo({ demanda, tickets }: AgregadoDemanda): EstadoDemanda {
+export function estadoNaLinhaDoTempo({ demanda, tickets }: ResumoDaDemanda): EstadoDemanda {
   if (CICLO_DA_DEMANDA.satisfazDependencia(demanda.estado)) return "concluida";
   if (CICLO_DA_DEMANDA.estaEmAndamento(demanda.estado)) return demanda.estado;
   return tickets
@@ -60,7 +60,7 @@ interface LeiturasDoProjeto {
   pendencias: ReturnType<typeof pendenciasDasDemandas>;
 }
 
-function demandaDoProjeto(ag: AgregadoDemanda, leituras: LeiturasDoProjeto): DemandaDoProjeto {
+function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): DemandaDoProjeto {
   const { id } = ag.demanda;
   const rodada = (rodada_id: number) => formatarRodadaRef({ demanda_id: id, rodada_id });
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
@@ -132,8 +132,8 @@ export function consultarProjeto(
       cancelada: filtro.canceladas,
     };
     const ids = todas.filter((d) => mostrarDoEstado[d.estado] ?? true).map((d) => d.id);
-    const agregados = carregarDemandas(banco, ids);
-    const naoTerminadas = agregados.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
+    const resumos = resumosDasDemandas(banco, ids);
+    const naoTerminadas = resumos.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
     const leituras: LeiturasDoProjeto = {
       etapas: projeto.etapas,
       predecessoras: predecessorasDasDemandas(banco, ids),
@@ -143,13 +143,13 @@ export function consultarProjeto(
       pendencias: pendenciasDasDemandas(
         banco,
         naoTerminadas,
-        sessoesDeDemanda(banco, { escopo: "ativas", projeto: nome }),
+        sessoesDasDemandas(banco, naoTerminadas, { escopo: "ativas" }),
         situacaoDa,
         relogio.agora(),
       ),
     };
     return {
-      demandas: agregados.map((ag) => demandaDoProjeto(ag, leituras)),
+      demandas: resumos.map((ag) => demandaDoProjeto(ag, leituras)),
       contagem: {
         andamento: todas.filter((d) => CICLO_DA_DEMANDA.estaEmAndamento(d.estado)).length,
         concluidas: quantas("concluida"),

@@ -357,7 +357,7 @@ export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string):
 /**
  * Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`).
  */
-export function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
+export function exigirSemPendencias(ag: Pick<AgregadoDemanda, "rodadas" | "tickets">, ignorar?: number): void {
   const rodada = ag.rodadas.find((r) => r.estado !== "concluida");
   if (rodada !== undefined) {
     throw new ErroDeRegra(

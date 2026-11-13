@@ -1,7 +1,8 @@
 // Os PRs de cada Espaço de Trabalho (MELHORIAS §10): o único SQL de `pull_request`. O Ciclo de Vida guarda no agregado
 // da demanda o PR de cada rodada e o final, e os lê e grava por aqui, na unidade de trabalho dele; o Repositório só
 // guarda a situação observada na hospedagem, e as decisões sobre o PR continuam do Ciclo de Vida (§10, regra 6).
-import type { DatabaseSync, StatementSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 import {
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
@@ -24,11 +25,8 @@ const TABELA_DOS_PULL_REQUESTS: TabelaDoAgregado<PullRequestsDaDemanda> = {
 };
 
 /** Os PRs da demanda, na ordem em que foram gravados, sem as colunas nulas. */
-export const lerPullRequestsDaDemanda = (
-  preparar: (sql: string) => StatementSync,
-  demandaId: string,
-): Record<string, unknown>[] =>
-  preparar("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid").all(demandaId).map(semNulos);
+export const lerPullRequestsDaDemanda = (linhasDaDemanda: LinhasDoAgregado): Record<string, unknown>[] =>
+  linhasDaDemanda("pull_request").map(semNulos);
 
 /** Apaga os PRs que sumiram entre `antes` e `depois`: vai antes de apagar as rodadas, que são mães deles. */
 export const apagarPullRequestsQueSumiram = (

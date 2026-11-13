@@ -11,9 +11,9 @@ import { registrarDemanda } from "../nucleo/transicoes/transicoes_demanda.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import {
   carregarDemanda,
-  carregarDemandas,
   comDemanda,
-  listarDemandas,
+  listarResumosDasDemandas,
+  resumosDasDemandas,
   situacaoDasDemandas,
 } from "./agregado_da_demanda.ts";
 import {
@@ -602,7 +602,20 @@ test("carregarDemanda dentro de escrever lê na transação aberta e não a fech
   assert.equal(b.isTransaction, false);
 });
 
-test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela no filtro e só as em andamento no outro", () => {
+/** O agregado sem o que as listagens não leem: as Evidências, as versões do Plano, os critérios e os arquivos previstos. */
+const resumoDoAgregado = (ag: AgregadoDemanda) => ({
+  demanda: ag.demanda,
+  tickets: ag.tickets,
+  decisoes: ag.decisoes,
+  rodadas: ag.rodadas,
+  dependencias_rodada: ag.dependencias_rodada,
+  dependencias_ticket: ag.dependencias_ticket,
+  tentativas: ag.tentativas,
+  ...(ag.encerramento && { encerramento: ag.encerramento }),
+  pull_requests: ag.pull_requests,
+});
+
+test("listarResumosDasDemandas: os resumos em ordem de criação, sem arquivada por padrão, com ela no filtro e só as em andamento no outro", () => {
   const b = banco();
   const ag = completo();
   const com = (id: string, estado: AgregadoDemanda["demanda"]["estado"]) => {
@@ -633,36 +646,29 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
   com("I-4", "concluida");
   com("I-5", "cancelada");
   assert.deepEqual(
-    listarDemandas(b).map((a) => a.demanda.id),
+    listarResumosDasDemandas(b).map((a) => a.demanda.id),
     ["I-10", "I-3", "I-4", "I-5"],
   );
   assert.deepEqual(
-    listarDemandas(b, { arquivadas: true }).map((a) => a.demanda.id),
-    ["I-10", "I-2", "I-3", "I-4", "I-5"],
+    listarResumosDasDemandas(b, { arquivadas: true }),
+    ["I-10", "I-2", "I-3", "I-4", "I-5"].map((id) => resumoDoAgregado(carregarDemanda(b, id))),
   );
   assert.deepEqual(
-    listarDemandas(b, { soNaoTerminadas: true }).map((a) => a.demanda.id),
+    listarResumosDasDemandas(b, { soNaoTerminadas: true }).map((a) => a.demanda.id),
     ["I-10", "I-3"],
   );
   assert.equal(b.isTransaction, false);
   escrever(b, () => {
-    assert.equal(listarDemandas(b).length, 4);
+    assert.equal(listarResumosDasDemandas(b).length, 4);
   });
 });
 
-test("carregarDemandas devolve os agregados na ordem pedida e prepara os SQL na mesma quantidade com 1 ou 3 ids", () => {
+test("resumosDasDemandas devolve os resumos na ordem pedida e recusa a demanda inexistente", () => {
   const b = comBase();
-  const preparacoesDe = (ids: string[]) => {
-    const original = b.prepare.bind(b);
-    let preparacoes = 0;
-    b.prepare = (sql) => (preparacoes++, original(sql));
-    carregarDemandas(b, ids);
-    b.prepare = original;
-    return preparacoes;
-  };
-  assert.deepEqual(carregarDemandas(b, ["I-1", "I-1"]), [carregarDemanda(b, "I-1"), carregarDemanda(b, "I-1")]);
-  assert.equal(preparacoesDe(["I-1", "I-1", "I-1"]), preparacoesDe(["I-1"]));
-  assert.throws(() => carregarDemandas(b, ["I-9"]), ErroDeInexistente);
+  const resumo = resumoDoAgregado(carregarDemanda(b, "I-1"));
+  assert.deepEqual(resumosDasDemandas(b, ["I-1", "I-1"]), [resumo, resumo]);
+  assert.deepEqual(resumosDasDemandas(b, []), []);
+  assert.throws(() => resumosDasDemandas(b, ["I-1", "I-9"]), ErroDeInexistente);
 });
 
 test("situacaoDasDemandas devolve só o id e o estado das demandas pedidas, na ordem pedida", () => {

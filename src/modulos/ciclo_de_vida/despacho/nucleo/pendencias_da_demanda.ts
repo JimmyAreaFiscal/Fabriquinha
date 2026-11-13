@@ -3,7 +3,7 @@
 // do Despacho, que o seleciona como o agendador o selecionaria.
 import { Endereco } from "../../etapas/publico.ts";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   type Pendencia,
   pendenciasDoProcesso,
   type PullRequestDoEspaco,
@@ -19,7 +19,7 @@ import { Despacho, prontosParaExecutarAgora, situacaoDeUmaDemanda } from "./desp
  * nada é Pendência.
  */
 export function pendenciasDaDemanda(
-  ag: AgregadoDemanda,
+  ag: ResumoDaDemanda,
   vivos: readonly TrabalhoVivo[],
   prs: readonly PullRequestDoEspaco[],
   agendadorLigado: boolean,

@@ -12,6 +12,7 @@ import {
 import { branchDemanda, DemandaId } from "../../../../repositorio/publico.ts";
 import {
   AgregadoDemanda,
+  type ResumoDaDemanda,
   prDaDemanda,
   type PullRequestDoEspaco,
   type TicketDemanda,
@@ -71,14 +72,14 @@ function exigirEncerramento(ag: AgregadoDemanda) {
   return atual;
 }
 
-const resolverPendente = (ag: AgregadoDemanda): TicketDemanda | undefined =>
+const resolverPendente = (ag: ResumoDaDemanda): TicketDemanda | undefined =>
   ag.tickets.find((t) => t.ticket_id === ag.encerramento?.conflito_pendente?.ticket_id);
 
-const conflitoLiberado = (ag: AgregadoDemanda): boolean =>
+const conflitoLiberado = (ag: ResumoDaDemanda): boolean =>
   ag.encerramento?.conflito_pendente === undefined || resolverPendente(ag)?.estado === "concluido";
 
 /** Elegibilidade para a aplicação: o ticket da integração aberto e, havendo conflito, o da resolução concluído. */
-export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
+export function podeTentarEncerramento(ag: ResumoDaDemanda): boolean {
   const integradora = etapaDoPapel("integra_a_demanda");
   if (ag.demanda.estado !== integradora || ticketAtualDaEtapa(ag, integradora)?.estado !== "aberto") return false;
   return conflitoLiberado(ag);

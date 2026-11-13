@@ -8,7 +8,7 @@ import type { Instante } from "../../../../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import {
-  type AgregadoDemanda,
+  type ResumoDaDemanda,
   carregarDemanda,
   CICLO_DA_DEMANDA,
   type Pendencia,
@@ -31,7 +31,7 @@ export const pendenciaDoChat = (pendencia: Pendencia): PendenciaDoChat => ({
 
 /** A sessão de um ticket com o agregado da demanda, o ticket e as execuções dela, em ordem. */
 export interface SessaoDoTicket {
-  ag: AgregadoDemanda;
+  ag: ResumoDaDemanda;
   ticket: TicketDemanda;
   sessao: Sessao;
   execucoes: Execucao[];

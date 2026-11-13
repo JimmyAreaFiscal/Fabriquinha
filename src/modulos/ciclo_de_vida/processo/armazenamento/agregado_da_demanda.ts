@@ -2,13 +2,18 @@
 // Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira. O estado da demanda fica em
 // `processo_demanda`; o conteúdo do pedido vem de Demandas, como dado, e o Processo não o grava. As tabelas dos itens de
 // Planejamento (rodadas, tickets, vínculos e versões do Plano) passam pela API dele, e as Evidências, pela delas.
-import type { DatabaseSync, StatementSync } from "node:sqlite";
-import { AgregadoDemanda } from "../nucleo/agregado/agregado_demanda.ts";
+import type { DatabaseSync } from "node:sqlite";
+import { AgregadoDemanda, ResumoDaDemanda } from "../nucleo/agregado/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, EstadoDemanda } from "../nucleo/ciclos/ciclos.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
 import { escrever, instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 import { pedidosRecebidosEmLote, type PedidoRecebido } from "./pedidos_recebidos.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
+import {
+  linhasDeUmAgregado,
+  type LinhasDoAgregado,
+  linhasDosAgregadosEmLote,
+} from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 import {
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
@@ -30,6 +35,7 @@ import {
   apagarItensDasDemandas,
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
+  carregarResumoDosItensDoPlanejamento,
   gravarItensNovosEMudados,
 } from "../../planejamento/publico.ts";
 import {
@@ -71,32 +77,30 @@ function gravarDiferenca(banco: DatabaseSync, antes: AgregadoDemanda | undefined
   gravarEvidenciasNovasEAlteradas(banco, antes?.evidencias ?? [], depois.evidencias);
 }
 
-function carregar(
-  banco: DatabaseSync,
-  id: string,
-  pedidos: ReadonlyMap<string, PedidoRecebido>,
-  preparar: (sql: string) => StatementSync = (sql) => banco.prepare(sql),
-): AgregadoDemanda | undefined {
-  const estado = preparar("SELECT estado, estado_alterado_em, branch FROM processo_demanda WHERE demanda_id = ?").get(
-    id,
-  );
-  const pedido = pedidos.get(id);
+/** O estado da demanda no Processo e o pedido que ela recebeu de Demandas; sem um dos dois, a demanda não existe. */
+function demandaLida(linhasDaDemanda: LinhasDoAgregado, pedido: PedidoRecebido | undefined) {
+  const [estado] = linhasDaDemanda("processo_demanda");
   if (!estado || !pedido) return undefined;
-  return AgregadoDemanda.parse({
-    demanda: { ...pedido, ...estado },
-    ...carregarItensDoPlanejamento(preparar, id),
-    ...carregarEstadoDoProcesso(preparar, id),
-    pull_requests: lerPullRequestsDaDemanda(preparar, id),
-    evidencias: lerEvidenciasDaDemanda(id, preparar),
-  });
+  const { estado: estadoDaDemanda, estado_alterado_em, branch } = estado;
+  return { ...pedido, estado: estadoDaDemanda, estado_alterado_em, branch };
 }
 
-const existente = (banco: DatabaseSync, id: string): AgregadoDemanda =>
-  encontrado(
-    carregar(banco, id, pedidosRecebidosEmLote(banco, [id])),
-    `a demanda ${id} não existe`,
-    "confira o id da demanda",
+const naoExiste = (id: string) => [`a demanda ${id} não existe`, "confira o id da demanda"] as const;
+
+const existente = (banco: DatabaseSync, id: string): AgregadoDemanda => {
+  const linhasDaDemanda = linhasDeUmAgregado(banco, "demanda_id", id);
+  const demanda = encontrado(
+    demandaLida(linhasDaDemanda, pedidosRecebidosEmLote(banco, [id]).get(id)),
+    ...naoExiste(id),
   );
+  return AgregadoDemanda.parse({
+    demanda,
+    ...carregarItensDoPlanejamento(linhasDaDemanda),
+    ...carregarEstadoDoProcesso(linhasDaDemanda, id),
+    pull_requests: lerPullRequestsDaDemanda(linhasDaDemanda),
+    evidencias: lerEvidenciasDaDemanda(linhasDaDemanda),
+  });
+};
 
 /** O agregado da demanda, lido num snapshot só; demanda inexistente dá `ErroDeInexistente`. */
 export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemanda {
@@ -104,33 +108,33 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
 }
 
 /**
- * Os agregados de `ids`, na ordem pedida, lidos num snapshot só e com cada SQL preparado uma vez, não uma por demanda;
- * demanda inexistente dá `ErroDeInexistente`.
- * @testes o teste exercita direto; a produção a usa só dentro do módulo (a consulta que a usa vem em seguida)
+ * Os resumos das demandas `ids`, na ordem pedida, para as listagens: lidos num snapshot só e em lote, com uma execução
+ * SQL por tabela, qualquer que seja o número de demandas; demanda inexistente dá `ErroDeInexistente`.
  */
-export function carregarDemandas(banco: DatabaseSync, ids: readonly string[]): AgregadoDemanda[] {
-  const preparados = new Map<string, StatementSync>();
-  const preparar = (sql: string) => {
-    const preparado = preparados.get(sql) ?? banco.prepare(sql);
-    preparados.set(sql, preparado);
-    return preparado;
-  };
+export function resumosDasDemandas(banco: DatabaseSync, ids: readonly string[]): ResumoDaDemanda[] {
   return lerEmSnapshot(banco, () => {
     const pedidos = pedidosRecebidosEmLote(banco, ids);
-    return ids.map((id) =>
-      encontrado(carregar(banco, id, pedidos, preparar), `a demanda ${id} não existe`, "confira o id da demanda"),
-    );
+    const linhasDe = linhasDosAgregadosEmLote(banco, "demanda_id", ids);
+    return ids.map((id) => {
+      const linhasDaDemanda = linhasDe(id);
+      return ResumoDaDemanda.parse({
+        demanda: encontrado(demandaLida(linhasDaDemanda, pedidos.get(id)), ...naoExiste(id)),
+        ...carregarResumoDosItensDoPlanejamento(linhasDaDemanda),
+        ...carregarEstadoDoProcesso(linhasDaDemanda, id),
+        pull_requests: lerPullRequestsDaDemanda(linhasDaDemanda),
+      });
+    });
   });
 }
 
 /**
- * As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra) e, com
+ * Os resumos das demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra) e, com
  * `soNaoTerminadas`, só as que não terminaram (o Início).
  */
-export function listarDemandas(
+export function listarResumosDasDemandas(
   banco: DatabaseSync,
   { arquivadas = false, soNaoTerminadas = false }: { arquivadas?: boolean; soNaoTerminadas?: boolean } = {},
-): AgregadoDemanda[] {
+): ResumoDaDemanda[] {
   return lerEmSnapshot(banco, () => {
     const filtro = soNaoTerminadas
       ? `WHERE NOT ${CICLO_DA_DEMANDA.sqlDosTerminais("estado")}`
@@ -138,7 +142,7 @@ export function listarDemandas(
         ? ""
         : "WHERE estado <> 'arquivada'";
     const ids = banco.prepare(`SELECT demanda_id FROM processo_demanda ${filtro} ORDER BY rowid`).all();
-    return carregarDemandas(
+    return resumosDasDemandas(
       banco,
       ids.map((l) => String(l.demanda_id)),
     );
