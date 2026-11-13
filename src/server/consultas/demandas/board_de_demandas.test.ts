@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   cadastrarProjetoLoja,
   gravarAgregadoPronto,
   montarAgregadoDemanda,
-} from "../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { consultarBoardDeDemandas } from "./board_de_demandas.ts";

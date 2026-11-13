@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarPiFalso } from "../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import {
   Endereco,
@@ -33,7 +33,7 @@ import {
 } from "../../../modulos/sessoes/publico.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { registrarProjeto } from "../../../modulos/demandas/publico.ts";
-import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { abrirChatDemanda, exportarHistoricoDemanda } from "./chat.ts";
 

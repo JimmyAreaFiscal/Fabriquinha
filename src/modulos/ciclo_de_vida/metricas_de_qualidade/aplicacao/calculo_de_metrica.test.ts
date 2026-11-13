@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDaDemanda, origemDe } from "../../../../../apoio-testes/banco_de_metricas.ts";
+import { bancoDaDemanda, origemDe } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import type { DefinicaoDaMetrica } from "../nucleo/metrica.ts";
 import { MetricaDoSdlc, MetricaPorEtapa } from "./calculo_de_metrica.ts";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AgregadoDemanda } from "../../processo/publico.ts";
-import { comEvidencia } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { comEvidencia } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { type Ator, FABRIQUINHA, TIPOS_DA_DEMANDA } from "../../etapas/publico.ts";
 import { pendentesDeEnvio } from "./evidencia_demanda.ts";
 

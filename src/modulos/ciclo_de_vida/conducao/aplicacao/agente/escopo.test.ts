@@ -1,7 +1,7 @@
 // O escopo do agente: a execução precisa existir e estar aberta, e só o próprio ticket e a própria demanda passam.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   cadastrarProjetoLoja,
@@ -10,7 +10,7 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import {

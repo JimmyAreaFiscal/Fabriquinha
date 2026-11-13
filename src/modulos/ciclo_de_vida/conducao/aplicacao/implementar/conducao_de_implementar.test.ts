@@ -19,7 +19,7 @@ import {
   TIPOS,
   todas,
   verif,
-} from "../../../../../../apoio-testes/cenario_de_implementacao.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
 import { commitarTicketDemanda } from "./commit_do_ticket.ts";

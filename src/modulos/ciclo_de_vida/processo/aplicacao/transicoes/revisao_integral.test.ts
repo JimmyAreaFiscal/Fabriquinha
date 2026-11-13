@@ -10,7 +10,7 @@ import {
   cenarioRevisao,
   REF_GLOBAL,
   comEvidencia,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { decidirGate } from "../../../conducao/publico.ts";
 import { iniciarRevisaoIntegral } from "./revisao_integral.ts";
 

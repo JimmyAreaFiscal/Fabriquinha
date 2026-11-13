@@ -5,13 +5,13 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import {
   commitarArquivo,
   criarRepositorioDeTeste,
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
+import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
   listarAmbientes,
   GeradorDeAmbientes,

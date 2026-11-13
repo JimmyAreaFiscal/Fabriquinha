@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { Ator } from "../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { caminhoArquivo, guardarBytes } from "../../../../shared/armazenamento/arquivos.ts";
@@ -16,7 +16,7 @@ import {
   primeiraEvidenciaDasDemandas,
 } from "./evidencia_demanda.ts";
 import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
-import { comEvidencia } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { comEvidencia } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

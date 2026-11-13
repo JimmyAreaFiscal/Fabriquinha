@@ -12,8 +12,8 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { type Ator, type TipoEvidencia, Endereco } from "../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { SubmissaoDeEvidencia } from "../../evidencias/publico.ts";

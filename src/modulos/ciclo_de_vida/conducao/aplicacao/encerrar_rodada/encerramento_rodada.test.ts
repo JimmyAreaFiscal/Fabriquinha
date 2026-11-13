@@ -11,7 +11,7 @@ import {
   hospedagem,
   MARCA,
   REF,
-} from "../../../../../../apoio-testes/cenario_de_encerramento_rodada.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_encerramento_rodada.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../../shared/nucleo/erros.ts";
 import { cursorDaBase, caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";

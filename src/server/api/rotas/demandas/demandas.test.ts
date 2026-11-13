@@ -7,7 +7,7 @@ import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenam
 import { gravarUsoDeclarado } from "../../../../modulos/sessoes/publico.ts";
 import { cenarioDemandas } from "../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
-import { origemDe } from "../../../../../apoio-testes/banco_de_metricas.ts";
+import { origemDe } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 
 interface Anexo {
   nome: string;

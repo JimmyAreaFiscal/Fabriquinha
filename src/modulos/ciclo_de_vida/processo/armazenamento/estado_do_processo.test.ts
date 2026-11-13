@@ -1,7 +1,7 @@
 // A leitura em lote das Decisões, sem o agregado: por demanda e, com período, pelo instante da Decisão.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDaDemanda, bancoDoPeriodo, doMes, em } from "../../../../../apoio-testes/banco_de_metricas.ts";
+import { bancoDaDemanda, bancoDoPeriodo, doMes, em } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { decisoesEmLote, tentativasReprovadasEmLote } from "./estado_do_processo.ts";
 
 test("as Decisões das demandas em lote, com o resultado, a nota e o instante, e o período pelo instante", () => {

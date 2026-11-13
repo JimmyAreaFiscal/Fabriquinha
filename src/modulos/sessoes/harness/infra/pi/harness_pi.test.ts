@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
-import { instalarPiFalso } from "../../../../../../apoio-testes/pi_falso.ts";
+import { instalarPiFalso } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";

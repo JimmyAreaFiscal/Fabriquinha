@@ -4,15 +4,18 @@ import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { condutor, Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { gravarConfiguracaoSdlc } from "../../../../modulos/demandas/publico.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
+import {
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo,

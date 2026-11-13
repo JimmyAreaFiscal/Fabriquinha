@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { AmbienteHostLocal, AmbienteContainer } from "../../../ambiente/publico.ts";
 import { arquivosDe, commitar } from "./commit.ts";

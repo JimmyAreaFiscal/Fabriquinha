@@ -12,13 +12,13 @@ import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { raizDo } from "../src/shared/armazenamento/banco.ts";
 import { servirWeb } from "../src/server/api/servidor.ts";
 import { noLog } from "../src/shared/infra/registro.ts";
-import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "./banco/banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,
   cadastrarProjetoLoja,
   gravarAgregadoPronto,
   montarAgregadoDemanda,
-} from "./cenarios_de_demanda.ts";
+} from "./cenarios/cenarios_de_demanda.ts";
 
 const fechamentos: (() => Promise<void>)[] = [];
 after(async () => {

@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { falhaQueExigeOAuditor } from "../../../etapas/publico.ts";
-import { cenarioDeImplementacao, ref, ticket } from "../../../../../../apoio-testes/cenario_de_implementacao.ts";
+import {
+  cenarioDeImplementacao,
+  ref,
+  ticket,
+} from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
 import { falharTicketEmExecucao } from "./transicoes_pedidas.ts";
 
 test("falharTicketEmExecucao falha o ticket em execução de qualquer etapa e ignora o que não está em execução", async () => {

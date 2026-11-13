@@ -7,7 +7,7 @@ import {
   gravarDecisaoEm,
   gravarTicket,
   origemDe,
-} from "../../../../../apoio-testes/banco_de_metricas.ts";
+} from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../etapas/publico.ts";
 import type { Recorte } from "../nucleo/metrica.ts";

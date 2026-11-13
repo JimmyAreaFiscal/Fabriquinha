@@ -20,7 +20,7 @@ import {
   criarDemandaNova,
   gravarAgregadoPronto,
   comEvidencia,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const em = "2026-01-01T00:00:00.000Z";

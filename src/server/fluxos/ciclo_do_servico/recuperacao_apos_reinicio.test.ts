@@ -2,7 +2,7 @@
 // recuperação dos processos. O que cada domínio recupera é testado nele (conjunto de Ambientes, condutor).
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import type { ConjuntoDeAmbientes } from "../../../modulos/ambiente/publico.ts";
 import { condutor } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { recuperacaoDaSubida, recuperarAposReinicio } from "./recuperacao_apos_reinicio.ts";

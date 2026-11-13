@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 import { GeradorDeAmbientes, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "./gerador_de_ambientes.ts";
 

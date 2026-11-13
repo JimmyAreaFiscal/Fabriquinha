@@ -10,7 +10,7 @@ import {
   DEMANDA,
   MOTIVO,
   reprovarPRRodada,
-} from "../../../../../../apoio-testes/cenario_de_ajustes.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_ajustes.ts";
 import { decidirGate } from "../gates.ts";
 
 test("CA-13: reprovar sem motivo, como agente ou fora do gate é reprovado sem gravar o marco nem abrir a sessão", async () => {

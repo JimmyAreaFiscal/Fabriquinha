@@ -9,7 +9,7 @@ import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada, exigirGit } from "../../src/modulos/repositorio/publico.ts";

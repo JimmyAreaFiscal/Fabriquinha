@@ -10,7 +10,7 @@ import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
 import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { expect, type Fabriquinha } from "./apoio.ts";
 
 const em = "2026-10-11T12:00:00.000Z";

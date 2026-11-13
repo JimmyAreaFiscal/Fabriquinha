@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { AUDITOR } from "../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";

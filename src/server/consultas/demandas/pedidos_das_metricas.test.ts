@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDoPeriodo, em } from "../../../../apoio-testes/banco_de_metricas.ts";
+import { bancoDoPeriodo, em } from "../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { lerPedidosDasMetricas } from "./pedidos_das_metricas.ts";
 
 test("os pedidos das Métricas, de todas as demandas ou das pedidas, com o registro e a conclusão do histórico", () => {

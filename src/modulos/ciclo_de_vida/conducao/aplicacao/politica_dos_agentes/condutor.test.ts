@@ -10,9 +10,9 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
-import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
-import { instalarDockerFalso } from "../../../../../../apoio-testes/docker_falso.ts";
-import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
+import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
   inserirAmbienteAlocado,
   AmbienteContainer,

@@ -1,6 +1,6 @@
 // Histórico (F7 §4.4) no DOM: lê as sessões terminadas com os filtros, desenha a lista com as funções puras de
 // historico.ts, mostra a prévia da escolhida. Não se atualiza sozinho: o que terminou fica
-// terminado. Os testes de ponta a ponta (e2e/historico.spec.ts) o exercitam.
+// terminado. Os testes de ponta a ponta (e2e/telas/historico.spec.ts) o exercitam.
 import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";

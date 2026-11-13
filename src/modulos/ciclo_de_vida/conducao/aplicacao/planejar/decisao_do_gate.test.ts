@@ -14,7 +14,7 @@ import {
   plano,
   proporPlanoDoAgente,
   reprovarGateDoPlanejamento,
-} from "../../../../../../apoio-testes/cenario_de_planejamento.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_planejamento.ts";
 
 test("CA-4: plano válido leva ao gate e fica como evidência do planejar", () => {
   const { banco } = cenarioDePlanejamento({ estadoDoTicket: "em_execucao" });

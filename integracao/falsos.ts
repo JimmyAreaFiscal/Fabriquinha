@@ -1,5 +1,5 @@
 // Falso da suíte de integração do SDLC: a hospedagem (`gh` na frente do PATH, com o estado dos PRs num JSON). O pi falso
-// é o de `apoio-testes/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
+// é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
 import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { once } from "node:events";
@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, type TestContext } from "node:test";
-import { hospedagemFalsa } from "../apoio-testes/hospedagem_falsa.ts";
+import { hospedagemFalsa } from "../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
   ConjuntoDeAmbientes,
   montarConjuntoDoServico,
@@ -20,7 +20,7 @@ import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 
-/** O `gh` falso (a hospedagem já testada em `apoio-testes/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
+/** O `gh` falso (a hospedagem já testada em `apoio-testes/falsos/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
 export function ghFalso(dir: string) {
   const h = hospedagemFalsa(dir);
   h.zerar();
@@ -52,7 +52,10 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
   cpSync(join(import.meta.dirname, "projeto-container"), c.repo, { recursive: true });
   const pastaDoPi = join(c.repo, "pi-falso");
   mkdirSync(pastaDoPi);
-  copyFileSync(join(import.meta.dirname, "..", "apoio-testes", "pi_falso.ts"), join(pastaDoPi, "pi_falso.ts"));
+  copyFileSync(
+    join(import.meta.dirname, "..", "apoio-testes", "falsos", "pi_falso.ts"),
+    join(pastaDoPi, "pi_falso.ts"),
+  );
   writeFileSync(join(pastaDoPi, "pi"), PI_DA_IMAGEM, { mode: 0o755 });
   appendFileSync(join(c.repo, "Dockerfile"), "COPY --chmod=755 pi-falso /opt/pi-falso\nENV PATH=/opt/pi-falso:$PATH\n");
   git(c.repo, "add", "-A");

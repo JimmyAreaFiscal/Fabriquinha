@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
-import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import {
   AUDITOR,
   type Ator,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
-import { cadastrarProjetoLoja } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { cadastrarProjetoLoja } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../shared/nucleo/erros.ts";
 import { inserirAmbienteAlocado } from "../../modulos/ambiente/publico.ts";
 import { gravarProjeto, projetoExistente } from "../../modulos/demandas/publico.ts";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "../../configuracao/publico.ts";
 import { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";

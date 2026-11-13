@@ -10,7 +10,7 @@ import { servir } from "../../../../../../apoio-testes/servidor_web_de_teste.ts"
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 

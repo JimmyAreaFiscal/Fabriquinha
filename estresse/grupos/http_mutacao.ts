@@ -17,7 +17,7 @@ import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fa
 import { carregarDemanda, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { exigirGit } from "../../src/modulos/repositorio/publico.ts";
-import { instalarDockerFalso } from "../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../apoio-testes/falsos/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";

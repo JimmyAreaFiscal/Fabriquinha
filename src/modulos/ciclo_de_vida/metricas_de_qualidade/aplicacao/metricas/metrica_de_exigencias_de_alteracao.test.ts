@@ -6,7 +6,7 @@ import {
   gravarDecisaoEm,
   gravarExecucao,
   origemDe,
-} from "../../../../../../apoio-testes/banco_de_metricas.ts";
+} from "../../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import type { EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaDeExigenciasDeAlteracao } from "./metrica_de_exigencias_de_alteracao.ts";

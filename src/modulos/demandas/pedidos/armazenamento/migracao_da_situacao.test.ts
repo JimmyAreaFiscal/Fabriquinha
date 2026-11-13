@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { cadastrarProjetoLoja } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { cadastrarProjetoLoja } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { EstadoDemanda } from "../../../ciclo_de_vida/publico.ts";
 import { lerPedido } from "./pedidos.ts";

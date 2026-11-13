@@ -7,7 +7,7 @@ import {
   CONTEXTO_DOS_PEDIDOS,
   registrarPedidoDeTeste,
   situacaoGravada,
-} from "../../../apoio-testes/pedidos_de_teste.ts";
+} from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { AUDITOR, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { lerPedido } from "../../modulos/demandas/publico.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../shared/nucleo/erros.ts";

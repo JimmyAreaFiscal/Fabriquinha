@@ -1,7 +1,11 @@
 // O fluxo da conclusão: o encerramento do processo e a conclusão do pedido gravados na mesma unidade de trabalho.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoComProjeto, pedidoEnviadoDeTeste, situacaoGravada } from "../../../apoio-testes/pedidos_de_teste.ts";
+import {
+  bancoComProjeto,
+  pedidoEnviadoDeTeste,
+  situacaoGravada,
+} from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { concluirDesenvolvimento } from "./conclusao_do_desenvolvimento.ts";
 
 const concluirOProcesso = (banco: ReturnType<typeof bancoComProjeto>, id: string) => () => {

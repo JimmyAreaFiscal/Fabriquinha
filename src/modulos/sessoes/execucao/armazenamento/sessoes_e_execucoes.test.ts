@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   agregadoNoEstado,
   cadastrarProjetoLoja,
   gravarAgregadoPronto,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { escopoDaExecucao } from "./sessoes_e_execucoes.ts";
 
 test("escopoDaExecucao traz a sessão e o ticket da execução, aberta ou terminada, e nada da que não existe", () => {

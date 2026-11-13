@@ -1,8 +1,8 @@
 // As Dependências num banco temporário: o registro da aresta (CA-2 a CA-6) e os dependentes que ainda não terminaram.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/pedidos_de_teste.ts";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
+import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";

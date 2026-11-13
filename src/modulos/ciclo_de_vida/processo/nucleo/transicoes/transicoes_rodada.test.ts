@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clonarAgregadoDemanda as structuredClone } from "../../../../../../apoio-testes/clonar_agregado_demanda.ts";
+import { clonarAgregadoDemanda as structuredClone } from "../../../../../../apoio-testes/cenarios/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 import { AgregadoDemanda } from "../agregado/agregado_demanda.ts";
 import { CICLO_DA_RODADA } from "../ciclos/ciclos.ts";

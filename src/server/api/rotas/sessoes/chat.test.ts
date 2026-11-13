@@ -19,10 +19,13 @@ import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/demandas/publico.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../../../modulos/sessoes/publico.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
+import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");

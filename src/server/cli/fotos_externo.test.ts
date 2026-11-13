@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { after, mock, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { executarFabriquinha as principal } from "../composicao/cli.ts";
 
 const novoBancoTemporario = fabricaDeBancosTemporarios();

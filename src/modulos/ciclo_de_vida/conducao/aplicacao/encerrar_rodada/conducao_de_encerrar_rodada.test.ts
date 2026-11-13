@@ -9,7 +9,7 @@ import {
   MARCA,
   BRANCH_DEMANDA,
   BRANCH_RODADA,
-} from "../../../../../../apoio-testes/cenario_de_encerramento_rodada.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_encerramento_rodada.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";

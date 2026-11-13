@@ -15,7 +15,7 @@ import {
   enderecoDoTicket,
   todas,
   verif,
-} from "../../../../../../apoio-testes/cenario_de_implementacao.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import type { OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";
 import { ConducaoDeResolverConflito } from "./conducao_de_resolver_conflito.ts";

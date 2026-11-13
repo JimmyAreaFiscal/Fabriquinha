@@ -4,13 +4,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../../demandas/publico.ts";
 import { carregarDemanda } from "../../processo/publico.ts";
 

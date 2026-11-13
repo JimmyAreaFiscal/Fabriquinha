@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import {
   type AgregadoDemanda,
@@ -32,7 +32,7 @@ import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { registrarProjeto } from "../../../../demandas/publico.ts";
 import { gravarCommitDemanda, garantirWorktreeDemanda } from "../../../../repositorio/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import {
   criarSessao,
   iniciarExecucao,

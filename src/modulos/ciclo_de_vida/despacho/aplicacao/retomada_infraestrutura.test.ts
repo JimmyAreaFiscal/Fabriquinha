@@ -1,13 +1,13 @@
 // Política de retomada contra banco real: só as causas tipadas decidem, nunca o texto do motivo.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { carregarDemanda, POLITICA_DE_TENTATIVAS } from "../../processo/publico.ts";
 import { comDemanda } from "../../processo/armazenamento/agregado_da_demanda.ts";
 import {

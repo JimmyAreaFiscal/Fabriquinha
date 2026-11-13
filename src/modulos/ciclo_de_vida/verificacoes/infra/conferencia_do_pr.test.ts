@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
+import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import type { Hospedagem, OpcoesVerificacao } from "../../../repositorio/publico.ts";
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
 

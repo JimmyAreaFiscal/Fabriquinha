@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   cadastrarProjetoLoja,
   comEvidencia,
   gravarAgregadoPronto,
   montarAgregadoDemanda,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { gravarAnexos } from "../../evidencias/publico.ts";
 import { visaoDaDemanda } from "./visao_da_demanda.ts";

@@ -20,7 +20,7 @@ import {
   proporPlanoDoAgente,
   registrarExterna,
 } from "./apoio.ts";
-import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
+import { instalarPiFalso } from "../apoio-testes/falsos/pi_falso.ts";
 
 const pi = instalarPiFalso(base);
 const harness = new HarnessPi();

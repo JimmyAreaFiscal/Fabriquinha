@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   cadastrarProjetoLoja,
@@ -13,7 +13,7 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { decidirRevisao } from "./decidir_revisao.ts";

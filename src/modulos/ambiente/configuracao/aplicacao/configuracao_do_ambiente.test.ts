@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { configuracaoDoAmbiente } from "../armazenamento/configuracao_do_ambiente.ts";
 import { validarESalvarConfiguracaoDoAmbiente } from "./configuracao_do_ambiente.ts";
 

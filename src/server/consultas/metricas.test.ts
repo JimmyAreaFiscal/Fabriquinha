@@ -4,7 +4,7 @@ process.env.TZ = "America/Sao_Paulo"; // o mês do relógio é o do fuso do serv
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { relogioFixo } from "../../shared/nucleo/relogio.ts";
 import { consultarMetricasDasDemandas, consultarMetricasDosMeses } from "./metricas.ts";
 

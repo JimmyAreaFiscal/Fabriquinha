@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import {
   prDaDemanda,
   AUDITOR,
@@ -34,7 +34,7 @@ import {
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
@@ -45,7 +45,7 @@ import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamen
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { integrarPR, exigirGit } from "../../src/modulos/repositorio/publico.ts";
-import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
+import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 

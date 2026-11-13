@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, ocupanteDoAmbiente } from "../../../repositorio/publico.ts";
 import { Projeto } from "../../../demandas/publico.ts";

@@ -1,7 +1,7 @@
 // A origem do pedido num banco temporário: o achado da Avaliação de onde ele foi encaminhado.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/pedidos_de_teste.ts";
+import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { origemDoPedido } from "./pedidos.ts";
 
 test("o pedido encaminhado de um achado tem a origem dele; o registrado direto, nenhuma", () => {

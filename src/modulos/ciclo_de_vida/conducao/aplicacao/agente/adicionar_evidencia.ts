@@ -10,8 +10,14 @@ import {
 } from "../../../processo/publico.ts";
 import { type EspacoDeTrabalho, espacoDoTicket, ambienteDoEspaco } from "../../../../repositorio/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { agregadoDaRodada, type AnexoEnviado, type Origens } from "../../../evidencias/publico.ts";
-import { Endereco } from "../../../etapas/publico.ts";
+import {
+  agregadoDaRodada,
+  type AnexoEnviado,
+  type EsquemaDeEvidencia,
+  type Origens,
+  schemaDoTipo,
+} from "../../../evidencias/publico.ts";
+import { CATALOGO_ETAPAS, Endereco, TipoEvidencia } from "../../../etapas/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { gerarAula, type Trecho } from "../encerrar_rodada/documentacao_do_pr/aula.ts";
 import {
@@ -24,8 +30,24 @@ import {
   type ProcessoDoAgente,
   reconferirExecucao,
 } from "./escopo.ts";
-import { tipoDoAgente } from "./tipo_do_agente.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+
+/** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
+const TIPOS_QUE_O_AGENTE_SUBMETE: readonly TipoEvidencia[] = [
+  ...new Set(CATALOGO_ETAPAS.filter((i) => i.produtor === "agente").map((i) => i.tipo)),
+];
+
+/** O tipo que o agente submete e o schema dele; os demais tipos não têm comando do agente. */
+export function tipoDoAgente(texto: string): { tipo: TipoEvidencia; schema: EsquemaDeEvidencia } {
+  const tipo = TipoEvidencia.safeParse(texto);
+  if (!tipo.success || !TIPOS_QUE_O_AGENTE_SUBMETE.includes(tipo.data)) {
+    throw new ErroDeRegra(
+      `${texto} não é evidência que o agente submete`,
+      `use um de ${TIPOS_QUE_O_AGENTE_SUBMETE.join(", ")}`,
+    );
+  }
+  return { tipo: tipo.data, schema: schemaDoTipo(tipo.data) };
+}
 
 /**
  * A evidência que o agente submete ao próprio ticket; `dados` é o valor da opção, que `lerJson` lê, e cada anexo chega

@@ -22,8 +22,8 @@ import { anotar } from "../src/shared/infra/registro.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
-import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
-import { instalarPiFalso, type PassoPi } from "../apoio-testes/pi_falso.ts";
+import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 

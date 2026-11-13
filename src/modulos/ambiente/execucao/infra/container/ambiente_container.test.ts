@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { instalarDockerFalso } from "../../../../../../apoio-testes/docker_falso.ts";
+import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteContainer } from "./ambiente_container.ts";
 import { pastasDoAmbiente } from "../../../sandboxes/infra/pastas_do_ambiente.ts";

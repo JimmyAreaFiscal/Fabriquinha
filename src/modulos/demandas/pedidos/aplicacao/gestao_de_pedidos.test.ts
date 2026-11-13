@@ -8,7 +8,7 @@ import {
   pedidoEnviadoDeTeste,
   registrarPedidoDeTeste,
   situacaoGravada,
-} from "../../../../../apoio-testes/pedidos_de_teste.ts";
+} from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { ErroDeEscopo, ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { lerPedido } from "../armazenamento/pedidos.ts";
 import {

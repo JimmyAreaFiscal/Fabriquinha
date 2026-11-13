@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   cadastrarProjetoLoja,
@@ -15,7 +15,7 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { createHash } from "node:crypto";
 import { adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";

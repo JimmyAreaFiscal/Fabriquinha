@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { mensagem } from "../../../../shared/nucleo/erros.ts";
 import { Endereco } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";

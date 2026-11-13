@@ -2,7 +2,7 @@
 // (o padrão), e a lista esperada na ordem de `desde`. Início, board, Projeto e chat leem este mesmo cenário.
 import type { AgregadoDemanda, TipoPendencia } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { projeto } from "./apoio.ts";
 
 /** Uma Pendência esperada: o endereço do item e o tipo. */

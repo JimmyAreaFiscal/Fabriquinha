@@ -4,7 +4,7 @@ import {
   INSTANTE_DO_CENARIO,
   montarAgregadoDemanda,
   montarTicket,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { type Ator, AUDITOR, TipoEvidencia, CATALOGO_ETAPAS, Endereco } from "../../etapas/publico.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {

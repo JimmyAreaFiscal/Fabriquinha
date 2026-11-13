@@ -17,7 +17,7 @@ import {
   planejar,
   proporPlanoDoAgente,
   reprovarGateDoPlanejamento,
-} from "../../../../../../apoio-testes/cenario_de_planejamento.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";

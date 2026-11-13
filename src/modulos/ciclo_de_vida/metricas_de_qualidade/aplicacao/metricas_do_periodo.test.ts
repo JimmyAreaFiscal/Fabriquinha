@@ -8,7 +8,7 @@ import {
   gravarUsoDeclarado,
   linhaDeUsoDeclarado,
   origemDe,
-} from "../../../../../apoio-testes/banco_de_metricas.ts";
+} from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import type { TipoMetrica } from "../../etapas/publico.ts";
 import { type MetricasDaEtapa, metricasDasDemandasDoPeriodo, metricasDosMeses, NIVEIS } from "./metricas_do_periodo.ts";
 

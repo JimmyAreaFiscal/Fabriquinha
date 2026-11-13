@@ -9,7 +9,7 @@ import {
   pedidoEnviadoDeTeste,
   registrarPedidoDeTeste,
   situacaoGravada,
-} from "../../../apoio-testes/pedidos_de_teste.ts";
+} from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { AUDITOR, type Ator, condutor, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../modulos/sessoes/publico.ts";

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   type AgregadoDemanda,
   prDaDemanda,
@@ -27,8 +27,8 @@ import {
 } from "../../../../repositorio/publico.ts";
 import { registrarProjeto, lerPedido } from "../../../../demandas/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
-import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../../../../../../apoio-testes/hospedagem_falsa.ts";
+import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
   criarRepositorioDeTeste,
   commitarArquivo,

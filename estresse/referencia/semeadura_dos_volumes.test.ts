@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";

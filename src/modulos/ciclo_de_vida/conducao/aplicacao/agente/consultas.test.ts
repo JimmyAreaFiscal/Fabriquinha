@@ -1,7 +1,7 @@
 // As leituras do agente contra banco real: o projeto, a demanda e o ticket do próprio agente, pelo endereço público.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   cadastrarProjetoLoja,
@@ -10,7 +10,7 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { verDemanda, verProjeto, verTicket } from "./consultas.ts";

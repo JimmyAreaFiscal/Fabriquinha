@@ -4,7 +4,7 @@ import { type TestContext, test } from "node:test";
 import { Endereco } from "../../../etapas/publico.ts";
 import { configuracao } from "../../../despacho/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");

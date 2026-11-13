@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { comEvidencia, comPlanoSubmetido } from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
-import { clonarAgregadoDemanda as structuredClone } from "../../../../../../apoio-testes/clonar_agregado_demanda.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { clonarAgregadoDemanda as structuredClone } from "../../../../../../apoio-testes/cenarios/clonar_agregado_demanda.ts";
 import {
   type Ator,
   AUDITOR,

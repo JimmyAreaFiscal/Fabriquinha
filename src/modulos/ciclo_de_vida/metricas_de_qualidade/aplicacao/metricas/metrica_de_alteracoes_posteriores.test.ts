@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDoPeriodo, doMes, origemDe } from "../../../../../../apoio-testes/banco_de_metricas.ts";
+import { bancoDoPeriodo, doMes, origemDe } from "../../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import { MetricaDeAlteracoesPosteriores } from "./metrica_de_alteracoes_posteriores.ts";
 

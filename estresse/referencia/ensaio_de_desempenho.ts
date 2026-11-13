@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { cpus } from "node:os";
 import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import { somarMeses } from "../../src/shared/nucleo/periodo.ts";
 import { mesDoInstante, relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";

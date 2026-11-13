@@ -1,8 +1,8 @@
 // As leituras em lote de Planejamento, sem o agregado: os tickets e os Planos das demandas, e os tickets em execução.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bancoDaDemanda, bancoDoPeriodo, em } from "../../../../../apoio-testes/banco_de_metricas.ts";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { bancoDaDemanda, bancoDoPeriodo, em } from "../../../../../apoio-testes/banco/banco_de_metricas.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { planosDasDemandas, ticketsDasDemandas, ticketsEmExecucaoDasEtapas } from "./itens_do_planejamento.ts";
 
 test("os tickets das demandas em lote, com a Etapa, a rodada, o estado e os instantes", () => {

@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { instalarDockerFalso } from "../../../apoio-testes/docker_falso.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarDockerFalso } from "../../../apoio-testes/falsos/docker_falso.ts";
 import {
   inserirAmbienteAlocado,
   liberarAmbiente,

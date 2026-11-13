@@ -7,9 +7,9 @@ import { execFile } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { gravarTokenDaExecucao } from "../../../apoio-testes/cenario_da_api_do_agente.ts";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarTokenDaExecucao } from "../../../apoio-testes/cenarios/cenario_da_api_do_agente.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
+import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 import type { AgregadoDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 

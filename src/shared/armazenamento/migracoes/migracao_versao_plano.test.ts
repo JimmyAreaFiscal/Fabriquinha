@@ -5,7 +5,7 @@ import { MetricaDeConformidade } from "../../../modulos/ciclo_de_vida/metricas_d
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
-import { origemDe } from "../../../../apoio-testes/banco_de_metricas.ts";
+import { origemDe } from "../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
 
 const VERSAO_48 = VERSAO_LINHA_DE_BASE + 12;

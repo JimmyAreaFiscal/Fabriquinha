@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { bancoMigrado, origemDe, sha } from "../../../../../../apoio-testes/banco_de_metricas.ts";
+import { bancoMigrado, origemDe, sha } from "../../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import { ErroDeInexistente } from "../../../../../shared/nucleo/erros.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import { MetricaDeConformidade } from "./metrica_de_conformidade.ts";

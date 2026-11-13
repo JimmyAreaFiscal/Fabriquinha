@@ -2,7 +2,7 @@
 // política de uso dos agentes (prompt, modelo, capacidades, retomada, triagem do Auditor automático) entregue pronta a
 // Sessões; as conduções de cada Etapa, a decisão dos gates com os efeitos fora do agregado, os casos de uso do agente e o
 // chat do Auditor: o estado da sessão do ticket, a Pendência que a segura, as marcas da conversa e as ações dele.
-export { adicionarEvidenciaComAnexosEnviados } from "./aplicacao/agente/adicionar_evidencia.ts";
+export { adicionarEvidenciaComAnexosEnviados, tipoDoAgente } from "./aplicacao/agente/adicionar_evidencia.ts";
 export { verDemanda, verProjeto, verTicket } from "./aplicacao/agente/consultas.ts";
 export { criarTicketCorretivo } from "./aplicacao/agente/criar_ticket_corretivo.ts";
 export { decidirRevisao } from "./aplicacao/agente/decidir_revisao.ts";
@@ -13,7 +13,6 @@ export {
   type ProcessoDoAgente,
   resolverEscopoDoToken,
 } from "./aplicacao/agente/escopo.ts";
-export { tipoDoAgente } from "./aplicacao/agente/tipo_do_agente.ts";
 export { concluirSessaoAjustes } from "./aplicacao/ajustar_resultado/sessao_ajustes.ts";
 export { abortarDemanda, responderDialogoDemanda } from "./aplicacao/chat_do_auditor/acoes_do_auditor_no_chat.ts";
 export { marcadorDaConversa, promptsDaFabriquinha } from "./aplicacao/chat_do_auditor/marcas_da_conversa.ts";

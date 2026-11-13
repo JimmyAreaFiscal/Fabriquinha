@@ -23,8 +23,8 @@ import {
   REF,
   reprovarPRRodada,
   URL_PR,
-} from "../../../../../../apoio-testes/cenario_de_ajustes.ts";
-import { limitarTempoDoPi } from "../../../../../../apoio-testes/limite_do_pi.ts";
+} from "../../../../../../apoio-testes/cenarios/cenario_de_ajustes.ts";
+import { limitarTempoDoPi } from "../../../../../../apoio-testes/falsos/limite_do_pi.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "./sessao_ajustes.ts";

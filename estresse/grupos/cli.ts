@@ -19,7 +19,7 @@ import {
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { criarDemandaNova } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 

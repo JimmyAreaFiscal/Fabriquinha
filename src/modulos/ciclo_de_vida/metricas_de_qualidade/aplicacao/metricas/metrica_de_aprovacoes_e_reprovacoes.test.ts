@@ -7,7 +7,7 @@ import {
   gravarDecisaoEm,
   gravarTicket,
   origemDe,
-} from "../../../../../../apoio-testes/banco_de_metricas.ts";
+} from "../../../../../../apoio-testes/banco/banco_de_metricas.ts";
 import type { Recorte } from "../../nucleo/metrica.ts";
 import { MetricaDeAprovacoesEReprovacoes } from "./metrica_de_aprovacoes_e_reprovacoes.ts";
 

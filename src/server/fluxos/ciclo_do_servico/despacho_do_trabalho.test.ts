@@ -3,12 +3,12 @@
 // "Executar agora" a recebem.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   agregadoNoEstado,
   cadastrarProjetoLoja,
   gravarAgregadoPronto,
-} from "../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import {
   Endereco,
   EstadoDemanda,

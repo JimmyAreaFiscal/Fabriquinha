@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../aplicacao/cadastro.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";

@@ -18,7 +18,7 @@ import {
   comEvidencia,
   REF_GLOBAL,
   REF_RODADA,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { decidirGate } from "../gates.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";

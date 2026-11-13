@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/pi_falso.ts";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
 import {
   criarSessao,
@@ -18,7 +18,7 @@ import {
   comSessoesDoContexto,
 } from "../../../sessoes/publico.ts";
 import { registrarProjeto, registrarDependencia } from "../../../demandas/publico.ts";
-import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
 import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";

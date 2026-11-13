@@ -1,7 +1,7 @@
 // O ticket corretivo que o agente de uma sessão de ajustes cria na própria rodada, contra banco real.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   cadastrarProjetoLoja,
@@ -10,7 +10,7 @@ import {
   montarAgregadoDemanda,
   montarRodada,
   montarTicket,
-} from "../../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { criarTicketCorretivo } from "./criar_ticket_corretivo.ts";

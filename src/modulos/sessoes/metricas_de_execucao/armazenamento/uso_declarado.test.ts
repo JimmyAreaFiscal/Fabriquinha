@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import type { LinhaDeUso } from "../../harness/publico.ts";
 import { lerUsoDeclaradoEmLote, gravarUsoDeclarado, lerUsoDeclarado } from "./uso_declarado.ts";
 

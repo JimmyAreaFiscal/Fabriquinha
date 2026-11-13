@@ -1,7 +1,7 @@
 // O Uso em lote (por sessão, contexto e período) e o resumo da sessão, lidos só do banco, sem a conversa.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
 import { execucoesEmLote, resumoDaSessao, resumosDasSessoesEmLote } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type Execucao, type Sessao } from "../nucleo/sessao.ts";

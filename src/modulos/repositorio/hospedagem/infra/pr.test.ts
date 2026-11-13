@@ -7,7 +7,7 @@ import { after, beforeEach, test } from "node:test";
 import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Hospedagem } from "../../git/publico.ts";
-import { hospedagemFalsa } from "../../../../../apoio-testes/hospedagem_falsa.ts";
+import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { integrarPR, lerPR, PADROES_DA_ESPERA_DO_PR, publicarPRDe, verificarPR } from "./pr.ts";
 

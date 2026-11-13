@@ -1,8 +1,8 @@
 // Rotas do Início: o painel das demandas em andamento e as recusas do Despacho, com o corpo conferido pelo contrato.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { cenarioDoInicio } from "../../../../apoio-testes/cenario_do_inicio.ts";
+import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { cenarioDoInicio } from "../../../../apoio-testes/cenarios/cenario_do_inicio.ts";
 import { servir } from "../../../../apoio-testes/servidor_web_de_teste.ts";
 import { cicloDoDespacho, configuracao, despachoDasEtapas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";

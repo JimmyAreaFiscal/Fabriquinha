@@ -1,7 +1,7 @@
 // decidirGate, o ponto de entrada único dos gates do motor (todos menos o da demanda): a entrada reprovada pela regra não muda o banco e o erro é o do ensaio do núcleo.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco_temporario.ts";
+import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import {
   abrirTrabalhoDoAgente,
   agregadoComPullRequestAberto,
@@ -13,7 +13,7 @@ import {
   INSTANTE_DO_CENARIO,
   REF_GLOBAL,
   REF_RODADA,
-} from "../../../../../apoio-testes/cenarios_de_demanda.ts";
+} from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { type AgregadoDemanda, carregarDemanda } from "../../processo/publico.ts";
 import { type Ator, AUDITOR, Endereco, type NomeGate } from "../../etapas/publico.ts";
 import { GATES, decidirGate } from "./gates.ts";
