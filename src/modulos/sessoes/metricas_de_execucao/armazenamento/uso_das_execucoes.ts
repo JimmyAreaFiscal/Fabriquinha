@@ -1,0 +1,28 @@
+// O Uso medido das execuções (tabela `uso_modelo_execucao`), uma linha por execução e modelo. Quem diz quais execuções
+// ler é a Execução; aqui só se lê e grava o Uso delas.
+import type { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
+import { UsoDaExecucao } from "../nucleo/uso_da_execucao.ts";
+
+/** O Uso das execuções `execucoes`, na ordem em que foi gravado; custo NULL é desconhecido e volta sem a chave, nunca zero. */
+export const lerUsoDasExecucoes = (banco: DatabaseSync, execucoes: readonly string[]): UsoDaExecucao[] =>
+  z.array(UsoDaExecucao).parse(
+    banco
+      .prepare("SELECT * FROM uso_modelo_execucao WHERE execucao_id IN (SELECT value FROM json_each(?)) ORDER BY rowid")
+      .all(JSON.stringify(execucoes))
+      .map(({ custo, ...uso }) => (custo === null ? uso : { ...uso, custo })),
+  );
+
+/** Grava cada Uso pela chave (execução e modelo): a chave que já existe troca tokens e custo. */
+export function gravarUsoDasExecucoes(banco: DatabaseSync, usos: readonly UsoDaExecucao[]): void {
+  const gravarUso = banco.prepare(
+    `INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida,
+       tokens_cache_leitura, tokens_cache_escrita, custo)
+     VALUES ($execucao_id, $modelo_provedor, $modelo_nome, $tokens_entrada, $tokens_saida, $tokens_cache_leitura,
+       $tokens_cache_escrita, $custo)
+     ON CONFLICT (execucao_id, modelo_provedor, modelo_nome) DO UPDATE SET tokens_entrada = excluded.tokens_entrada,
+       tokens_saida = excluded.tokens_saida, tokens_cache_leitura = excluded.tokens_cache_leitura,
+       tokens_cache_escrita = excluded.tokens_cache_escrita, custo = excluded.custo`,
+  );
+  for (const uso of usos) gravarUso.run({ ...uso, custo: uso.custo ?? null });
+}

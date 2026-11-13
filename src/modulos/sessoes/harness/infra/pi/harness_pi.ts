@@ -7,7 +7,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../../../sandbox/infra/ambiente.ts";
+import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../../../ambiente/publico.ts";
 import type { Modelo } from "../../../modelos/publico.ts";
 import type { EventoDoAgente } from "../../nucleo/eventos.ts";
 import type { Harness, LancamentoDoTicket, ProcessoDoAgente, RespostaDaConsulta } from "../../nucleo/harness.ts";

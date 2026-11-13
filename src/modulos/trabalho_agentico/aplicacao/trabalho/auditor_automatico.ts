@@ -1,3 +1,4 @@
+// provisório: o ticket 15 absorve na Condução (a triagem é política: chega pronta às Sessões no pedido do processo).
 // Auditor automático: a pergunta que o agente de um ticket autônomo faz com a `perguntar` vai antes a um modelo, numa
 // chamada única do pi sem ferramentas. Ele responde o que é banal pelas regras do Auditor e escala o estratégico, que
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
@@ -5,30 +6,15 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { registrarUsoDaConsulta, type TicketRef } from "./processo_do_ticket.ts";
 import { condutor } from "./condutor.ts";
-import type { Modelo } from "../../../compartilhado/nucleo/primitivos.ts";
+import type { Modelo, PerguntaDoAgente, RespostaAPergunta } from "../../../sessoes/publico.ts";
 import type { EtapaTicket } from "../../../etapas/catalogo.ts";
 import { oAgenteDecideOGate } from "../../../etapas/catalogo.ts";
-
-export interface PerguntaDoAgente {
-  pergunta: string;
-  detalhes?: string;
-  /** Os rótulos das opções; vazio na pergunta de texto livre. */
-  opcoes: string[];
-  /** As descrições das opções, na ordem de `opcoes` ("" sem descrição); ausente quando nenhuma tem. */
-  descricoes?: string[];
-}
 
 interface ContextoDaPergunta {
   /** Endereço público do ticket (`I-12.T3`), a etapa e o título da demanda. */
   ticket: string;
   etapa: EtapaTicket;
   demanda: string;
-}
-
-export interface RespostaDoAuditorAutomatico {
-  /** Um dos rótulos, na pergunta com opções; senão, o texto da resposta. */
-  resposta: string;
-  justificativa: string;
 }
 
 /**
@@ -103,11 +89,7 @@ const Decisao = z.discriminatedUnion("decisao", [
  * deploy de teste também escala.
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function lerDecisao(
-  saida: string,
-  p: PerguntaDoAgente,
-  etapa: EtapaTicket,
-): RespostaDoAuditorAutomatico | undefined {
+export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: EtapaTicket): RespostaAPergunta | undefined {
   const decisao = saida
     .split("\n")
     .map((linha) => {
@@ -151,7 +133,7 @@ export async function triarPergunta(
   contexto: ContextoDaPergunta,
   p: PerguntaDoAgente,
   quemPerguntou?: ExecucaoQuePerguntou,
-): Promise<RespostaDoAuditorAutomatico | undefined> {
+): Promise<RespostaAPergunta | undefined> {
   const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS);
   if (resposta === undefined) return undefined;
   if (quemPerguntou) {

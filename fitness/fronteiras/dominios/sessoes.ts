@@ -2,12 +2,10 @@
 // (../motor.ts) explica os campos e como declarar o domínio migrado.
 import type { RegrasDoDominio } from "../motor.ts";
 
-/** O condutor: o único que lança o pi e consulta o modelo. */
-export const ARQUIVO_DO_CONDUTOR = "modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
+/** As sessões de agente: o único que lança o pi e consulta o modelo. */
+export const ARQUIVO_DO_CONDUTOR = "modulos/sessoes/execucao/aplicacao/sessoes_de_agente.ts";
 /** O adapter pi, que implementa `.lancar(` e `.perguntar(`. */
 export const ARQUIVO_DO_HARNESS = "modulos/sessoes/harness/infra/pi/harness_pi.ts";
-
-const IMPORTA_O_CODIGO_ANTIGO = "um domínio migrado não importa o código antigo";
 
 export const REGRAS_DE_SESSOES: RegrasDoDominio = {
   migrado: true,
@@ -17,24 +15,13 @@ export const REGRAS_DE_SESSOES: RegrasDoDominio = {
     harness: ["modelos"],
     modelos: [],
     historico: [],
-    execucao: ["harness", "historico"],
-    chat: ["harness", "historico"],
+    // O fim da execução grava o Uso dela na mesma unidade de trabalho, e os eventos vivos vão ao chat.
+    execucao: ["harness", "historico", "chat", "metricas_de_execucao", "modelos"],
+    chat: ["harness"],
     metricas_de_execucao: ["harness", "modelos"],
   },
   posseDasTabelas: "inventario",
-  // O Ambiente ainda não tem fachada (ticket 06): o harness lança o agente pelo Ambiente do código antigo.
-  excecoes: [
-    {
-      arquivo: "modulos/sessoes/harness/nucleo/harness.ts",
-      import: `../../../sandbox/infra/ambiente.ts (${IMPORTA_O_CODIGO_ANTIGO})`,
-      ticket: "09",
-    },
-    {
-      arquivo: "modulos/sessoes/harness/infra/pi/harness_pi.ts",
-      import: `../../../../sandbox/infra/ambiente.ts (${IMPORTA_O_CODIGO_ANTIGO})`,
-      ticket: "09",
-    },
-  ],
+  excecoes: [],
   dependenciasToleradas: [],
   // O pi sem worktree fala com o host.
   processoDoHost: {

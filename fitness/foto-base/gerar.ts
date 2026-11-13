@@ -19,14 +19,15 @@ import { dirname, join, resolve } from "node:path";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/modulos/sdlc/nucleo/demanda/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
-import { criarTrabalho, iniciarProcesso } from "../../src/modulos/trabalho_agentico/nucleo/trabalho_agentico.ts";
+import {
+  comSessoesDoContexto,
+  criarSessao,
+  gravarTokenDaExecucao,
+  iniciarExecucao,
+} from "../../src/modulos/sessoes/publico.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { abrir, raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import {
-  comTrabalhosDoTicket,
-  gravarTokenDoProcesso,
-} from "../../src/modulos/trabalho_agentico/armazenamento/trabalho_agentico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { publicarPRDe } from "../../src/modulos/repositorio/infra/hospedagem/pr.ts";
@@ -229,8 +230,8 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
         : []),
     ],
   } as unknown as AgregadoDemanda);
-  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
-    const sessoes = criarTrabalho(e.sessoes, {
+  comSessoesDoContexto(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
+    const sessoes = criarSessao(e.sessoes, {
       id: "s-exec-7",
       demanda_id: "I-206",
       ticket_id: 7,
@@ -240,7 +241,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     return {
       ...e,
       sessoes,
-      execucoes: iniciarProcesso(sessoes, e.execucoes, {
+      execucoes: iniciarExecucao(sessoes, e.execucoes, {
         id: "exec-7",
         trabalho_id: "s-exec-7",
         inicio: em,
@@ -248,7 +249,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       }),
     };
   });
-  gravarTokenDoProcesso(banco, "exec-7", "token-exec-7");
+  gravarTokenDaExecucao(banco, "exec-7", "token-exec-7");
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");

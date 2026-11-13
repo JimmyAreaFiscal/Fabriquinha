@@ -1,3 +1,5 @@
+// provisório: remover no ticket 21. A lista de sessões do Histórico junta `trabalho_agentico` (de Sessões) às tabelas das
+// Demandas e do Ciclo de Vida; a consulta da tela passa a montá-la pelas fachadas.
 import type { DatabaseSync } from "node:sqlite";
 import type { EtapaTicket } from "../../etapas/catalogo.ts";
 

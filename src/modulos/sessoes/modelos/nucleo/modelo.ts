@@ -10,3 +10,7 @@ export const Modelo = z.object({ provedor: Slug, nome: z.string().trim().min(1).
 
 export type Effort = z.infer<typeof Effort>;
 export type Modelo = z.infer<typeof Modelo>;
+
+/** O modelo e o effort com que uma execução rodou, cada um opcional; a política os escolhe e entrega prontos. */
+export const ConfiguracaoDoModelo = z.object({ modelo: Modelo.optional(), effort: Effort.optional() });
+export type ConfiguracaoDoModelo = z.infer<typeof ConfiguracaoDoModelo>;

@@ -1,8 +1,8 @@
 // O Harness (F4 §6.1): a ferramenta que roda o agente de código num Ambiente, hoje o pi (`harness/infra/pi/`). O resto do
-// serviço só conhece esta interface; a única instância concreta nasce na composição e chega pelo `CondutorDeTrabalhos`.
+// serviço só conhece esta interface; a única instância concreta nasce na composição e chega pelas `SessoesDeAgente`.
 // O adapter traduz os eventos e o Uso do harness para os contratos da Fabriquinha (`eventos.ts`, `uso.ts`).
 import { z } from "zod";
-import type { Ambiente, IdentificadorDoProcesso } from "../../../sandbox/infra/ambiente.ts";
+import type { Ambiente, IdentificadorDoProcesso } from "../../../ambiente/publico.ts";
 import type { Effort, Modelo } from "../../modelos/publico.ts";
 import type { EventoDoAgente } from "./eventos.ts";
 import type { LinhaDeUso } from "./uso.ts";

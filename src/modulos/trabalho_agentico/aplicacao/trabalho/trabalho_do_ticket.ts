@@ -1,3 +1,4 @@
+// provisório: o ticket 15 absorve na Condução (quem pode agir em qual ticket é política, não Sessões).
 // O agente só age no próprio ticket: o Ator `agente` traz só o `trabalho_id` (o `processo_do_trabalho.id`), então o núcleo não
 // sabe de quem é o trabalho. Quem grava a ação de um agente (decisão, evidência, ticket corretivo) chama esta conferência.
 import type { DatabaseSync } from "node:sqlite";

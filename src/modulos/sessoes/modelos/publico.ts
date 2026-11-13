@@ -1,2 +1,2 @@
-// A API do subdomínio Modelos: o modelo do agente e o esforço de raciocínio.
-export { Effort, Modelo } from "./nucleo/modelo.ts";
+// A API do subdomínio Modelos: o modelo do agente, o esforço de raciocínio e os dois juntos, como a execução os guarda.
+export { ConfiguracaoDoModelo, Effort, Modelo } from "./nucleo/modelo.ts";
