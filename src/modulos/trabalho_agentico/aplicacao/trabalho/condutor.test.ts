@@ -9,6 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { isDeepStrictEqual } from "node:util";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco_temporario.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../../apoio-testes/pi_falso.ts";
@@ -491,10 +492,18 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
       ],
       "interativo",
     );
-    await dormir(300);
+    const retratoEsperado = encerrada ? ["message_end"] : ["message_start", "message_update"];
+    // Com a suíte inteira em paralelo, o pi falso pode levar mais que um intervalo fixo para emitir os eventos: espera o
+    // retrato chegar, assinando e desassinando, em vez de dormir um tempo fixo.
+    const tiposDoRetratoAtual = () => {
+      const tipos: string[] = [];
+      condutor.assinar(execucao.sessao, (evento) => tipos.push(evento.type))();
+      return tipos;
+    };
+    await ate(() => isDeepStrictEqual(tiposDoRetratoAtual(), retratoEsperado), "o retrato da mensagem");
     const recebidos: string[] = [];
     const pararRetrato = condutor.assinar(execucao.sessao, (evento) => recebidos.push(evento.type));
-    assert.deepEqual(recebidos, encerrada ? ["message_end"] : ["message_start", "message_update"]);
+    assert.deepEqual(recebidos, retratoEsperado);
     const pararFalho = condutor.assinar(execucao.sessao, (evento) => {
       if (evento.type === "response") throw new Error("ouvinte indisponível");
     });

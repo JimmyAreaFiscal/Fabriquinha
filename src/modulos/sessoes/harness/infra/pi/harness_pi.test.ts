@@ -361,6 +361,11 @@ test("lancar: o ticket vai com a linha de comando no log, o stdin aberto e as va
       () => undefined,
     );
     assert.equal(await Promise.race([ticket.saiu, dormir(200, "preso")]), "preso");
+    // Com a suíte inteira em paralelo, o pi falso pode não ter gravado o início em 200 ms: parar antes o mataria sem registro.
+    for (let esperaMs = 0; piFalso.registro().length === 0; esperaMs += 10) {
+      assert.ok(esperaMs < 5000, "o pi falso não começou em 5 s");
+      await dormir(10);
+    }
     await ticket.parar();
     assert.match(readFileSync(log, "utf8"), /pi --mode rpc --session-dir /);
     assert.equal(piFalso.registro()[0]?.execucao, "do-servico", "as variáveis do serviço vão por cima");

@@ -1,6 +1,6 @@
 // O registro de uma Verificação com `dados` que o schema do tipo aceita, atendendo ou não à regra dele: o fechamento do
 // ticket submete esses `dados` ao Avaliador, que recusa o que o schema não aceita e a verificação que não atende.
-import type { RegistroDaVerificacao } from "../src/modulos/verificacao/aplicacao/coleta_das_verificacoes.ts";
+import type { RegistroDaVerificacao } from "../src/modulos/ciclo_de_vida/publico.ts";
 
 type TipoDaVerificacao = RegistroDaVerificacao["tipo"];
 

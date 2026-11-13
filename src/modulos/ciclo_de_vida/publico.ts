@@ -4,3 +4,4 @@
 export * from "./etapas/publico.ts";
 export * from "./planejamento/publico.ts";
 export * from "./evidencias/publico.ts";
+export * from "./verificacoes/publico.ts";

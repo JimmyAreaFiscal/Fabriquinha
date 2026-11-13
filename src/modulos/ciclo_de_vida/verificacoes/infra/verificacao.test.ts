@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ErroDeRegra } from "../../compartilhado/nucleo/erros.ts";
-import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../etapas/catalogo.ts";
-import type { TipoVerificacao } from "../../etapas/definicao/tipos_declaraveis.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { CATALOGO_DE_ETAPAS, EtapaTicket } from "../../etapas/publico.ts";
+import type { TipoVerificacao } from "../../etapas/publico.ts";
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
-import { LIMITE } from "../../sdlc/nucleo/evidencias/schemas.ts";
+import { LIMITE } from "../../../sdlc/nucleo/evidencias/schemas.ts";
 import { montarVerificacoesDaEtapa, ULTIMOS_BYTES_DO_LOG } from "./verificacao.ts";
 
 const COM_CODIGO: TipoVerificacao[] = ["testes", "fitness", "sonar", "hooks_do_commit"];

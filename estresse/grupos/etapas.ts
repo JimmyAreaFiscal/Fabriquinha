@@ -24,7 +24,7 @@ import { registrarCorrecoesSessao } from "../../src/modulos/sdlc/nucleo/transico
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/modulos/etapas/encerrar_demanda/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
-import type { RegistroDaVerificacao } from "../../src/modulos/verificacao/aplicacao/coleta_das_verificacoes.ts";
+import type { RegistroDaVerificacao } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { cicloDoDespacho } from "../../src/modulos/sdlc/aplicacao/despacho/despacho.ts";
 import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
