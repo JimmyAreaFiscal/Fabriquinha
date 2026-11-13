@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import { AgregadoDemanda } from "../agregado/agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../compartilhado/nucleo/erros.ts";
-import { iniciarTentativaDoTicket } from "./inicio_da_tentativa.ts";
+import { iniciarTentativaDoTicket } from "./inicio_da_execucao.ts";
 import { Endereco } from "../../../../compartilhado/nucleo/vocabulario_do_sdlc/endereco.ts";
 
 const t0 = "2026-01-01T00:00:00Z";

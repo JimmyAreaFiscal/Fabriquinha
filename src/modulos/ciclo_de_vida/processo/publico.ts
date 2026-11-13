@@ -63,7 +63,6 @@ export {
   mudarTicket,
   planoSubmetido,
   reabrirTicket,
-  retomarTicketFalhoPorInfraestrutura,
   tentativasAposSair,
   ticketDaDemanda,
 } from "./nucleo/transicoes/transicoes_demanda.ts";
@@ -92,6 +91,8 @@ export {
   registrarIntegracaoFinal,
   registrarPRDaRodada,
   registrarTentativaDoEncerramento,
+  reservarTicketSelecionado,
+  retomarFalhaDeInfraestruturaDoTicket,
   solicitarIntegracaoFinal,
 } from "./aplicacao/transicoes_pedidas.ts";
 export { submeterEvidencia } from "./aplicacao/submissao_de_evidencia.ts";
@@ -115,16 +116,12 @@ export {
   carregarDemanda,
   carregarDemandas,
   carregarEscopoDoProcesso,
-  comDemanda,
   listarDemandas,
   situacaoDasDemandas,
 } from "./armazenamento/agregado_da_demanda.ts";
 export {
   apagarEstadoDoProcessoDasDemandas,
-  apagarEstadoQueSumiu,
-  carregarEstadoDoProcesso,
   decisoesEmLote,
-  gravarEstadoNovoEMudado,
   lerTentativasDasDemandas,
   tentativasReprovadasEmLote,
 } from "./armazenamento/estado_do_processo.ts";

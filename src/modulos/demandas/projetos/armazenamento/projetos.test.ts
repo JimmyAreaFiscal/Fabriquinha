@@ -11,7 +11,7 @@ import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../../ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { registrarDemanda } from "../../../ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
-import { iniciarTentativaDoTicket } from "../../../ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_tentativa.ts";
+import { iniciarTentativaDoTicket } from "../../../ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import { FABRIQUINHA } from "../../../compartilhado/nucleo/vocabulario_do_sdlc/ator.ts";
 import {
   apagarProjeto,

@@ -3,7 +3,7 @@
 // da revisão). O Gate da demanda, que cancela em cascata, é decidido pelo fluxo do servidor, junto dos pedidos. Os efeitos de cada Etapa (integrar o PR, falar com o pi) ficam na pasta dela, e
 // `etapas/gates.ts` junta um Gate por nome.
 import type { DatabaseSync } from "node:sqlite";
-import { type AgregadoDemanda, comDemanda, type Gate } from "../../../processo/publico.ts";
+import { type AgregadoDemanda, decidirGateNaDemanda, type Gate } from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
@@ -33,12 +33,13 @@ export const gateDeRevisao = (regra: Gate): GateComEfeitos => ({
   regra,
   decidir(banco, endereco, entrada, ator, relogio) {
     const { resultado } = regra.validarEntrada(entrada, ator);
-    const demanda = comDemanda(banco, endereco.demanda_id, (ag) => {
-      const ticket = regra.ancora(ag, endereco);
-      exigirTrabalhoDoTicket(banco, ator, ticket);
-      const decidida = regra.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() });
-      if (resultado === "aprovado") conferirAprovacao(ag, ticket.ticket_id);
-      return decidida;
+    const demanda = decidirGateNaDemanda(banco, regra, endereco, entrada, ator, relogio, {
+      antes: (_ag, ticket) => {
+        exigirTrabalhoDoTicket(banco, ator, ticket);
+      },
+      depois: (ag, ticket) => {
+        if (resultado === "aprovado") conferirAprovacao(ag, ticket.ticket_id);
+      },
     });
     return { demanda, canceladas: [] };
   },

@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../../etapas/publico.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../../etapas/publico.ts";
 import { AgregadoDemanda } from "../../processo/nucleo/agregado/agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { reservarTicket } from "./reserva_ticket.ts";
+import type { ContextoDemanda } from "../../processo/publico.ts";
+import { reservarTicketAberto } from "../../processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
+import { exigirSelecaoDoDespacho } from "./reserva_ticket.ts";
+
+/** A reserva como o Despacho a pede ao Processo: o ticket aberto, guardado pela seleção do Despacho. */
+const reservarTicket = (
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+  predecessorasSatisfeitas: boolean,
+): AgregadoDemanda =>
+  reservarTicketAberto(ag, entrada, ator, ctx, (agregado, ticket) => {
+    exigirSelecaoDoDespacho(agregado, ticket, predecessorasSatisfeitas);
+  });
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";

@@ -3,15 +3,14 @@
 // agendador, a Fabriquinha devolve esses tickets a `aberto`, se a política das Tentativas manda; a seleção global os
 // escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA, formatarTicketRef, resolverConfiguracaoAgente } from "../../etapas/publico.ts";
+import { formatarTicketRef, resolverConfiguracaoAgente } from "../../etapas/publico.ts";
 import {
-  comDemanda,
   desdeAReabertura,
   POLITICA_DE_TENTATIVAS,
-  retomarTicketFalhoPorInfraestrutura,
+  retomarFalhaDeInfraestruturaDoTicket,
   tentativasDoTicket,
 } from "../../processo/publico.ts";
-import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
+import { type Relogio, relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
 import { agregadosDespachados } from "./despacho.ts";
 import type { Modelo } from "../../../sessoes/publico.ts";
@@ -46,11 +45,8 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relo
         if (!modelo) continue;
       }
       try {
-        comDemanda(banco, ag.demanda.id, (a) =>
-          retomarTicketFalhoPorInfraestrutura(a, { ticket_id: t.ticket_id, ...(modelo && { modelo }) }, FABRIQUINHA, {
-            agora,
-          }),
-        );
+        // Todas as retomadas do ciclo no mesmo instante, o do começo da varredura.
+        retomarFalhaDeInfraestruturaDoTicket(banco, t, modelo, relogioFixo(agora));
         retomados.push(formatarTicketRef(t));
       } catch (erro) {
         noLog(erro);

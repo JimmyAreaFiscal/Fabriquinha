@@ -5,10 +5,10 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   type AgregadoDemanda,
   CICLO_DA_DEMANDA,
-  comDemanda,
   EstadoDemanda,
   etapaDoEstado,
   iniciarRevisaoIntegral,
+  reservarTicketSelecionado,
   type TicketDemanda,
 } from "../../processo/publico.ts";
 import {
@@ -19,15 +19,9 @@ import {
   type ResultadoDoDespacho,
   type SituacaoDoDespacho,
 } from "../nucleo/despacho.ts";
-import { reservarTicket } from "../nucleo/reserva_ticket.ts";
+import { exigirSelecaoDoDespacho } from "../nucleo/reserva_ticket.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import {
-  CATALOGO_DE_ETAPAS,
-  Endereco,
-  exigirEtapaConduzida,
-  FABRIQUINHA,
-  formatarTicketRef,
-} from "../../etapas/publico.ts";
+import { CATALOGO_DE_ETAPAS, Endereco, exigirEtapaConduzida, formatarTicketRef } from "../../etapas/publico.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
@@ -116,9 +110,9 @@ export const reservarTicketParaAFabriquinha = (
   relogio: Relogio,
   predecessorasSatisfeitas: boolean,
 ): AgregadoDemanda =>
-  comDemanda(banco, demanda_id, (ag) =>
-    reservarTicket(ag, { ticket_id }, FABRIQUINHA, { agora: relogio.agora() }, predecessorasSatisfeitas),
-  );
+  reservarTicketSelecionado(banco, { demanda_id, ticket_id }, relogio, (ag, ticket) => {
+    exigirSelecaoDoDespacho(ag, ticket, predecessorasSatisfeitas);
+  });
 
 /**
  * Reserva o ticket aberto (o planejamento reprovado que se retoma já está em execução) e o entrega à Condução da Etapa

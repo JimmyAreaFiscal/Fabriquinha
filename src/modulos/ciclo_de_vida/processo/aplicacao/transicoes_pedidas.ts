@@ -1,17 +1,25 @@
-// As transições que a Condução pede ao Processo (MELHORIAS §11, regra 1): cada uma abre a unidade de trabalho da demanda,
-// aplica a transição do agregado no instante do relógio e grava; quem pede só diz qual transição e com que dados.
+// As transições que a Condução e o Despacho pedem ao Processo (MELHORIAS §11, regra 1): cada uma abre a unidade de
+// trabalho da demanda, aplica a transição do agregado no instante do relógio e grava; quem pede só diz qual transição e
+// com que dados, e o Processo é o único que grava o estado do desenvolvimento.
 import type { DatabaseSync } from "node:sqlite";
+import type { Modelo } from "../../../sessoes/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { type Ator, type Endereco, FABRIQUINHA, type FalhaDaTentativa } from "../../etapas/publico.ts";
 import { PRIMEIRA_ETAPA_DA_RODADA } from "../nucleo/ciclos/ciclos.ts";
-import { type AgregadoDemanda, comPrDaRodada, type PullRequestDoEspaco } from "../nucleo/agregado/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  comPrDaRodada,
+  type PullRequestDoEspaco,
+  type TicketDemanda,
+} from "../nucleo/agregado/agregado_demanda.ts";
 import type { Gate } from "../nucleo/agregado/gate_da_demanda.ts";
 import { comDemanda } from "../armazenamento/agregado_da_demanda.ts";
-import { iniciarTentativaDoTicket } from "../nucleo/transicoes_do_ticket/inicio_da_tentativa.ts";
+import { iniciarTentativaDoTicket, reservarTicketAberto } from "../nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import {
   type ContextoDemanda,
   devolverTicket,
   registrarFalhaTicket,
+  retomarTicketFalhoPorInfraestrutura,
   ticketDaDemanda,
 } from "../nucleo/transicoes/transicoes_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/transicoes_do_ticket/conclusao_ticket.ts";
@@ -46,6 +54,33 @@ const pedidoDa =
     comDemanda(banco, demandaId, (ag) => transicao(ag, entrada, ator, { agora: relogio.agora() }));
 
 // O ticket.
+
+/**
+ * Reserva o ticket aberto para a Fabriquinha: vai a `em_execucao` só se `exigirSelecao` (a seleção do Despacho) o deixa,
+ * na mesma unidade de trabalho que lê o agregado. Atômica: de duas reservas simultâneas, a segunda o acha em execução.
+ */
+export const reservarTicketSelecionado = (
+  banco: DatabaseSync,
+  { demanda_id, ticket_id }: TicketDaTransicao,
+  relogio: Relogio,
+  exigirSelecao: (ag: AgregadoDemanda, ticket: TicketDemanda) => void,
+): AgregadoDemanda =>
+  comDemanda(banco, demanda_id, (ag) =>
+    reservarTicketAberto(ag, { ticket_id }, FABRIQUINHA, { agora: relogio.agora() }, exigirSelecao),
+  );
+
+/** Reabre sem o Auditor o ticket que falhou por infraestrutura, com o modelo da retomada quando a política o troca. */
+export const retomarFalhaDeInfraestruturaDoTicket = (
+  banco: DatabaseSync,
+  { demanda_id, ticket_id }: TicketDaTransicao,
+  modelo: Modelo | undefined,
+  relogio: Relogio,
+): AgregadoDemanda =>
+  comDemanda(banco, demanda_id, (ag) =>
+    retomarTicketFalhoPorInfraestrutura(ag, { ticket_id, ...(modelo && { modelo }) }, FABRIQUINHA, {
+      agora: relogio.agora(),
+    }),
+  );
 
 /** Abre, no início da execução, a Tentativa do ticket que começa a executar, guardando o processo dela. */
 export const abrirTentativaDoTicket = (
@@ -155,7 +190,13 @@ export const concluirEncerramentoDaDemanda = pedidoDa(concluirEncerramento);
 
 // Os gates.
 
-/** A decisão do gate sobre o agregado da demanda, pela regra dele. */
+/** O que quem pede a decisão confere no ticket âncora, na mesma unidade de trabalho: antes e depois de a regra decidir. */
+interface ConferenciasDaDecisao {
+  antes(ag: AgregadoDemanda, ticket: TicketDemanda): void;
+  depois(ag: AgregadoDemanda, ticket: TicketDemanda): void;
+}
+
+/** A decisão do gate sobre o agregado da demanda, pela regra dele; a conferência que recusa desfaz tudo. */
 export const decidirGateNaDemanda = (
   banco: DatabaseSync,
   regra: Gate,
@@ -163,10 +204,17 @@ export const decidirGateNaDemanda = (
   entrada: unknown,
   ator: Ator,
   relogio: Relogio,
+  conferencias?: ConferenciasDaDecisao,
 ): AgregadoDemanda =>
-  comDemanda(banco, endereco.demanda_id, (ag) =>
-    regra.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() }),
-  );
+  comDemanda(banco, endereco.demanda_id, (ag) => {
+    const decidir = () => regra.decidir(ag, endereco, entrada, ator, { agora: relogio.agora() });
+    if (conferencias === undefined) return decidir();
+    const ticket = regra.ancora(ag, endereco);
+    conferencias.antes(ag, ticket);
+    const decidida = decidir();
+    conferencias.depois(ag, ticket);
+    return decidida;
+  });
 
 /** A aprovação do gate do PR da rodada, com o PR integrado na hospedagem, na mesma unidade de trabalho. */
 export const aprovarPRIntegradoDaRodada = (
