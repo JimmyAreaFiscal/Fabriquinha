@@ -2,7 +2,7 @@
 // previstos e versões do Plano. Este é o único arquivo que fala SQL com elas; o agregado da demanda as carrega e grava
 // por aqui, no meio das tabelas dele (todas dependem só de `demanda`, e as do Processo dependem delas).
 import type { DatabaseSync, StatementSync } from "node:sqlite";
-import type { Ator, ConfiguracaoAgente } from "../../etapas/publico.ts";
+import type { Ator, ConfiguracaoAgente, EtapaTicket } from "../../etapas/publico.ts";
 import {
   agruparColunasDoCampo,
   apagarLinhasQueSumiram,
@@ -186,3 +186,21 @@ export function carregarItensDoPlanejamento(preparar: (sql: string) => Statement
     })),
   };
 }
+
+/**
+ * Os tickets `em_execucao` das Etapas de `sempre` e, das Etapas de `noEstadoDaRodada`, só os da rodada que ainda está no
+ * estado da própria Etapa.
+ */
+export const ticketsEmExecucaoDasEtapas = (
+  banco: DatabaseSync,
+  etapas: { sempre: readonly EtapaTicket[]; noEstadoDaRodada: readonly EtapaTicket[] },
+): VinculoDoTicket[] =>
+  banco
+    .prepare(
+      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
+         etapa IN (SELECT value FROM json_each(?))
+         OR (etapa IN (SELECT value FROM json_each(?)) AND EXISTS (SELECT 1 FROM rodada r
+           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = t.etapa)))`,
+    )
+    .all(JSON.stringify(etapas.sempre), JSON.stringify(etapas.noEstadoDaRodada))
+    .map((linha) => ({ ...linha }) as unknown as VinculoDoTicket);

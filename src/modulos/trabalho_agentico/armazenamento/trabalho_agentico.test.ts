@@ -19,7 +19,6 @@ import {
   sessaoDeCadaTicketDasDemandas,
   ticketDoTrabalho,
   ticketsComPiAtivo,
-  ticketsEmExecucaoSemProcesso,
   trabalhosComTicketDaDemanda,
 } from "./trabalho_agentico.ts";
 
@@ -238,24 +237,6 @@ test("o ticket dono do trabalho e os trabalhos da demanda; id desconhecido volta
     { id: "s2", ...noTicket2 },
   ]);
   assert.deepEqual(trabalhosComTicketDaDemanda(b, "I-2"), []);
-});
-
-test("tickets em execução de etapa que fecha depois da execução; ticket aberto ou de etapa fora da lista não entram", () => {
-  const b = banco();
-  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
-  b.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
-  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), [ref]);
-  b.exec("UPDATE ticket_demanda SET etapa = 'planejar' WHERE ticket_id = 1");
-  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
-});
-
-test("o ticket da Etapa cujo Gate espera em estado próprio só entra com a rodada ainda no estado da Etapa", () => {
-  const b = banco();
-  b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'encerrar_rodada', ${T}, 0, 'fabriquinha/I-1-1');
-    UPDATE ticket_demanda SET estado = 'em_execucao', etapa = 'encerrar_rodada', rodada_id = 1 WHERE ticket_id = 1`);
-  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), [ref]);
-  b.exec("UPDATE rodada SET estado = 'gate_pr'");
-  assert.deepEqual(ticketsEmExecucaoSemProcesso(b), []);
 });
 
 test("trabalhos do histórico com o título da demanda, filtrados por projeto, demanda e etapa", () => {

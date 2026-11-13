@@ -16,4 +16,5 @@ export {
   apagarItensQueSumiram,
   carregarItensDoPlanejamento,
   gravarItensNovosEMudados,
+  ticketsEmExecucaoDasEtapas,
 } from "./armazenamento/itens_do_planejamento.ts";

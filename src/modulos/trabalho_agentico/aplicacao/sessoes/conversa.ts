@@ -7,6 +7,9 @@ export { emMarkdown, type Mensagem, texto } from "../../../sessoes/publico.ts";
 /** As entradas do JSONL da sessão; linha incompleta do fim fica de fora. */
 export const lerConversa = (raiz: string, sessao: string): unknown[] => condutor.lerConversa(raiz, sessao);
 
-/** As perguntas que o agente fez com `perguntar` e que o Auditor respondeu; sessão sem arquivo não tem perguntas. */
+/**
+ * As perguntas que o agente fez com `perguntar` e que o Auditor respondeu; sessão sem arquivo não tem perguntas.
+ * @testes provisório: remover no ticket 22 (a Condução lê do condutor; só os testes antigos usam este caminho)
+ */
 export const perguntasRespondidasNaSessao = (raiz: string, sessao: string): { pergunta: string; resposta: string }[] =>
   condutor.perguntasRespondidasNaSessao(raiz, sessao);
