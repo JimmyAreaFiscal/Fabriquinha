@@ -1,5 +1,5 @@
-// Regras de fronteira do domínio Demandas (MELHORIAS §12): a fachada publico.ts e os subdomínios Projetos, Pedidos e
-// Dependências. O motor (../motor.ts) explica os campos.
+// Regras de fronteira do domínio Demandas (MELHORIAS §12): a fachada publico.ts e os subdomínios Projetos e Pedidos
+// (que absorveu as Dependências e monta a GestaoDeDemandas). O motor (../motor.ts) explica os campos.
 import type { RegrasDoDominio } from "../motor.ts";
 
 export const REGRAS_DE_DEMANDAS: RegrasDoDominio = {
@@ -9,7 +9,6 @@ export const REGRAS_DE_DEMANDAS: RegrasDoDominio = {
   subdominios: {
     projetos: [],
     pedidos: ["projetos"],
-    dependencias: ["pedidos"],
   },
   processoDoHost: { pastasLiberadas: [], importamChildProcess: [], chamadoresDiretos: [] },
 };

@@ -22,13 +22,13 @@ export const ROTAS_DO_INICIO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/inicio",
-    tratar: ({ banco, relogio }) => consultarInicio(banco, relogio),
+    tratar: ({ banco, demandas, relogio }) => consultarInicio(banco, demandas, relogio),
     resposta: DadosDoInicio,
   },
   {
     metodo: "GET",
     caminho: "/api/pendencias/quantidade",
-    tratar: ({ banco, relogio }) => consultarQuantidadeDePendencias(banco, relogio),
+    tratar: ({ banco, demandas, relogio }) => consultarQuantidadeDePendencias(banco, demandas, relogio),
     resposta: QuantidadeDePendencias,
   },
   { metodo: "GET", caminho: "/api/despacho", tratar: recusasDoDespacho, resposta: RecusasDoDespacho },

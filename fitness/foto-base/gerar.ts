@@ -26,7 +26,7 @@ import {
 } from "../../src/modulos/sessoes/publico.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
@@ -264,6 +264,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       porta,
       agendador: { proximaBusca: () => new Date() },
       ambientes,
+      demandas: montarDemandasDoBanco(banco),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

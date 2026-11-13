@@ -29,7 +29,6 @@ import { pastasDoProcesso } from "../../nucleo/pastas_do_processo.ts";
 import { ConducaoDeImplementar } from "../implementar/conducao_de_implementar.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
-import { registrarProjeto } from "../../../../demandas/publico.ts";
 import { gravarCommitDemanda, garantirWorktreeDemanda } from "../../../../repositorio/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
@@ -50,6 +49,7 @@ import {
 import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

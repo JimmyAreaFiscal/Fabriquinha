@@ -35,8 +35,8 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relo
       let modelo: Modelo | undefined;
       if (passo.trocarProvedor) {
         const etapa = projetosCadastrados()
-          .buscarProjeto(banco, ag.demanda.projeto)
-          ?.etapas.find((e) => e.etapa === t.etapa);
+          .projetoExistente(banco, ag.demanda.projeto)
+          .etapas.find((e) => e.etapa === t.etapa);
         const { modelo: modeloResolvido } = resolverConfiguracaoAgente({
           ticket: t.configuracao_agente,
           etapaDoProjeto: etapa?.configuracao_agente,

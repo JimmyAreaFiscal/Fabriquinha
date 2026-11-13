@@ -16,7 +16,7 @@ import {
   type ResumoDaSessao,
   resumosDasSessoesEmLote,
 } from "../../../modulos/sessoes/publico.ts";
-import { pedidosDoProjeto } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Resultado, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
 import { montarCabecalhoDaSessao, sessaoDoTicketDoResumo } from "./chat.ts";
 
@@ -91,16 +91,20 @@ export function sessoesDasDemandas(
  * As sessões do filtro, das demandas que têm sessão (só as da demanda ou do projeto pedido, se houver), com as demandas
  * lidas em lote.
  */
-export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDemanda): SessaoDeDemanda[] {
+export function sessoesDeDemanda(
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  filtro: FiltroSessoesDemanda,
+): SessaoDeDemanda[] {
   const demandasDoFiltro =
     filtro.demanda !== undefined
       ? [filtro.demanda]
       : filtro.projeto !== undefined
-        ? pedidosDoProjeto(banco, filtro.projeto)
+        ? gestaoDeDemandas.pedidos({ projeto: filtro.projeto }).map(({ id }) => id)
         : undefined;
   const resumos = resumosDasSessoesEmLote(banco, demandasDoFiltro);
-  const demandas = resumosDasDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
-  return sessoesDosResumos(resumos, new Map(demandas.map((ag) => [ag.demanda.id, ag])), filtro);
+  const resumosDasDemandasLidas = resumosDasDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
+  return sessoesDosResumos(resumos, new Map(resumosDasDemandasLidas.map((ag) => [ag.demanda.id, ag])), filtro);
 }
 
 /**

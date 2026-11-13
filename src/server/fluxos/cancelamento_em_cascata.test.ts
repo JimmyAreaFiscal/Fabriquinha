@@ -14,6 +14,7 @@ import { AUDITOR, type Ator, condutor, carregarDemanda } from "../../modulos/cic
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../modulos/sessoes/publico.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "./cancelamento_em_cascata.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 
 const ctx = CONTEXTO_DOS_PEDIDOS;
 const aprovar = { resultado: "aprovado" };
@@ -45,7 +46,7 @@ test("CA-16: aprovar o Gate da demanda leva ao planejamento, grava a decisão e 
   const banco = bancoComProjeto();
   const a = pedidoEnviadoDeTeste(banco);
   const dependente = registrarPedidoDeTeste(banco, [a]);
-  const { demanda, canceladas } = decidirGateDaDemanda(banco, a, aprovar, AUDITOR);
+  const { demanda, canceladas } = decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, aprovar, AUDITOR);
   assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
   assert.equal(demanda.decisoes[0]?.resultado, "aprovado");
@@ -62,7 +63,7 @@ test("CA-17: reprovar com motivo cancela o pedido, o processo e os dependentes e
   const dependente = registrarPedidoDeTeste(banco, [a]);
   const feita = registrarPedidoDeTeste(banco, [a]);
   terminarComo(banco, feita, "concluida", "concluido");
-  const { demanda, canceladas } = decidirGateDaDemanda(banco, a, reprovar, AUDITOR);
+  const { demanda, canceladas } = decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, reprovar, AUDITOR);
   assert.equal(demanda.demanda.estado, "cancelada");
   assert.deepEqual(canceladas, [a, dependente]);
   assert.deepEqual(
@@ -79,7 +80,7 @@ test("CA-17: reprovar a demanda interrompe a execução aberta do dependente can
   const banco = bancoComProjeto();
   const a = pedidoEnviadoDeTeste(banco);
   const ref = abrirExecucao(banco, registrarPedidoDeTeste(banco, [a]), "s1");
-  decidirGateDaDemanda(banco, a, reprovar, AUDITOR);
+  decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, reprovar, AUDITOR);
   assert.ok(carregarSessoesDoContexto(banco, ref).execucoes[0]?.fim);
 });
 
@@ -87,14 +88,20 @@ test("CA-18 a CA-20: a entrada inválida, o autor e a demanda em registro são r
   const banco = bancoComProjeto();
   const a = pedidoEnviadoDeTeste(banco);
   assert.throws(
-    () => decidirGateDaDemanda(banco, a, { resultado: "reprovado" }, AUDITOR),
+    () => decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, { resultado: "reprovado" }, AUDITOR),
     /informe o motivo da reprovação/,
   );
-  assert.throws(() => decidirGateDaDemanda(banco, a, { resultado: "x" }, AUDITOR), ErroDeRegra);
-  assert.throws(() => decidirGateDaDemanda(banco, a, aprovar, agente), /Auditor/);
+  assert.throws(
+    () => decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, { resultado: "x" }, AUDITOR),
+    ErroDeRegra,
+  );
+  assert.throws(() => decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, aprovar, agente), /Auditor/);
   assert.deepEqual([estado(banco, a), situacaoGravada(banco, a)], ["gate_demanda", "enviado"]);
   const rascunho = registrarPedidoDeTeste(banco);
-  assert.throws(() => decidirGateDaDemanda(banco, rascunho, aprovar, AUDITOR), /não espera decisão/);
+  assert.throws(
+    () => decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), rascunho, aprovar, AUDITOR),
+    /não espera decisão/,
+  );
   assert.equal(estado(banco, rascunho), "entender_e_desenhar");
 });
 
@@ -108,7 +115,7 @@ test("CA-21: cancelar leva dependentes diretos e indiretos de outros projetos e 
   terminarComo(banco, d, "concluida", "concluido");
   terminarComo(banco, e, "arquivada", "concluido");
   colocarEmExecucao(banco, a);
-  const { canceladas } = cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
+  const { canceladas } = cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx);
   assert.deepEqual([...canceladas].sort(), [a, b, c].sort());
   assert.deepEqual(
     [a, b, c, d, e].map((id) => [estado(banco, id), situacaoGravada(banco, id)]),
@@ -127,7 +134,7 @@ test("CA-22: a execução órfã de um dependente é interrompida e fica com o f
   const a = registrarPedidoDeTeste(banco);
   const ref = abrirExecucao(banco, registrarPedidoDeTeste(banco, [a]), "s1");
   const refAlheia = abrirExecucao(banco, registrarPedidoDeTeste(banco), "s2");
-  cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
+  cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx);
   assert.equal(carregarSessoesDoContexto(banco, refAlheia).execucoes[0]?.fim, null);
   assert.ok(carregarSessoesDoContexto(banco, ref).execucoes[0]?.fim);
 });
@@ -143,7 +150,7 @@ test("ordem: as execuções abertas só são interrompidas depois do commit do c
     vistoNaInterrupcao.push({ emTransacao: banco.isTransaction, situacao: situacaoGravada(banco, a) });
     return interromperDeVerdade(execucao);
   });
-  cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
+  cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx);
   assert.deepEqual(vistoNaInterrupcao, [
     { emTransacao: false, situacao: "cancelado" },
     { emTransacao: false, situacao: "cancelado" },
@@ -153,10 +160,10 @@ test("ordem: as execuções abertas só são interrompidas depois do commit do c
 test("CA-23 e CA-24: o autor não cancela, e a demanda terminada não se cancela", () => {
   const banco = bancoComProjeto();
   const a = registrarPedidoDeTeste(banco);
-  assert.throws(() => cancelarDemandaEmCascata(banco, a, agente, ctx), /Auditor/);
+  assert.throws(() => cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, agente, ctx), /Auditor/);
   assert.deepEqual([estado(banco, a), situacaoGravada(banco, a)], ["entender_e_desenhar", "rascunho"]);
   terminarComo(banco, a, "concluida", "concluido");
-  assert.throws(() => cancelarDemandaEmCascata(banco, a, AUDITOR, ctx), /já terminou/);
+  assert.throws(() => cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx), /já terminou/);
   assert.deepEqual([estado(banco, a), situacaoGravada(banco, a)], ["concluida", "concluido"]);
 });
 
@@ -169,9 +176,9 @@ test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
     execucoes: [{ id: "e1", trabalho_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
   }));
-  decidirGateDaDemanda(banco, a, aprovar, AUDITOR);
+  decidirGateDaDemanda(banco, montarDemandasDoBanco(banco), a, aprovar, AUDITOR);
   const antes = { processo: carregarDemanda(banco, a), execucoes: carregarSessoesDoContexto(banco, ref).execucoes };
-  const { demanda } = cancelarDemandaEmCascata(banco, a, AUDITOR, ctx);
+  const { demanda } = cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx);
   assert.deepEqual(demanda.decisoes, antes.processo.decisoes);
   assert.deepEqual(demanda.evidencias, antes.processo.evidencias);
   assert.deepEqual(carregarSessoesDoContexto(banco, ref).execucoes, antes.execucoes);
@@ -185,7 +192,7 @@ test("CA-26 (atomicidade): a falha no processo de um dependente desfaz o pedido,
   const ref = abrirExecucao(banco, b, "s1");
   banco.exec(`CREATE TRIGGER falha BEFORE UPDATE OF estado ON processo_demanda WHEN NEW.demanda_id = '${c}' AND NEW.estado = 'cancelada'
     BEGIN SELECT RAISE(ABORT, 'falhou'); END`);
-  assert.throws(() => cancelarDemandaEmCascata(banco, a, AUDITOR, ctx), /falhou/);
+  assert.throws(() => cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx), /falhou/);
   assert.deepEqual(
     [a, b, c].map((id) => [estado(banco, id), situacaoGravada(banco, id)]),
     [
@@ -203,7 +210,10 @@ test("atomicidade: a falha ao gravar a situação dos pedidos desfaz o cancelame
   const b = registrarPedidoDeTeste(banco, [a]);
   banco.exec(`CREATE TRIGGER falha_na_situacao BEFORE UPDATE OF situacao ON demanda WHEN NEW.id = '${b}'
     BEGIN SELECT RAISE(ABORT, 'a situação falhou'); END`);
-  assert.throws(() => cancelarDemandaEmCascata(banco, a, AUDITOR, ctx), /a situação falhou/);
+  assert.throws(
+    () => cancelarDemandaEmCascata(banco, montarDemandasDoBanco(banco), a, AUDITOR, ctx),
+    /a situação falhou/,
+  );
   assert.deepEqual(
     [a, b].map((id) => [estado(banco, id), situacaoGravada(banco, id)]),
     [

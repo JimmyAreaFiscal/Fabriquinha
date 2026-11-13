@@ -25,7 +25,7 @@ import {
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
-import { dependentesNaoConcluidosDoPedido, origemDoPedido } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { PaginaDaDemanda } from "../../contrato/demanda.ts";
 import { ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { lerPedidosDasMetricas } from "./pedidos_das_metricas.ts";
@@ -73,6 +73,7 @@ const passosDoEncerramento = (ag: AgregadoDemanda): PaginaDaDemanda["encerrament
 /** A página da demanda `id`, lida num snapshot só; as dependentes que o cancelamento leva junto vêm de uma leitura em lote. */
 export function consultarDemanda(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
@@ -80,13 +81,16 @@ export function consultarDemanda(
   return lerEmSnapshot(banco, () => {
     const ag = carregarDemanda(banco, id);
     const { demanda } = ag;
-    const predecessoras = predecessorasDe(predecessorasDasDemandas(banco, [id]), id);
+    const predecessoras = predecessorasDe(predecessorasDasDemandas(banco, gestaoDeDemandas, [id]), id);
     const anexosDasEvidencias = anexosDaDemanda(banco, id);
     const { ticket, rodada } = enderecosNaDemanda(id);
-    const achado = origemDoPedido(banco, id);
+    const { origem: achado, dependentesPendentes } = gestaoDeDemandas.pedido(id);
     const sessoes = new Map(sessaoDeCadaTicketDasDemandas(banco, [id]).get(id));
     const comPiAtivo = ticketsComPiAtivo(banco);
-    const { modelos, custo, textoDoCusto } = usoDaDemanda({ banco, pedidos: lerPedidosDasMetricas(banco, [id]) }, id);
+    const { modelos, custo, textoDoCusto } = usoDaDemanda(
+      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas, [id]) },
+      id,
+    );
     const elegiveis = new Set(
       prontosParaExecutarAgora(
         new Despacho().selecionar({
@@ -98,7 +102,7 @@ export function consultarDemanda(
       ).map((t) => t.ticket_id),
     );
     return {
-      pendencias: pendenciasDeUmaDemanda(banco, ag, situacaoDa, relogio.agora()),
+      pendencias: pendenciasDeUmaDemanda(banco, gestaoDeDemandas, ag, situacaoDa, relogio.agora()),
       ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
       demanda: {
         id,
@@ -172,7 +176,7 @@ export function consultarDemanda(
       })),
       encerramento: passosDoEncerramento(ag),
       dependencias: predecessoras,
-      dependentes: resumosDasDemandas(banco, dependentesNaoConcluidosDoPedido(banco, id)).map(({ demanda: d }) => ({
+      dependentes: resumosDasDemandas(banco, dependentesPendentes).map(({ demanda: d }) => ({
         demanda_id: d.id,
         titulo: d.titulo,
         estado: d.estado,

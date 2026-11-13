@@ -3,7 +3,7 @@
 // estão sem varredura há 24 horas, e coleta os commits novos da base de cada um.
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
-import { listarProjetos, projetoExistente } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { projetosAVarrer, varrerCommitsHumanos } from "../../../modulos/repositorio/publico.ts";
 
 /**
@@ -12,17 +12,18 @@ import { projetosAVarrer, varrerCommitsHumanos } from "../../../modulos/reposito
  */
 export async function varrerCommitsHumanosVencidos(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
   registrarErro: (erro: unknown) => void,
 ): Promise<void> {
   const vencidos = projetosAVarrer(
     banco,
-    listarProjetos(banco).map((projeto) => projeto.nome),
+    gestaoDeDemandas.projetos().map((projeto) => projeto.nome),
     relogio,
   );
   for (const nome of vencidos) {
     try {
-      await varrerCommitsHumanos(banco, projetoExistente(banco, nome, "cadastre-o na Configuração"));
+      await varrerCommitsHumanos(banco, gestaoDeDemandas.projeto(nome, "cadastre-o na Configuração"));
     } catch (erro) {
       registrarErro(erro);
     }

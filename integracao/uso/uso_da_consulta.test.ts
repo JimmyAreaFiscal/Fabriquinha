@@ -25,6 +25,7 @@ import {
 import { base, ciclo, criarCenario, demanda, esperar } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 const gh = ghFalso(base);
 
@@ -101,7 +102,7 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
     c.banco,
     c.config,
     despachoComEsperaCurta(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
   );
   await esperar(() => pisAteAgora() === fins.length, "o pi do encerramento receber o prompt");
   comoAgente(c, id, encerramento.ticket_id, [

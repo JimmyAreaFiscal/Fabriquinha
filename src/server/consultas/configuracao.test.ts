@@ -4,7 +4,6 @@ import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporar
 import { cadastrarProjetoLoja } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { ErroDeInexistente } from "../../shared/nucleo/erros.ts";
 import { inserirAmbienteAlocado } from "../../../apoio-testes/falsos/ambiente_falso.ts";
-import { gravarProjeto, projetoExistente } from "../../modulos/demandas/publico.ts";
 import { noLog } from "../../shared/infra/registro.ts";
 import { montarAmbientesDoServico } from "../composicao/ambientes_do_servico.ts";
 import { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
@@ -14,6 +13,8 @@ import {
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
 } from "./configuracao.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
+import { gravarProjeto } from "../../../apoio-testes/demandas_de_teste.ts";
 
 const PROXIMA = new Date("2026-10-12T14:35:00.000Z");
 
@@ -48,15 +49,15 @@ test("o ambiente traz os limites gravados e o conjunto de containers, e cumpre o
 
 test("os projetos trazem o modelo e o effort de cada etapa; o que não existe é ErroDeInexistente", () => {
   const { banco } = abrirBancoTemporario();
-  assert.deepEqual(consultarProjetosCadastrados(banco), []);
+  assert.deepEqual(consultarProjetosCadastrados(montarDemandasDoBanco(banco)), []);
   cadastrarProjetoLoja(banco);
   gravarProjeto(banco, {
-    ...projetoExistente(banco, "loja"),
+    ...montarDemandasDoBanco(banco).projeto("loja"),
     etapas: [{ etapa: "implementar", configuracao_agente: { effort: "low" } }],
   });
-  const loja = consultarProjetoCadastrado(banco, "loja");
+  const loja = consultarProjetoCadastrado(montarDemandasDoBanco(banco), "loja");
   assert.deepEqual(loja.configuracoes, { implementar: { effort: "low" } });
-  assert.deepEqual(consultarProjetosCadastrados(banco), [loja]);
+  assert.deepEqual(consultarProjetosCadastrados(montarDemandasDoBanco(banco)), [loja]);
   assert.deepEqual(ProjetoCadastrado.parse(loja), loja);
-  assert.throws(() => consultarProjetoCadastrado(banco, "outro"), ErroDeInexistente);
+  assert.throws(() => consultarProjetoCadastrado(montarDemandasDoBanco(banco), "outro"), ErroDeInexistente);
 });

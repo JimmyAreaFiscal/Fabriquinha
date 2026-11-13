@@ -9,10 +9,12 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { gravarProjeto, Projeto, registrarProjeto } from "../../../modulos/demandas/publico.ts";
+import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { ListaDoProjeto } from "../../contrato/projeto.ts";
 import { consultarProjeto, estadoNaLinhaDoTempo } from "./projeto.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { gravarProjeto, registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const relogio = relogioFixo("2026-01-01T00:00:00.000Z");
@@ -34,7 +36,7 @@ function bancoComProjetos(...nomes: string[]): DatabaseSync {
 }
 
 const consultar = (banco: DatabaseSync, nome: string, filtro: Partial<typeof SEM_FILTRO> = {}) =>
-  consultarProjeto(banco, nome, { ...SEM_FILTRO, ...filtro }, relogio, semSessaoViva);
+  consultarProjeto(banco, montarDemandasDoBanco(banco), nome, { ...SEM_FILTRO, ...filtro }, relogio, semSessaoViva);
 
 const concluido = (demanda_id: string, ticket_id: number, etapa: string, extra: object = {}) =>
   montarTicket(demanda_id, ticket_id, etapa, { estado: "concluido", ...extra });

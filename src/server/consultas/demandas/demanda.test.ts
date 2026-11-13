@@ -10,6 +10,7 @@ import {
 import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { PaginaDaDemanda } from "../../contrato/demanda.ts";
 import { consultarDemanda } from "./demanda.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const relogio = relogioFixo("2026-01-01T00:00:00.000Z");
 const semSessaoViva = () => undefined;
@@ -50,18 +51,25 @@ test("CA-5: consultarDemanda prepara o mesmo número de SQL com 1 e com 20 depen
   cadastrarProjetoLoja(banco);
   const comUm = demandaComDependentes(banco, 1, 1);
   const comVinte = demandaComDependentes(banco, 10, 20);
-  consultarDemanda(banco, comUm, relogio, semSessaoViva); // a 1ª consulta do processo prepara a mais o que as seguintes reaproveitam
-  const preparosComUm = contarPrepare(banco, () => consultarDemanda(banco, comUm, relogio, semSessaoViva));
-  const preparosComVinte = contarPrepare(banco, () => consultarDemanda(banco, comVinte, relogio, semSessaoViva));
+  consultarDemanda(banco, montarDemandasDoBanco(banco), comUm, relogio, semSessaoViva); // a 1ª consulta do processo prepara a mais o que as seguintes reaproveitam
+  const preparosComUm = contarPrepare(banco, () =>
+    consultarDemanda(banco, montarDemandasDoBanco(banco), comUm, relogio, semSessaoViva),
+  );
+  const preparosComVinte = contarPrepare(banco, () =>
+    consultarDemanda(banco, montarDemandasDoBanco(banco), comVinte, relogio, semSessaoViva),
+  );
   assert.equal(preparosComVinte, preparosComUm);
-  assert.equal(consultarDemanda(banco, comVinte, relogio, semSessaoViva).dependentes.length, 20);
+  assert.equal(
+    consultarDemanda(banco, montarDemandasDoBanco(banco), comVinte, relogio, semSessaoViva).dependentes.length,
+    20,
+  );
 });
 
 test("a página traz os dependentes não terminados com título e estado, e cumpre o contrato", () => {
   const { banco } = abrirBancoTemporario();
   cadastrarProjetoLoja(banco);
   const id = demandaComDependentes(banco, 1, 2);
-  const pagina = consultarDemanda(banco, id, relogio, semSessaoViva);
+  const pagina = consultarDemanda(banco, montarDemandasDoBanco(banco), id, relogio, semSessaoViva);
   assert.deepEqual(pagina.dependentes, [
     { demanda_id: "I-2", titulo: "demanda I-2", estado: "entender_e_desenhar" },
     { demanda_id: "I-3", titulo: "demanda I-3", estado: "entender_e_desenhar" },
@@ -76,7 +84,7 @@ test("a demanda encaminhada de um achado de avaliação, da Avaliação que saiu
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-1", "entender_e_desenhar"));
   banco.exec(`INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('av-1', 'loja', '2026-01-01', '2026-01-31', '', 't');
     INSERT INTO achado_avaliacao (avaliacao_id, achado_id, titulo, descricao, evidencia, demanda_id) VALUES ('av-1', 1, 'Achado', 'd', 'e', 'I-1')`);
-  const pagina = consultarDemanda(banco, "I-1", relogio, semSessaoViva);
+  const pagina = consultarDemanda(banco, montarDemandasDoBanco(banco), "I-1", relogio, semSessaoViva);
   assert.deepEqual(pagina.origem, { avaliacao: "av-1", achado: 1, titulo: "Achado" });
   assert.deepEqual(PaginaDaDemanda.parse(pagina), pagina);
 });

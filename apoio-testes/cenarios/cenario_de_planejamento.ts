@@ -14,7 +14,6 @@ import {
   type AgregadoDemanda,
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { registrarDependencia, registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
@@ -25,6 +24,7 @@ import { limitarTempoDoPi } from "../falsos/limite_do_pi.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
 import { reservadoPeloDespacho } from "../reserva_do_despacho.ts";
+import { registrarDependencia, registrarProjeto } from "../demandas_de_teste.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));

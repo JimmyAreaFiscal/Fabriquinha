@@ -9,7 +9,7 @@ import { ZodError } from "zod";
 import type { Ator } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { buscarProjeto, gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
+import { Projeto } from "../src/modulos/demandas/publico.ts";
 import {
   AUTOR,
   base,
@@ -21,6 +21,7 @@ import {
   registrarExterna,
 } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/falsos/pi_falso.ts";
+import { buscarProjeto, gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 const harness = new HarnessPi();

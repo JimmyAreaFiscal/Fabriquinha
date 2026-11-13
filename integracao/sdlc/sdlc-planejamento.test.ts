@@ -16,11 +16,13 @@ import {
   cicloDoDespacho,
   executarAgora,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { gravarProjeto, Projeto, projetoExistente } from "../../src/modulos/demandas/publico.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "../apoio.ts";
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 
@@ -62,7 +64,7 @@ async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> 
     c.banco,
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
   );
   assert.equal(fins.length, ids.length, "o ciclo deveria iniciar só o planejamento de cada demanda");
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
@@ -94,7 +96,12 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   proporPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
   assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(c.banco)).length,
+    cicloDoDespacho(
+      c.banco,
+      c.config,
+      despachoDasEtapas(),
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ).length,
     0,
   );
   semDesenvolvimento(c, id);
@@ -145,7 +152,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   // A preparação só falha na worktree da rodada 2, depois da demanda e da rodada 1.
   const quebra = join(c.raiz, "quebra");
   const { banco, projeto } = c;
-  const projetoDoCenario = projetoExistente(banco, projeto);
+  const projetoDoCenario = montarDemandasDoBanco(banco).projeto(projeto);
   gravarProjeto(
     banco,
     Projeto.parse({
@@ -182,7 +189,12 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   );
   // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
   assert.equal(
-    cicloDoDespacho(banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)).length,
+    cicloDoDespacho(
+      banco,
+      c.config,
+      despachoDasEtapas(),
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(banco)),
+    ).length,
     0,
   );
   assert.equal(pi.prompts().length, chamadas);
@@ -256,7 +268,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 },
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
   );
   assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.estado, "falhou");
   assert.deepEqual(demanda(c, b), antesB);

@@ -1,6 +1,7 @@
 // A consulta do Histórico e da navegação: as sessões de demanda do escopo, lidas num snapshot só e no formato do
 // contrato da API.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import { Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
@@ -17,9 +18,13 @@ function demandaDoEndereco(texto: string): string {
 }
 
 /** As sessões do `filtro`, da que está assim há mais tempo para a mais recente. */
-export function consultarHistorico(banco: DatabaseSync, { demanda, ...filtro }: FiltroDeSessoes): SessaoDeDemanda[] {
+export function consultarHistorico(
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  { demanda, ...filtro }: FiltroDeSessoes,
+): SessaoDeDemanda[] {
   return lerEmSnapshot(banco, () =>
-    sessoesDeDemanda(banco, {
+    sessoesDeDemanda(banco, gestaoDeDemandas, {
       ...filtro,
       ...(demanda !== undefined && { demanda: demandaDoEndereco(demanda) }),
     }),

@@ -9,6 +9,7 @@ import { contarExecucoesSql } from "../../../../estresse/referencia/contador_de_
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { consultarInicio } from "./inicio.ts";
 import { consultarQuantidadeDePendencias } from "./quantidade_de_pendencias.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const semSessaoViva = () => undefined;
@@ -16,9 +17,12 @@ const semSessaoViva = () => undefined;
 test("conta as mesmas Pendências do Aguarda você do Início", () => {
   const { banco } = abrirBancoTemporario();
   cenarioDoInicio(banco);
-  assert.deepEqual(consultarQuantidadeDePendencias(banco, relogioDoSistema, semSessaoViva), {
-    quantidade: consultarInicio(banco, relogioDoSistema, semSessaoViva).aguarda.length,
-  });
+  assert.deepEqual(
+    consultarQuantidadeDePendencias(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva),
+    {
+      quantidade: consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva).aguarda.length,
+    },
+  );
 });
 
 test("a regra única: mudar o que é Pendência num só lugar (o agendador) muda o contador e o Início juntos", () => {
@@ -33,8 +37,8 @@ test("a regra única: mudar o que é Pendência num só lugar (o agendador) muda
     }),
   );
   const contadorEInicio = () => [
-    consultarQuantidadeDePendencias(banco, relogioDoSistema, semSessaoViva).quantidade,
-    consultarInicio(banco, relogioDoSistema, semSessaoViva).aguarda.length,
+    consultarQuantidadeDePendencias(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva).quantidade,
+    consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva).aguarda.length,
   ];
   // Com o agendador desligado, o ticket aberto e elegível é o despacho parado; ligado, o agendador o despacha.
   assert.deepEqual(contadorEInicio(), [1, 1]);
@@ -46,10 +50,12 @@ test("o contador não monta o Início: faz menos execuções SQL que ele", async
   const { banco } = abrirBancoTemporario();
   cenarioDoInicio(banco);
   const doContador = await contarExecucoesSql(() =>
-    Promise.resolve(consultarQuantidadeDePendencias(banco, relogioDoSistema, semSessaoViva)),
+    Promise.resolve(
+      consultarQuantidadeDePendencias(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva),
+    ),
   );
   const doInicio = await contarExecucoesSql(() =>
-    Promise.resolve(consultarInicio(banco, relogioDoSistema, semSessaoViva)),
+    Promise.resolve(consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, semSessaoViva)),
   );
   assert.ok(
     doContador < doInicio,

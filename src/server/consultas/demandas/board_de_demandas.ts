@@ -1,6 +1,7 @@
 // A consulta do board das demandas: as demandas fora das arquivadas e o trabalho global ativo, montados no contrato da
 // API (contrato/) a partir de um snapshot só, com as leituras em lote, sem uma consulta por demanda.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
@@ -31,6 +32,7 @@ const emExecucao = (ag: ResumoDaDemanda, comPiAtivo: ReadonlySet<string>): Board
 /** O board: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
 export function consultarBoardDeDemandas(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
 ): BoardDeDemandas {
@@ -39,12 +41,14 @@ export function consultarBoardDeDemandas(
     const comPiAtivo = ticketsComPiAtivo(banco);
     const predecessoras = predecessorasDasDemandas(
       banco,
+      gestaoDeDemandas,
       todas.map((ag) => ag.demanda.id),
     );
     // As Pendências de todas as demandas em andamento numa leitura só; a terminada não espera ninguém.
     const emAndamento = todas.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
     const pendencias = pendenciasDasDemandas(
       banco,
+      gestaoDeDemandas,
       emAndamento,
       sessoesDasDemandas(banco, emAndamento, { escopo: "ativas" }),
       situacaoDa,

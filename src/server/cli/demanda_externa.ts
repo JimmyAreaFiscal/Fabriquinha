@@ -16,7 +16,7 @@ import {
   TIPOS_DA_DEMANDA,
   visaoDaDemanda,
 } from "../../modulos/ciclo_de_vida/publico.ts";
-import { editarPedido, predecessorasDosPedidosEmLote } from "../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { registrarPedidoComProcesso } from "../fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../fluxos/envio_ao_desenvolvimento.ts";
 import {
@@ -58,11 +58,11 @@ const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
   arquivo === "-" ? text(stdin) : Promise.resolve(readFileSync(arquivo, "utf8"));
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
-function visao(banco: DatabaseSync, id: string) {
+function visao(banco: DatabaseSync, gestaoDeDemandas: GestaoDeDemandas, id: string) {
   const { agregado, evidencias } = visaoDaDemanda(banco, id);
   return {
     ...demandaParaCli(agregado.demanda),
-    dependencias: predecessorasDosPedidosEmLote(banco, [id]).get(id),
+    dependencias: gestaoDeDemandas.pedido(id).predecessoras,
     evidencias: evidencias.map(({ evidencia, anexos }) => ({
       tipo: evidencia.tipo,
       em: evidencia.em,
@@ -107,8 +107,12 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         descricao: await ler(opcoes.descricao as string, deps.stdin),
         dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
-      return deps.comBanco((banco) =>
-        visao(banco, registrarPedidoComProcesso(banco, dados, autor, { agora: deps.relogio.agora() }).demanda.id),
+      return deps.comBanco((banco, gestaoDeDemandas) =>
+        visao(
+          banco,
+          gestaoDeDemandas,
+          registrarPedidoComProcesso(banco, gestaoDeDemandas, dados, autor, { agora: deps.relogio.agora() }).demanda.id,
+        ),
       );
     },
   },
@@ -129,9 +133,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         tipo: opcoes.tipo,
         descricao: arquivo === undefined ? undefined : await ler(arquivo, deps.stdin),
       };
-      return deps.comBanco((banco) => {
-        editarPedido(banco, id, dados, autor);
-        return visao(banco, id);
+      return deps.comBanco((banco, gestaoDeDemandas) => {
+        gestaoDeDemandas.editar(id, dados, autor);
+        return visao(banco, gestaoDeDemandas, id);
       });
     },
   },
@@ -159,9 +163,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         copie: `a pasta do comando (${pasta})`,
       };
       const arquivos = (opcoes.arquivo ?? []) as string[];
-      return deps.comBanco((banco) => {
+      return deps.comBanco((banco, gestaoDeDemandas) => {
         const { avisos } = submeterEvidenciaDaEntradaExterna(banco, id, { tipo, dados, arquivos }, autor, origens);
-        return { ...visao(banco, id), avisos };
+        return { ...visao(banco, gestaoDeDemandas, id), avisos };
       });
     },
   },
@@ -176,9 +180,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const arquivo = entrada.opcoes.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
       const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
-      return deps.comBanco((banco) => {
+      return deps.comBanco((banco, gestaoDeDemandas) => {
         const { avisos } = declararUso(banco, id, dados, autor);
-        return { ...visao(banco, id), avisos };
+        return { ...visao(banco, gestaoDeDemandas, id), avisos };
       });
     },
   },
@@ -190,9 +194,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     executar(entrada, deps) {
       const id = idDe(String(entrada.posicionais[0]));
       const autor = autorDe(entrada, deps);
-      return deps.comBanco((banco) => {
-        enviarAoDesenvolvimento(banco, id, autor, { agora: deps.relogio.agora() });
-        return visao(banco, id);
+      return deps.comBanco((banco, gestaoDeDemandas) => {
+        enviarAoDesenvolvimento(banco, gestaoDeDemandas, id, autor, { agora: deps.relogio.agora() });
+        return visao(banco, gestaoDeDemandas, id);
       });
     },
   },
@@ -201,7 +205,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     posicionais: ["I-<n>"],
     opcoesDeUso: USO_IDENTIDADE,
     argumentos: { options: IDENTIDADE },
-    executar: ({ posicionais }, deps) => deps.comBanco((banco) => visao(banco, idDe(String(posicionais[0])))),
+    executar: ({ posicionais }, deps) =>
+      deps.comBanco((banco, gestaoDeDemandas) => visao(banco, gestaoDeDemandas, idDe(String(posicionais[0])))),
   },
   {
     nome: "demanda schema",

@@ -57,7 +57,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   configuracao_etapa_projeto: "demandas/projetos",
   demanda: "demandas/pedidos",
   demanda_historico: "demandas/pedidos",
-  dependencia_demanda: "demandas/dependencias",
+  dependencia_demanda: "demandas/pedidos",
   // Históricas da Avaliação, que saiu no ticket 02: o achado ainda é a origem da demanda encaminhada dele.
   avaliacao: "demandas/pedidos",
   avaliacao_demanda: "demandas/pedidos",

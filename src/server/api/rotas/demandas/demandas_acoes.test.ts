@@ -9,7 +9,6 @@ import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts"
 import { setTimeout as dormir } from "node:timers/promises";
 import { condutor, Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { gravarConfiguracaoSdlc } from "../../../../modulos/demandas/publico.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
   gravarAgregadoPronto,
@@ -32,6 +31,7 @@ import {
 } from "../../../contrato/demanda.ts";
 import { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
 import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -95,7 +95,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
        VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(c.repo);
-  gravarConfiguracaoSdlc(banco, {
+  montarDemandasDoBanco(banco).configurarSdlc({
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",

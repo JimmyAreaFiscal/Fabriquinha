@@ -3,6 +3,7 @@
 // demanda não existe (404). Cada rota só converte a entrada e chama o F4; as regras ficam lá. A resposta JSON é o tipo
 // de `contrato/sessoes/chat.ts`.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../../modulos/demandas/publico.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { abortarDemanda, enviarDemanda, responderDialogoDemanda } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { abrirChatDemanda, type ChatDemanda, exportarHistoricoDemanda } from "../../../consultas/sessoes/chat.ts";
@@ -15,8 +16,8 @@ const naoExiste = (sessao: string): ErroDeInexistente =>
   new ErroDeInexistente(`a sessão ${sessao} não existe`, "confira o endereço do chat");
 
 /** A sessão da demanda aberta, ou 404. */
-function chatDa(banco: DatabaseSync, sessao: string): ChatDemanda {
-  const chat = abrirChatDemanda(banco, sessao);
+function chatDa(banco: DatabaseSync, gestaoDeDemandas: GestaoDeDemandas, sessao: string): ChatDemanda {
+  const chat = abrirChatDemanda(banco, gestaoDeDemandas, sessao);
   if (!chat) throw naoExiste(sessao);
   return chat;
 }
@@ -26,8 +27,8 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "GET",
     caminho: "/api/sessoes/:sessao",
     resposta: DadosDoChatDemanda,
-    tratar: ({ banco, params }) => {
-      const chat = chatDa(banco, String(params.sessao));
+    tratar: ({ banco, demandas, params }) => {
+      const chat = chatDa(banco, demandas, String(params.sessao));
       return { ...chat.cabecalho, conversa: chat.conversa };
     },
   },
@@ -37,8 +38,8 @@ export const ROTAS_DO_CHAT: Rota[] = [
     fluxoSse: true,
     // Primeiro `{ type: "chat" }` com a sessão e a conversa até agora, lidas logo antes de assinar; depois cada evento
     // do pi como veio e `{ type: "estado" }` com o cabeçalho novo (F4 §5.4).
-    tratar: ({ banco, params, resposta }) => {
-      const chat = chatDa(banco, String(params.sessao));
+    tratar: ({ banco, demandas, params, resposta }) => {
+      const chat = chatDa(banco, demandas, String(params.sessao));
       abrirFluxoSse(resposta, { type: "chat", ...chat.cabecalho, conversa: chat.conversa }, (escrever) =>
         chat.assinar(escrever),
       );

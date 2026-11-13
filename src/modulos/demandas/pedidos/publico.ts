@@ -1,21 +1,5 @@
-// A API dos Pedidos (MELHORIAS §12): registra, edita, envia e consulta os pedidos e registra o cancelamento e a conclusão.
-// A situação administrativa é só rascunho, enviado, cancelado ou concluído; o andamento é do Ciclo de Vida.
-export { type Pedido, pedidoTerminou, SituacaoDoPedido } from "./nucleo/pedido.ts";
-export {
-  editarPedido,
-  enviarPedido,
-  registrarCancelamentoDosPedidos,
-  registrarConclusaoDoPedido,
-  registrarPedido,
-} from "./aplicacao/gestao_de_pedidos.ts";
-export {
-  apagarPedidosDoProjeto,
-  gravarPedidoNovo,
-  historicoDosPedidosEmLote,
-  lerPedido,
-  lerPedidosEmLote,
-  origemDoPedido,
-  pedidosDoProjeto,
-  situacoesDosPedidos,
-} from "./armazenamento/pedidos.ts";
-export { MIGRACOES_DE_DEMANDAS } from "./armazenamento/migracao_da_situacao.ts";
+// A fronteira de Pedidos para a fachada de Demandas: a montagem da GestaoDeDemandas, que junta os projetos, os pedidos e
+// as dependências entre eles, e os tipos da entrada e da saída dela.
+export type { Pedido } from "./nucleo/pedido.ts";
+export type { FiltroDePedidos } from "./armazenamento/pedidos.ts";
+export { type GestaoDeDemandas, montarGestaoDeDemandas, type NovoPedido } from "./aplicacao/gestao_de_demandas.ts";

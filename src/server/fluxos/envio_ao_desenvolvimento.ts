@@ -8,11 +8,12 @@ import {
   type ContextoDemanda,
   levarAoGateDaDemanda,
 } from "../../modulos/ciclo_de_vida/publico.ts";
-import { enviarPedido } from "../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 
 export const enviarAoDesenvolvimento = (
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   autor: Ator,
   ctx: ContextoDemanda,
-): AgregadoDemanda => enviarPedido(banco, id, () => levarAoGateDaDemanda(banco, id, autor, ctx));
+): AgregadoDemanda => gestaoDeDemandas.enviar(id, () => levarAoGateDaDemanda(banco, id, autor, ctx));

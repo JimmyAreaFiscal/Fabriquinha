@@ -10,7 +10,6 @@ import { abrirBancoTemporario } from "../../../../../../../apoio-testes/banco/ba
 import { type AgregadoDemanda, MOTIVO_APROVACAO_AUTOMATICA_PR, carregarDemanda } from "../../../../processo/publico.ts";
 import { AUDITOR, type Ator, Endereco } from "../../../../etapas/publico.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../../../../../../shared/nucleo/erros.ts";
-import { registrarProjeto } from "../../../../../demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
@@ -22,6 +21,7 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../../
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "../../gates.ts";
 import { AmbienteHostLocal } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { registrarProjeto } from "../../../../../../../apoio-testes/demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

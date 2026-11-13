@@ -26,6 +26,7 @@ import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
+import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -227,7 +228,12 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
-  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const fins = cicloDoDespacho(
+    c.banco,
+    c.config,
+    deps,
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+  );
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();

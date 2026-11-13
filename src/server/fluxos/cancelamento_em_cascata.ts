@@ -14,7 +14,7 @@ import {
   GATE_DA_DEMANDA,
   interromperExecucoesDasDemandas,
 } from "../../modulos/ciclo_de_vida/publico.ts";
-import { cancelarComDependentes } from "../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 
 /** A demanda depois da transição e as que ela levou junto (vazia se ela não terminou `cancelada`). */
 interface ResultadoDaCascata {
@@ -29,12 +29,13 @@ interface ResultadoDaCascata {
  */
 function cancelarEmCascata(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   ator: Ator,
   ctx: ContextoDemanda,
   transicao: (ag: AgregadoDemanda) => AgregadoDemanda,
 ): ResultadoDaCascata {
-  const cascata = cancelarComDependentes(banco, id, (dependentes) =>
+  const cascata = gestaoDeDemandas.cancelar(id, (dependentes) =>
     cancelarProcessosEmCascata(banco, id, dependentes, ator, ctx, transicao),
   );
   interromperExecucoesDasDemandas(banco, cascata.canceladas);
@@ -44,24 +45,26 @@ function cancelarEmCascata(
 /** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto e os dependentes saem junto. */
 export const cancelarDemandaEmCascata = (
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   ator: Ator,
   ctx: ContextoDemanda,
 ): ResultadoDaCascata =>
   comCampoInvalidoComoErroDeRegra(() =>
-    cancelarEmCascata(banco, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)),
+    cancelarEmCascata(banco, gestaoDeDemandas, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)),
   );
 
 /** CA-16 a CA-20: o Auditor decide o Gate da demanda; aprovar não cascateia, reprovar cancela a demanda e os dependentes. */
 export const decidirGateDaDemanda = (
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   entrada: unknown,
   ator: Ator,
   relogio: Relogio = relogioDoSistema,
 ): ResultadoDaCascata => {
   const ctx = { agora: relogio.agora() };
-  return cancelarEmCascata(banco, id, ator, ctx, (ag) =>
+  return cancelarEmCascata(banco, gestaoDeDemandas, id, ator, ctx, (ag) =>
     GATE_DA_DEMANDA.decidir(ag, Endereco.daDemanda(id), entrada, ator, ctx),
   );
 };

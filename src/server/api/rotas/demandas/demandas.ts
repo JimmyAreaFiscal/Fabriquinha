@@ -37,13 +37,13 @@ export const ROTAS_DAS_DEMANDAS: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/demandas",
-    tratar: ({ banco, relogio }) => consultarBoardDeDemandas(banco, relogio),
+    tratar: ({ banco, demandas, relogio }) => consultarBoardDeDemandas(banco, demandas, relogio),
     resposta: BoardDeDemandas,
   },
   {
     metodo: "GET",
     caminho: "/api/demandas/:id",
-    tratar: ({ banco, params, relogio }) => consultarDemanda(banco, String(params.id), relogio),
+    tratar: ({ banco, demandas, params, relogio }) => consultarDemanda(banco, demandas, String(params.id), relogio),
     resposta: PaginaDaDemanda,
   },
   { metodo: "GET", caminho: "/api/demandas/:id/anexos/:sha256", tratar: anexo, resposta: SemCorpoEmJson },

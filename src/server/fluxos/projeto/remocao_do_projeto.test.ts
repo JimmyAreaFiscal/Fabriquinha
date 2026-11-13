@@ -12,8 +12,10 @@ import { ErroDeInexistente, ErroDeRegra } from "../../../shared/nucleo/erros.ts"
 import { FABRIQUINHA } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarDemanda } from "../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import { iniciarTentativaDoTicket } from "../../../modulos/ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
-import { buscarProjeto, gravarProjeto, listarProjetos, Projeto } from "../../../modulos/demandas/publico.ts";
+import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { removerProjetoComOQueDependeDele } from "./remocao_do_projeto.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { buscarProjeto, gravarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 const ANEXO_ORFAO = "a".repeat(64);
 const ANEXO_DE_OUTRO_PROJETO = "b".repeat(64);
@@ -69,14 +71,14 @@ const contar = (banco: DatabaseSync, sql: string): unknown => banco.prepare(sql)
 test("recusa enquanto um ticket do projeto executa e, sem execução, apaga tudo o que depende do projeto, só dele", async () => {
   const { banco, raiz, fechar } = cenario();
   const recusa = { name: ErroDeRegra.name, message: /^o projeto a tem execução em andamento no I-1\.T1/ };
-  await assert.rejects(removerProjetoComOQueDependeDele(banco, "a"), recusa);
+  await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
   banco.exec(
     "UPDATE processo_do_trabalho SET fim = 'depois'; UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'",
   );
-  await assert.rejects(removerProjetoComOQueDependeDele(banco, "a"), recusa);
+  await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
   banco.exec("UPDATE ticket_demanda SET estado = 'aberto' WHERE demanda_id = 'I-1'");
 
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, "a");
+  const { avisos } = await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a");
 
   // Os repositórios do cenário não existem: só a limpeza das worktrees avisa.
   assert.deepEqual(avisos, [
@@ -131,15 +133,20 @@ test("remove as Tentativas antes dos tickets, sem deixar referência quebrada, e
   assert.equal(contar(banco, "SELECT count(*) AS quantidade FROM tentativa"), 1);
   banco.exec("UPDATE ticket_demanda SET estado = 'aberto'");
 
-  await removerProjetoComOQueDependeDele(banco, "a");
+  await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a");
 
   assert.deepEqual(
-    listarProjetos(banco).map((projeto) => projeto.nome),
+    montarDemandasDoBanco(banco)
+      .projetos()
+      .map((projeto) => projeto.nome),
     ["b"],
   );
   assert.equal(contar(banco, "SELECT count(*) AS quantidade FROM tentativa"), 0);
   assert.equal(contar(banco, "SELECT count(*) AS quantidade FROM ticket_demanda"), 0);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
-  await assert.rejects(removerProjetoComOQueDependeDele(banco, "fantasma"), ErroDeInexistente);
+  await assert.rejects(
+    removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "fantasma"),
+    ErroDeInexistente,
+  );
   fechar();
 });

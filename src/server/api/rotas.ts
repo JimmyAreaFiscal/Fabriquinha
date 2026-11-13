@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
 import type { MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import { Id } from "../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
@@ -27,6 +28,7 @@ export interface Pedido {
   banco: DatabaseSync;
   agendador: Agendador;
   ambientes: AmbientesDoServico;
+  demandas: GestaoDeDemandas;
   relogio: Relogio;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;

@@ -18,7 +18,7 @@ import {
 } from "../../src/modulos/sessoes/publico.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
@@ -200,7 +200,9 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
-      rascunhos.push(registrarPedidoComProcesso(banco, entrada, autor, { agora: em }).demanda.id);
+      rascunhos.push(
+        registrarPedidoComProcesso(banco, montarDemandasDoBanco(banco), entrada, autor, { agora: em }).demanda.id,
+      );
     }
     // `enviar` exige as duas evidências de quem registra; o rascunho de cada chamada nasce com elas.
     for (const id of rascunhos.slice(2 * CHAMADAS)) {

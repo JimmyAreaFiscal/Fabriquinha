@@ -1,4 +1,5 @@
 // Rotas das métricas (F7 §4.2) chamadas como o servidor as chama, contra um banco de verdade.
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import type { AmbientesDoServico } from "../rotas.ts";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
@@ -6,11 +7,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import type { MetricasDoMes, MetricasPorDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { registrarProjeto } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { casar } from "../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
+import { registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -40,6 +41,7 @@ async function chamar(endereco: string): Promise<unknown> {
         banco,
         agendador: { proximaBusca: () => new Date() },
         ambientes: undefined as unknown as AmbientesDoServico,
+        demandas: montarDemandasDoBanco(banco),
         relogio: relogioDoSistema,
         params,
         query: url.searchParams,

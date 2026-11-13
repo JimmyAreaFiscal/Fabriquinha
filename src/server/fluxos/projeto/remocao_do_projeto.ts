@@ -1,7 +1,7 @@
 // O fluxo da remoção do projeto (I-4, MELHORIAS §5.1 e §5.3), entre Demandas, o Ciclo de Vida, Sessões e o Repositório:
-// numa unidade de trabalho só, recusa a execução em andamento e apaga, cada domínio as suas tabelas e na ordem das chaves
-// estrangeiras, os commits, as sessões, o desenvolvimento, as dependências e os pedidos do projeto e o cursor da
-// varredura dele; o cadastro do projeto e o disco ficam com Demandas, que abre a unidade de trabalho.
+// numa unidade de trabalho só, que Demandas abre, recusa a execução em andamento e apaga, cada domínio as suas tabelas e
+// na ordem das chaves estrangeiras, os commits, as sessões e o desenvolvimento das demandas do projeto e o cursor da
+// varredura dele; depois Demandas apaga as dependências, os pedidos, o cadastro e o disco.
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import {
@@ -9,12 +9,7 @@ import {
   formatarTicketRef,
   ticketsDasDemandas,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
-import {
-  apagarDependenciasDosPedidos,
-  apagarPedidosDoProjeto,
-  pedidosDoProjeto,
-  removerProjeto,
-} from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { apagarCommitsDasDemandas, apagarVarreduraDoProjeto } from "../../../modulos/repositorio/publico.ts";
 import { apagarSessoesDasDemandas, execucoesAbertas } from "../../../modulos/sessoes/publico.ts";
 
@@ -36,15 +31,16 @@ function recusarExecucaoEmAndamento(banco: DatabaseSync, nome: string, pedidos: 
 }
 
 /** Remove o projeto e tudo o que depende dele, em qualquer estado; falha no disco vira aviso. */
-export const removerProjetoComOQueDependeDele = (banco: DatabaseSync, nome: string) =>
-  removerProjeto(banco, nome, () => {
-    const pedidos = pedidosDoProjeto(banco, nome);
+export const removerProjetoComOQueDependeDele = (
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  nome: string,
+) =>
+  gestaoDeDemandas.removerProjeto(nome, (pedidos) => {
     recusarExecucaoEmAndamento(banco, nome, pedidos);
     apagarCommitsDasDemandas(banco, pedidos);
     const { execucoes, sessoes } = apagarSessoesDasDemandas(banco, pedidos);
     const anexosSemEvidencia = apagarDesenvolvimentoDasDemandas(banco, pedidos);
-    apagarDependenciasDosPedidos(banco, pedidos);
-    apagarPedidosDoProjeto(banco, nome);
     apagarVarreduraDoProjeto(banco, nome);
     return { execucoes, sessoes, anexosSemEvidencia };
   });

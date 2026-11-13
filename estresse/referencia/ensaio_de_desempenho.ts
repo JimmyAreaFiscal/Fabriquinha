@@ -3,6 +3,7 @@
 // leitura das telas, uma por vez: 1 chamada conta as execuções SQL, e as seguintes dão o p50 e o p95. Grava o relatório
 // em estresse/referencia/referencia.md, ou no arquivo pedido (`npm run estresse:referencia -- <arquivo>`), para comparar
 // com a referência sem sobrescrevê-la.
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -63,6 +64,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
       porta,
       agendador: { proximaBusca: () => new Date() },
       ambientes,
+      demandas: montarDemandasDoBanco(banco),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

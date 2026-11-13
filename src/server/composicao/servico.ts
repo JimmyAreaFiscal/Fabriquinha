@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
-import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { gravarCatalogoDePrecos, HarnessPi } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../shared/infra/registro.ts";
@@ -112,6 +112,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
         porta,
         agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
         ambientes: ambientesMontados,
+        demandas: montarDemandasDoBanco(aberto),
         relogio,
         registrarErro: noLogDoServico,
       }),
@@ -124,6 +125,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   }
   const banco = aberto;
   const ambientes = ambientesMontados.gestao;
+  const demandas = montarDemandasDoBanco(banco);
   // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
   // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
   // ponytail: o preço que o pi passa a declarar depois da subida só entra na subida seguinte; reler na batida do relógio
@@ -155,13 +157,13 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       etapaTerminou = false;
       // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
       // em cada; guardar a última tentativa se o log incomodar.
-      varredura ??= varrerCommitsHumanosVencidos(banco, relogio, noLogDoServico)
+      varredura ??= varrerCommitsHumanosVencidos(banco, demandas, relogio, noLogDoServico)
         .catch(noLogDoServico)
         .finally(() => {
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of despacharTrabalho(banco, c, despachoDoServico, relogio))
+      for (const fim of despacharTrabalho(banco, demandas, c, despachoDoServico, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -174,7 +176,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = despacharAgora(banco, ref, configuracao(banco), despachoDoServico, relogio);
+      const aceitoOuRecusa = despacharAgora(banco, demandas, ref, configuracao(banco), despachoDoServico, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

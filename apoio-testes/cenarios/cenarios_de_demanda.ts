@@ -10,7 +10,7 @@ import {
   gravarDemandaNova,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { validarPlano } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
-import { gravarPedidoNovo, gravarProjeto, type Pedido, Projeto } from "../../src/modulos/demandas/publico.ts";
+import { type Pedido, Projeto } from "../../src/modulos/demandas/publico.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
 import { ErroDeRegra } from "../../src/shared/nucleo/erros.ts";
 import { garantirWorktreeDemanda } from "../../src/modulos/repositorio/publico.ts";
@@ -18,6 +18,7 @@ import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
 import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
+import { gravarPedidoNovo, gravarProjeto } from "../demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

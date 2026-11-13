@@ -14,7 +14,7 @@ import {
   configuracao,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { integrarPR } from "../../src/modulos/repositorio/publico.ts";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
@@ -123,10 +123,10 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
         return;
       case "entender_e_desenhar":
         submeterObrigatorias(c, id);
-        enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX);
+        enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, CTX);
         break;
       case "gate_demanda":
-        decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+        decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR);
         break;
       case "planejar":
         await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);

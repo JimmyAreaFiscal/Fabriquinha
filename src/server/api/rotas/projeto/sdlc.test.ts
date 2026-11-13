@@ -5,11 +5,13 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
-import { buscarProjeto, gravarProjeto, type Projeto, projetoExistente } from "../../../../modulos/demandas/publico.ts";
+import { type Projeto } from "../../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
+import { buscarProjeto, gravarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -31,6 +33,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
         banco,
         agendador: { proximaBusca: () => new Date() },
         ambientes: undefined as unknown as AmbientesDoServico,
+        demandas: montarDemandasDoBanco(banco),
         relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
@@ -108,9 +111,12 @@ test("POST grava com o nome do caminho e o GET devolve o gravado", async () => {
 
 test("POST mantém etapas e preparação gravadas no cadastro", async () => {
   const cadastrado = {
-    ...projetoExistente(banco, "loja"),
+    ...montarDemandasDoBanco(banco).projeto("loja"),
     etapas: [{ etapa: "implementar" as const, configuracao_agente: { effort: "low" as const } }],
-    verificacoes: { ...projetoExistente(banco, "loja").verificacoes, preparacao: ["echo cadastro", "npm ci"] },
+    verificacoes: {
+      ...montarDemandasDoBanco(banco).projeto("loja").verificacoes,
+      preparacao: ["echo cadastro", "npm ci"],
+    },
   };
   gravarProjeto(banco, cadastrado);
   const resposta = await chamar("POST", URL, valida());
@@ -121,7 +127,7 @@ test("POST mantém etapas e preparação gravadas no cadastro", async () => {
     verificacoes: { ...valida().verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(resposta, { configurada: true, configuracao: esperado });
-  assert.deepEqual(projetoExistente(banco, "loja"), esperado);
+  assert.deepEqual(montarDemandasDoBanco(banco).projeto("loja"), esperado);
 });
 
 test("GET devolve o cursor da varredura de commits humanos, com ou sem configuração", async () => {

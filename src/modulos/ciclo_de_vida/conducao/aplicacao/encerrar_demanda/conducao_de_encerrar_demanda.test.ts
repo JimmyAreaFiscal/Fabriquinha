@@ -25,7 +25,6 @@ import {
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "../../../../repositorio/publico.ts";
-import { registrarProjeto, lerPedido } from "../../../../demandas/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
@@ -41,6 +40,8 @@ import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from ".
 import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -205,7 +206,7 @@ test("com o fluxo da conclusão que a composição liga, o pedido fica concluíd
   execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
   const ag = await conduzir(c.banco);
   assert.equal(ag.demanda.estado, "concluida");
-  assert.equal(lerPedido(c.banco, D).situacao, "concluido");
+  assert.equal(montarDemandasDoBanco(c.banco).pedido(D).situacao, "concluido");
 });
 
 const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge");

@@ -3,7 +3,7 @@
 // reserva os tickets. O ciclo do agendador e o "Executar agora" passam por aqui, com a mesma liberação.
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
-import { predecessorasPendentesDosPedidos } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import {
   cicloDoDespacho,
   type Configuracao,
@@ -17,22 +17,30 @@ import {
  * @testes os testes que chamam o Despacho direto passam a mesma liberação do serviço
  */
 export const predecessorasPendentesPelasDependencias =
-  (banco: DatabaseSync) =>
-  (demandaIds: readonly string[]): Map<string, string[]> =>
-    predecessorasPendentesDosPedidos(banco, demandaIds);
+  (gestaoDeDemandas: GestaoDeDemandas) =>
+  (demandaIds: readonly string[]): Map<string, readonly string[]> =>
+    new Map(gestaoDeDemandas.pedidos({ ids: demandaIds }).map((pedido) => [pedido.id, pedido.predecessorasPendentes]));
 
 /** Um ciclo do agendador com os pedidos liberados por Demandas; devolve as etapas em segundo plano, que nunca rejeitam. */
 export const despacharTrabalho = (
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   configuracaoDoServico: Configuracao,
   conducoes: DepsDespacho,
   relogio: Relogio,
 ): Promise<void>[] =>
-  cicloDoDespacho(banco, configuracaoDoServico, conducoes, predecessorasPendentesPelasDependencias(banco), relogio);
+  cicloDoDespacho(
+    banco,
+    configuracaoDoServico,
+    conducoes,
+    predecessorasPendentesPelasDependencias(gestaoDeDemandas),
+    relogio,
+  );
 
 /** O "Executar agora" de um ticket, com a mesma liberação do ciclo; o que o Despacho recusa volta como motivo. */
 export const despacharAgora = (
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   ticket: { demanda_id: string; ticket_id: number },
   configuracaoDoServico: Configuracao,
   conducoes: DepsDespacho,
@@ -43,6 +51,6 @@ export const despacharAgora = (
     ticket,
     configuracaoDoServico,
     conducoes,
-    predecessorasPendentesPelasDependencias(banco),
+    predecessorasPendentesPelasDependencias(gestaoDeDemandas),
     relogio,
   );

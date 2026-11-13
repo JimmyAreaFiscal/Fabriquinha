@@ -9,20 +9,21 @@ import { relogioFixo } from "../../shared/nucleo/relogio.ts";
 import { consultarMetricasDasDemandas, consultarMetricasDosMeses } from "./metricas.ts";
 import { contarExecucoesSql } from "../../../estresse/referencia/contador_de_execucoes_sql.ts";
 import { semearVolume } from "../../../estresse/referencia/semeadura_dos_volumes.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 
 const relogio = relogioFixo("2026-03-15T12:00:00.000Z");
 
 test("sem `de` nem `ate`, os 11 meses antes do mês do relógio mais o corrente", () => {
   const { banco } = abrirBancoTemporario();
-  const meses = consultarMetricasDosMeses(banco, {}, relogio).map((m) => m.mes);
+  const meses = consultarMetricasDosMeses(banco, montarDemandasDoBanco(banco), {}, relogio).map((m) => m.mes);
   assert.deepEqual([meses[0], meses.at(-1), meses.length], ["2025-04", "2026-03", 12]);
   assert.equal(banco.isTransaction, false);
 });
 
 test("só `ate` leva `de` 11 meses antes; `de` e `ate` dados valem como estão", () => {
   const { banco } = abrirBancoTemporario();
-  const meses = (filtro: Parameters<typeof consultarMetricasDosMeses>[1]) =>
-    consultarMetricasDosMeses(banco, filtro, relogio).map((m) => m.mes);
+  const meses = (filtro: Parameters<typeof consultarMetricasDosMeses>[2]) =>
+    consultarMetricasDosMeses(banco, montarDemandasDoBanco(banco), filtro, relogio).map((m) => m.mes);
   assert.deepEqual(meses({ ate: "2026-01" }).slice(0, 2), ["2025-02", "2025-03"]);
   assert.deepEqual(meses({ de: "2026-01", ate: "2026-02" }), ["2026-01", "2026-02"]);
   assert.deepEqual(meses({ de: "2026-02" }), ["2026-02", "2026-03"]);
@@ -31,16 +32,17 @@ test("só `ate` leva `de` 11 meses antes; `de` e `ate` dados valem como estão",
 test("`de` depois de `ate` ou mais de 24 meses é recusado, nas duas visões", () => {
   const { banco } = abrirBancoTemporario();
   for (const consultar of [consultarMetricasDosMeses, consultarMetricasDasDemandas]) {
-    assert.throws(() => consultar(banco, { de: "2026-05", ate: "2026-04" }, relogio), z.ZodError);
-    assert.throws(() => consultar(banco, { de: "2024-03", ate: "2026-03" }, relogio), /no máximo 24 meses/);
-    assert.doesNotThrow(() => consultar(banco, { de: "2024-04", ate: "2026-03" }, relogio));
+    const demandas = montarDemandasDoBanco(banco);
+    assert.throws(() => consultar(banco, demandas, { de: "2026-05", ate: "2026-04" }, relogio), z.ZodError);
+    assert.throws(() => consultar(banco, demandas, { de: "2024-03", ate: "2026-03" }, relogio), /no máximo 24 meses/);
+    assert.doesNotThrow(() => consultar(banco, demandas, { de: "2024-04", ate: "2026-03" }, relogio));
   }
   assert.equal(banco.isTransaction, false);
 });
 
 test("a visão por demanda de um período sem execução vem vazia, com o rodapé zerado", () => {
   const { banco } = abrirBancoTemporario();
-  const { demandas, total } = consultarMetricasDasDemandas(banco, {}, relogio);
+  const { demandas, total } = consultarMetricasDasDemandas(banco, montarDemandasDoBanco(banco), {}, relogio);
   assert.deepEqual(demandas, []);
   assert.deepEqual([total.execucoes, total.textoDoCusto, total.nota], [0, "US$ 0,00", null]);
   assert.equal(banco.isTransaction, false);
@@ -55,10 +57,10 @@ async function execucoesSqlDasMetricas(demandas: number): Promise<Record<string,
     const execucoesPorVisao: Record<string, number> = {};
     for (const [periodo, filtro] of Object.entries(PERIODOS_DO_ENSAIO)) {
       execucoesPorVisao[`meses ${periodo}`] = await contarExecucoesSql(() =>
-        Promise.resolve(consultarMetricasDosMeses(banco, filtro, relogioDoEnsaio)),
+        Promise.resolve(consultarMetricasDosMeses(banco, montarDemandasDoBanco(banco), filtro, relogioDoEnsaio)),
       );
       execucoesPorVisao[`demandas ${periodo}`] = await contarExecucoesSql(() =>
-        Promise.resolve(consultarMetricasDasDemandas(banco, filtro, relogioDoEnsaio)),
+        Promise.resolve(consultarMetricasDasDemandas(banco, montarDemandasDoBanco(banco), filtro, relogioDoEnsaio)),
       );
     }
     return execucoesPorVisao;

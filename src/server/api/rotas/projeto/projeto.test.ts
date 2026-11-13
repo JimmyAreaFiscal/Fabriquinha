@@ -1,5 +1,6 @@
 // Rotas da página do projeto (F7 §4.2), as demandas, o Arquivar concluídas e o heatmap, chamadas como o servidor as
 // chama, contra um banco de verdade.
+import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 import type { AmbientesDoServico } from "../../rotas.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -15,11 +16,11 @@ import {
   montarAgregadoDemanda,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { MetricasDoMes } from "../../../../modulos/ciclo_de_vida/publico.ts";
-import { registrarProjeto } from "../../../../modulos/demandas/publico.ts";
 import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
 import type { ListaDoProjeto } from "../../../contrato/projeto.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -50,6 +51,7 @@ async function chamar(metodo: string, endereco: string): Promise<unknown> {
         banco,
         agendador: { proximaBusca: () => new Date() },
         ambientes: undefined as unknown as AmbientesDoServico,
+        demandas: montarDemandasDoBanco(banco),
         relogio: relogioDoSistema,
         params,
         query: url.searchParams,

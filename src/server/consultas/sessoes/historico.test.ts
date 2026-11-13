@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import { consultarHistorico } from "./historico.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const T0 = "2026-10-11T12:00:00.000Z";
 
@@ -22,7 +23,8 @@ function cenario() {
 
 test("a demanda do filtro vale como I-1 ou 1; a outra não aparece", () => {
   const banco = cenario();
-  const sessoes = (demanda: string) => consultarHistorico(banco, { escopo: "historico", demanda }).map((s) => s.sessao);
+  const sessoes = (demanda: string) =>
+    consultarHistorico(banco, montarDemandasDoBanco(banco), { escopo: "historico", demanda }).map((s) => s.sessao);
   assert.deepEqual(sessoes("I-1"), ["s1"]);
   assert.deepEqual(sessoes("1"), ["s1"]);
   assert.deepEqual(sessoes("I-2"), []);
@@ -33,7 +35,7 @@ test("o endereço de rodada ou de ticket no filtro de demanda é ErroDeRegra", (
   const banco = cenario();
   for (const demanda of ["I-1.R1", "I-1.T1"]) {
     assert.throws(
-      () => consultarHistorico(banco, { escopo: "historico", demanda }),
+      () => consultarHistorico(banco, montarDemandasDoBanco(banco), { escopo: "historico", demanda }),
       (erro) => erro instanceof ErroDeRegra && erro.message.startsWith(`${demanda} não é o endereço de uma demanda`),
     );
   }
@@ -42,7 +44,8 @@ test("o endereço de rodada ou de ticket no filtro de demanda é ErroDeRegra", (
 
 test("sem demanda no filtro, todas as sessões do escopo", () => {
   const banco = cenario();
-  const sessoes = (escopo: "ativas" | "historico") => consultarHistorico(banco, { escopo }).map((s) => s.sessao);
+  const sessoes = (escopo: "ativas" | "historico") =>
+    consultarHistorico(banco, montarDemandasDoBanco(banco), { escopo }).map((s) => s.sessao);
   assert.deepEqual(sessoes("historico"), ["s1"]);
   assert.deepEqual(sessoes("ativas"), []);
 });

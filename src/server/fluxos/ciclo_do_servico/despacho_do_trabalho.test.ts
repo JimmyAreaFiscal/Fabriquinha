@@ -16,10 +16,11 @@ import {
   type DepsDespacho,
   configuracao,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { registrarDependencia } from "../../../modulos/demandas/publico.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas } from "../../consultas/demandas/predecessoras.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { despacharAgora, despacharTrabalho, predecessorasPendentesPelasDependencias } from "./despacho_do_trabalho.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { registrarDependencia } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 /** Grava a demanda `id` em `estado` e, antes do envio, as dependências dela. */
 function gravarDemandaComPredecessoras(
@@ -51,16 +52,16 @@ test("a liberação de Demandas é a de antes: a predecessora em cada estado do 
   gravarDemandaComPredecessoras(banco, "I-200", "planejar", predecessoras.toReversed());
   const ids = [...dependentes, "I-200", ...predecessoras];
   const liberacaoDeAntes = new Map(
-    [...predecessorasDasDemandas(banco, ids)].map(([id, lidas]) => [
+    [...predecessorasDasDemandas(banco, montarDemandasDoBanco(banco), ids)].map(([id, lidas]) => [
       id,
       bloqueiosDaDemanda(lidas).map((predecessora) => predecessora.demanda_id),
     ]),
   );
-  assert.deepEqual(predecessorasPendentesPelasDependencias(banco)(ids), liberacaoDeAntes);
+  assert.deepEqual(predecessorasPendentesPelasDependencias(montarDemandasDoBanco(banco))(ids), liberacaoDeAntes);
   // A comparação não é vazia: concluída e arquivada liberam, as demais pendem.
   const liberadas = dependentes.filter((id) => liberacaoDeAntes.get(id)?.length === 0);
   assert.deepEqual(
-    liberadas.map((id) => predecessorasDasDemandas(banco, [id]).get(id)?.[0]?.estado),
+    liberadas.map((id) => predecessorasDasDemandas(banco, montarDemandasDoBanco(banco), [id]).get(id)?.[0]?.estado),
     ["concluida", "arquivada"],
   );
   banco.close();
@@ -85,14 +86,14 @@ test("o ciclo e o Executar agora só despacham o planejar do pedido cujas predec
   };
   const planejarDaI2 = { demanda_id: "I-2", ticket_id: 2 };
   const c = configuracao(banco);
-  await Promise.all(despacharTrabalho(banco, c, conducoes, relogioDoSistema));
-  assert.deepEqual(despacharAgora(banco, planejarDaI2, c, conducoes, relogioDoSistema), {
+  await Promise.all(despacharTrabalho(banco, montarDemandasDoBanco(banco), c, conducoes, relogioDoSistema));
+  assert.deepEqual(despacharAgora(banco, montarDemandasDoBanco(banco), planejarDaI2, c, conducoes, relogioDoSistema), {
     tipo: "dependencia_pendente",
     aguarda: [Endereco.daDemanda("I-1")],
   });
   assert.deepEqual(conduzidos, []);
   banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = 'I-1'").run();
-  await despacharAgora(banco, planejarDaI2, c, conducoes, relogioDoSistema);
+  await despacharAgora(banco, montarDemandasDoBanco(banco), planejarDaI2, c, conducoes, relogioDoSistema);
   assert.deepEqual(conduzidos, ["I-2.T2"]);
   banco.close();
 });

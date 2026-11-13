@@ -9,7 +9,7 @@ import type { DadosDoChatDemanda } from "../../../server/contrato/sessoes/chat.t
 import { ROTAS_DO_CHAT } from "../../../server/api/rotas/sessoes/chat.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
-import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../../server/composicao/banco_da_fabriquinha.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 5;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -90,7 +90,11 @@ test("depois da migração 42 o chat da demanda concluída mostra a conversa e a
 
   const rota = ROTAS_DO_CHAT.find((r) => r.caminho === "/api/sessoes/:sessao");
   assert.ok(rota);
-  const chat = rota.tratar({ banco, params: { sessao: "s-1" } } as unknown as Pedido) as DadosDoChatDemanda;
+  const chat = rota.tratar({
+    banco,
+    demandas: montarDemandasDoBanco(banco),
+    params: { sessao: "s-1" },
+  } as unknown as Pedido) as DadosDoChatDemanda;
 
   assert.equal(chat.sessao.estado, "terminada");
   assert.equal((chat.conversa[0]?.message as { content: string }).content, "oi da demanda");

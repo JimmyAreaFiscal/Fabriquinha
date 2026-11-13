@@ -1,6 +1,7 @@
 // I-288.R3: o trabalho de um Espaço no container de verdade (CONCEITOS.md §7). O projeto de teste é o de
 // `projeto-container/` (imagem com node e git, teste, e2e e hook de commit) e o pi é o falso da imagem. Pulado sem
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e constrói a imagem na primeira vez.
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -600,7 +601,7 @@ test("CA-3: o cancelamento da demanda mata o pi dentro do container", COM_DOCKER
   const fim = ciclo(c, despachoComVerificacoesReais);
   await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(container)), "o pi vivo no container");
 
-  cancelarDemandaEmCascata(c.banco, id, AUDITOR, CTX);
+  cancelarDemandaEmCascata(c.banco, montarDemandasDoBanco(c.banco), id, AUDITOR, CTX);
   await fim;
 
   assert.equal(statusDe(c, ticketDe(c, id, 1)), "cancelado");
@@ -781,6 +782,7 @@ test(
         agendador: { proximaBusca: () => new Date() },
         // A gestão do cenário: uma segunda montagem conferiria o conjunto do Docker da máquina.
         ambientes: { gestao, configurar: () => undefined },
+        demandas: montarDemandasDoBanco(c.banco),
         relogio: relogioDoSistema,
         registrarErro: noLog,
       }),

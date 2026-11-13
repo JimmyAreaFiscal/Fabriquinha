@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { configuracao } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
-import { listarProjetos, projetoComConfiguracoesDasEtapas, projetoExistente } from "../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas, Projeto } from "../../modulos/demandas/publico.ts";
 import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
 import { configuracaoDoAmbiente } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
 
@@ -21,10 +21,20 @@ export async function consultarEstadoDoAmbiente(
   return { configuracao, conjunto: await ambientes.listar() };
 }
 
+/** O projeto como o formulário o lê: o cadastro com a configuração do agente de cada etapa que tem uma. */
+export const projetoComConfiguracoesDasEtapas = (projeto: Projeto): ProjetoCadastrado => ({
+  ...projeto,
+  configuracoes: Object.fromEntries(
+    projeto.etapas.flatMap(({ etapa, configuracao_agente }) =>
+      configuracao_agente ? [[etapa, configuracao_agente]] : [],
+    ),
+  ),
+});
+
 /** Os projetos cadastrados, cada um com o modelo e o effort de cada etapa. */
-export const consultarProjetosCadastrados = (banco: DatabaseSync): ProjetoCadastrado[] =>
-  listarProjetos(banco).map(projetoComConfiguracoesDasEtapas);
+export const consultarProjetosCadastrados = (gestaoDeDemandas: GestaoDeDemandas): ProjetoCadastrado[] =>
+  gestaoDeDemandas.projetos().map(projetoComConfiguracoesDasEtapas);
 
 /** O projeto `nome`, com o modelo e o effort de cada etapa; `ErroDeInexistente` se não está cadastrado. */
-export const consultarProjetoCadastrado = (banco: DatabaseSync, nome: string): ProjetoCadastrado =>
-  projetoComConfiguracoesDasEtapas(projetoExistente(banco, nome));
+export const consultarProjetoCadastrado = (gestaoDeDemandas: GestaoDeDemandas, nome: string): ProjetoCadastrado =>
+  projetoComConfiguracoesDasEtapas(gestaoDeDemandas.projeto(nome));

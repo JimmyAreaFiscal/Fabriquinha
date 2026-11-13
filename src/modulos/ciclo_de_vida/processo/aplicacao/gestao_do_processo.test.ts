@@ -14,6 +14,7 @@ import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import * as gestao from "./gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../../../server/fluxos/envio_ao_desenvolvimento.ts";
+import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -31,6 +32,7 @@ const novoBanco = () => {
 const registrar = (b: DatabaseSync) =>
   registrarPedidoComProcesso(
     b,
+    montarDemandasDoBanco(b),
     { projeto: "fabriquinha", titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     autor,
     ctx,
@@ -158,7 +160,7 @@ test("CA-15: depois do envio criterios_aceite está congelado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
-  enviarAoDesenvolvimento(b, id, autor, ctx);
+  enviarAoDesenvolvimento(b, montarDemandasDoBanco(b), id, autor, ctx);
   assert.throws(
     () => submeter(b, id, "criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
@@ -198,7 +200,7 @@ test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
-  enviarAoDesenvolvimento(b, id, autor, ctx);
+  enviarAoDesenvolvimento(b, montarDemandasDoBanco(b), id, autor, ctx);
   assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só no estado concluida/);
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });

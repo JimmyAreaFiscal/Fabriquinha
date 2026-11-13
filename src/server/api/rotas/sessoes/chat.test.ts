@@ -23,9 +23,10 @@ import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { gravarConfiguracaoSdlc, registrarProjeto } from "../../../../modulos/demandas/publico.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../../../modulos/sessoes/publico.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -245,7 +246,7 @@ test("CA-3: a sessão que não é de uma demanda não existe em nenhuma rota do 
 });
 
 test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a mensagem e abortar", async () => {
-  gravarConfiguracaoSdlc(servico.banco, {
+  montarDemandasDoBanco(servico.banco).configurarSdlc({
     nome: "loja",
     branch_base: "main",
     chave_sonarqube: "loja",

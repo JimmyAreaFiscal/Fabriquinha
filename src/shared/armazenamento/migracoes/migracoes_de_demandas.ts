@@ -43,7 +43,10 @@ DROP TABLE demanda;
 ALTER TABLE demanda_nova RENAME TO demanda;
 `;
 
-/** As migrações de Demandas, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. */
+/**
+ * As migrações de Demandas, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. Moram
+ * no histórico do esquema, e não na fachada de Demandas, que só expõe a GestaoDeDemandas.
+ */
 export const MIGRACOES_DE_DEMANDAS = {
   dominio: "demandas",
   migracoes: [

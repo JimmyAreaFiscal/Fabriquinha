@@ -7,6 +7,7 @@ import type { ParseArgsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
 import { schemaDoTipo, type TipoEvidencia } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
@@ -34,8 +35,8 @@ export interface DepsDoCli {
   readonly raiz: string;
   /** A hora dos comandos que gravam. */
   readonly relogio: Relogio;
-  /** O banco da raiz para um comando, desligado no fim. */
-  comBanco<T>(usar: (banco: DatabaseSync) => T | Promise<T>): Promise<T>;
+  /** O banco da raiz e a gestão de Demandas sobre ele, para um comando; o banco é desligado no fim. */
+  comBanco<T>(usar: (banco: DatabaseSync, demandas: GestaoDeDemandas) => T | Promise<T>): Promise<T>;
   iniciarServico(): Promise<ServicoEmExecucao>;
   abrirNoNavegador(url: string): Promise<void>;
   /** Resolve quando o `servidor` deve parar (SIGINT ou SIGTERM). */

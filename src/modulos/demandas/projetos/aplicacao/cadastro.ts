@@ -27,10 +27,8 @@ import {
 import {
   type ConferirModeloNoHarness,
   type ConfiguracoesDasEtapas,
-  configuracoesDasEtapas,
   etapasComModeloOuEffort,
   parDoModelo,
-  projetoComConfiguracoesDasEtapas,
 } from "./configuracao_do_agente.ts";
 
 /** `<raiz>/simulacoes/<n>`: a pasta da execução simulada `n`, da Simulação que saiu (ticket 02); só a remoção a apaga. */
@@ -97,7 +95,7 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
 }
 
 /** O projeto como o formulário o manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-type ProjetoDoFormulario = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> & {
+export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> & {
   hospedagem?: Hospedagem;
   preparacao: Projeto["verificacoes"]["preparacao"];
   configuracoes: ConfiguracoesDasEtapas;
@@ -113,10 +111,12 @@ async function conferirModelosAlterados(
   configuracoes: ConfiguracoesDasEtapas,
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) {
-  const gravadas = configuracoesDasEtapas(buscarProjeto(banco, nome)?.etapas ?? []);
+  const gravadas = buscarProjeto(banco, nome)?.etapas ?? [];
+  const modeloGravado = (etapa: EtapaTicket) =>
+    gravadas.find((gravada) => gravada.etapa === etapa)?.configuracao_agente?.modelo;
   const alterados = EtapaTicket.options.flatMap((etapa) => {
     const modelo = configuracoes[etapa]?.modelo;
-    return modelo && parDoModelo(modelo) !== parDoModelo(gravadas[etapa]?.modelo) ? [{ etapa, modelo }] : [];
+    return modelo && parDoModelo(modelo) !== parDoModelo(modeloGravado(etapa)) ? [{ etapa, modelo }] : [];
   });
   const rejeitados = (
     await Promise.all(
@@ -144,7 +144,7 @@ async function conferirModelosAlterados(
  */
 async function conferirEGravar(
   banco: DatabaseSync,
-  formulario: ProjetoDoFormulario,
+  formulario: FormularioDoProjeto,
   gravar: typeof registrarProjeto,
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) {
@@ -153,16 +153,13 @@ async function conferirEGravar(
     throw new ErroExterno(mensagem(error_));
   });
   await conferirModelosAlterados(banco, formulario.nome, configuracoes, conferirModeloNoHarness);
-  return escrever(banco, () => {
-    // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
-    const salvo = gravar(banco, {
-      ...cadastro,
-      hospedagem,
-      chave_sonarqube: formulario.nome,
-      etapas: etapasComModeloOuEffort(configuracoes),
-      verificacoes: { preparacao },
-    });
-    return projetoComConfiguracoesDasEtapas(salvo);
+  // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
+  return gravar(banco, {
+    ...cadastro,
+    hospedagem,
+    chave_sonarqube: formulario.nome,
+    etapas: etapasComModeloOuEffort(configuracoes),
+    verificacoes: { preparacao },
   });
 }
 
@@ -172,7 +169,7 @@ async function conferirEGravar(
  */
 export async function cadastrarProjetoDoFormulario(
   banco: DatabaseSync,
-  formulario: ProjetoDoFormulario,
+  formulario: FormularioDoProjeto,
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) {
   const salvo = await conferirEGravar(banco, formulario, registrarProjeto, conferirModeloNoHarness);
@@ -183,17 +180,23 @@ export async function cadastrarProjetoDoFormulario(
 /** Edita o projeto que já existe com as mesmas conferências do cadastro, sem varrer a base. */
 export const editarProjetoDoFormulario = (
   banco: DatabaseSync,
-  formulario: ProjetoDoFormulario,
+  formulario: FormularioDoProjeto,
   conferirModeloNoHarness: ConferirModeloNoHarness,
 ) => conferirEGravar(banco, formulario, editarProjeto, conferirModeloNoHarness);
+
+/** O que sobra para apagar no disco do que dependia do projeto: as execuções, as conversas das sessões e os anexos que nenhuma evidência cita mais. */
+export interface SobrasNoDisco {
+  execucoes: readonly string[];
+  sessoes: readonly string[];
+  anexosSemEvidencia: readonly string[];
+}
 
 /**
  * O que depende do projeto e não é do cadastro dele: os pedidos, as dependências e o desenvolvimento deles nos outros
  * domínios. Quem remove o projeto apaga tudo isso na unidade de trabalho da remoção, recusando antes a execução em
- * andamento, e devolve o que sobra para apagar no disco: as execuções, as conversas das sessões e os anexos que nenhuma
- * evidência cita mais.
+ * andamento, e devolve o que sobra para apagar no disco.
  */
-type ApagarOQueDependeDoProjeto = () => { execucoes: string[]; sessoes: string[]; anexosSemEvidencia: string[] };
+type ApagarOQueDependeDoProjeto = () => SobrasNoDisco;
 
 /**
  * Remove o projeto e tudo o que depende dele, em qualquer estado (I-4): primeiro o banco, numa transação, com o que

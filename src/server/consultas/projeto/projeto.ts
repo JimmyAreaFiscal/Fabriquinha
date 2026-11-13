@@ -21,13 +21,20 @@ import {
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import { sessaoDeCadaTicketDasDemandas } from "../../../modulos/sessoes/publico.ts";
-import { pedidosDoProjeto, type Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas, Projeto } from "../../../modulos/demandas/publico.ts";
 import type { DemandaDoProjeto, FiltroDoProjeto, ListaDoProjeto } from "../../contrato/projeto.ts";
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "../demandas/predecessoras.ts";
 import { pendenciasDasDemandas, situacaoDoCondutor, type SituacaoDaSessao } from "../demandas/pendencias.ts";
 
 export const ORIENTACAO_PROJETO_INEXISTENTE = "escolha um projeto cadastrado na Configuração";
+
+/** Os ids das demandas do projeto, das mais novas para as mais antigas. */
+export const idsDasDemandasDoProjeto = (gestaoDeDemandas: GestaoDeDemandas, projeto: string): string[] =>
+  gestaoDeDemandas
+    .pedidos({ projeto })
+    .map(({ id }) => id)
+    .reverse();
 
 /** O estado da demanda em que o trabalho da Etapa acontece; as Etapas das rodadas e do conflito acontecem em `em_execucao`. */
 const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
@@ -117,14 +124,15 @@ function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): Dem
  */
 export function consultarProjeto(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   nome: string,
   filtro: FiltroDoProjeto,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
 ): ListaDoProjeto {
-  const projeto = projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE);
+  const projeto = gestaoDeDemandas.projeto(nome, ORIENTACAO_PROJETO_INEXISTENTE);
   return lerEmSnapshot(banco, () => {
-    const todas = situacaoDasDemandas(banco, pedidosDoProjeto(banco, nome));
+    const todas = situacaoDasDemandas(banco, idsDasDemandasDoProjeto(gestaoDeDemandas, nome));
     const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
     const mostrarDoEstado: Partial<Record<EstadoDemanda, boolean>> = {
       concluida: filtro.concluidas,
@@ -136,12 +144,13 @@ export function consultarProjeto(
     const naoTerminadas = resumos.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
     const leituras: LeiturasDoProjeto = {
       etapas: projeto.etapas,
-      predecessoras: predecessorasDasDemandas(banco, ids),
+      predecessoras: predecessorasDasDemandas(banco, gestaoDeDemandas, ids),
       sessoes: sessaoDeCadaTicketDasDemandas(banco, ids),
       comPiAtivo: ticketsComPiAtivo(banco),
       // A demanda encerrada não espera ninguém.
       pendencias: pendenciasDasDemandas(
         banco,
+        gestaoDeDemandas,
         naoTerminadas,
         sessoesDasDemandas(banco, naoTerminadas, { escopo: "ativas" }),
         situacaoDa,

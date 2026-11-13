@@ -16,7 +16,7 @@ import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { recuperacaoDaSubida } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
+import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */

@@ -5,7 +5,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { andamentoDasDemandasEmLote, CICLO_DA_DEMANDA, EstadoDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
-import { predecessorasDosPedidosEmLote } from "../../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 
 export interface Predecessora {
   demanda_id: string;
@@ -13,8 +13,13 @@ export interface Predecessora {
 }
 
 /** As predecessoras diretas de cada demanda de `ids`, na ordem em que a dependência foi registrada, com o estado de cada uma. */
-export function predecessorasDasDemandas(banco: DatabaseSync, ids: readonly string[]): Map<string, Predecessora[]> {
-  const predecessorasDoPedido = predecessorasDosPedidosEmLote(banco, ids);
+export function predecessorasDasDemandas(
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  ids: readonly string[],
+): Map<string, Predecessora[]> {
+  const predecessorasDoPedido = new Map(ids.map((id): [string, readonly string[]] => [id, []]));
+  for (const pedido of gestaoDeDemandas.pedidos({ ids })) predecessorasDoPedido.set(pedido.id, pedido.predecessoras);
   const andamentos = andamentoDasDemandasEmLote(banco, [...new Set([...predecessorasDoPedido.values()].flat())]);
   const comEstado = (demanda_id: string): Predecessora => ({
     demanda_id,

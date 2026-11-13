@@ -11,8 +11,8 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { registrarProjeto } from "../../../demandas/publico.ts";
 import { carregarDemanda } from "../../processo/publico.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

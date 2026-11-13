@@ -5,8 +5,9 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { buscarProjeto, gravarProjeto, Projeto } from "../../src/modulos/demandas/publico.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { expect, projeto, test } from "../apoio.ts";
+import { buscarProjeto, gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** A linha de `configuracao_etapa_projeto` da etapa `planejar` e a mesma etapa como o cadastro do projeto a entrega. */
 const PLANEJAR = { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "high" };

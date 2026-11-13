@@ -17,7 +17,6 @@ import {
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
 import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
@@ -25,6 +24,7 @@ import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { commitarArquivo, criarRepositorioDeTeste, rodarGit } from "../repositorio_de_teste.ts";
+import { registrarProjeto } from "../demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 const em = "2026-01-01T00:00:00.000Z";

@@ -11,6 +11,9 @@ export const alocarIdDoPedido = (banco: DatabaseSync): string => `I-${String(nov
 
 const COLUNAS_DO_PEDIDO =
   "id, projeto, titulo, tipo, descricao, criada_por_ferramenta, criada_por_sessao, enviada, situacao";
+/** As mesmas colunas, da `demanda d` da consulta que junta o histórico e a origem. */
+const COLUNAS_DO_PEDIDO_NA_CONSULTA =
+  "d.id, d.projeto, d.titulo, d.tipo, d.descricao, d.criada_por_ferramenta, d.criada_por_sessao, d.enviada, d.situacao";
 
 const pedidoDaLinha = (linha: Record<string, SQLOutputValue>): Pedido => ({
   id: String(linha.id),
@@ -37,21 +40,6 @@ export const lerPedido = (banco: DatabaseSync, id: string): Pedido =>
     ),
   );
 
-/** Os pedidos `ids`, pelo id, numa leitura só; o id sem pedido não entra no mapa. */
-export const lerPedidosEmLote = (banco: DatabaseSync, ids: readonly string[]): Map<string, Pedido> =>
-  new Map(
-    instrucaoPreparada(banco, `SELECT ${COLUNAS_DO_PEDIDO} FROM demanda WHERE id IN (SELECT value FROM json_each(?))`)
-      .all(JSON.stringify(ids))
-      .map((linha) => [String(linha.id), pedidoDaLinha(linha)]),
-  );
-
-/** Os ids dos pedidos do projeto, dos mais novos para os mais antigos. */
-export const pedidosDoProjeto = (banco: DatabaseSync, projeto: string): string[] =>
-  banco
-    .prepare("SELECT id FROM demanda WHERE projeto = ? ORDER BY rowid DESC")
-    .all(projeto)
-    .map((linha) => String(linha.id));
-
 /** Grava o pedido novo, com o ID que a sequência alocou. */
 export const gravarPedidoNovo = (banco: DatabaseSync, pedido: Pedido): void => {
   banco
@@ -69,48 +57,58 @@ export const gravarPedidoNovo = (banco: DatabaseSync, pedido: Pedido): void => {
     );
 };
 
-/** A situação de cada pedido, numa leitura só. */
-export const situacoesDosPedidos = (banco: DatabaseSync): Map<string, SituacaoDoPedido> =>
-  new Map(
-    banco
-      .prepare("SELECT id, situacao FROM demanda")
-      .all()
-      .map((linha) => [String(linha.id), SituacaoDoPedido.parse(linha.situacao)]),
-  );
-
-/** O cadastro do pedido com o histórico administrativo: o registro e a conclusão gravados, ou `null` (a demanda nova). */
-interface HistoricoDoPedido {
-  id: string;
-  projeto: string;
-  titulo: string;
-  criadaEm: string | null;
-  concluidaEm: string | null;
+/** O achado da Avaliação de onde o pedido foi encaminhado. */
+interface OrigemDoPedido {
+  readonly avaliacao_id: string;
+  readonly achado_id: number;
+  readonly titulo: string;
 }
 
-/** O histórico dos pedidos `ids`, ou de todos sem `ids`, na ordem em que foram registrados, numa leitura só. */
-export const historicoDosPedidosEmLote = (banco: DatabaseSync, ids?: readonly string[]): HistoricoDoPedido[] =>
+/** O pedido com o histórico administrativo e a origem: o que a consulta dos pedidos lê da linha de cada um. */
+export interface PedidoComHistorico extends Pedido {
+  /** O registro gravado no histórico, ou `null` (a demanda nova). */
+  readonly criadaEm: string | null;
+  /** A conclusão gravada no histórico, ou `null`. */
+  readonly concluidaEm: string | null;
+  /** O achado da Avaliação de onde o pedido foi encaminhado; ausente no pedido que não veio de um. */
+  readonly origem?: OrigemDoPedido;
+}
+
+/** Quais pedidos ler: os `ids`, os do `projeto`, ou todos sem nenhum dos dois. */
+export interface FiltroDePedidos {
+  readonly ids?: readonly string[];
+  readonly projeto?: string;
+}
+
+/**
+ * Os pedidos do `filtro`, na ordem em que foram registrados, com o histórico e a origem, numa leitura só. Cada pedido vem
+ * de no máximo um achado (`demanda_id` é único na tabela).
+ */
+export const lerPedidosDoFiltro = (banco: DatabaseSync, { ids, projeto }: FiltroDePedidos): PedidoComHistorico[] =>
   instrucaoPreparada(
     banco,
-    `SELECT d.id, d.projeto, d.titulo, h.criada_em, h.concluida_em
-       FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id
-       WHERE $ids IS NULL OR d.id IN (SELECT value FROM json_each($ids)) ORDER BY d.rowid`,
+    `SELECT ${COLUNAS_DO_PEDIDO_NA_CONSULTA}, h.criada_em, h.concluida_em, o.avaliacao_id, o.achado_id, o.titulo AS titulo_do_achado
+       FROM demanda d
+       LEFT JOIN demanda_historico h ON h.demanda_id = d.id
+       LEFT JOIN achado_avaliacao o ON o.demanda_id = d.id
+      WHERE ($ids IS NULL OR d.id IN (SELECT value FROM json_each($ids))) AND ($projeto IS NULL OR d.projeto = $projeto)
+      ORDER BY d.rowid`,
   )
-    .all({ ids: ids === undefined ? null : JSON.stringify(ids) })
+    .all({ ids: ids === undefined ? null : JSON.stringify(ids), projeto: projeto ?? null })
     .map((linha) => ({
-      id: String(linha.id),
-      projeto: String(linha.projeto),
-      titulo: String(linha.titulo),
+      ...pedidoDaLinha(linha),
       criadaEm: linha.criada_em === null ? null : String(linha.criada_em),
       concluidaEm: linha.concluida_em === null ? null : String(linha.concluida_em),
+      ...(linha.avaliacao_id === null
+        ? {}
+        : {
+            origem: {
+              avaliacao_id: String(linha.avaliacao_id),
+              achado_id: Number(linha.achado_id),
+              titulo: String(linha.titulo_do_achado),
+            },
+          }),
     }));
-
-/** O achado da Avaliação de onde o pedido `id` foi encaminhado, ou `undefined` no pedido que não veio de um. */
-export const origemDoPedido = (
-  banco: DatabaseSync,
-  id: string,
-): { avaliacao_id: string; achado_id: number; titulo: string } | undefined =>
-  banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(id) as
-    { avaliacao_id: string; achado_id: number; titulo: string } | undefined;
 
 export const gravarConteudoDoPedido = (banco: DatabaseSync, { id, titulo, tipo, descricao }: Pedido): void => {
   banco.prepare("UPDATE demanda SET titulo = ?, tipo = ?, descricao = ? WHERE id = ?").run(titulo, tipo, descricao, id);

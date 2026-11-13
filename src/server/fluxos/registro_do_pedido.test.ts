@@ -9,9 +9,9 @@ import {
   situacaoGravada,
 } from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { AUDITOR, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
-import { lerPedido } from "../../modulos/demandas/publico.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "./registro_do_pedido.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 
 const contarLinhas = (banco: ReturnType<typeof bancoComProjeto>, tabela: string): unknown =>
   banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n;
@@ -20,6 +20,7 @@ test("CA-1: registra o pedido I-n em rascunho e o processo no estado da primeira
   const banco = bancoComProjeto();
   const processo = registrarPedidoComProcesso(
     banco,
+    montarDemandasDoBanco(banco),
     { projeto: "fabriquinha", titulo: "T", tipo: "funcionalidade", descricao: "D" },
     AUTORA_DOS_PEDIDOS,
     CONTEXTO_DOS_PEDIDOS,
@@ -30,7 +31,15 @@ test("CA-1: registra o pedido I-n em rascunho e o processo no estado da primeira
   assert.deepEqual(processo.tickets[0]?.criado_por, { tipo: "fabriquinha" });
   assert.deepEqual(processo.evidencias, []);
   assert.equal(carregarDemanda(banco, processo.demanda.id).demanda.titulo, "T");
-  assert.deepEqual(lerPedido(banco, processo.demanda.id), {
+  const {
+    criadaEm: _,
+    concluidaEm: __,
+    predecessoras: ___,
+    predecessorasPendentes: ____,
+    dependentesPendentes: _____,
+    ...lido
+  } = montarDemandasDoBanco(banco).pedido(processo.demanda.id);
+  assert.deepEqual(lido, {
     id: processo.demanda.id,
     projeto: "fabriquinha",
     titulo: "T",
@@ -48,6 +57,7 @@ test("registrar recusa projeto inexistente e campo inválido com campo e correç
     () =>
       registrarPedidoComProcesso(
         banco,
+        montarDemandasDoBanco(banco),
         { projeto: "x", titulo: "T", tipo: "funcionalidade", descricao: "D" },
         AUTORA_DOS_PEDIDOS,
         CONTEXTO_DOS_PEDIDOS,
@@ -58,6 +68,7 @@ test("registrar recusa projeto inexistente e campo inválido com campo e correç
     () =>
       registrarPedidoComProcesso(
         banco,
+        montarDemandasDoBanco(banco),
         { projeto: "fabriquinha", titulo: "", tipo: "funcionalidade", descricao: "D" },
         AUTORA_DOS_PEDIDOS,
         CONTEXTO_DOS_PEDIDOS,

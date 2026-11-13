@@ -8,21 +8,12 @@ import {
   type ContextoDemanda,
   criarProcessoDoPedido,
 } from "../../modulos/ciclo_de_vida/publico.ts";
-import { registrarDependencia, registrarPedido } from "../../modulos/demandas/publico.ts";
+import type { GestaoDeDemandas, NovoPedido } from "../../modulos/demandas/publico.ts";
 
-/** O conteúdo do pedido (projeto, título, tipo, descrição) e as demandas de que ele depende. */
-type EntradaDoRegistro = { dependencias?: string[] } & Record<string, unknown>;
-
-export function registrarPedidoComProcesso(
+export const registrarPedidoComProcesso = (
   banco: DatabaseSync,
-  entrada: EntradaDoRegistro,
+  gestaoDeDemandas: GestaoDeDemandas,
+  novo: NovoPedido,
   autor: Ator,
   ctx: ContextoDemanda,
-): AgregadoDemanda {
-  const { dependencias = [], ...conteudo } = entrada;
-  return registrarPedido(banco, conteudo, autor, (pedido) => {
-    const processo = criarProcessoDoPedido(banco, pedido, ctx);
-    for (const dependeId of dependencias) registrarDependencia(banco, pedido.id, dependeId);
-    return processo;
-  });
-}
+): AgregadoDemanda => gestaoDeDemandas.registrar(novo, autor, (pedido) => criarProcessoDoPedido(banco, pedido, ctx));

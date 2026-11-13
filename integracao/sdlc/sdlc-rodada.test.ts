@@ -40,6 +40,7 @@ import {
 import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git } from "../apoio.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../falsos.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 const gh = ghFalso(base);
 
@@ -377,8 +378,12 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(
-    cicloDoDespacho(humana.banco, humana.config, despacho(), predecessorasPendentesPelasDependencias(humana.banco))
-      .length,
+    cicloDoDespacho(
+      humana.banco,
+      humana.config,
+      despacho(),
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(humana.banco)),
+    ).length,
     0,
   );
 

@@ -32,13 +32,15 @@ import {
   emMarkdown,
 } from "../../../modulos/sessoes/publico.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
-import { registrarProjeto } from "../../../modulos/demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste } from "../../../../apoio-testes/repositorio_de_teste.ts";
 import { abrirChatDemanda, exportarHistoricoDemanda } from "./chat.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 /** O cabeçalho da sessão, como o chat o abre; `undefined` se o id não é de uma sessão da demanda. */
-const cabecalhoDaSessao = (banco: DatabaseSync, id: string) => abrirChatDemanda(banco, id)?.cabecalho;
+const cabecalhoDaSessao = (banco: DatabaseSync, id: string) =>
+  abrirChatDemanda(banco, montarDemandasDoBanco(banco), id)?.cabecalho;
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sessoes-demanda-")));
@@ -263,7 +265,11 @@ test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () =>
 
 test("I-275: o gate do planejamento é a Pendência do planejamento, não a do gate da demanda", () => {
   const { banco } = cenario();
-  const { sessao, pendencias } = encontrado(abrirChatDemanda(banco, "s301"), "sem chat", "x").cabecalho;
+  const { sessao, pendencias } = encontrado(
+    abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s301"),
+    "sem chat",
+    "x",
+  ).cabecalho;
   assert.deepEqual(
     [sessao.pendencia?.tipo, sessao.pendencia?.item, sessao.pendencia?.motivo],
     ["gate_humano", "I-301", "Aprovação do planejamento aguarda decisão"],
@@ -276,7 +282,11 @@ test("I-275: o gate do planejamento é a Pendência do planejamento, não a do g
 
 test("o cabeçalho leva as Pendências da demanda inteira: o ticket bloqueado e a conversa", () => {
   const { banco } = cenario();
-  const { pendencias } = encontrado(abrirChatDemanda(banco, "s1"), "sem chat", "x").cabecalho;
+  const { pendencias } = encontrado(
+    abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s1"),
+    "sem chat",
+    "x",
+  ).cabecalho;
   assert.deepEqual(
     pendencias.map((p) => [p.tipo, p.item]),
     [
@@ -301,7 +311,7 @@ test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale te
 test("CA-7 e CA-14: id que não é de sessão da demanda não dá nada", () => {
   const { banco } = cenario();
   assert.equal(cabecalhoDaSessao(banco, "nao-existe"), undefined);
-  assert.equal(abrirChatDemanda(banco, "nao-existe"), undefined);
+  assert.equal(abrirChatDemanda(banco, montarDemandasDoBanco(banco), "nao-existe"), undefined);
   assert.equal(exportarHistoricoDemanda(banco, "nao-existe"), undefined);
 });
 
@@ -331,10 +341,10 @@ function conversaDoPlanejamento(raiz: string): void {
 
 test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcado, e o estado muda ao vivo", () => {
   const { banco, c } = cenario();
-  assert.deepEqual(abrirChatDemanda(banco, "s1")?.conversa, []);
+  assert.deepEqual(abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s1")?.conversa, []);
   conversaDoPlanejamento(c.raiz);
 
-  const chat = abrirChatDemanda(banco, "s1");
+  const chat = abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s1");
   assert.ok(chat);
   assert.deepEqual(
     chat.conversa.map((e) => [e.type, e.fabriquinha]),
@@ -375,7 +385,7 @@ test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Ag
       .join("\n") + "\n",
   );
   assert.deepEqual(
-    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s1")?.conversa.map((e) => e.ator),
     [agente, { tipo: "auditor" }, undefined],
   );
 });
@@ -404,7 +414,7 @@ test("I-266.T29: as linhas livres do condutor que citam o prefixo da resposta au
     [resposta("auto"), resposta("humana")].map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
   assert.deepEqual(
-    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    abrirChatDemanda(banco, montarDemandasDoBanco(banco), "s1")?.conversa.map((e) => e.ator),
     [agente, { tipo: "auditor" }],
   );
 });
@@ -467,7 +477,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   });
   const sessao = String(carregarSessoesDoContexto(banco, ref).sessoes[0]?.id);
   const ao_vivo: Record<string, unknown>[] = [];
-  const chat = abrirChatDemanda(banco, sessao);
+  const chat = abrirChatDemanda(banco, montarDemandasDoBanco(banco), sessao);
   assert.equal(chat?.cabecalho.sessao.estado, "rodando");
   const cancelar = chat.assinar((e) => ao_vivo.push({ ...e }));
 

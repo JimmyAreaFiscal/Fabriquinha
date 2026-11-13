@@ -2,6 +2,7 @@
 // sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora. Fora do
 // Início, o menu conta o que aguarda pela consulta leve de quantidade_de_pendencias.ts, com as mesmas Pendências.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { mesDoInstante, type Relogio } from "../../../shared/nucleo/relogio.ts";
 import {
   type ResumoDaDemanda,
@@ -86,6 +87,7 @@ function cartoesDaDemanda(ag: ResumoDaDemanda, bloqueios: string[], apoio: Apoio
 /** O Início, lido num snapshot só; o mês corrente e as Pendências saem do instante do `relogio`. */
 export function consultarInicio(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacaoDoCondutor,
 ): DadosDoInicio {
@@ -93,9 +95,10 @@ export function consultarInicio(
     const agora = relogio.agora();
     const mes = mesDoInstante(agora);
     // Um mês pedido, um mês devolvido.
-    const [doMes] = metricasDosMeses({ banco, pedidos: lerPedidosDasMetricas(banco) }, { de: mes, ate: mes }) as [
-      DadosDoInicio["mes"],
-    ];
+    const [doMes] = metricasDosMeses(
+      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      { de: mes, ate: mes },
+    ) as [DadosDoInicio["mes"]];
     const demandas = listarResumosDasDemandas(banco, { soNaoTerminadas: true });
     // Só as sessões das demandas em andamento, lidas em lote: calcular o estado de todas as do banco custa segundos. Ficam
     // na ordem das demandas, e as de cada demanda, da que está assim há mais tempo para a mais recente.
@@ -105,6 +108,7 @@ export function consultarInicio(
     const apoio: ApoioDosTickets = { modoDe: (ref) => modos.get(ref), comPiAtivo: ticketsComPiAtivo(banco) };
     const predecessoras = predecessorasDasDemandas(
       banco,
+      gestaoDeDemandas,
       demandas.map((ag) => ag.demanda.id),
     );
     const tituloDoTicket = new Map(
@@ -112,7 +116,7 @@ export function consultarInicio(
     );
     return {
       mes: doMes,
-      aguarda: pendenciasDasDemandas(banco, demandas, sessoes, situacaoDa, agora),
+      aguarda: pendenciasDasDemandas(banco, gestaoDeDemandas, demandas, sessoes, situacaoDa, agora),
       rodando: sessoes
         .filter((s) => s.estado === "rodando")
         .map((s) => {

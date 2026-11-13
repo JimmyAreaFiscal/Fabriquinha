@@ -4,13 +4,15 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
-import { cadastrarProjetoLoja } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
-import { EstadoDemanda } from "../../../ciclo_de_vida/publico.ts";
-import { lerPedido } from "./pedidos.ts";
-import { registrarPedido } from "../aplicacao/gestao_de_pedidos.ts";
-import { MIGRACOES_DE_DEMANDAS } from "./migracao_da_situacao.ts";
+import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
+import { cadastrarProjetoLoja } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { EstadoDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { MIGRACOES_DE_DEMANDAS } from "./migracoes_de_demandas.ts";
+
+/** A situação administrativa do pedido `id`, lida direto da linha. */
+const situacaoGravada = (banco: DatabaseSync, id: string): unknown =>
+  banco.prepare("SELECT situacao FROM demanda WHERE id = ?").get(id)?.situacao;
 
 const versaoDo = (banco: DatabaseSync): unknown => banco.prepare("PRAGMA user_version").get()?.user_version;
 
@@ -86,7 +88,7 @@ test("a 51 deriva a situação de cada pedido do estado e do envio, sem perder l
   assert.equal(versaoDo(banco), 51);
   assert.deepEqual(linhasDeTodasAsTabelas(banco, ["situacao"]), linhasAntes);
   assert.deepEqual(
-    Object.fromEntries([...estadoDe.keys()].map((id) => [id, lerPedido(banco, id).situacao])),
+    Object.fromEntries([...estadoDe.keys()].map((id) => [id, situacaoGravada(banco, id)])),
     Object.fromEntries([...estadoDe].map(([id, estado]) => [id, SITUACAO_DO_ESTADO[estado]])),
   );
   banco.close();
@@ -118,8 +120,8 @@ test("o banco aberto pela Fabriquinha registra a 51 e a 53 de Demandas, e o pedi
   cadastrarProjetoLoja(banco);
   const autor = { tipo: "externo", ferramenta: "claude", sessao: "s1" } as const;
   const conteudo = { projeto: "loja", titulo: "Título", tipo: "problema", descricao: "d" };
-  const pedido = registrarPedido(banco, conteudo, autor, (registrado) => registrado);
-  assert.equal(lerPedido(banco, pedido.id).situacao, "rascunho");
+  const pedido = montarDemandasDoBanco(banco).registrar(conteudo, autor, (registrado) => registrado);
+  assert.equal(situacaoGravada(banco, pedido.id), "rascunho");
   assert.equal(banco.prepare("SELECT estado FROM demanda WHERE id = ?").get(pedido.id)?.estado, null);
   fechar();
 });

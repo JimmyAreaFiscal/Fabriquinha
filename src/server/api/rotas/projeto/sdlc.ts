@@ -1,7 +1,7 @@
 // Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto`, ao lado do cadastro do projeto
 // (`/api/projetos/:nome`).
 import { z } from "zod";
-import { gravarConfiguracaoSdlc, ProjetoConfigurado, projetoExistente } from "../../../../modulos/demandas/publico.ts";
+import { ProjetoConfigurado } from "../../../../modulos/demandas/publico.ts";
 import { consultarConfiguracaoSdlc } from "../../../consultas/projeto/sdlc.ts";
 import { ConfiguracaoSdlcDoProjeto } from "../../../contrato/sdlc.ts";
 import type { Rota } from "../../rotas.ts";
@@ -25,18 +25,18 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/configuracao-sdlc",
-    tratar: ({ banco, params }) => consultarConfiguracaoSdlc(banco, String(params.nome)),
+    tratar: ({ banco, demandas, params }) => consultarConfiguracaoSdlc(banco, demandas, String(params.nome)),
     resposta: ConfiguracaoSdlcDoProjeto,
   },
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome/configuracao-sdlc",
-    tratar: ({ banco, params, corpo }) => {
+    tratar: ({ demandas, params, corpo }) => {
       const nome = String(params.nome);
-      projetoExistente(banco, nome);
+      demandas.projeto(nome);
       const lida = ProjetoConfigurado.safeParse({ ...(corpo as object), nome });
       if (!lida.success) throw new z.ZodError(lida.error.issues.map(orientar));
-      return { configurada: true, configuracao: gravarConfiguracaoSdlc(banco, lida.data) };
+      return { configurada: true, configuracao: demandas.configurarSdlc(lida.data) };
     },
     resposta: ConfiguracaoSdlcDoProjeto,
   },

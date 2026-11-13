@@ -12,7 +12,7 @@ import { after, beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarDockerFalso } from "../../../../apoio-testes/falsos/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/falsos/pi_falso.ts";
-import { buscarProjeto, gravarProjeto, Projeto, projetoExistente } from "../../../modulos/demandas/publico.ts";
+import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { cursorDaBase } from "../../../modulos/repositorio/publico.ts";
@@ -22,6 +22,8 @@ import type { AmbientesDoServico } from "../rotas.ts";
 import { ROTAS } from "../servidor.ts";
 import { montarAmbientesDoServico } from "../../composicao/ambientes_do_servico.ts";
 import { noLog } from "../../../shared/infra/registro.ts";
+import { buscarProjeto, gravarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 // realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-config-")));
@@ -89,6 +91,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
         banco,
         agendador: { proximaBusca: () => PROXIMA },
         ambientes,
+        demandas: montarDemandasDoBanco(banco),
         relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),
@@ -359,7 +362,7 @@ test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravaç
     ...formulario(repo),
     configuracoes: { implementar: { effort: "max" } },
   });
-  const lida = projetoExistente(banco, "loja");
+  const lida = montarDemandasDoBanco(banco).projeto("loja");
   assert.deepEqual(lida.etapas, [{ etapa: "implementar", configuracao_agente: { effort: "max" } }]);
   assert.equal(lida.verificacoes.linguagens.length, 1);
 

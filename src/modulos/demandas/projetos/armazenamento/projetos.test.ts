@@ -5,18 +5,11 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../aplicacao/cadastro.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
-import {
-  buscarProjeto,
-  carregarProjeto,
-  donoDoRepositorio,
-  gravarProjeto,
-  listarProjetos,
-  projetoExistente,
-} from "./projetos.ts";
+import { buscarProjeto, donoDoRepositorio, gravarProjeto, listarProjetos, projetoExistente } from "./projetos.ts";
 
 const TABELAS = [
   "projeto",
@@ -119,25 +112,6 @@ test("projetoExistente recusa o projeto inexistente, com a orientação padrão 
   });
 });
 
-test("carregarProjeto recusa o projeto inexistente com a orientação de configurar", () => {
-  comBanco((banco) => {
-    assert.throws(
-      () => carregarProjeto(banco, "fantasma"),
-      (erro) =>
-        erro instanceof ErroDeRegra &&
-        erro.message === "o projeto fantasma não tem configuração do SDLC (configure o projeto)",
-    );
-    assert.throws(
-      () => carregarProjeto(banco, "a"),
-      (erro) =>
-        erro instanceof ErroDeRegra &&
-        erro.message === "o projeto a não tem configuração do SDLC (configure o projeto)",
-    );
-    gravarCompleta(banco);
-    assert.deepEqual(carregarProjeto(banco, "a"), canonica);
-  });
-});
-
 test("donoDoRepositorio acha só o outro projeto que usa o repositório; gravarProjeto atualiza o mesmo nome", () => {
   comBanco((banco) => {
     gravarProjeto(banco, Projeto.parse({ ...cadastro(), branch_base: "dev" }));
@@ -178,7 +152,7 @@ test("preparação: lida sem SDLC, substituída na ordem 1..n; a inválida não 
       ...projetoB,
       verificacoes: { ...projetoB.verificacoes, preparacao: ["uv venv .venv", "uv sync"] },
     });
-    assert.throws(() => carregarProjeto(banco, "b"), ErroDeRegra);
+    assert.deepEqual(projetoExistente(banco, "b").verificacoes.linguagens, []);
     assert.deepEqual(projetoExistente(banco, "b").verificacoes.preparacao, ["uv venv .venv", "uv sync"]);
     gravarCompleta(banco);
     const projetoA = projetoExistente(banco, "a");
@@ -216,7 +190,7 @@ test("etapas: lidas sem SDLC, substituídas; a inválida não altera nada", () =
       etapas: [{ etapa: "ajustar_resultado", configuracao_agente: { effort: "max" } }],
     }).etapas;
     gravarProjeto(banco, { ...projetoB, etapas: etapasB });
-    assert.throws(() => carregarProjeto(banco, "b"), ErroDeRegra);
+    assert.deepEqual(projetoExistente(banco, "b").verificacoes.linguagens, []);
     assert.deepEqual(projetoExistente(banco, "b").etapas, etapasB);
     gravarCompleta(banco);
     const substituido = Projeto.parse({
@@ -330,7 +304,7 @@ test("ausência: projeto inexistente lê undefined; cadastro sem SDLC é legíve
     );
     assert.equal(banco.isTransaction, false);
     gravarProjeto(banco, ProjetoConfigurado.parse(minima("nao-existe")));
-    assert.deepEqual(carregarProjeto(banco, "nao-existe"), ProjetoConfigurado.parse(minima("nao-existe")));
+    assert.deepEqual(buscarProjeto(banco, "nao-existe"), ProjetoConfigurado.parse(minima("nao-existe")));
   });
 });
 
@@ -454,7 +428,6 @@ test("raiz_git relativa é rejeitada pelo schema sem mutação; cadastro e SDLC 
     assert.equal(listarProjetos(banco).length, 2);
     gravarConfiguracaoSdlc(banco, { ...sdlc, raiz_git: "/repos/nova" });
     assert.equal(buscarProjeto(banco, "loja")?.raiz_git, "/repos/nova");
-    assert.equal(carregarProjeto(banco, "loja").raiz_git, "/repos/nova");
   });
 });
 

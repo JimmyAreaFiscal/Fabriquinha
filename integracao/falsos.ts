@@ -16,10 +16,12 @@ import {
   salvarConfiguracaoDoAmbiente,
 } from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { AmbienteContainer, ligarGestaoDeAmbientesNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
-import { gravarProjeto, Projeto, projetoExistente } from "../src/modulos/demandas/publico.ts";
+import { Projeto } from "../src/modulos/demandas/publico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../src/modulos/sessoes/publico.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
+import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 
 /** O `gh` falso (a hospedagem já testada em `apoio-testes/falsos/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
 export function ghFalso(dir: string) {
@@ -63,7 +65,7 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
   git(c.repo, "commit", "-q", "-m", "projeto de teste em container");
   git(c.repo, "push", "-q", "origin", "main");
   git(c.repo, "config", "core.hooksPath", "hooks");
-  const projeto = projetoExistente(c.banco, c.projeto);
+  const projeto = montarDemandasDoBanco(c.banco).projeto(c.projeto);
   gravarProjeto(
     c.banco,
     Projeto.parse({

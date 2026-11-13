@@ -1,5 +1,6 @@
 // Servidor web de verdade para os testes das rotas: banco real, projeto `loja` e um agendador falso que só anota o que
 // lhe pedem. Fica fora de cenarios_de_demanda.ts porque fecha o servidor num `after()` do arquivo de teste.
+import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer, request } from "node:http";
@@ -90,6 +91,7 @@ export async function servir(
       porta,
       agendador,
       ambientes,
+      demandas: montarDemandasDoBanco(banco),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

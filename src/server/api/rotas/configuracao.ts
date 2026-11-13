@@ -7,6 +7,7 @@ import {
   consultarEstadoDoAmbiente,
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
+  projetoComConfiguracoesDasEtapas,
 } from "../../consultas/configuracao.ts";
 import {
   EstadoDaConfiguracao,
@@ -18,10 +19,6 @@ import {
   ProjetoCadastrado,
   ProjetoRemovido,
 } from "../../contrato/configuracao.ts";
-import {
-  cadastrarProjetoConferindoOModelo,
-  editarProjetoConferindoOModelo,
-} from "../../fluxos/projeto/cadastro_do_projeto.ts";
 import { removerProjetoComOQueDependeDele } from "../../fluxos/projeto/remocao_do_projeto.ts";
 import { SemCorpoEmJson, type Rota } from "../rotas.ts";
 
@@ -65,34 +62,37 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos",
-    tratar: ({ banco }) => consultarProjetosCadastrados(banco),
+    tratar: ({ demandas }) => consultarProjetosCadastrados(demandas),
     resposta: ProjetosCadastrados,
   },
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome",
-    tratar: ({ banco, params }) => consultarProjetoCadastrado(banco, String(params.nome)),
+    tratar: ({ demandas, params }) => consultarProjetoCadastrado(demandas, String(params.nome)),
     resposta: ProjetoCadastrado,
   },
   { metodo: "GET", caminho: "/api/modelos", tratar: () => condutor.harness.listarModelos(), resposta: ModelosDoPi },
   {
     metodo: "POST",
     caminho: "/api/projetos",
-    tratar: ({ banco, corpo }) => cadastrarProjetoConferindoOModelo(banco, FormularioDoProjeto.parse(corpo)),
+    tratar: async ({ demandas, corpo }) =>
+      projetoComConfiguracoesDasEtapas(await demandas.cadastrarProjeto(FormularioDoProjeto.parse(corpo))),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome",
-    tratar: ({ banco, params, corpo }) =>
-      editarProjetoConferindoOModelo(banco, { ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) }),
+    tratar: async ({ demandas, params, corpo }) =>
+      projetoComConfiguracoesDasEtapas(
+        await demandas.editarProjeto({ ...FormularioDeEdicaoDoProjeto.parse(corpo), nome: String(params.nome) }),
+      ),
     resposta: ProjetoCadastrado,
   },
   {
     metodo: "DELETE",
     caminho: "/api/projetos/:nome",
-    tratar: async ({ banco, params }) => {
-      const { avisos } = await removerProjetoComOQueDependeDele(banco, String(params.nome));
+    tratar: async ({ banco, demandas, params }) => {
+      const { avisos } = await removerProjetoComOQueDependeDele(banco, demandas, String(params.nome));
       return { avisos };
     },
     resposta: ProjetoRemovido,

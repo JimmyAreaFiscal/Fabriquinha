@@ -8,9 +8,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
+import { MIGRACOES_DE_DEMANDAS } from "../../shared/armazenamento/migracoes/migracoes_de_demandas.ts";
 import { MIGRACOES_DE_SESSOES } from "../../modulos/sessoes/publico.ts";
-import { concluirDesenvolvimento } from "../fluxos/conclusao_do_desenvolvimento.ts";
 import {
+  condutor,
   configuracao,
   ligarConclusaoDoDesenvolvimento,
   ligarLeituraDosLimitesDasSessoes,
@@ -18,17 +19,30 @@ import {
   ligarLeituraDosProjetosCadastrados,
   MIGRACOES_DO_CICLO_DE_VIDA,
 } from "../../modulos/ciclo_de_vida/publico.ts";
-import {
-  buscarProjeto,
-  carregarProjeto,
-  lerPedidosEmLote,
-  MIGRACOES_DE_DEMANDAS,
-  projetoExistente,
-} from "../../modulos/demandas/publico.ts";
+import { type GestaoDeDemandas, montarGestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 
-ligarLeituraDosProjetosCadastrados({ buscarProjeto, carregarProjeto, projetoExistente });
-ligarLeituraDosPedidosRecebidos({ lerPedidosEmLote });
-ligarConclusaoDoDesenvolvimento(concluirDesenvolvimento);
+/**
+ * A gestão de Demandas sobre o `banco`, com a conferência do modelo pelo harness do serviço (lido na hora da conferência).
+ * ponytail: a gestão só guarda o banco e a conferência, então montá-la a cada leitura ligada ao Ciclo de Vida não custa;
+ * montar uma por banco quando a gestão guardar estado.
+ */
+export const montarDemandasDoBanco = (banco: DatabaseSync): GestaoDeDemandas =>
+  montarGestaoDeDemandas({ banco, conferirModeloNoHarness: (modelo) => condutor.harness.conferirModelo(modelo) });
+
+ligarLeituraDosProjetosCadastrados({
+  projetoExistente: (banco, nome, orientacao) => montarDemandasDoBanco(banco).projeto(nome, orientacao),
+});
+ligarLeituraDosPedidosRecebidos({
+  lerPedidosEmLote: (banco, ids) =>
+    new Map(
+      montarDemandasDoBanco(banco)
+        .pedidos({ ids })
+        .map((pedido) => [pedido.id, pedido]),
+    ),
+});
+ligarConclusaoDoDesenvolvimento((banco, demandaId, gravarEncerramentoDoProcesso) => {
+  montarDemandasDoBanco(banco).concluir(demandaId, gravarEncerramentoDoProcesso);
+});
 ligarLeituraDosLimitesDasSessoes({
   timeoutMin: (banco) => configuracao(banco).timeoutMin,
   ociosidadeMin: (banco) => configuracao(banco).ociosidadeMin,

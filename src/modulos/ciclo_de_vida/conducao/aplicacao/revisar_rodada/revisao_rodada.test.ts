@@ -7,7 +7,6 @@ import { AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { reabrirTicket, motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../../../processo/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarProjeto, gravarProjeto } from "../../../../demandas/publico.ts";
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
@@ -22,6 +21,7 @@ import {
 import { decidirGate } from "../gates.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { buscarProjeto, gravarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -73,7 +73,8 @@ test("CA-3: arquivo modificado aparece como M", async () => {
 
 test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; regravar substitui", async () => {
   const { banco } = await cenarioRevisao();
-  const projeto = carregarProjeto(banco, "loja");
+  const projeto = buscarProjeto(banco, "loja");
+  assert.ok(projeto);
   gravarProjeto(banco, {
     ...projeto,
     verificacoes: {
@@ -108,7 +109,8 @@ test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; reg
 
 test("fitness que falha: erro e nenhuma das duas evidências fica gravada", async () => {
   const { banco } = await cenarioRevisao();
-  const projeto = carregarProjeto(banco, "loja");
+  const projeto = buscarProjeto(banco, "loja");
+  assert.ok(projeto);
   gravarProjeto(banco, {
     ...projeto,
     verificacoes: { ...projeto.verificacoes, fitness: [{ nome: "ruim", comando: "exit 1", descricao: "d" }] },

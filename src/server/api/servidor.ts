@@ -8,6 +8,7 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import { casar } from "../web/compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
@@ -151,6 +152,7 @@ interface Web {
   porta: number;
   agendador: Agendador;
   ambientes: AmbientesDoServico;
+  demandas: GestaoDeDemandas;
   relogio: Relogio;
   /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
   registrarErro: (erro: unknown) => void;
@@ -168,6 +170,7 @@ export function servirWeb({
   porta,
   agendador,
   ambientes,
+  demandas,
   relogio,
   registrarErro,
   rotasDoAgente: rotasDaApiDoAgente = ROTAS_DO_AGENTE,
@@ -218,6 +221,7 @@ export function servirWeb({
         banco,
         agendador,
         ambientes,
+        demandas,
         relogio,
         params,
         query: url.searchParams,

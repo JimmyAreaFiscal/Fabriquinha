@@ -12,25 +12,35 @@ import { consultarBoardDeDemandas } from "./demandas/board_de_demandas.ts";
 import { consultarProjeto } from "./projeto/projeto.ts";
 import { contarExecucoesSql } from "../../../estresse/referencia/contador_de_execucoes_sql.ts";
 import { semearVolume } from "../../../estresse/referencia/semeadura_dos_volumes.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 
 const AGORA = "2026-11-12T12:00:00.000Z";
 const relogio = relogioFixo(AGORA);
 const semSessaoViva = () => undefined;
 
 const LISTAGENS: Record<string, (banco: DatabaseSync) => unknown> = {
-  inicio: (banco) => consultarInicio(banco, relogio, semSessaoViva),
-  contadorDePendencias: (banco) => consultarQuantidadeDePendencias(banco, relogio, semSessaoViva),
-  board: (banco) => consultarBoardDeDemandas(banco, relogio, semSessaoViva),
+  inicio: (banco) => consultarInicio(banco, montarDemandasDoBanco(banco), relogio, semSessaoViva),
+  contadorDePendencias: (banco) =>
+    consultarQuantidadeDePendencias(banco, montarDemandasDoBanco(banco), relogio, semSessaoViva),
+  board: (banco) => consultarBoardDeDemandas(banco, montarDemandasDoBanco(banco), relogio, semSessaoViva),
   projetoEmAndamento: (banco) =>
     consultarProjeto(
       banco,
+      montarDemandasDoBanco(banco),
       "loja",
       { concluidas: false, arquivadas: false, canceladas: false },
       relogio,
       semSessaoViva,
     ),
   projetoComTodas: (banco) =>
-    consultarProjeto(banco, "loja", { concluidas: true, arquivadas: true, canceladas: true }, relogio, semSessaoViva),
+    consultarProjeto(
+      banco,
+      montarDemandasDoBanco(banco),
+      "loja",
+      { concluidas: true, arquivadas: true, canceladas: true },
+      relogio,
+      semSessaoViva,
+    ),
 };
 
 /** As execuções SQL de cada listagem num banco semeado com `demandas` demandas. */

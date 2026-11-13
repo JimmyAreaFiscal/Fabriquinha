@@ -1,6 +1,7 @@
 // As Pendências das demandas como as telas as mostram: o Início, o board, a página da demanda e a do projeto derivam das
 // mesmas, pela regra única do núcleo, com o que cada uma precisa para levar ao chat ou à página da demanda.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import {
   type ResumoDaDemanda,
@@ -71,6 +72,7 @@ function pendenciasDoInicio(
  */
 export function pendenciasDasDemandas(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   demandas: readonly ResumoDaDemanda[],
   sessoes: readonly SessaoDeDemanda[],
   situacaoDa: SituacaoDaSessao,
@@ -82,6 +84,7 @@ export function pendenciasDasDemandas(
   const agendadorLigado = configuracao(banco).agendadorAtivo;
   const predecessoras = predecessorasDasDemandas(
     banco,
+    gestaoDeDemandas,
     demandas.map((ag) => ag.demanda.id),
   );
   return demandas
@@ -104,11 +107,12 @@ export function pendenciasDasDemandas(
  */
 export function pendenciasDeUmaDemanda(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   ag: ResumoDaDemanda,
   situacaoDa: SituacaoDaSessao,
   agora: Instante,
 ): PendenciaDoInicio[] {
   if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
   const sessoes = sessoesDasDemandas(banco, [ag], { escopo: "ativas" });
-  return pendenciasDasDemandas(banco, [ag], sessoes, situacaoDa, agora);
+  return pendenciasDasDemandas(banco, gestaoDeDemandas, [ag], sessoes, situacaoDa, agora);
 }

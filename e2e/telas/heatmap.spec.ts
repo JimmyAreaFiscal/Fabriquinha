@@ -5,8 +5,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { expect, test } from "../apoio.ts";
+import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** O instante de `meses` meses antes de hoje (ISO). */
 const atras = (meses: number): string => {

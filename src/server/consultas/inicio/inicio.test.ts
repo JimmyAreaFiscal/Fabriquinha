@@ -12,6 +12,7 @@ import type { DadosDoInicio } from "../../contrato/inicio.ts";
 import type { SessaoDeDemanda } from "../sessoes/historico_demanda.ts";
 import { consultarInicio } from "./inicio.ts";
 import { trabalhoVivoDaSessao } from "../demandas/pendencias.ts";
+import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -19,6 +20,12 @@ function cenario(): DatabaseSync {
   const { banco } = abrirBancoTemporario();
   cenarioDoInicio(banco);
   return banco;
+}
+
+/** O Início do cenário, sem sessão viva. */
+function consultarInicioDoCenario() {
+  const banco = cenario();
+  return consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, () => undefined);
 }
 
 const viva = (atividade?: string) => ({
@@ -30,7 +37,7 @@ const viva = (atividade?: string) => ({
 });
 
 test("aguarda: as Pendências da regra única, da mais antiga para a mais nova", () => {
-  const { aguarda } = consultarInicio(cenario(), relogioDoSistema, () => undefined);
+  const { aguarda } = consultarInicioDoCenario();
   const comum = (id: string) => ({ demanda: id, projeto: "loja", titulo: `demanda ${id}` });
   const inicioDosTempos = "2026-01-01T00:00:00.000Z";
   assert.deepEqual(aguarda, [
@@ -185,7 +192,12 @@ test("aguarda: o merge final do PR da demanda e o despacho parado com o agendado
     }),
   );
   const tipos = () =>
-    consultarInicio(banco, relogioDoSistema, () => undefined).aguarda.map((p) => [p.tipo, p.item, p.motivo, p.desde]);
+    consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, () => undefined).aguarda.map((p) => [
+      p.tipo,
+      p.item,
+      p.motivo,
+      p.desde,
+    ]);
   assert.deepEqual(tipos(), [
     ["acao_externa", "I-310", "Integrar o PR final #12 na plataforma", em(1)],
     ["despacho_parado", "I-311.T5", "Ticket aberto e elegível, com o agendador desligado", em(5)],
@@ -200,7 +212,9 @@ test("aguarda: o merge final do PR da demanda e o despacho parado com o agendado
 test("aguarda: a revisão parada vem da regra pura, com o agora do teste e sem abrir a revisão", () => {
   const banco = cenario();
   const aguarda = (agora: string) =>
-    consultarInicio(banco, relogioFixo(agora), () => undefined).aguarda.filter((p) => p.demanda === "I-308");
+    consultarInicio(banco, montarDemandasDoBanco(banco), relogioFixo(agora), () => undefined).aguarda.filter(
+      (p) => p.demanda === "I-308",
+    );
   // A I-308 concluiu a última rodada agora: dentro da tolerância de 2 min, nada aguarda.
   assert.deepEqual(aguarda(new Date().toISOString()), []);
   const daqui3Minutos = new Date(Date.now() + 3 * 60_000).toISOString();
@@ -220,12 +234,16 @@ test("aguarda: a revisão parada vem da regra pura, com o agora do teste e sem a
 test("rodando: as sessões que rodam com o que o agente faz, ou o título do ticket", () => {
   const banco = cenario();
   const fazendo = (dados: DadosDoInicio) => dados.rodando.map((s) => [s.sessao, s.fazendo]);
-  assert.deepEqual(fazendo(consultarInicio(banco, relogioDoSistema, () => undefined)), [
+  assert.deepEqual(fazendo(consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, () => undefined)), [
     ["s-titulo", "Busca por cupom"],
     ["s-viva", undefined],
   ]);
   assert.deepEqual(
-    fazendo(consultarInicio(banco, relogioDoSistema, (s) => (s === "s-viva" ? viva("lendo src/cupom.ts") : viva()))),
+    fazendo(
+      consultarInicio(banco, montarDemandasDoBanco(banco), relogioDoSistema, (s) =>
+        s === "s-viva" ? viva("lendo src/cupom.ts") : viva(),
+      ),
+    ),
     [
       ["s-titulo", "Busca por cupom"],
       ["s-viva", "lendo src/cupom.ts"],
@@ -234,7 +252,7 @@ test("rodando: as sessões que rodam com o que o agente faz, ou o título do tic
 });
 
 test("board: um cartão por demanda fora da execução e um por rodada aberta nela, só das em andamento", () => {
-  const dados = consultarInicio(cenario(), relogioDoSistema, () => undefined);
+  const dados = consultarInicioDoCenario();
   assert.equal(dados.quantidadeEmAndamento, 9);
   assert.deepEqual(
     dados.board.map((c) => [c.coluna, c.ref, c.ticket?.ref, c.ticket?.estado, c.ticket?.modo, c.outros, c.bloqueios]),

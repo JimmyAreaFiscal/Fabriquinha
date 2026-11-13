@@ -15,11 +15,13 @@ import {
   ligarGestaoDeAmbientesNosModulos,
 } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { despachoDasEtapas } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { gravarProjeto, Projeto, projetoExistente } from "../../src/modulos/demandas/publico.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "../apoio-execucao.ts";
 import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
 import { base, ciclo, criarCenario, demanda } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
+import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 // O `gh` falso, e com ele o `bin` do PATH onde também fica o sonar-scanner falso.
 ghFalso(base);
@@ -67,7 +69,7 @@ test("CA-4: git da worktree, Preparação, Verificações e pi de cada ticket da
   });
 
   const c = criarCenario(t);
-  const projetoDoCenario = projetoExistente(c.banco, c.projeto);
+  const projetoDoCenario = montarDemandasDoBanco(c.banco).projeto(c.projeto);
   gravarProjeto(
     c.banco,
     Projeto.parse({

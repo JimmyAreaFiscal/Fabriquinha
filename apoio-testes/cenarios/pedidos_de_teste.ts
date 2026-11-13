@@ -9,6 +9,7 @@ import { fabricaDeBancosTemporarios } from "../banco/banco_temporario.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 export const INSTANTE_DOS_PEDIDOS = "2026-01-01T00:00:00.000Z";
 export const CONTEXTO_DOS_PEDIDOS = { agora: INSTANTE_DOS_PEDIDOS };
@@ -49,6 +50,7 @@ export const registrarPedidoDeTeste = (
 ): string =>
   registrarPedidoComProcesso(
     banco,
+    montarDemandasDoBanco(banco),
     { projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc", dependencias },
     autor,
     CONTEXTO_DOS_PEDIDOS,
@@ -80,7 +82,7 @@ export function completarDefinicao(banco: DatabaseSync, id: string): void {
 export function pedidoEnviadoDeTeste(banco: DatabaseSync, dependencias?: string[]): string {
   const id = registrarPedidoDeTeste(banco, dependencias);
   completarDefinicao(banco, id);
-  enviarAoDesenvolvimento(banco, id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS);
+  enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS);
   return id;
 }
 

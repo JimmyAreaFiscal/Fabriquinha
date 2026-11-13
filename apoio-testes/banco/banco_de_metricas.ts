@@ -4,7 +4,7 @@ import type { Recorte } from "../../src/modulos/ciclo_de_vida/metricas_de_qualid
 import type { OrigemDosFatos } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/leitura_dos_fatos.ts";
 import { lerPedidosDasMetricas } from "../../src/server/consultas/demandas/pedidos_das_metricas.ts";
 import { intervalo } from "../../src/shared/nucleo/periodo.ts";
-import { migrarBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */
 export const em = (mes: string) => new Date(`${mes}-15T12:00:00`).toISOString();
@@ -17,7 +17,10 @@ export const doMes = (mes: string): Recorte => {
 };
 
 /** De onde as Métricas leem neste banco: ele e os pedidos de todas as demandas, lidos agora. */
-export const origemDe = (banco: DatabaseSync): OrigemDosFatos => ({ banco, pedidos: lerPedidosDasMetricas(banco) });
+export const origemDe = (banco: DatabaseSync): OrigemDosFatos => ({
+  banco,
+  pedidos: lerPedidosDasMetricas(banco, montarDemandasDoBanco(banco)),
+});
 
 export function bancoMigrado(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");

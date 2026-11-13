@@ -3,6 +3,7 @@
 // estado da sessão, a Pendência que a segura e as da demanda), no cabeçalho com os endereços públicos, na conversa com
 // as marcas e no fluxo ao vivo; e o histórico da conversa em Markdown. A sessão que não é de um ticket não tem chat.
 import type { DatabaseSync } from "node:sqlite";
+import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { raizDo } from "../../../shared/armazenamento/banco.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
@@ -156,10 +157,15 @@ function trabalhosVivosDaDemanda(banco: DatabaseSync, ag: ResumoDaDemanda) {
 }
 
 /** As Pendências da demanda, as mesmas do Início, para o chat mostrar o que a demanda espera do Auditor. */
-function pendenciasDoChat(banco: DatabaseSync, ag: ResumoDaDemanda, relogio: Relogio): PendenciaDoChat[] {
+function pendenciasDoChat(
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  ag: ResumoDaDemanda,
+  relogio: Relogio,
+): PendenciaDoChat[] {
   const { id } = ag.demanda;
   const predecessorasSatisfeitas =
-    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(banco, [id]), id)).length === 0;
+    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(banco, gestaoDeDemandas, [id]), id)).length === 0;
   return pendenciasDaDemanda(
     ag,
     trabalhosVivosDaDemanda(banco, ag),
@@ -169,14 +175,20 @@ function pendenciasDoChat(banco: DatabaseSync, ag: ResumoDaDemanda, relogio: Rel
   ).map(pendenciaDoChat);
 }
 
-const montarCabecalho = (banco: DatabaseSync, c: SessaoDoTicket, relogio: Relogio): CabecalhoDemanda => ({
+const montarCabecalho = (
+  banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
+  c: SessaoDoTicket,
+  relogio: Relogio,
+): CabecalhoDemanda => ({
   ...montarCabecalhoDaSessao(c, relogio),
-  pendencias: pendenciasDoChat(banco, c.ag, relogio),
+  pendencias: pendenciasDoChat(banco, gestaoDeDemandas, c.ag, relogio),
 });
 
 /** A conversa do JSONL com o fluxo ao vivo; `undefined` se o id não é de uma sessão da demanda. */
 export function abrirChatDemanda(
   banco: DatabaseSync,
+  gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   relogio: Relogio = relogioDoSistema,
 ): ChatDemanda | undefined {
@@ -188,14 +200,15 @@ export function abrirChatDemanda(
   const relida = () =>
     encontrado(lerSessaoDoTicket(banco, id), `a sessão ${id} não existe`, "confira o endereço do chat");
   return {
-    cabecalho: montarCabecalho(banco, c, relogio),
+    cabecalho: montarCabecalho(banco, gestaoDeDemandas, c, relogio),
     conversa: condutor.lerConversa(raiz, id).map((e) => ({
       ...(e as EntradaDemanda),
       ...marcar((e as EntradaDemanda).message),
     })),
     assinar: (ouvinte) =>
       condutor.assinar(id, (evento) => {
-        if (evento.type === "estado") ouvinte({ type: "estado", ...montarCabecalho(banco, relida(), relogio) });
+        if (evento.type === "estado")
+          ouvinte({ type: "estado", ...montarCabecalho(banco, gestaoDeDemandas, relida(), relogio) });
         else if (evento.type === "message_end") {
           ouvinte({ ...evento, ...marcadorDaConversa(raiz, relida())(evento.message) });
         } else ouvinte(evento);

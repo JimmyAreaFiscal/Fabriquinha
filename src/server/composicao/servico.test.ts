@@ -22,9 +22,9 @@ import {
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
-import { registrarProjeto } from "../../modulos/demandas/publico.ts";
 import { Configuracao, salvarConfiguracao, condutor } from "../../modulos/ciclo_de_vida/publico.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
+import { registrarProjeto } from "../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 /** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */

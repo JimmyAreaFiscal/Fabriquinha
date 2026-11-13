@@ -1,3 +1,5 @@
+import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
+import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,7 +80,8 @@ test("um Comando recebe a entrada já lida e as dependências do processo", asyn
     stderr: { write: () => true },
     raiz: "/raiz",
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
-    comBanco: <T>(usar: (aberto: DatabaseSync) => T | Promise<T>) => Promise.resolve(usar(banco)),
+    comBanco: <T>(usar: (aberto: DatabaseSync, demandas: GestaoDeDemandas) => T | Promise<T>) =>
+      Promise.resolve(usar(banco, montarDemandasDoBanco(banco))),
     iniciarServico: () => Promise.reject(new Error("não sobe")),
     abrirNoNavegador: () => Promise.resolve(),
     parada: () => Promise.resolve(),

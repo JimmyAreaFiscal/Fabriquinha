@@ -3,15 +3,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
-import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
-import {
-  dependentesNaoConcluidosDoPedido,
-  predecessorasPendentesDosPedidos,
-  registrarDependencia,
-} from "./gestao_de_dependencias.ts";
+import { registrarDependencia } from "./gestao_de_dependencias.ts";
+
+type Banco = ReturnType<typeof bancoComProjeto>;
+const dependentesNaoConcluidosDoPedido = (banco: Banco, id: string): unknown =>
+  montarDemandasDoBanco(banco).pedido(id).dependentesPendentes;
+const predecessorasPendentesDosPedidos = (banco: Banco, ids: string[]) =>
+  montarDemandasDoBanco(banco)
+    .pedidos({ ids })
+    .map((pedido) => [pedido.id, pedido.predecessorasPendentes]);
 
 const contarArestas = (banco: ReturnType<typeof bancoComProjeto>): unknown =>
   banco.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n;
@@ -64,7 +68,7 @@ test("CA-11: os dependentes não terminados, entre projetos, pela situação do 
   const c = registrarPedidoDeTeste(banco, [b], { projeto: "outro" });
   const concluido = registrarPedidoDeTeste(banco, [a]);
   banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = ?").run(concluido);
-  assert.deepEqual(dependentesNaoConcluidosDoPedido(banco, a).toSorted(), [b, c]);
+  assert.deepEqual((dependentesNaoConcluidosDoPedido(banco, a) as string[]).toSorted(), [b, c]);
   assert.equal(banco.isTransaction, false);
 });
 
@@ -75,10 +79,9 @@ test("dependentesNaoConcluidosDoPedido dentro de escrever não fecha a transaç�
   const autor = { tipo: "externo", ferramenta: "claude", sessao: "S1" } as const;
   const conteudo = { projeto: "fabriquinha", titulo: "T", tipo: "funcionalidade", descricao: "D" };
   const ctx = { agora: "2026-01-01T00:00:00.000Z" };
-  const [a, b] = [1, 2].map(() => registrarPedidoComProcesso(banco, conteudo, autor, ctx).demanda.id) as [
-    string,
-    string,
-  ];
+  const [a, b] = [1, 2].map(
+    () => registrarPedidoComProcesso(banco, montarDemandasDoBanco(banco), conteudo, autor, ctx).demanda.id,
+  ) as [string, string];
   const outra = abrirBancoDaFabriquinha(raiz);
   try {
     outra.exec("PRAGMA busy_timeout = 0");
@@ -109,10 +112,10 @@ test("predecessorasPendentesDosPedidos: o pedido liberado não tem predecessora 
     [dependente, [enviado]],
     [liberado, []],
   ];
-  assert.deepEqual([...predecessorasPendentesDosPedidos(banco, [dependente, liberado])], esperado);
+  assert.deepEqual(predecessorasPendentesDosPedidos(banco, [dependente, liberado]), esperado);
   assert.equal(banco.isTransaction, false);
   escrever(banco, () => {
-    assert.deepEqual([...predecessorasPendentesDosPedidos(banco, [dependente, liberado])], esperado);
+    assert.deepEqual(predecessorasPendentesDosPedidos(banco, [dependente, liberado]), esperado);
     assert.equal(banco.isTransaction, true);
   });
 });

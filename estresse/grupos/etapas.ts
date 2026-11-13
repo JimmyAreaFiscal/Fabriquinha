@@ -43,12 +43,13 @@ import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { carregarSessoesDoContexto, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
 import { integrarPR, exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
+import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
 export const EXECUCOES = 5;
@@ -192,6 +193,7 @@ function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
   const id = registrarPedidoComProcesso(
     c.banco,
+    montarDemandasDoBanco(c.banco),
     { projeto: c.projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     AUTOR,
     ctx,
@@ -209,8 +211,8 @@ function demandaAprovada(c: Cenario): Promise<string> {
     );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  enviarAoDesenvolvimento(c.banco, id, AUTOR, ctx);
-  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, ctx);
+  decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR);
   return Promise.resolve(id);
 }
 
@@ -240,14 +242,21 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
+  await Promise.all(
+    cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+  );
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const fins = cicloDoDespacho(
+    c.banco,
+    c.config,
+    deps,
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+  );
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -338,7 +347,12 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const [fim] = cicloDoDespacho(
+    c.banco,
+    c.config,
+    deps,
+    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+  );
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

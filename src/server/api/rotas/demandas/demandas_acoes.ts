@@ -32,8 +32,8 @@ function refDaRodada({ params }: Pedido): RefRodada {
 }
 
 /** O corpo é a entrada do gate (`resultado`, `nota` e `motivo`): quem valida é o gate. */
-const decisaoDaDemanda = ({ banco, params, corpo }: Pedido) =>
-  decidirGateDaDemanda(banco, String(params.id), corpo, AUDITOR);
+const decisaoDaDemanda = ({ banco, demandas, params, corpo }: Pedido) =>
+  decidirGateDaDemanda(banco, demandas, String(params.id), corpo, AUDITOR);
 
 async function decisaoDoPlanejamento({ banco, params, corpo }: Pedido) {
   const { demanda } = await decidirGate(
@@ -86,8 +86,8 @@ async function executar(pedido: Pedido): Promise<unknown> {
   return recusa && recusaEmJson(recusa);
 }
 
-const cancelamento = ({ banco, params, relogio }: Pedido) =>
-  cancelarDemandaEmCascata(banco, String(params.id), AUDITOR, { agora: relogio.agora() });
+const cancelamento = ({ banco, demandas, params, relogio }: Pedido) =>
+  cancelarDemandaEmCascata(banco, demandas, String(params.id), AUDITOR, { agora: relogio.agora() });
 const arquivamento = ({ banco, params, relogio }: Pedido) => ({
   demanda: arquivar(banco, String(params.id), AUDITOR, { agora: relogio.agora() }),
 });
