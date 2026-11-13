@@ -36,7 +36,7 @@ import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.t
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
@@ -55,7 +55,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
-  const fins = cicloDoDespacho(c.banco, config, despacho(), predecessorasPendentesNoBanco(c.banco));
+  const fins = cicloDoDespacho(c.banco, config, despacho(), predecessorasPendentesPelasDependencias(c.banco));
   assert.equal(fins.length, 2);
   await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);

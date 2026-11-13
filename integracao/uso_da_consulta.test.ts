@@ -28,7 +28,7 @@ import {
 } from "./apoio-execucao.ts";
 import { base, ciclo, criarCenario, demanda, esperar } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const gh = ghFalso(base);
 
@@ -101,7 +101,12 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
     { agente: agenteMudo, uso: null },
     { chamadaUnica: { saida: "Resumo da demanda.", uso: usoDaConsulta } },
   ]);
-  const fins = cicloDoDespacho(c.banco, c.config, despachoComEsperaCurta(), predecessorasPendentesNoBanco(c.banco));
+  const fins = cicloDoDespacho(
+    c.banco,
+    c.config,
+    despachoComEsperaCurta(),
+    predecessorasPendentesPelasDependencias(c.banco),
+  );
   await esperar(() => pisAteAgora() === fins.length, "o pi do encerramento receber o prompt");
   comoAgente(c, id, encerramento.ticket_id, [
     ["mensagem_pr", MENSAGEM_PR],

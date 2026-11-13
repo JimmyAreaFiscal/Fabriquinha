@@ -24,7 +24,7 @@ import { type Configuracao, configuracao } from "../src/modulos/ciclo_de_vida/de
 import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));
@@ -148,7 +148,7 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
 export async function ciclo(c: Cenario, deps: DepsDespacho = despachoDasEtapas()): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco)));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
 }
 
 // Evidências de uma IA externa que registra a demanda (F3): critérios e desenho com o html.

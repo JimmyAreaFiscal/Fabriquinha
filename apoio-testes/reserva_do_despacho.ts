@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { reservarTicketParaAFabriquinha } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
 import type { Endereco } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { carregarDemanda } from "../src/modulos/sdlc/armazenamento/demandas.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesDosPedidos } from "../src/modulos/demandas/publico.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 
 /**
@@ -15,7 +15,7 @@ export function reservadoPeloDespacho(banco: DatabaseSync, endereco: Endereco): 
   const { demanda_id } = endereco;
   const ticket = carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === endereco.ticket_id);
   if (ticket?.estado === "aberto") {
-    const liberada = predecessorasPendentesNoBanco(banco)([demanda_id]).get(demanda_id)?.length === 0;
+    const liberada = predecessorasPendentesDosPedidos(banco, [demanda_id]).get(demanda_id)?.length === 0;
     reservarTicketParaAFabriquinha(banco, ticket, relogioDoSistema, liberada);
   }
   return endereco;

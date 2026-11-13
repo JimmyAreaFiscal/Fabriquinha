@@ -3,13 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
-import { registrarProjeto } from "./cadastro.ts";
-import {
-  projetosAVarrer,
-  registrarCommitsHumanosDoTicket,
-  varrerCommitsHumanos,
-} from "./varredura_de_commits_humanos.ts";
+import { registrarCommitsHumanosDoTicket, varrerCommitsHumanos } from "./varredura_de_commits_humanos.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -22,19 +16,5 @@ test("demanda inexistente é erro", async () => {
 test("varrerBase de projeto inexistente é erro", async () => {
   const { banco } = abrirBancoTemporario();
   await assert.rejects(varrerCommitsHumanos(banco, "outro"), /o projeto outro não existe/);
-  banco.close();
-});
-
-test("projetosAVarrer olha todos os projetos cadastrados", () => {
-  const { banco } = abrirBancoTemporario();
-  for (const nome of ["velho", "loja"])
-    registrarProjeto(banco, {
-      nome,
-      raiz_git: `/repo/${nome}`,
-      branch_base: "main",
-      hospedagem: "github",
-      chave_sonarqube: nome,
-    });
-  assert.deepEqual(projetosAVarrer(banco, relogioFixo("2026-10-11T12:00:00.000Z")), ["loja", "velho"]);
   banco.close();
 });

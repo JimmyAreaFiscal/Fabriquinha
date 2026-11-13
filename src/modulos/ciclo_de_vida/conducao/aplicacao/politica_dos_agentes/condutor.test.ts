@@ -41,7 +41,7 @@ import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type PedidoDeProcesso,
 } from "./condutor.ts";
-import { recuperacaoDaSubida } from "../../../../../server/composicao/servico.ts";
+import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
@@ -103,10 +103,14 @@ const dialogos: NonNullable<PassoPi["eventos"]> = [
   { type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 150 },
   { type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a", "b"] },
 ];
+// O silêncio aceito no teste da ferramenta longa (0,02 min = 1,2 s) folga o bastante para os eventos seguidos do pi falso
+// chegarem sob a carga da suíte inteira (com 300 ms, o fim da resposta às vezes chegava depois do vigia); a ferramenta
+// fica calada o dobro dele.
+const SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN = 0.02;
 const ferramentaLonga: PassoPi = {
   eventos: [
     { type: "tool_execution_start", toolCallId: "b1", toolName: "bash", args: { command: "docker build ." } },
-    { pausaMs: 600 },
+    { pausaMs: 2400 },
     { type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: {}, isError: false },
     // O pi que fecha uma mensagem sem `message` não derruba o ouvinte do condutor.
     { type: "message_end" },
@@ -417,13 +421,25 @@ test("o modelo que para de responder no meio da resposta encerra a execução co
 
 test("ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {
   assert.equal(
-    await rodar([{ ...ferramentaLonga, termina: "assenta" }], "autonomo", 1, undefined, 0.005).fim,
+    await rodar(
+      [{ ...ferramentaLonga, termina: "assenta" }],
+      "autonomo",
+      1,
+      undefined,
+      SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN,
+    ).fim,
     undefined,
   );
 
-  const ociosa = rodar([{ ...ferramentaLonga, termina: "assenta" }], "interativo", 1, undefined, 0.005);
+  const ociosa = rodar(
+    [{ ...ferramentaLonga, termina: "assenta" }],
+    "interativo",
+    1,
+    undefined,
+    SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN,
+  );
   await ate(() => condutor.situacao(ociosa.sessao)?.ocupado === false, "a sessão ociosa");
-  await dormir(400);
+  await dormir(1500);
   assert.ok(condutor.situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");
   condutor.encerrar(ociosa.sessao);
   assert.equal(await ociosa.fim, undefined);

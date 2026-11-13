@@ -8,23 +8,18 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, mensagem } from "../../modulos/compartilhado/nucleo/erros.ts";
 import { relogioDoSistema } from "../../modulos/compartilhado/nucleo/relogio.ts";
-import { projetosAVarrer, varrerCommitsHumanos } from "../../modulos/projeto/aplicacao/varredura_de_commits_humanos.ts";
 import { abrirBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { dirDoPiDoAuditor, HarnessPi, PACOTE } from "../../modulos/sessoes/publico.ts";
 import { noLog } from "../../modulos/compartilhado/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
-import {
-  cicloDoDespacho,
-  configuracao,
-  executarAgora,
-  type MotivoDeRecusa,
-} from "../../modulos/ciclo_de_vida/despacho/publico.ts";
-import { predecessorasPendentesNoBanco } from "../../modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { configuracao, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/despacho/publico.ts";
+import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { varrerCommitsHumanosVencidos } from "../fluxos/ciclo_do_servico/varredura_de_commits_humanos.ts";
 import { despachoDasEtapas } from "../../modulos/etapas/conducoes.ts";
 import { concluirDesenvolvimentoNoBanco } from "../fluxos/conclusao_do_desenvolvimento.ts";
-import { condutor, type RecuperacaoDaSubida } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { falharTicketDemanda } from "../../modulos/sdlc/aplicacao/despacho/fechamento_ticket.ts";
+import { condutor } from "../../modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
 import {
   montarAmbienteDoServico,
   montarConjuntoDoServico,
@@ -35,12 +30,6 @@ import type { ConjuntoDeAmbientes } from "../../modulos/sandbox/aplicacao/conjun
 
 /** O harness do serviço, o único concreto: trocá-lo é trocar esta linha. */
 export const harnessDoServico = new HarnessPi();
-
-/**
- * O que a subida recupera além dos processos dos tickets: o motor falha o ticket que ficou sem processo.
- * @testes os testes e o e2e recuperam a subida como o serviço, sem subi-lo
- */
-export const recuperacaoDaSubida: RecuperacaoDaSubida = { falharTicket: falharTicketDemanda };
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -124,7 +113,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     const bancoAberto = aberto;
     // O conjunto entra antes da recuperação, que sinaliza cada processo pelo Ambiente que o lançou.
     montarConjuntoDoServico(() => conjuntoDoBanco(bancoAberto));
-    condutor.recuperarNaSubida(aberto, recuperacaoDaSubida);
+    await recuperarAposReinicio(aberto, conjuntoDoBanco(aberto), noLogDoServico);
     web.on(
       "request",
       servirWeb({
@@ -148,22 +137,9 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
 
   /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let eliminacaoDeOciosos: Promise<void> | undefined;
-  // O conjunto fora do ar não impede o serviço de subir: o erro vai para o log e a reconciliação fica
-  // para a próxima subida.
-  await conjuntoConfigurado()?.reconciliarNaSubida().catch(noLogDoServico);
 
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
-
-  /**
-   * F4 §4, passo 1: `varrerCommitsHumanos` em cada projeto sem varredura há 24 horas, um por vez; a falha de um só vai para o log.
-   * ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
-   * em cada; guardar a última tentativa se o log incomodar.
-   */
-  async function varrerVencidos(): Promise<void> {
-    for (const projeto of projetosAVarrer(banco, relogio))
-      await varrerCommitsHumanos(banco, projeto).catch(noLogDoServico);
-  }
 
   /**
    * F4 §4, passos 1 a 4, numa batida do relógio. Nunca lança:
@@ -186,13 +162,15 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
       etapaTerminou = false;
-      varredura ??= varrerVencidos()
+      // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
+      // em cada; guardar a última tentativa se o log incomodar.
+      varredura ??= varrerCommitsHumanosVencidos(banco, relogio, noLogDoServico)
         .catch(noLogDoServico)
         .finally(() => {
           varredura = undefined;
         });
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of cicloDoDespacho(banco, c, despachoDoServico, predecessorasPendentesNoBanco(banco), relogio))
+      for (const fim of despacharTrabalho(banco, c, despachoDoServico, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -205,14 +183,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = executarAgora(
-        banco,
-        ref,
-        configuracao(banco),
-        despachoDoServico,
-        predecessorasPendentesNoBanco(banco),
-        relogio,
-      );
+      const aceitoOuRecusa = despacharAgora(banco, ref, configuracao(banco), despachoDoServico, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

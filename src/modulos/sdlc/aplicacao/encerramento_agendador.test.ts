@@ -24,7 +24,7 @@ import { cicloDoDespacho } from "../../ciclo_de_vida/despacho/publico.ts";
 import type { DepsDespacho } from "../../ciclo_de_vida/conducao/publico.ts";
 import { AmbienteHostLocal } from "../../sandbox/infra/host_local/ambiente_host_local.ts";
 import { despachoDasEtapas } from "../../etapas/conducoes.ts";
-import { predecessorasPendentesNoBanco } from "./liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -132,7 +132,7 @@ async function cenario() {
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesNoBanco(banco))),
+    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco))),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

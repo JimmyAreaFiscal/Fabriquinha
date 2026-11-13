@@ -7,7 +7,11 @@ import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
-import { dependentesNaoConcluidosDoPedido, registrarDependencia } from "./gestao_de_dependencias.ts";
+import {
+  dependentesNaoConcluidosDoPedido,
+  predecessorasPendentesDosPedidos,
+  registrarDependencia,
+} from "./gestao_de_dependencias.ts";
 
 const contarArestas = (banco: ReturnType<typeof bancoComProjeto>): unknown =>
   banco.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n;
@@ -91,4 +95,24 @@ test("dependentesNaoConcluidosDoPedido dentro de escrever não fecha a transaç�
   } finally {
     outra.close();
   }
+});
+
+test("predecessorasPendentesDosPedidos: o pedido liberado não tem predecessora por concluir; lê fora e dentro de escrever", () => {
+  const banco = bancoComProjeto();
+  const concluido = registrarPedidoDeTeste(banco);
+  const enviado = registrarPedidoDeTeste(banco);
+  const dependente = registrarPedidoDeTeste(banco, [concluido, enviado]);
+  const liberado = registrarPedidoDeTeste(banco, [concluido]);
+  banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = ?").run(concluido);
+  banco.prepare("UPDATE demanda SET situacao = 'enviado' WHERE id = ?").run(enviado);
+  const esperado = [
+    [dependente, [enviado]],
+    [liberado, []],
+  ];
+  assert.deepEqual([...predecessorasPendentesDosPedidos(banco, [dependente, liberado])], esperado);
+  assert.equal(banco.isTransaction, false);
+  escrever(banco, () => {
+    assert.deepEqual([...predecessorasPendentesDosPedidos(banco, [dependente, liberado])], esperado);
+    assert.equal(banco.isTransaction, true);
+  });
 });

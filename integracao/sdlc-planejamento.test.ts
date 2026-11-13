@@ -16,7 +16,7 @@ import { carregarTrabalhosDoTicket } from "../src/modulos/trabalho_agentico/arma
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const pi = instalarPiFalso(base);
 
@@ -54,7 +54,12 @@ const plano = (id: string, titulo: string, rodadas = 1) => ({
  */
 async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> {
   const antes = pi.prompts().length;
-  const fins = cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(c.banco));
+  const fins = cicloDoDespacho(
+    c.banco,
+    c.config,
+    despachoDasEtapas(),
+    predecessorasPendentesPelasDependencias(c.banco),
+  );
   assert.equal(fins.length, ids.length, "o ciclo deveria iniciar só o planejamento de cada demanda");
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
   for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
@@ -85,7 +90,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   proporPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
   assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(c.banco)).length,
+    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(c.banco)).length,
     0,
   );
   semDesenvolvimento(c, id);
@@ -172,7 +177,10 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
     /preparação falhou em .*rodadas\/2/,
   );
   // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
-  assert.equal(cicloDoDespacho(banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(banco)).length, 0);
+  assert.equal(
+    cicloDoDespacho(banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)).length,
+    0,
+  );
   assert.equal(pi.prompts().length, chamadas);
 
   // Corrigida a causa, a mesma aprovação conclui.
@@ -244,7 +252,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 },
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesNoBanco(c.banco),
+    predecessorasPendentesPelasDependencias(c.banco),
   );
   assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.estado, "falhou");
   assert.deepEqual(demanda(c, b), antesB);

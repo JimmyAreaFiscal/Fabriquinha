@@ -30,13 +30,18 @@ import { despachoDasEtapas } from "../src/modulos/etapas/conducoes.ts";
 import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
 import { editarPedido, registrarDependencia } from "../src/modulos/demandas/publico.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 
 const pi = instalarPiFalso(base);
 
 /** O planejamento é uma sessão interativa: dispara o ciclo, espera o pi receber o prompt e interrompe a execução. */
 async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<void> {
-  const fins = cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(c.banco));
+  const fins = cicloDoDespacho(
+    c.banco,
+    c.config,
+    despachoDasEtapas(),
+    predecessorasPendentesPelasDependencias(c.banco),
+  );
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
   await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
   const ref = { demanda_id: id, ticket_id: 2 };
@@ -97,7 +102,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
     [["entender_e_desenhar", "cancelado"]],
   );
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(c.banco)).length,
+    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(c.banco)).length,
     0,
   );
   assert.equal(pi.prompts().length, 0);
@@ -126,7 +131,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const a = demandaEnviada(c, undefined, "outro");
   const b = await demandaAprovada(c, [a]);
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesNoBanco(c.banco)).length,
+    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(c.banco)).length,
     0,
   );
   assert.equal(pi.prompts().length, 0);

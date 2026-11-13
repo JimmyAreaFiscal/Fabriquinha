@@ -1,6 +1,6 @@
 // Parar o serviço com um ticket de demanda em execução (I-246, CA-1 a CA-3): o systemd manda o SIGTERM ao cgroup
 // inteiro, então o serviço e o pi recebem o sinal juntos. A parada sai limpa e o ticket falha com "serviço reiniciado".
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -236,5 +236,73 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     await expect(ticket).toContainText("serviço reiniciado");
     expect(sleepAlheio.exitCode ?? sleepAlheio.signalCode).toBeNull(); // o sleep alheio seguiu vivo
     sleepAlheio.kill("SIGKILL");
+  });
+});
+
+/** As execuções do I-216.T1 gravadas no banco, lidas por outra conexão enquanto o serviço roda. */
+function execucoesDoT1(raiz: string): { grupo_processo?: number | null; fim?: string | null }[] {
+  const banco = abrirBancoDaFabriquinha(raiz);
+  const { execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
+  banco.close();
+  return execucoes;
+}
+
+/** O grupo de processo existe (o `kill -0` não lança). */
+const grupoVivo = (pgid: number): boolean => {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// MELHORIAS §5.2 e §5.3 (ticket 20): o serviço cai (SIGKILL, sem parada limpa) com o pi do T1 rodando. A identidade do
+// processo (a execução e o grupo do pi) já estava gravada; a subida seguinte mata o pi órfão por ela e falha o ticket como
+// "serviço reiniciado", e o 1º ciclo do agendador o retoma com uma execução nova só: nada roda em dobro, nada se perde.
+test.describe("ticket 20: queda no meio da execução", () => {
+  test.use({ roteiroDoPi: roteiroDoPiParado });
+  test("a subida seguinte mata o pi órfão, e o ciclo seguinte retoma o ticket com uma execução nova só", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    test.setTimeout(150_000);
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    const pgidDaQueda = await executarEEsperarPi(pagina, fabriquinha.raiz, fabriquinha.base);
+
+    const saiu = once(fabriquinha.servico, "exit");
+    fabriquinha.servico.kill("SIGKILL");
+    await saiu;
+    expect(grupoVivo(pgidDaQueda)).toBe(true); // o pi sobreviveu à queda do serviço
+    rmSync(join(fabriquinha.raiz, "web.url")); // a queda não apaga o link morto
+    const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
+    banco.exec("UPDATE configuracao SET agendador_ativo = 1, intervalo_min = 1");
+    banco.close();
+
+    const nova = await fabriquinha.reiniciar();
+    await expect.poll(() => grupoVivo(pgidDaQueda)).toBe(false);
+    const [daQueda] = execucoesDoT1(fabriquinha.raiz);
+    expect(execucoesDoT1(fabriquinha.raiz)).toHaveLength(1);
+    expect(daQueda?.fim).not.toBeNull();
+    await pagina.goto(nova.link);
+    await pagina.goto(`${nova.base}/demandas/I-216`);
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("serviço reiniciado");
+
+    // O 1º ciclo (em ~60 s) devolve o ticket a aberto e o despacha de novo, num pi novo.
+    await expect
+      .poll(() => execucoesDoT1(fabriquinha.raiz)[1]?.grupo_processo ?? null, { timeout: 100_000 })
+      .not.toBeNull();
+    const execucoes = execucoesDoT1(fabriquinha.raiz);
+    expect(execucoes).toHaveLength(2);
+    expect(execucoes.filter((execucao) => execucao.fim === null)).toHaveLength(1);
+    const pgidDaRetomada = Number(execucoes[1]?.grupo_processo);
+    expect(pgidDaRetomada).not.toBe(pgidDaQueda);
+    expect(grupoVivo(pgidDaRetomada)).toBe(true);
+    await pagina.reload();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T2" })).toContainText("Aberto");
   });
 });

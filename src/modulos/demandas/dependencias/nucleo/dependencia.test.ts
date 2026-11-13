@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type DependenciaDemanda, dependenciaNovaValidada, dependentesNaoConcluidos } from "./dependencia.ts";
+import {
+  type DependenciaDemanda,
+  dependenciaNovaValidada,
+  dependentesNaoConcluidos,
+  predecessorasNaoConcluidas,
+} from "./dependencia.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 
 const aresta = (demanda_id: string, depende_demanda_id: string): DependenciaDemanda => ({
@@ -55,4 +60,31 @@ test("CA-11: dependentes diretos e indiretos que não terminaram, sem repetir e 
     ["I-9", "cancelado"],
   ] as const);
   assert.deepEqual(dependentesNaoConcluidos(arestas, situacoes, "I-1").toSorted(), ["I-2", "I-3"]);
+});
+
+test("CA-9 e CA-10: de cada pedido, as predecessoras diretas que não concluíram, na ordem das arestas", () => {
+  const arestas = [
+    aresta("I-5", "I-4"),
+    aresta("I-5", "I-1"),
+    aresta("I-5", "I-2"),
+    aresta("I-5", "I-3"),
+    aresta("I-6", "I-1"),
+    aresta("I-7", "I-5"),
+  ];
+  const situacoes = new Map([
+    ["I-1", "concluido"],
+    ["I-2", "rascunho"],
+    ["I-3", "cancelado"],
+    ["I-4", "enviado"],
+    ["I-5", "enviado"],
+  ] as const);
+  assert.deepEqual(
+    [...predecessorasNaoConcluidas(arestas, situacoes, ["I-5", "I-6", "I-7", "I-8"])],
+    [
+      ["I-5", ["I-4", "I-2", "I-3"]],
+      ["I-6", []],
+      ["I-7", ["I-5"]],
+      ["I-8", []],
+    ],
+  );
 });

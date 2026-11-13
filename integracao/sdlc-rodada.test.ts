@@ -13,7 +13,7 @@ import { registrarCorrecoesSessao } from "../src/modulos/sdlc/nucleo/transicoes/
 import { marcaDoPRRodada } from "../src/modulos/etapas/encerrar_rodada/documentacao_do_pr/pr_rodada.ts";
 import { decidirGate } from "../src/modulos/etapas/gates.ts";
 import { cicloDoDespacho } from "../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { predecessorasPendentesNoBanco } from "../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import {
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
@@ -377,7 +377,8 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(
-    cicloDoDespacho(humana.banco, humana.config, despacho(), predecessorasPendentesNoBanco(humana.banco)).length,
+    cicloDoDespacho(humana.banco, humana.config, despacho(), predecessorasPendentesPelasDependencias(humana.banco))
+      .length,
     0,
   );
 

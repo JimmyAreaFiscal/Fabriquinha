@@ -26,7 +26,7 @@ import { marcaDoPRFinal } from "../../src/modulos/etapas/encerrar_demanda/encerr
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { cicloDoDespacho } from "../../src/modulos/ciclo_de_vida/despacho/publico.ts";
-import { predecessorasPendentesNoBanco } from "../../src/modulos/sdlc/aplicacao/liberacao_das_demandas.ts";
+import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { despachoDasEtapas } from "../../src/modulos/etapas/conducoes.ts";
 import { interromperExecucaoDemanda } from "../../src/modulos/sdlc/aplicacao/execucao/execucao_demanda.ts";
 import { decidirGate } from "../../src/modulos/etapas/gates.ts";
@@ -226,14 +226,14 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco)));
+  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco));
+  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -324,7 +324,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesNoBanco(c.banco));
+  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

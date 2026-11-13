@@ -61,3 +61,21 @@ export function dependentesNaoConcluidos(
     return situacao !== undefined && !pedidoTerminou(situacao);
   });
 }
+
+/**
+ * CA-9 e CA-10: de cada pedido de `ids`, as predecessoras diretas que ainda não concluíram, na ordem das arestas; o
+ * pedido sem nenhuma está liberado para o desenvolvimento. Só o pedido concluído libera (o arquivado também está).
+ */
+export const predecessorasNaoConcluidas = (
+  arestas: readonly DependenciaDemanda[],
+  situacoes: ReadonlyMap<string, SituacaoDoPedido>,
+  ids: readonly string[],
+): Map<string, string[]> =>
+  new Map(
+    ids.map((id) => [
+      id,
+      arestas
+        .filter((aresta) => aresta.demanda_id === id && situacoes.get(aresta.depende_demanda_id) !== "concluido")
+        .map((aresta) => aresta.depende_demanda_id),
+    ]),
+  );

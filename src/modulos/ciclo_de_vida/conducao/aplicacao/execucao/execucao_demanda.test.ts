@@ -34,7 +34,7 @@ import {
 import { criarRepositorioDeTeste } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { AmbienteHostLocal, montarAmbienteDoServico } from "../../../../ambiente/publico.ts";
-import { recuperacaoDaSubida } from "../../../../../server/composicao/servico.ts";
+import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 

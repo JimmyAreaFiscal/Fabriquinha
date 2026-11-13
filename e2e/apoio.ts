@@ -12,7 +12,7 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { condutor } from "../src/modulos/trabalho_agentico/aplicacao/trabalho/condutor.ts";
-import { recuperacaoDaSubida } from "../src/server/composicao/servico.ts";
+import { recuperacaoDaSubida } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
@@ -34,9 +34,9 @@ export interface Fabriquinha {
   reiniciar(): Promise<{ base: string; link: string }>;
 }
 
-/** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. */
+/** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. O que o teste já derrubou por sinal já saiu. */
 async function parar(servico: ChildProcess): Promise<void> {
-  if (servico.exitCode !== null) return;
+  if (servico.exitCode !== null || servico.signalCode !== null) return;
   const saiu = once(servico, "exit");
   servico.kill("SIGTERM");
   if (await Promise.race([saiu.then(() => true), dormir(5000).then(() => false)])) return;
