@@ -43,7 +43,7 @@ import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenv
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { carregarSessoesDoContexto, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
 import { integrarPR, exigirGit } from "../../src/modulos/repositorio/publico.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
@@ -134,6 +134,8 @@ function prepararProcesso(amb: Ambiente): void {
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
   piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
+  // As etapas rodam neste processo, sem a composição do serviço: o condutor recebe o harness do pi como ela o monta.
+  condutor.montarHarness(new HarnessPi());
   pastaDosCenarios = join(raiz, "cenarios");
   mkdirSync(pastaDosCenarios);
 }
