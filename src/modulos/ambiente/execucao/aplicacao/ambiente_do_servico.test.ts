@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AmbienteHostLocal } from "../infra/host_local/ambiente_host_local.ts";
-import type { ConjuntoDeAmbientes } from "./conjunto_de_ambientes/conjunto.ts";
+import type { ConjuntoDeAmbientes } from "./conjunto_de_ambientes.ts";
 import {
   ambienteDoServico,
   conjuntoDoServico,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { ErroDeInexistente } from "../../compartilhado/nucleo/erros.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import {
   alocarAmbienteLivreDaImagem,
   buscarAmbienteAlocadoPara,
@@ -11,8 +11,8 @@ import {
   reservarAmbienteParaEliminar,
   listarAmbientes,
 } from "./ambientes.ts";
-import { migrar } from "../../compartilhado/armazenamento/banco.ts";
-import { MIGRACOES } from "../../compartilhado/armazenamento/migracoes/migracoes.ts";
+import { migrar } from "../../../../shared/armazenamento/banco.ts";
+import { MIGRACOES } from "../../../../shared/armazenamento/migracoes/migracoes.ts";
 
 const T1 = "2026-01-01T00:00:00.000Z";
 const T2 = "2026-01-02T00:00:00.000Z";
