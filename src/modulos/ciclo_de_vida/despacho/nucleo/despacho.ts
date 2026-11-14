@@ -13,7 +13,8 @@ import {
   type TicketDemanda,
 } from "../../processo/publico.ts";
 import { CATALOGO_DE_ETAPAS, Endereco, etapaDoPapel, NomeGate } from "../../etapas/publico.ts";
-import { estaOcupado, GrafoDeDependencias } from "../../planejamento/publico.ts";
+import { estaOcupado } from "../../planejamento/publico.ts";
+import { GrafoDeDependencias } from "../../../../shared/nucleo/demanda/grafo_de_dependencias.ts";
 import { Motivo, motivo } from "../../../../shared/nucleo/primitivos.ts";
 
 const ehEndereco = z.custom<Endereco>((candidato) => candidato instanceof Endereco);

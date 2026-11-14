@@ -5,7 +5,7 @@
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
 import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import type { AgregadoDemanda } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";

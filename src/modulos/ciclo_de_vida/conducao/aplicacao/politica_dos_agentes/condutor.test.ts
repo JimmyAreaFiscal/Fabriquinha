@@ -34,7 +34,7 @@ import {
   type PedidoDeProcesso,
 } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import { falhaDaTentativaDaExecucao } from "./condutor.ts";
-import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {

@@ -3,7 +3,7 @@
 // da rodada pela fachada, em vez de montá-las, e informa só o identificador da demanda e o número da rodada.
 import { z } from "zod";
 import { Id } from "../../../../shared/nucleo/primitivos.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 
 /** A rodada dona de um Espaço: a demanda e o número da rodada nela. */
 export const RodadaDoEspaco = z.object({ demanda_id: DemandaId, rodada_id: Id });

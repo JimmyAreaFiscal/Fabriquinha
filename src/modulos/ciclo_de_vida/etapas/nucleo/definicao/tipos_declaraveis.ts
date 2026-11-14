@@ -2,7 +2,7 @@
 // que as aprova, as verificações que roda e as métricas que mede. Ficam com a definição, sem I/O, para o catálogo e quem o
 // lê não dependerem de quem implementa cada tipo (a avaliação da evidência, a verificação, o cálculo da métrica).
 import { z } from "zod";
-import type { Ator } from "../vocabulario/ator.ts";
+import type { Ator } from "../../../../../shared/nucleo/demanda/ator.ts";
 
 /** Os tipos de evidência de qualquer dono: da demanda, da rodada ou do ticket. */
 export const TipoEvidencia = z.enum([

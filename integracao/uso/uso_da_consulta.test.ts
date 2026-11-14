@@ -3,7 +3,7 @@
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cicloDoDespacho, produtividadeDaRodada } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { cicloDoDespacho, produtividadeDaRodada } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { gravarCatalogoDePrecos, HarnessPi, carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
@@ -26,7 +26,7 @@ import {
 import { base, ciclo, criarCenario, demanda, esperar } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 

@@ -1,8 +1,8 @@
 // O pedido (MELHORIAS §12): o conteúdo, quem o registrou e a situação administrativa. O andamento do desenvolvimento é
 // do Ciclo de Vida e não entra aqui; a situação diz só se o pedido é rascunho, foi enviado, cancelado ou concluído.
 import { z } from "zod";
-import { type Ator, AtorExterno, exigirAutoria } from "../../../ciclo_de_vida/publico.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { type Ator, AtorExterno, exigirAutoria } from "../../../../shared/nucleo/demanda/ator.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Markdown, Slug, Titulo } from "../../../../shared/nucleo/primitivos.ts";
 

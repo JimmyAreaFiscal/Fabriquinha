@@ -4,7 +4,11 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { produtividadeDaRodada, type EtapaTicket, carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  produtividadeDaRodada,
+  type EtapaTicket,
+  carregarDemanda,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import {
   metricasDasEtapas,
   metricasDosMeses,

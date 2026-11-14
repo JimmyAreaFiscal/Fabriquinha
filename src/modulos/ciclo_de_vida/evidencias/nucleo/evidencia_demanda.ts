@@ -2,7 +2,7 @@
 // `dados` segue opaco aqui: o schema de cada tipo é o de `formatos.ts`. Os tipos da demanda são os que a Etapa dela declara.
 import { z } from "zod";
 import { Ator, OBRIGATORIAS_DEMANDA, TipoEvidencia } from "../../etapas/publico.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { Id, Instante } from "../../../../shared/nucleo/primitivos.ts";
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */

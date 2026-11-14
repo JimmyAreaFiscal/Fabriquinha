@@ -5,7 +5,7 @@
 // por sessão. O harness pi, o catálogo de preços, o encerramento da execução órfã e o fim dos processos da instância
 // anterior são internos: a montagem do serviço os liga, e `parar` espera o que ficou em curso.
 import type { DatabaseSync } from "node:sqlite";
-import type { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import type { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { existe } from "../../../../shared/nucleo/erros.ts";
 import type { Relogio } from "../../../../shared/nucleo/relogio.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";

@@ -14,7 +14,7 @@ import {
   motivoDaFalhaDoTicket,
   tentativasDoTicket,
   reabrirTicket,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -43,7 +43,10 @@ import {
   carregarSessoesDoContexto,
   comSessoesDoContexto,
 } from "../../apoio-testes/sessoes_de_teste.ts";
-import { liberacaoDasDemandas, recuperarAposReinicio } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import {
+  liberacaoDasDemandas,
+  recuperarAposReinicio,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
   const agregado = demanda(c, id);

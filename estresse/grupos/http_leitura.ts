@@ -3,7 +3,7 @@
 // corpo; nas rotas de SSE, até o primeiro evento. `semMedicao` confere a cobertura contra a tabela do produto.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type AgregadoDemanda, gravarAnexos } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { type AgregadoDemanda, gravarAnexos } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { guardarBytes } from "../../src/shared/armazenamento/arquivos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";

@@ -6,7 +6,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
-import type { Ator } from "../../../ciclo_de_vida/publico.ts";
+import type { Ator } from "../../../../shared/nucleo/demanda/ator.ts";
 import type { RepositorioDoProjeto } from "../../../repositorio/publico.ts";
 import {
   cadastrarProjetoDoFormulario,

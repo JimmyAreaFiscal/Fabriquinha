@@ -6,11 +6,11 @@ import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   criarTicket,
   estaOcupado,
-  GrafoDeDependencias,
   proximoIdDeRodada,
   proximoIdDeTicket,
   ticketAtualDaEtapa,
 } from "./item_de_trabalho.ts";
+import { GrafoDeDependencias } from "../../../../shared/nucleo/demanda/grafo_de_dependencias.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";

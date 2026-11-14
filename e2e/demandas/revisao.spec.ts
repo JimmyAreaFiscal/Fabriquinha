@@ -7,7 +7,7 @@ import {
   type AgregadoDemanda,
   motivoDaFalhaDoTicket,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";

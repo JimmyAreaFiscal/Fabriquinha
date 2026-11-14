@@ -51,7 +51,7 @@ import {
   carregarSessoesDoContexto,
   motorDoBanco,
 } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
-import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

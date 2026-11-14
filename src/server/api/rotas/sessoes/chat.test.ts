@@ -6,7 +6,7 @@ import {
   montarPromptDemanda,
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,
-} from "../../../../modulos/ciclo_de_vida/publico.ts";
+} from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";

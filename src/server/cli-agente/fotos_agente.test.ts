@@ -11,7 +11,7 @@ import { gravarTokenDaExecucao } from "../../../apoio-testes/cenarios/cenario_da
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
-import type { AgregadoDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { AgregadoDemanda } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

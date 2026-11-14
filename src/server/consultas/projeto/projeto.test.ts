@@ -1,4 +1,4 @@
-import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";

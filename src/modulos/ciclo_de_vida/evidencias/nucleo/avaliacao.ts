@@ -5,22 +5,8 @@ import { basename } from "node:path";
 import type { Ator, Endereco, ItemCatalogoEtapa, TipoEvidencia } from "../../etapas/publico.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { schemaDoTipo, validarFormato } from "./formatos.ts";
+import { exigirAutoria } from "../../../../shared/nucleo/demanda/ator.ts";
 import type { ContextoDaAvaliacao, Veredito } from "./schemas.ts";
-
-/** Recusa quem não é a ferramenta e a sessão autoras da demanda (CA-6). */
-export function exigirAutoria(
-  demanda: Pick<ContextoDaAvaliacao["demanda"], "id" | "criada_por">,
-  autor: Ator,
-  acao: string,
-): void {
-  const { ferramenta, sessao } = demanda.criada_por;
-  if (autor.tipo !== "externo" || autor.ferramenta !== ferramenta || autor.sessao !== sessao) {
-    throw new ErroDeEscopo(
-      `só a ferramenta ${ferramenta} da sessão ${sessao} pode ${acao} a demanda ${demanda.id}`,
-      "peça a quem registrou a demanda, na mesma sessão",
-    );
-  }
-}
 
 /** O que se submete à Etapa: `anexos` são os caminhos dos arquivos, que a Etapa ainda não abriu. */
 export interface SubmissaoDeEvidencia {

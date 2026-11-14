@@ -13,12 +13,12 @@ import {
   linhasDeUmAgregado,
   type LinhasDoAgregado,
   linhasDosAgregadosEmLote,
-} from "../../../../shared/armazenamento/linhas_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/linhas_do_agregado.ts";
 import {
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
   type TabelaDoAgregado,
-} from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/diferenca_do_agregado.ts";
 import {
   apagarEstadoDoProcessoDasDemandas,
   apagarEstadoQueSumiu,

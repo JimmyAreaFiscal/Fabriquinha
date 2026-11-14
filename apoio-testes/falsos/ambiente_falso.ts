@@ -21,7 +21,7 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { AmbienteHostLocal } from "../../src/modulos/ambiente/execucao/infra/host_local/ambiente_host_local.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
-import type { CicloDeVida, ModulosDoCiclo } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida, ModulosDoCiclo } from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { Relogio } from "../../src/shared/nucleo/relogio.ts";
 import { montarCicloDeVidaDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 

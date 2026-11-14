@@ -8,11 +8,11 @@ import {
   registrarPedidoDeTeste,
   situacaoGravada,
 } from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
-import { AUDITOR, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, carregarDemanda } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "./registro_do_pedido.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
-import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const contarLinhas = (banco: ReturnType<typeof bancoComProjeto>, tabela: string): unknown =>
   banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n;

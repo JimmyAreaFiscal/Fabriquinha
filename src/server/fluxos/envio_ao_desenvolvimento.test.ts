@@ -12,10 +12,10 @@ import {
   situacaoGravada,
 } from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { ErroDeEscopo } from "../../shared/nucleo/erros.ts";
-import { carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
+import { carregarDemanda } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { enviarAoDesenvolvimento } from "./envio_ao_desenvolvimento.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
-import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 test("CA-14: com as obrigatórias, o processo vai ao Gate da demanda e o pedido fica enviado, com o conteúdo congelado", () => {
   const banco = bancoComProjeto();

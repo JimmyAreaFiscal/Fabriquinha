@@ -21,10 +21,7 @@ export const PASTA_DO_HISTORICO_DO_ESQUEMA = "shared/armazenamento/migracoes/";
  * As migrações dos domínios: como o histórico do esquema, citam a tabela mãe na chave estrangeira, os estados nos CHECK e
  * levam, uma vez, os dados de uma tabela antiga de outro dono à tabela nova.
  */
-export const MIGRACOES_DOS_DOMINIOS = [
-  "modulos/ciclo_de_vida/processo/armazenamento/migracao_do_estado_do_processo.ts",
-  "shared/armazenamento/configuracao_do_ambiente.ts",
-];
+export const MIGRACOES_DOS_DOMINIOS = ["shared/armazenamento/configuracao_do_ambiente.ts"];
 
 // O shared não tem subdomínios.
 export const REGRAS_DO_SHARED: RegrasDoDominio = {

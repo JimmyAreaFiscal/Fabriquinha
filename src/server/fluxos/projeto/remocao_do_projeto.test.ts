@@ -9,7 +9,7 @@ import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_tempo
 import { criarDemandaNova } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { caminhoArquivo } from "../../../shared/armazenamento/arquivos.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../../../shared/nucleo/erros.ts";
-import { FABRIQUINHA } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { FABRIQUINHA } from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarDemanda } from "../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import { iniciarTentativaDoTicket } from "../../../modulos/ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import { Projeto } from "../../../modulos/demandas/publico.ts";

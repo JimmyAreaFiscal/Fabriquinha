@@ -12,7 +12,7 @@ import {
   type EstadoDemanda,
   carregarDemanda,
   configuracao,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
@@ -70,7 +70,7 @@ import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenv
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];

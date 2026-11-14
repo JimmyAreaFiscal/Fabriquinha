@@ -1,7 +1,7 @@
 // Progresso do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): decide se um efeito externo se repete.
 import { z } from "zod";
 import { branchDemanda } from "../../../repositorio/publico.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { Id, Motivo } from "../../../../shared/nucleo/primitivos.ts";
 
 const Texto = z.string().trim().min(1);

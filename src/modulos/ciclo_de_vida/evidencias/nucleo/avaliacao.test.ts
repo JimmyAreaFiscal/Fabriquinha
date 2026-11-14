@@ -1,3 +1,4 @@
+import { exigirAutoria } from "../../../../shared/nucleo/demanda/ator.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -12,7 +13,6 @@ import {
   agregadoDaRodada,
   AvaliadorDeEvidencia,
   evidenciasPendentes,
-  exigirAutoria,
   type SubmissaoDeEvidencia,
 } from "./avaliacao.ts";
 import { conferirQuantidadeENomes, SCHEMA_DA_EVIDENCIA, schemaDoTipo } from "./formatos.ts";

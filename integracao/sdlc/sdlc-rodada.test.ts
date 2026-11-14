@@ -15,7 +15,7 @@ import {
   concluirSessaoAjustes,
   MOTIVO_APROVACAO_AUTOMATICA_PR,
   cicloDoDespacho,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
@@ -40,7 +40,7 @@ import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git }
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../falsos.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import { PREFIXO_DA_RESPOSTA_AUTOMATICA } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const gh = ghFalso(base);

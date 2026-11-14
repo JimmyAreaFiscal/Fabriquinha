@@ -8,7 +8,8 @@ import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado/agregado
 import { arquivarDemanda } from "../nucleo/transicoes/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos/ciclos.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import { CustosRealizados, exigirAutoria, type Origens } from "../../evidencias/publico.ts";
+import { CustosRealizados, type Origens } from "../../evidencias/publico.ts";
+import { exigirAutoria } from "../../../../shared/nucleo/demanda/ator.ts";
 import type { Relogio } from "../../../../shared/nucleo/relogio.ts";
 import {
   type ContextoDemanda,

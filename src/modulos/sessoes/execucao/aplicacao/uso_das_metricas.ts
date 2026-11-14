@@ -2,7 +2,7 @@
 // pedidas, a execução do período e a sessão externa declarada. O contexto (demanda, ticket) vai como veio; quem agrupa
 // por Etapa, mês ou demanda é quem pede.
 import type { DatabaseSync } from "node:sqlite";
-import type { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import type { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import {
   lerUsoDasExecucoes,
   lerUsoDeclaradoEmLote,

@@ -16,7 +16,7 @@ import {
   type EstadoDemanda,
   type EstadoRodada,
   AgregadoDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { encontrado } from "../../src/shared/nucleo/erros.ts";
 import { escrever, raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";

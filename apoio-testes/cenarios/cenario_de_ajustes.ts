@@ -15,7 +15,7 @@ import {
   concluirSessaoAjustes,
   type AgregadoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";

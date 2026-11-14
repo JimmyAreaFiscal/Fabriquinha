@@ -7,7 +7,7 @@ import {
   despachoDasEtapas,
   interromperExecucaoDemanda,
   cicloDoDespacho,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { ErroDeEscopo } from "../../src/shared/nucleo/erros.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import {
@@ -33,9 +33,9 @@ import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabr
 import { registrarDependencia } from "../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
-import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 

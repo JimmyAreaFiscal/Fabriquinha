@@ -10,7 +10,7 @@ import {
   registrarPedidoDeTeste,
   situacaoGravada,
 } from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
-import { carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
+import { carregarDemanda } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "./cancelamento_em_cascata.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
@@ -20,7 +20,7 @@ import {
   motorDoBanco,
 } from "../../../apoio-testes/sessoes_de_teste.ts";
 import { cicloDeVidaDeTeste } from "../../../apoio-testes/falsos/ambiente_falso.ts";
-import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const ctx = CONTEXTO_DOS_PEDIDOS;
 const aprovar = { resultado: "aprovado" };

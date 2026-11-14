@@ -1,7 +1,7 @@
 // CA-2 da I-270: o motivo da falha mora na última Tentativa do ticket. Banco novo aberto por `abrir` numa raiz temporária,
 // um ticket com duas Tentativas encerradas (motivos A e depois B): o esquema não tem mais os contadores nem o `erro`, e
 // o CLI do agente e a página da demanda mostram o motivo B.
-import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
@@ -16,7 +16,7 @@ import {
   montarTicket,
 } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
-import { Endereco, type Tentativa } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { Endereco, type Tentativa } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import {
   gravarTokenDaExecucao,
   criarSessao,

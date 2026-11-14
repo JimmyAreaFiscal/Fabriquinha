@@ -16,7 +16,11 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { type AgregadoDemanda, type TicketDemanda, EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  type AgregadoDemanda,
+  type TicketDemanda,
+  EtapaTicket,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import {
   gravarTokenDaExecucao,

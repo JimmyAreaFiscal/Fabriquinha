@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CATALOGO_ETAPAS, PlanoProposto, TipoEvidencia } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { CATALOGO_ETAPAS, PlanoProposto, TipoEvidencia } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { PACOTE } from "../src/shared/infra/isolamento_do_ambiente.ts";
 import { skillDoTipo } from "../apoio-testes/sessoes_de_teste.ts";
 

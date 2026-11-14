@@ -12,7 +12,7 @@ import {
   decidirGate,
   type AgregadoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";

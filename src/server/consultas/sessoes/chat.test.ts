@@ -21,7 +21,7 @@ import {
   type SessaoDoTicket,
   abortarDemanda,
   responderDialogoDemanda,
-} from "../../../modulos/ciclo_de_vida/publico.ts";
+} from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { type Execucao, montarSessoesDeAgente, type Sessao } from "../../../modulos/sessoes/publico.ts";
 import { emMarkdown } from "./markdown_da_conversa.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";

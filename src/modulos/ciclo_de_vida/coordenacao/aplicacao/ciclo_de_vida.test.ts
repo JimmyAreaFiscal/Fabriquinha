@@ -11,7 +11,7 @@ import {
 import { registrarDependencia } from "../../../../../apoio-testes/demandas_de_teste.ts";
 import { cicloDeVidaDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { comSessoesDoContexto, motorDoBanco } from "../../../../../apoio-testes/sessoes_de_teste.ts";
-import { recuperarAposReinicio } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { recuperarAposReinicio } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import { demandasDoCicloDeVida, montarCicloDeVidaDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { Endereco } from "../../etapas/publico.ts";
 

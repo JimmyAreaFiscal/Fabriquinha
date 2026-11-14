@@ -11,7 +11,7 @@ export {
   PlanoProposto,
   validarPlanoDaDemanda,
 } from "./nucleo/plano.ts";
-export { criarTicket, estaOcupado, GrafoDeDependencias, ticketAtualDaEtapa } from "./nucleo/item_de_trabalho.ts";
+export { criarTicket, estaOcupado, ticketAtualDaEtapa } from "./nucleo/item_de_trabalho.ts";
 export {
   apagarItensDasDemandas,
   apagarItensQueSumiram,

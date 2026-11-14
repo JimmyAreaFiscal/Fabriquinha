@@ -10,12 +10,12 @@ import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migra
 import { MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
 import { MIGRACOES_DE_DEMANDAS } from "../../shared/armazenamento/migracoes/migracoes_de_demandas.ts";
 import { MIGRACOES_DE_SESSOES } from "../../shared/armazenamento/migracoes/migracoes_de_sessoes.ts";
+import { MIGRACOES_DO_CICLO_DE_VIDA } from "../../shared/armazenamento/migracoes/migracoes_do_ciclo_de_vida.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { type Modelo, montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import {
   type CicloDeVida,
   type DemandasDoCicloDeVida,
-  MIGRACOES_DO_CICLO_DE_VIDA,
   type MontagemDoCicloDeVida,
   montarCicloDeVida,
 } from "../../modulos/ciclo_de_vida/publico.ts";

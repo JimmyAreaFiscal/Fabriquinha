@@ -15,7 +15,7 @@ import * as gestao from "./gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../../../server/fluxos/envio_ao_desenvolvimento.ts";
 import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
-import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

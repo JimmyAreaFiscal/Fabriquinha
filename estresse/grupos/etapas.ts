@@ -9,7 +9,10 @@ import {
   ligarGestaoDeAmbientesNosModulos,
   modulosDoCicloDeTeste,
 } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { cicloDeVidaNoContexto, liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import {
+  cicloDeVidaNoContexto,
+  liberacaoDasDemandas,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import {
   chmodSync,
   mkdirSync,
@@ -37,7 +40,7 @@ import {
   configuracao,
   interromperExecucaoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";

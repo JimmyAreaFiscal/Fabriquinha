@@ -1,10 +1,10 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25: cancelamento e arquivamento com dependentes e execução
 // em andamento (D08) e a demanda encaminhada de um achado da Avaliação, que saiu (D12, ticket 02). Banco sempre numa raiz
 // temporária; git real, pi falso.
-import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, cicloDoDespacho, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, cicloDoDespacho, configuracao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import {
   bloqueiosDaDemanda,
   predecessorasDasDemandas,
@@ -39,9 +39,9 @@ import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server
 import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
-import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);

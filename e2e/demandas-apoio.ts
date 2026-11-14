@@ -1,6 +1,11 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts, e
 // abre o chat do planejamento com o pi falso.
-import { Endereco, type AgregadoDemanda, carregarDemanda, gravarAnexos } from "../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  Endereco,
+  type AgregadoDemanda,
+  carregarDemanda,
+  gravarAnexos,
+} from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { Page } from "@playwright/test";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { execFileSync } from "node:child_process";

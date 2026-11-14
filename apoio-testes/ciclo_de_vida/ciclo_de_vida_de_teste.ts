@@ -1,19 +1,19 @@
 // O apoio de teste do Ciclo de Vida: a liberação dos pedidos por Demandas, na forma que o Despacho pede, e a recuperação da
 // subida do serviço, com que os testes chamam o Despacho e a condução direto, sem o agendador da montagem.
 import type { DatabaseSync } from "node:sqlite";
-import { type CicloDeVida, montarCicloDeVida } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { type CicloDeVida, montarCicloDeVida } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import {
   type MontagemDasSessoesDeAgente,
   montarSessoesDeAgente,
   type SessoesDeAgente,
-} from "../src/modulos/sessoes/publico.ts";
-import { existe } from "../src/shared/nucleo/erros.ts";
-import { montarRepositorio } from "../src/modulos/repositorio/publico.ts";
-import { noLog } from "../src/shared/infra/registro.ts";
-import { relogioFixo } from "../src/shared/nucleo/relogio.ts";
-import { cicloDeVidaDeTeste } from "./falsos/ambiente_falso.ts";
-export { CATALOGO as CATALOGO_DO_CICLO_DE_VIDA } from "../src/modulos/ciclo_de_vida/coordenacao/aplicacao/leituras_do_ciclo_de_vida.ts";
-import { demandasDoCicloDeVida } from "../src/server/composicao/banco_da_fabriquinha.ts";
+} from "../../src/modulos/sessoes/publico.ts";
+import { existe } from "../../src/shared/nucleo/erros.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import { noLog } from "../../src/shared/infra/registro.ts";
+import { relogioFixo } from "../../src/shared/nucleo/relogio.ts";
+import { cicloDeVidaDeTeste } from "../falsos/ambiente_falso.ts";
+export { CATALOGO as CATALOGO_DO_CICLO_DE_VIDA } from "../../src/modulos/ciclo_de_vida/coordenacao/aplicacao/leituras_do_ciclo_de_vida.ts";
+import { demandasDoCicloDeVida } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 /** As predecessoras pendentes de cada pedido, pelas Dependências de Demandas: a mesma liberação do serviço. */
 export const liberacaoDasDemandas =

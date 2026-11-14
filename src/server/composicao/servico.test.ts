@@ -22,7 +22,7 @@ import {
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
-import { Configuracao, salvarConfiguracao } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Configuracao, salvarConfiguracao } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 import { registrarProjeto } from "../../../apoio-testes/demandas_de_teste.ts";
 import { motorDoBanco } from "../../../apoio-testes/sessoes_de_teste.ts";

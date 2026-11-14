@@ -1,7 +1,7 @@
 // Ler as linhas que um agregado tem em cada tabela: cada dono pede as tabelas dele pelo nome, e a mesma montagem serve a
 // um agregado só ou a vários lidos em lote, com uma execução SQL por tabela, qualquer que seja o número de agregados.
 import type { DatabaseSync, SQLOutputValue } from "node:sqlite";
-import { instrucaoPreparada } from "./banco.ts";
+import { instrucaoPreparada } from "../banco.ts";
 
 type LinhaLida = Record<string, SQLOutputValue>;
 

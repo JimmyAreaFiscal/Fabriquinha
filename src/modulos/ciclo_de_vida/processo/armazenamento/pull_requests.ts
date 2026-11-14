@@ -2,14 +2,14 @@
 // cada rodada e o final, com a situação observada na hospedagem, e os lê e grava por aqui, na unidade de trabalho dele; o
 // Repositório publica e lê o PR na hospedagem, e as decisões sobre o PR são do Ciclo de Vida (§10, regra 6).
 import type { DatabaseSync } from "node:sqlite";
-import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas/linhas_do_agregado.ts";
 import {
   apagarLinhasQueSumiram,
   gravarLinhasNovasEMudadas,
   type LinhaDaTabela,
   semNulos,
   type TabelaDoAgregado,
-} from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/diferenca_do_agregado.ts";
 
 /** Os PRs de uma demanda, como o Ciclo de Vida os guarda: o de cada rodada e o final, sem `rodada_id`. */
 interface PullRequestsDaDemanda {

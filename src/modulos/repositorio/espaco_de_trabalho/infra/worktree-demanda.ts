@@ -25,7 +25,7 @@ import {
 } from "../../git/publico.ts";
 import { podarWorktreesNoCore, preparar } from "./worktree.ts";
 import { branchDemanda, branchRodada, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(

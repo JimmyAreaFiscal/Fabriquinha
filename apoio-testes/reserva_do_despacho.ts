@@ -5,7 +5,7 @@ import {
   reservarTicketParaAFabriquinha,
   type Endereco,
   carregarDemanda,
-} from "../src/modulos/ciclo_de_vida/publico.ts";
+} from "./ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 

@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
-import { motivoDaFalhaDoTicket, carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { motivoDaFalhaDoTicket, carregarDemanda } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { sinalNoGrupo } from "../../src/shared/infra/processo.ts";

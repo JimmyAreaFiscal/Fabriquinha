@@ -14,7 +14,7 @@ import {
   cicloDoDespacho,
   type DepsDespacho,
   interromperExecucaoDemanda,
-} from "../src/modulos/ciclo_de_vida/publico.ts";
+} from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { anotar } from "../src/shared/infra/registro.ts";
@@ -25,7 +25,7 @@ import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.t
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../apoio-testes/sessoes_de_teste.ts";
-import { liberacaoDasDemandas } from "../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 export const pi = instalarPiFalso(base);
 

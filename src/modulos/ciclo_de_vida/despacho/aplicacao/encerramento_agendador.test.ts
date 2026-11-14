@@ -24,7 +24,7 @@ import type { RegistroDaVerificacao } from "../../verificacoes/publico.ts";
 import { type DepsDespacho, despachoDasEtapas } from "../../conducao/publico.ts";
 import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
-import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

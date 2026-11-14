@@ -1,8 +1,8 @@
 // Quem age: o Ator é o único tipo de autoria da Fabriquinha (CONCEITOS.md §15); as transições da demanda recebem o
 // ator e checam se ele pode agir. É também o autor das evidências, o criador de um ticket e quem decide.
 import { z } from "zod";
-import { ErroDeEscopo } from "../../../../../shared/nucleo/erros.ts";
-import { Slug } from "../../../../../shared/nucleo/primitivos.ts";
+import { ErroDeEscopo } from "../erros.ts";
+import { Slug } from "../primitivos.ts";
 
 /** O trabalho de uma ferramenta de fora da Fabriquinha: a ferramenta e a sessão dela. */
 const TrabalhoNaoGerenciado = z.object({ ferramenta: Slug, sessao: z.string().min(1) });
@@ -38,4 +38,19 @@ export function exigirAtor(ator: Ator, acao: string, ...permitidos: Ator["tipo"]
     `só ${permitidos.map((tipo) => QUEM_PODE[tipo].nome).join(" ou ")} pode ${acao}`,
     permitidos.map((tipo) => QUEM_PODE[tipo].orientacao).join("; "),
   );
+}
+
+/** Recusa quem não é a ferramenta e a sessão autoras da demanda (CA-6). */
+export function exigirAutoria(
+  demanda: { readonly id: string; readonly criada_por: { readonly ferramenta: string; readonly sessao: string } },
+  autor: Ator,
+  acao: string,
+): void {
+  const { ferramenta, sessao } = demanda.criada_por;
+  if (autor.tipo !== "externo" || autor.ferramenta !== ferramenta || autor.sessao !== sessao) {
+    throw new ErroDeEscopo(
+      `só a ferramenta ${ferramenta} da sessão ${sessao} pode ${acao} a demanda ${demanda.id}`,
+      "peça a quem registrou a demanda, na mesma sessão",
+    );
+  }
 }

@@ -10,7 +10,7 @@ import { ROTAS } from "../../src/server/api/servidor.ts";
 import { configuracaoDoAmbiente } from "../../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { carregarDemanda, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { carregarDemanda, configuracao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarDockerFalso } from "../../apoio-testes/falsos/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";

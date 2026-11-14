@@ -8,7 +8,7 @@ import {
   CICLO_DA_DEMANDA,
   type EstadoDemanda,
   gravarDemandaNova,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { validarPlano } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_demanda.ts";
 import { type Pedido, Projeto } from "../../src/modulos/demandas/publico.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";

@@ -1,7 +1,7 @@
-import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
-import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +11,7 @@ import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import { schemaDoTipo } from "../../modulos/ciclo_de_vida/publico.ts";
+import { schemaDoTipo } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioFixo } from "../../shared/nucleo/relogio.ts";
 import { type Comando, type DepsDoCli, type EntradaDoComando, lerJsonDoArquivo, schemaJsonDoTipo } from "./comando.ts";
 

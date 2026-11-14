@@ -1,6 +1,6 @@
 // A dependência entre pedidos (MELHORIAS §12, regra 4 do §11): o grafo das arestas, fora do processo de cada pedido.
 // Funções puras sobre as arestas e as situações dos pedidos; ler e gravar é do armazenamento.
-import { GrafoDeDependencias } from "../../../ciclo_de_vida/publico.ts";
+import { GrafoDeDependencias } from "../../../../shared/nucleo/demanda/grafo_de_dependencias.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { pedidoTerminou, type SituacaoDoPedido } from "./pedido.ts";
 

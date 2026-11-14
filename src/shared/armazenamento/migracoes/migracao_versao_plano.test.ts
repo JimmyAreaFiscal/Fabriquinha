@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { MetricaDeConformidade } from "../../../modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/metricas/metrica_de_conformidade.ts";
-import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../../../modulos/ciclo_de_vida/publico.ts";
+import {
+  CorrecaoDoPlano,
+  lerPlanoGravado,
+  Plano,
+} from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 import { origemDe } from "../../../../apoio-testes/banco/banco_de_metricas.ts";

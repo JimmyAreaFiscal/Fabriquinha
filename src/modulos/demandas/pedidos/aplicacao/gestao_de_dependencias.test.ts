@@ -8,7 +8,7 @@ import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
 import { registrarDependencia } from "./gestao_de_dependencias.ts";
-import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 type Banco = ReturnType<typeof bancoComProjeto>;
 const dependentesNaoConcluidosDoPedido = (banco: Banco, id: string): unknown =>

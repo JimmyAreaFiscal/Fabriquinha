@@ -15,7 +15,7 @@ import {
   EtapaTicket,
   type Recorte,
   type TipoMetrica,
-} from "../../../modulos/ciclo_de_vida/publico.ts";
+} from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { ErroDeInexistente } from "../../../shared/nucleo/erros.ts";
 import {
   type MetricasDaEtapa,

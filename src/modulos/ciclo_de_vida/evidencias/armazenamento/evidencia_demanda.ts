@@ -3,7 +3,7 @@
 // transação da evidência (`comDemanda`, via `aposGravar`) por cima do armazenamento por SHA-256 de `arquivos.ts`.
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
-import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas/linhas_do_agregado.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
 import {
@@ -12,7 +12,7 @@ import {
   gravarLinhasNovasEMudadas,
   semNulos,
   type TabelaDoAgregado,
-} from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/diferenca_do_agregado.ts";
 import type { EvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
 

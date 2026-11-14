@@ -18,7 +18,7 @@ import {
   enviarDemanda,
   Endereco,
   retomarFalhasDeInfraestrutura,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { GestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
 import { AmbienteContainer, modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import {
@@ -56,7 +56,7 @@ import {
 import { cancelarDemandaEmCascata } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { reservadoPeloDespacho } from "../../apoio-testes/reserva_do_despacho.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
-import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 await instalarSonarFalso(join(base, "bin"));

@@ -14,7 +14,7 @@ import {
   gestaoQueSoUsa,
   ligarGestaoDeAmbientesNosModulos,
 } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { despachoDasEtapas } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { despachoDasEtapas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "../apoio-execucao.ts";
 import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";

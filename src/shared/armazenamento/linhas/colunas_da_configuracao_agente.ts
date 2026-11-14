@@ -1,6 +1,11 @@
-// A ConfiguracaoAgente nas tabelas que a guardam (ticket, etapa do projeto, execução): as colunas planas
-// `modelo_provedor`, `modelo_nome` e `effort` mantêm o nome; o domínio só vê o valor `configuracao_agente`.
-import type { ConfiguracaoAgente } from "./configuracao_agente.ts";
+// A ConfiguracaoAgente nas tabelas que a guardam (ticket do Ciclo de Vida, etapa do projeto de Demandas): as colunas
+// planas `modelo_provedor`, `modelo_nome` e `effort` mantêm o nome; o domínio só vê o valor `configuracao_agente`.
+
+/** O modelo e o esforço do agente, na forma da `ConfiguracaoAgente` do Ciclo de Vida. */
+interface ConfiguracaoAgente {
+  readonly modelo?: { readonly provedor: string; readonly nome: string } | undefined;
+  readonly effort?: string | undefined;
+}
 
 /** As três colunas de uma linha a gravar; o ausente é NULL. */
 export const colunasDaConfiguracaoAgente = (configuracao: ConfiguracaoAgente | undefined) => ({

@@ -11,7 +11,7 @@ import {
   marcaDoPRRodada,
   type AgregadoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../falsos/hospedagem_falsa.ts";

@@ -3,7 +3,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 export { caminhoArquivo } from "../../src/shared/armazenamento/arquivos.ts";
-export { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
+export { carregarDemanda } from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 export { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 export { comSessoesDoContexto as comTrabalhosDoTicket } from "../sessoes_de_teste.ts";
 

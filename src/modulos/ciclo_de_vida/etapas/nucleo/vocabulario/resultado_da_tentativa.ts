@@ -2,7 +2,7 @@
 // ou a falha (de infraestrutura, ou a interrupção que pede o Auditor). É vocabulário de todo o serviço: o condutor e as
 // verificações também o devolvem.
 import { z } from "zod";
-import { AUDITOR, Ator, FABRIQUINHA } from "./ator.ts";
+import { AUDITOR, Ator, FABRIQUINHA } from "../../../../../shared/nucleo/demanda/ator.ts";
 import { ErroDeReprovacao, ErroExterno, mensagem } from "../../../../../shared/nucleo/erros.ts";
 import { Markdown, motivo } from "../../../../../shared/nucleo/primitivos.ts";
 

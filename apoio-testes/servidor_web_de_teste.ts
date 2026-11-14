@@ -7,7 +7,7 @@ import { createServer, request } from "node:http";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
-import { type MotivoDeRecusa, gravarAnexos } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { type MotivoDeRecusa, gravarAnexos } from "./ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { raizDo } from "../src/shared/armazenamento/banco.ts";

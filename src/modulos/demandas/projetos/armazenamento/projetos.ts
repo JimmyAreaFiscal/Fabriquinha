@@ -6,7 +6,10 @@ import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
 import { encontrado } from "../../../../shared/nucleo/erros.ts";
 // O mapeador das colunas da configuração do agente é do Ciclo de Vida, dono da Configuração do Agente.
-import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "../../../ciclo_de_vida/publico.ts";
+import {
+  colunasDaConfiguracaoAgente,
+  linhaComConfiguracaoAgente,
+} from "../../../../shared/armazenamento/linhas/colunas_da_configuracao_agente.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 
 type Linha = Record<string, unknown>;

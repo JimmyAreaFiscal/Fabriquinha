@@ -11,12 +11,12 @@ import {
   type LinhaDaTabela,
   semNulos,
   type TabelaDoAgregado,
-} from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/diferenca_do_agregado.ts";
 import type { Decisao } from "../nucleo/gate.ts";
 import type { ProgressoEncerramento } from "../nucleo/progresso_do_encerramento.ts";
 import { Tentativa } from "../nucleo/tentativa.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
-import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas/linhas_do_agregado.ts";
 
 /** O estado do desenvolvimento que o Processo grava, como o agregado da demanda o guarda. */
 interface EstadoDoProcesso {

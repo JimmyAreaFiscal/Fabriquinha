@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Id, Slug } from "../../../../shared/nucleo/primitivos.ts";
 import type { ProjetoDoRepositorio } from "../../git/publico.ts";
 import { branchDemanda, branchRodada } from "./nome_do_espaco.ts";
-import { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 
 /** O PR do Espaço: lido de um lugar só (`pull_request`), por rodada ou, sem rodada, o final da demanda. */
 export const PullRequest = z.object({

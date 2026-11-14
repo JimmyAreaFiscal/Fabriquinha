@@ -14,7 +14,7 @@ import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/do
 import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
-import { recuperarAposReinicio } from "../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { recuperarAposReinicio } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */

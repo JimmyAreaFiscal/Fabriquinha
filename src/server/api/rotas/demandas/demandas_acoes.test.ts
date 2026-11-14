@@ -7,7 +7,11 @@ import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import {
+  Endereco,
+  carregarDemanda,
+  type MotivoDeRecusa,
+} from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {

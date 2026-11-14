@@ -6,12 +6,8 @@ import { readFileSync, realpathSync } from "node:fs";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import {
-  type Ator,
-  type CatalogoDoCicloDeVida,
-  type CicloDeVida,
-  Endereco,
-} from "../../modulos/ciclo_de_vida/publico.ts";
+import type { Ator } from "../../shared/nucleo/demanda/ator.ts";
+import { type CatalogoDoCicloDeVida, type CicloDeVida, Endereco } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { registrarPedidoComProcesso } from "../fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../fluxos/envio_ao_desenvolvimento.ts";
