@@ -373,6 +373,14 @@ test(
     const segundaExecucao = execucoesDe(c, ticket).at(-1);
     assert.notEqual(segundaExecucao?.id, primeiraExecucao.id);
     motorDoBanco(c.banco).encerrar(String(segundaExecucao?.id));
+    // O encerramento ainda escreve no log da execução depois de gravar o fim; o último `estado` do SSE sai depois disso.
+    // Sem esperá-lo, a escrita cai depois que o cenário apagou a raiz.
+    const encerrada = (evento: EventoDoChat) =>
+      evento.type === "estado" &&
+      (evento.execucoes as { id: string; fim: string | null }[] | undefined)?.some(
+        (execucao) => execucao.id === segundaExecucao?.id && execucao.fim !== null,
+      ) === true;
+    await esperar(() => eventos.some(encerrada), "o último estado do pi retomado");
   },
 );
 
