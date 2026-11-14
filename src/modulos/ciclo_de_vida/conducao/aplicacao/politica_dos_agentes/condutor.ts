@@ -35,7 +35,7 @@ export function falhaDaTentativaDaExecucao(falha: FalhaDaExecucao): FalhaDaTenta
 }
 
 /** O que a subida do serviço recupera além dos processos dos tickets, dito por quem é dono de cada coisa. */
-export interface RecuperacaoDaSubida {
+interface RecuperacaoDaSubida {
   falharTicket: FalharTicketSemProcesso;
 }
 

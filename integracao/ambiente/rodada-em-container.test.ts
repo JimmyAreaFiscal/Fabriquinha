@@ -1,7 +1,7 @@
 // I-288.R3: o trabalho de um Espaço no container de verdade (CONCEITOS.md §7). O projeto de teste é o de
 // `projeto-container/` (imagem com node e git, teste, e2e e hook de commit) e o pi é o falso da imagem. Pulado sem
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e constrói a imagem na primeira vez.
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -17,7 +17,6 @@ import {
   ConducaoDePlanejar,
   enviarDemanda,
   Endereco,
-  AUDITOR,
   retomarFalhasDeInfraestrutura,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
@@ -57,6 +56,7 @@ import {
 import { cancelarDemandaEmCascata } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { reservadoPeloDespacho } from "../../apoio-testes/reserva_do_despacho.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 await instalarSonarFalso(join(base, "bin"));
@@ -309,7 +309,7 @@ test(
   COM_DOCKER,
   async (t) => {
     const { c, pi, gestao } = await cenarioEmContainer(t);
-    const { porta, pedir } = await servir(c.banco, true, undefined, gestao);
+    const { porta, pedir } = await servir(c.banco, undefined, gestao);
     pi.roteirizar([
       PI_QUE_PERGUNTA,
       { resposta: "resposta à mensagem", modelo: MODELO_B, uso: null },
@@ -603,7 +603,7 @@ test("CA-3: o cancelamento da demanda mata o pi dentro do container", COM_DOCKER
   const fim = ciclo(c, despachoComVerificacoesReais);
   await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(container)), "o pi vivo no container");
 
-  cancelarDemandaEmCascata(modulosDoCicloDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, AUDITOR, CTX);
+  cancelarDemandaEmCascata(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), id);
   await fim;
 
   assert.equal(statusDe(c, ticketDe(c, id, 1)), "cancelado");
@@ -781,7 +781,10 @@ test(
         banco: c.banco,
         raiz: raizDo(c.banco),
         porta,
-        agendador: { proximaBusca: () => new Date() },
+        cicloDeVida: {
+          ...montarCicloDeVidaDoBanco(c.banco, { ambientes: gestao }),
+          proximaBusca: () => new Date().toISOString(),
+        },
         // A gestão do cenário: uma segunda montagem conferiria o conjunto do Docker da máquina.
         ambientes: { gestao, configurar: () => undefined },
         demandas: montarDemandasDoBanco(c.banco),

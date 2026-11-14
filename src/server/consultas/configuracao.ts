@@ -1,15 +1,15 @@
 // As consultas da tela de Configuração (F7 §4.2): cada uma monta o contrato da resposta, lendo num snapshot só.
 import type { DatabaseSync } from "node:sqlite";
-import { configuracao } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
 import type { GestaoDeDemandas, Projeto } from "../../modulos/demandas/publico.ts";
 import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
 import { configuracaoDoAmbiente } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
 
 /** A configuração do F4 §3 com a próxima busca do agendador, só ligado. */
-export function consultarEstadoDaConfiguracao(banco: DatabaseSync, proximaBusca: () => Date): EstadoDaConfiguracao {
-  const gravada = configuracao(banco);
-  return { ...gravada, proximaBusca: gravada.agendadorAtivo ? proximaBusca().toISOString() : null };
+export function consultarEstadoDaConfiguracao(cicloDeVida: CicloDeVida): EstadoDaConfiguracao {
+  const gravada = cicloDeVida.configuracao();
+  return { ...gravada, proximaBusca: gravada.agendadorAtivo ? cicloDeVida.proximaBusca() : null };
 }
 
 /** O tipo e os limites do Ambiente gravados, e o conjunto de containers da Fabriquinha (só os que ela criou) com o uso medido. */

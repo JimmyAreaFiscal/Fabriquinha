@@ -92,11 +92,10 @@ export const arquivarConcluidas = (
   banco: DatabaseSync,
   demandas: readonly string[],
   relogio: Relogio,
-): { arquivadas: number } => {
-  const concluidas = situacaoDasDemandas(banco, demandas).filter((d) => d.estado === "concluida");
-  for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: relogio.agora() });
-  return { arquivadas: concluidas.length };
-};
+): AgregadoDemanda[] =>
+  situacaoDasDemandas(banco, demandas)
+    .filter((d) => d.estado === "concluida")
+    .map(({ id }) => arquivar(banco, id, AUDITOR, { agora: relogio.agora() }));
 
 /** Só o Auditor reabre o ticket falho, com a instrução para a sessão que o retomar; devolve o ticket já aberto. */
 export const reabrir = (

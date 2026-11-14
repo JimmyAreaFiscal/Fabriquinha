@@ -98,7 +98,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
    * nada, se a preparação falhou e o ticket já foi falhado).
    */
   async iniciar(endereco: Endereco): Promise<ExecucaoIniciada | undefined> {
-    const { banco, sessoes, registro } = this.deps;
+    const { banco, registro } = this.deps;
     const ticket = this.ticketDe(endereco);
     const preparacao = this.prepararEspaco(ticket);
     // Sem preparação a execução nasce já, na transação da reserva do Despacho: é ela que ocupa a vaga do limite global.
@@ -108,7 +108,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
       espaco = await preparacao;
     } catch (erro) {
       // Com o serviço parando, o erro é efeito da parada: o ticket é retomado em vez de esperar o Auditor.
-      const falha = sessoes.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
+      const falha = this.deps.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
       registro(`${raizDo(banco)}/log`, `preparação falhou: ${falha.motivo}`);
       await this.falhar(ticket, falha);
       return undefined;

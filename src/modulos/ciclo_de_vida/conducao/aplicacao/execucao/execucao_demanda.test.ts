@@ -40,7 +40,6 @@ import {
   modulosDoCicloDeTeste,
   gestaoLigadaNosModulos,
 } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
-import { recuperarAposReinicio } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
@@ -52,6 +51,7 @@ import {
   carregarSessoesDoContexto,
   motorDoBanco,
 } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
+import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -171,9 +171,11 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 /** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
+/** A condução do `implementar`, que para junto com o motor das Sessões, como na parada do serviço. */
 const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
   new ConducaoDeImplementar({
     ...modulosDoCicloDeTeste(banco),
+    emParada: () => motorDoBanco(banco).emParada(),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", ticket_id)));

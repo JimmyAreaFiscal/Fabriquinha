@@ -19,18 +19,17 @@ import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
-import type { SessoesDeAgente } from "../../../../sessoes/publico.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
-/** A condução com os módulos do teste; `trocarSessoes` muda o que ela vê das Sessões (a parada do serviço). */
-const conducao = (banco: Banco, trocarSessoes: Partial<SessoesDeAgente> = {}) => {
+/** A condução com os módulos do teste; `emParada` diz se o serviço está parando. */
+const conducao = (banco: Banco, emParada: () => boolean = () => false) => {
   const modulos = modulosDoCicloDeTeste(banco);
   return new ConducaoDeRevisarRodada({
     ...modulos,
-    sessoes: { ...modulos.sessoes, ...trocarSessoes },
+    emParada,
     relogio: RELOGIO,
     registro: anotar,
   });
@@ -107,7 +106,7 @@ test("preparação que lança falha o ticket sem rodar o pi e vai ao log", async
 test("preparação interrompida pela parada do serviço falha como serviço reiniciado", async () => {
   const { banco } = await cenarioRevisao();
   banco.exec("DELETE FROM linguagem_projeto");
-  await conducao(banco, { emParada: () => true }).conduzir(reservadoPeloDespacho(banco, REVISOR));
+  await conducao(banco, () => true).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "serviço reiniciado");
 });
 

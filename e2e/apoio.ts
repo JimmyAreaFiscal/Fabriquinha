@@ -12,9 +12,9 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { recuperarAposReinicio } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { recuperarAposReinicio } from "../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */

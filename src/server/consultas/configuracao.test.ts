@@ -13,17 +13,23 @@ import {
   consultarProjetoCadastrado,
   consultarProjetosCadastrados,
 } from "./configuracao.ts";
-import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto } from "../../../apoio-testes/demandas_de_teste.ts";
 
 const PROXIMA = new Date("2026-10-12T14:35:00.000Z");
 
 test("a configuração só traz a próxima busca com o agendador ligado, e cumpre o contrato", () => {
   const { banco } = abrirBancoTemporario();
-  const desligado = consultarEstadoDaConfiguracao(banco, () => PROXIMA);
+  const desligado = consultarEstadoDaConfiguracao({
+    ...montarCicloDeVidaDoBanco(banco),
+    proximaBusca: () => PROXIMA.toISOString(),
+  });
   assert.equal(desligado.proximaBusca, null);
   banco.exec("UPDATE configuracao SET agendador_ativo = 1");
-  const ligado = consultarEstadoDaConfiguracao(banco, () => PROXIMA);
+  const ligado = consultarEstadoDaConfiguracao({
+    ...montarCicloDeVidaDoBanco(banco),
+    proximaBusca: () => PROXIMA.toISOString(),
+  });
   assert.equal(ligado.proximaBusca, "2026-10-12T14:35:00.000Z");
   assert.deepEqual(EstadoDaConfiguracao.parse(ligado), ligado);
 });

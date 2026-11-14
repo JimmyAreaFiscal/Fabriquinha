@@ -12,6 +12,7 @@ import { AUDITOR, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts
 import { ErroDeInexistente, ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "./registro_do_pedido.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
+import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const contarLinhas = (banco: ReturnType<typeof bancoComProjeto>, tabela: string): unknown =>
   banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n;
@@ -19,11 +20,10 @@ const contarLinhas = (banco: ReturnType<typeof bancoComProjeto>, tabela: string)
 test("CA-1: registra o pedido I-n em rascunho e o processo no estado da primeira Etapa, com a autora e sem evidência", () => {
   const banco = bancoComProjeto();
   const processo = registrarPedidoComProcesso(
-    banco,
+    cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
     montarDemandasDoBanco(banco),
     { projeto: "fabriquinha", titulo: "T", tipo: "funcionalidade", descricao: "D" },
     AUTORA_DOS_PEDIDOS,
-    CONTEXTO_DOS_PEDIDOS,
   );
   assert.match(processo.demanda.id, /^I-\d+$/);
   assert.equal(processo.demanda.estado, "entender_e_desenhar");
@@ -56,22 +56,20 @@ test("registrar recusa projeto inexistente e campo inválido com campo e correç
   assert.throws(
     () =>
       registrarPedidoComProcesso(
-        banco,
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
         montarDemandasDoBanco(banco),
         { projeto: "x", titulo: "T", tipo: "funcionalidade", descricao: "D" },
         AUTORA_DOS_PEDIDOS,
-        CONTEXTO_DOS_PEDIDOS,
       ),
     ErroDeInexistente,
   );
   assert.throws(
     () =>
       registrarPedidoComProcesso(
-        banco,
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
         montarDemandasDoBanco(banco),
         { projeto: "fabriquinha", titulo: "", tipo: "funcionalidade", descricao: "D" },
         AUTORA_DOS_PEDIDOS,
-        CONTEXTO_DOS_PEDIDOS,
       ),
     (erro: Error) =>
       erro instanceof ErroDeRegra && erro.message.startsWith("titulo:") && erro.message.includes("corrija"),

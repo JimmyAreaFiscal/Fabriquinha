@@ -1,70 +1,41 @@
 // O fluxo do cancelamento em cascata (MELHORIAS §5.3, D08), entre Demandas e o Ciclo de Vida: o pedido, os dependentes que
 // ainda não terminaram e os processos de todos são cancelados na mesma unidade de trabalho; as sessões abertas deles são
 // interrompidas só depois do commit. Cancela assim o Auditor que cancela a demanda e o Gate da demanda que a reprova.
-import { type Relogio, relogioDoSistema } from "../../shared/nucleo/relogio.ts";
-import {
-  type AgregadoDemanda,
-  type Ator,
-  cancelarDemanda,
-  cancelarProcessosEmCascata,
-  comCampoInvalidoComoErroDeRegra,
-  type ContextoDemanda,
-  Endereco,
-  GATE_DA_DEMANDA,
-  interromperExecucoesDasDemandas,
-  type ModulosDoCiclo,
-} from "../../modulos/ciclo_de_vida/publico.ts";
+import type { CascataDoCancelamento, CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 
 /** A demanda depois da transição e as que ela levou junto (vazia se ela não terminou `cancelada`). */
-interface ResultadoDaCascata {
-  demanda: AgregadoDemanda;
-  canceladas: string[];
-}
+type ResultadoDaCascata = Omit<CascataDoCancelamento, "interromperExecucoes">;
 
 /**
- * Aplica `transicao` ao processo `id` e, se ele terminou `cancelado`, cancela os dependentes não terminados: os
- * dependentes são lidos dentro da transação, sem janela para dependente nova. Depois do commit, as execuções abertas
- * dos cancelados são interrompidas, uma vez por ticket.
+ * Demandas lê os dependentes não terminados de `id` dentro da transação, sem janela para dependente nova, e o Ciclo de
+ * Vida aplica a transição; depois do commit, as execuções abertas dos cancelados são interrompidas, uma vez por ticket.
  */
 function cancelarEmCascata(
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
-  ator: Ator,
-  ctx: ContextoDemanda,
-  transicao: (ag: AgregadoDemanda) => AgregadoDemanda,
+  transicao: (dependentes: string[]) => CascataDoCancelamento,
 ): ResultadoDaCascata {
-  const cascata = gestaoDeDemandas.cancelar(id, (dependentes) =>
-    cancelarProcessosEmCascata(modulos.banco, id, dependentes, ator, ctx, transicao),
-  );
-  interromperExecucoesDasDemandas(modulos, cascata.canceladas);
-  return cascata;
+  const cascata = gestaoDeDemandas.cancelar(id, transicao);
+  cascata.interromperExecucoes();
+  return { demanda: cascata.demanda, canceladas: cascata.canceladas };
 }
 
 /** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto e os dependentes saem junto. */
 export const cancelarDemandaEmCascata = (
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
-  ator: Ator,
-  ctx: ContextoDemanda,
 ): ResultadoDaCascata =>
-  comCampoInvalidoComoErroDeRegra(() =>
-    cancelarEmCascata(modulos, gestaoDeDemandas, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)),
-  );
+  cancelarEmCascata(gestaoDeDemandas, id, (dependentes) => cicloDeVida.cancelar(id, dependentes));
 
 /** CA-16 a CA-20: o Auditor decide o Gate da demanda; aprovar não cascateia, reprovar cancela a demanda e os dependentes. */
 export const decidirGateDaDemanda = (
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   entrada: unknown,
-  ator: Ator,
-  relogio: Relogio = relogioDoSistema,
-): ResultadoDaCascata => {
-  const ctx = { agora: relogio.agora() };
-  return cancelarEmCascata(modulos, gestaoDeDemandas, id, ator, ctx, (ag) =>
-    GATE_DA_DEMANDA.decidir(ag, Endereco.daDemanda(id), entrada, ator, ctx),
+): ResultadoDaCascata =>
+  cancelarEmCascata(gestaoDeDemandas, id, (dependentes) =>
+    cicloDeVida.decidir({ gate: "gate_demanda", demanda: id, entrada, dependentes }),
   );
-};

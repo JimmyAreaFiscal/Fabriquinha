@@ -26,7 +26,11 @@ import {
 } from "../../apoio-testes/sessoes_de_teste.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import {
+  abrirBancoDaFabriquinha,
+  montarCicloDeVidaDoBanco,
+  montarDemandasDoBanco,
+} from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
@@ -263,7 +267,10 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       banco,
       raiz: raizDo(banco),
       porta,
-      agendador: { proximaBusca: () => new Date() },
+      cicloDeVida: {
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao }),
+        proximaBusca: () => new Date().toISOString(),
+      },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
       repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),

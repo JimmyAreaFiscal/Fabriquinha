@@ -22,6 +22,7 @@ import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoCli {
@@ -201,7 +202,12 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
       rascunhos.push(
-        registrarPedidoComProcesso(banco, montarDemandasDoBanco(banco), entrada, autor, { agora: em }).demanda.id,
+        registrarPedidoComProcesso(
+          cicloDeVidaNoContexto(banco, { agora: em }),
+          montarDemandasDoBanco(banco),
+          entrada,
+          autor,
+        ).demanda.id,
       );
     }
     // `enviar` exige as duas evidências de quem registra; o rascunho de cada chamada nasce com elas.

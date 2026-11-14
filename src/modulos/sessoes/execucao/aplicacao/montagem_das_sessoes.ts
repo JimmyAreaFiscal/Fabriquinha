@@ -94,8 +94,6 @@ export interface SessoesDeAgente {
   encerrar(execucao: IdDaExecucao): Promise<void>;
   /** A consulta ao modelo; devolve a saída, ou `undefined` se o pi falhou ou passou do limite. */
   consultar(pedido: PedidoDeConsulta): Promise<string | undefined>;
-  /** A parada do serviço começou (`parar`): o erro de quem prepara uma execução agora é efeito dela. */
-  emParada(): boolean;
   /** As sessões do filtro, sem a conversa, com o processo vivo de cada uma. */
   listar(filtro?: FiltroDeSessoes): ResumoDaSessaoComSituacao[];
   /** Os eventos do pi da sessão e `{ type: "estado" }` quando o estado dela pode ter mudado; devolve quem cancela. */
@@ -184,7 +182,6 @@ function sessoesDoBanco(banco: DatabaseSync, gravacaoDoCatalogo: Promise<void>):
       }
       return resposta?.saida;
     },
-    emParada: () => motor().emParada(),
     listar: (filtro) =>
       resumosDasSessoesEmLote(banco, filtro).map((resumo) => {
         const situacao = motor().situacao(resumo.id);

@@ -12,7 +12,6 @@ import {
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
-import type { SessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
@@ -180,12 +179,12 @@ export async function cenarioDeImplementacao({
         resultado: { tipo: "reprovacao" as const, motivo: "corrija" },
       })),
     }));
-  /** As dependências da condução; `trocarSessoes` muda o que a condução vê das Sessões (a parada do serviço, por exemplo). */
-  const deps = (trocarSessoes: Partial<SessoesDeAgente> = {}): DepsDaConducao => {
+  /** As dependências da condução; `emParada` diz se o serviço está parando. */
+  const deps = (emParada: () => boolean = () => false): DepsDaConducao => {
     const modulos = modulosDoCicloDeTeste(banco);
     return {
       ...modulos,
-      sessoes: { ...modulos.sessoes, ...trocarSessoes },
+      emParada,
       relogio: relogioDoSistema,
       registro: anotar,
     };

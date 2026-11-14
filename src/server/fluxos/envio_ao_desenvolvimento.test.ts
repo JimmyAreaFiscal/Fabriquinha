@@ -15,17 +15,17 @@ import { ErroDeEscopo } from "../../shared/nucleo/erros.ts";
 import { carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { enviarAoDesenvolvimento } from "./envio_ao_desenvolvimento.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
+import { cicloDeVidaNoContexto } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 test("CA-14: com as obrigatórias, o processo vai ao Gate da demanda e o pedido fica enviado, com o conteúdo congelado", () => {
   const banco = bancoComProjeto();
   const id = registrarPedidoDeTeste(banco);
   completarDefinicao(banco, id);
   const processo = enviarAoDesenvolvimento(
-    banco,
+    cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
     montarDemandasDoBanco(banco),
     id,
     AUTORA_DOS_PEDIDOS,
-    CONTEXTO_DOS_PEDIDOS,
   );
   assert.equal(processo.demanda.estado, "gate_demanda");
   assert.equal(carregarDemanda(banco, id).demanda.enviada, true);
@@ -36,7 +36,13 @@ test("CA-13: envio sem as obrigatórias lista as faltantes e deixa o pedido em r
   const banco = bancoComProjeto();
   const id = registrarPedidoDeTeste(banco);
   assert.throws(
-    () => enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS),
+    () =>
+      enviarAoDesenvolvimento(
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
+        montarDemandasDoBanco(banco),
+        id,
+        AUTORA_DOS_PEDIDOS,
+      ),
     (erro: Error) => erro.message.includes("desenho_solucao"),
   );
   assert.equal(carregarDemanda(banco, id).demanda.enviada, false);
@@ -48,7 +54,13 @@ test("CA-7: outra sessão não envia o pedido", () => {
   const id = registrarPedidoDeTeste(banco);
   completarDefinicao(banco, id);
   assert.throws(
-    () => enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, OUTRA_SESSAO, CONTEXTO_DOS_PEDIDOS),
+    () =>
+      enviarAoDesenvolvimento(
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
+        montarDemandasDoBanco(banco),
+        id,
+        OUTRA_SESSAO,
+      ),
     ErroDeEscopo,
   );
   assert.equal(carregarDemanda(banco, id).demanda.estado, "entender_e_desenhar");
@@ -59,7 +71,13 @@ test("o pedido já enviado não se envia de novo", () => {
   const banco = bancoComProjeto();
   const id = pedidoEnviadoDeTeste(banco);
   assert.throws(
-    () => enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS),
+    () =>
+      enviarAoDesenvolvimento(
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
+        montarDemandasDoBanco(banco),
+        id,
+        AUTORA_DOS_PEDIDOS,
+      ),
     /já foi enviada/,
   );
 });
@@ -71,7 +89,13 @@ test("atomicidade: a falha ao gravar a situação do pedido desfaz o avanço do 
   banco.exec(`CREATE TRIGGER falha_na_situacao BEFORE UPDATE OF situacao ON demanda WHEN NEW.situacao = 'enviado'
     BEGIN SELECT RAISE(ABORT, 'a situação falhou'); END`);
   assert.throws(
-    () => enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS),
+    () =>
+      enviarAoDesenvolvimento(
+        cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
+        montarDemandasDoBanco(banco),
+        id,
+        AUTORA_DOS_PEDIDOS,
+      ),
     /a situação falhou/,
   );
   const { demanda } = carregarDemanda(banco, id);

@@ -1,14 +1,6 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
-import {
-  arquivar,
-  AUDITOR,
-  concluirSessaoAjustes,
-  decidirGate,
-  Endereco,
-  reabrir,
-  type RefRodada,
-} from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { Endereco, type RefRodada } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../../fluxos/cancelamento_em_cascata.ts";
 import {
@@ -20,7 +12,7 @@ import {
   TicketReaberto,
 } from "../../../contrato/demanda.ts";
 import { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
-import { modulosDoCiclo, type Pedido, type Rota } from "../../rotas.ts";
+import type { Pedido, Rota } from "../../rotas.ts";
 import { recusaEmJson } from "../inicio.ts";
 
 /** O `:ref` do caminho como rodada (`I-206.R2`). */
@@ -32,34 +24,27 @@ function refDaRodada({ params }: Pedido): RefRodada {
 }
 
 /** O corpo é a entrada do gate (`resultado`, `nota` e `motivo`): quem valida é o gate. */
-const decisaoDaDemanda = (pedido: Pedido) =>
-  decidirGateDaDemanda(modulosDoCiclo(pedido), pedido.demandas, String(pedido.params.id), pedido.corpo, AUDITOR);
+const decisaoDaDemanda = ({ cicloDeVida, demandas, params, corpo }: Pedido) =>
+  decidirGateDaDemanda(cicloDeVida, demandas, String(params.id), corpo);
 
-async function decisaoDoPlanejamento(pedido: Pedido) {
-  const { params, corpo } = pedido;
-  const { demanda } = await decidirGate(
-    modulosDoCiclo(pedido),
-    "gate_planejamento",
-    Endereco.daDemanda(String(params.id)),
-    corpo,
-    AUDITOR,
-  );
-  return demanda;
+async function decisaoDoPlanejamento({ cicloDeVida, params, corpo }: Pedido) {
+  const decidida = await cicloDeVida.decidir({ gate: "gate_planejamento", demanda: String(params.id), entrada: corpo });
+  return decidida.demanda;
 }
 
-async function decisaoDoPR(pedido: Pedido) {
-  const { demanda_id, rodada_id } = refDaRodada(pedido);
-  const { demanda, sessao } = await decidirGate(
-    modulosDoCiclo(pedido),
-    "gate_pr",
-    Endereco.daRodada(demanda_id, rodada_id),
-    pedido.corpo,
-    AUDITOR,
-  );
-  return sessao === undefined ? demanda : { sessao };
-}
+const decisaoDoPR = async (pedido: Pedido) => {
+  const decidida = await pedido.cicloDeVida.decidir({
+    gate: "gate_pr",
+    rodada: refDaRodada(pedido),
+    entrada: pedido.corpo,
+  });
+  return decidida.sessao === undefined ? decidida.demanda : { sessao: decidida.sessao };
+};
 
-const concluir = (pedido: Pedido) => concluirSessaoAjustes(modulosDoCiclo(pedido), refDaRodada(pedido), AUDITOR);
+const concluir = async (pedido: Pedido) => {
+  const decidida = await pedido.cicloDeVida.decidir({ gate: "ajustes_concluidos", rodada: refDaRodada(pedido) });
+  return decidida.demanda;
+};
 
 /** O `:ref` do caminho como ticket (`I-206.T3`). */
 function refDoTicket({ params }: Pedido) {
@@ -70,30 +55,19 @@ function refDoTicket({ params }: Pedido) {
 }
 
 function reabertura(pedido: Pedido) {
-  const { demanda_id, ticket_id } = refDoTicket(pedido);
   const { instrucao } = ReaberturaDoTicket.parse(pedido.corpo);
-  return { ticket: reabrir(pedido.banco, demanda_id, { ticket_id, instrucao }, AUDITOR, pedido.relogio) };
+  return { ticket: pedido.cicloDeVida.reabrir(refDoTicket(pedido), instrucao) };
 }
 
 /** Aceito, responde 204; recusado pelo Despacho, responde o `MotivoDeRecusa`. */
-async function executar(pedido: Pedido): Promise<unknown> {
-  const { agendador } = pedido;
-  if (!agendador.executarAgora)
-    throw new ErroDeRegra(
-      "o agendador não executa tickets de demanda",
-      "suba a Fabriquinha com o serviço (fabriquinha servir)",
-    );
-  const recusa = await agendador.executarAgora(refDoTicket(pedido));
+function executar(pedido: Pedido): unknown {
+  const recusa = pedido.cicloDeVida.executarAgora(refDoTicket(pedido));
   return recusa && recusaEmJson(recusa);
 }
 
-const cancelamento = (pedido: Pedido) =>
-  cancelarDemandaEmCascata(modulosDoCiclo(pedido), pedido.demandas, String(pedido.params.id), AUDITOR, {
-    agora: pedido.relogio.agora(),
-  });
-const arquivamento = ({ banco, params, relogio }: Pedido) => ({
-  demanda: arquivar(banco, String(params.id), AUDITOR, { agora: relogio.agora() }),
-});
+const cancelamento = ({ cicloDeVida, demandas, params }: Pedido) =>
+  cancelarDemandaEmCascata(cicloDeVida, demandas, String(params.id));
+const arquivamento = ({ cicloDeVida, params }: Pedido) => ({ demanda: cicloDeVida.arquivar([String(params.id)])[0] });
 
 export const ROTAS_DAS_ACOES_DE_DEMANDA: Rota[] = [
   { metodo: "POST", caminho: "/api/demandas/:id/decisao", tratar: decisaoDaDemanda, resposta: DemandaComCanceladas },

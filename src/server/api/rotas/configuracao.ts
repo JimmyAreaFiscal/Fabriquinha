@@ -1,6 +1,5 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
-import { validarESalvarConfiguracao } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { montarSessoesDeAgente } from "../../../modulos/sessoes/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
@@ -27,15 +26,15 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/configuracao",
-    tratar: ({ banco, agendador }) => consultarEstadoDaConfiguracao(banco, () => agendador.proximaBusca()),
+    tratar: ({ cicloDeVida }) => consultarEstadoDaConfiguracao(cicloDeVida),
     resposta: EstadoDaConfiguracao,
   },
   {
     metodo: "POST",
     caminho: "/api/configuracao",
-    tratar: ({ banco, agendador, corpo }) => {
-      validarESalvarConfiguracao(banco, corpo);
-      return consultarEstadoDaConfiguracao(banco, () => agendador.proximaBusca());
+    tratar: ({ cicloDeVida, corpo }) => {
+      cicloDeVida.configurar(corpo);
+      return consultarEstadoDaConfiguracao(cicloDeVida);
     },
     resposta: EstadoDaConfiguracao,
   },

@@ -107,11 +107,11 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         descricao: await ler(opcoes.descricao as string, deps.stdin),
         dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
-      return deps.comBanco((banco, gestaoDeDemandas) =>
+      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) =>
         visao(
           banco,
           gestaoDeDemandas,
-          registrarPedidoComProcesso(banco, gestaoDeDemandas, dados, autor, { agora: deps.relogio.agora() }).demanda.id,
+          registrarPedidoComProcesso(cicloDeVida, gestaoDeDemandas, dados, autor).demanda.id,
         ),
       );
     },
@@ -194,8 +194,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     executar(entrada, deps) {
       const id = idDe(String(entrada.posicionais[0]));
       const autor = autorDe(entrada, deps);
-      return deps.comBanco((banco, gestaoDeDemandas) => {
-        enviarAoDesenvolvimento(banco, gestaoDeDemandas, id, autor, { agora: deps.relogio.agora() });
+      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+        enviarAoDesenvolvimento(cicloDeVida, gestaoDeDemandas, id, autor);
         return visao(banco, gestaoDeDemandas, id);
       });
     },

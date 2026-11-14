@@ -5,10 +5,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../../modulos/demandas/publico.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
-import { abortarDemanda, enviarDemanda, responderDialogoDemanda } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { abrirChatDemanda, type ChatDemanda, exportarHistoricoDemanda } from "../../../consultas/sessoes/chat.ts";
 import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../../contrato/sessoes/chat.ts";
-import { modulosDoCiclo, SemCorpoEmJson, type Rota } from "../../rotas.ts";
+import { SemCorpoEmJson, type Rota } from "../../rotas.ts";
 import { abrirFluxoSse } from "../../sse.ts";
 
 /** O erro da sessão que não é de nenhuma demanda. */
@@ -49,10 +48,10 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/mensagens",
     resposta: SemCorpoEmJson,
-    tratar: (pedido) => {
-      const { texto, modo } = NovaMensagemDoChat.parse(pedido.corpo);
-      const sessao = String(pedido.params.sessao);
-      if (!enviarDemanda(modulosDoCiclo(pedido), sessao, texto, modo)) throw naoExiste(sessao);
+    tratar: ({ cicloDeVida, params, corpo }) => {
+      const { texto, modo } = NovaMensagemDoChat.parse(corpo);
+      const sessao = String(params.sessao);
+      if (!cicloDeVida.mandar(sessao, texto, modo)) throw naoExiste(sessao);
     },
   },
   {
@@ -75,19 +74,19 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/dialogos/:id",
     resposta: SemCorpoEmJson,
-    tratar: ({ banco, params, corpo }) => {
+    tratar: ({ cicloDeVida, params, corpo }) => {
       const resposta = RespostaDoDialogo.parse(corpo);
       const sessao = String(params.sessao);
-      if (!responderDialogoDemanda(banco, sessao, String(params.id), resposta)) throw naoExiste(sessao);
+      if (!cicloDeVida.responder(sessao, String(params.id), resposta)) throw naoExiste(sessao);
     },
   },
   {
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/abortar",
     resposta: SemCorpoEmJson,
-    tratar: (pedido) => {
-      const sessao = String(pedido.params.sessao);
-      if (!abortarDemanda(modulosDoCiclo(pedido), sessao)) throw naoExiste(sessao);
+    tratar: ({ cicloDeVida, params }) => {
+      const sessao = String(params.sessao);
+      if (!cicloDeVida.abortar(sessao)) throw naoExiste(sessao);
     },
   },
 ];

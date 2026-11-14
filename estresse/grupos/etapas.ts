@@ -4,7 +4,12 @@
 // integracao/falsos.ts. O tempo vai do despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da
 // abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { ligarGestaoDeAmbientesNosModulos, modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  cicloDeVidaDeTeste,
+  ligarGestaoDeAmbientesNosModulos,
+  modulosDoCicloDeTeste,
+} from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto, liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import {
   chmodSync,
   mkdirSync,
@@ -36,7 +41,6 @@ import {
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
@@ -190,11 +194,10 @@ const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: 
 function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
   const id = registrarPedidoComProcesso(
-    c.banco,
+    cicloDeVidaNoContexto(c.banco, ctx),
     montarDemandasDoBanco(c.banco),
     { projeto: c.projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     AUTOR,
-    ctx,
   ).demanda.id;
   const pasta = realpathSync(c.dir);
   const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
@@ -209,14 +212,8 @@ function demandaAprovada(c: Cenario): Promise<string> {
     );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, ctx);
-  decidirGateDaDemanda(
-    modulosDoCicloDeTeste(c.banco),
-    montarDemandasDoBanco(c.banco),
-    id,
-    { resultado: "aprovado" },
-    AUDITOR,
-  );
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, ctx), montarDemandasDoBanco(c.banco), id, AUTOR);
+  decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" });
   return Promise.resolve(id);
 }
 
@@ -252,26 +249,14 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(
-    cicloDoDespacho(
-      modulosDoCicloDeTeste(c.banco),
-      c.config,
-      deps,
-      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-    ),
-  );
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco)));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(
-    modulosDoCicloDeTeste(c.banco),
-    c.config,
-    deps,
-    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-  );
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -368,12 +353,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(
-    modulosDoCicloDeTeste(c.banco),
-    c.config,
-    deps,
-    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-  );
+  const [fim] = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };

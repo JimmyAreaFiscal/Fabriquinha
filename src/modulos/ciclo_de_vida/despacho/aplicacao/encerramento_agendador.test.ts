@@ -23,9 +23,8 @@ import { criarRepositorioDeTeste, commitarArquivo } from "../../../../../apoio-t
 import type { RegistroDaVerificacao } from "../../verificacoes/publico.ts";
 import { type DepsDespacho, despachoDasEtapas } from "../../conducao/publico.ts";
 import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
-import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
-import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -133,15 +132,7 @@ async function cenario() {
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () =>
-      Promise.all(
-        cicloDoDespacho(
-          modulosDoCicloDeTeste(banco),
-          config,
-          deps,
-          predecessorasPendentesPelasDependencias(montarDemandasDoBanco(banco)),
-        ),
-      ),
+    ciclo: () => Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco))),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

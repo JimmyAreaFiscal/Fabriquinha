@@ -1,6 +1,6 @@
 // Servidor web de verdade para os testes das rotas: banco real, projeto `loja` e um agendador falso que só anota o que
 // lhe pedem. Fica fora de cenarios_de_demanda.ts porque fecha o servidor num `after()` do arquivo de teste.
-import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer, request } from "node:http";
@@ -59,19 +59,10 @@ export async function cenarioDemandas() {
  */
 export async function servir(
   banco: DatabaseSync,
-  comExecutarDemanda = true,
   recusaDoDespacho?: MotivoDeRecusa,
   gestaoDoCenario?: GestaoDeAmbientes,
 ) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
-  const agendador = {
-    proximaBusca: () => new Date(),
-    executarAgora(ref: { demanda_id: string; ticket_id: number }) {
-      executados.push(ref);
-      return Promise.resolve(recusaDoDespacho);
-    },
-  };
-  if (!comExecutarDemanda) delete (agendador as { executarAgora?: unknown }).executarAgora;
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
@@ -84,16 +75,24 @@ export async function servir(
         },
       }
     : await montarAmbientesDoServico({ banco, raiz: raizDo(banco), porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco, ambientes: ambientes.gestao });
   servidor.on(
     "request",
     servirWeb({
       banco,
       raiz: raizDo(banco),
       porta,
-      agendador,
+      cicloDeVida: {
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio }),
+        proximaBusca: () => new Date().toISOString(),
+        executarAgora(ref) {
+          executados.push(ref);
+          return recusaDoDespacho;
+        },
+      },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
-      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

@@ -48,7 +48,7 @@ export {
   interromperExecucoesDasDemandas,
   type OpcoesExecucaoDemanda,
 } from "./aplicacao/execucao/execucao_demanda.ts";
-export { type RecuperacaoDaSubida, recuperacaoDosTicketsNaSubida } from "./aplicacao/politica_dos_agentes/condutor.ts";
+export { recuperacaoDosTicketsNaSubida } from "./aplicacao/politica_dos_agentes/condutor.ts";
 export { exigirTrabalhoDoTicket } from "./aplicacao/politica_dos_agentes/trabalho_do_ticket.ts";
 export { montarPromptDemanda } from "./aplicacao/prompt/prompt_demanda.ts";
 export { ligarLeituraDosLimitesDasSessoes } from "./aplicacao/limites_das_sessoes.ts";

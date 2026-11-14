@@ -41,6 +41,17 @@ export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
     // O vocabulário do SDLC e o catálogo (o executor e o papel de cada Etapa) são de Etapas.
     despacho: ["processo", "planejamento", "conducao", "etapas"],
     metricas_de_qualidade: ["etapas", "planejamento", "processo", "evidencias", "verificacoes"],
+    // A montagem do Ciclo de Vida combina os outros subdomínios na interface `CicloDeVida`.
+    coordenacao: [
+      "etapas",
+      "planejamento",
+      "processo",
+      "evidencias",
+      "verificacoes",
+      "conducao",
+      "despacho",
+      "metricas_de_qualidade",
+    ],
   },
   // O sonar-scanner fala com o host.
   processoDoHost: {

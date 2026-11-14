@@ -1,5 +1,5 @@
 // Rotas das métricas (F7 §4.2) chamadas como o servidor as chama, contra um banco de verdade.
-import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import type { AmbientesDoServico } from "../rotas.ts";
 import assert from "node:assert/strict";
 import type { ServerResponse } from "node:http";
@@ -40,7 +40,7 @@ async function chamar(endereco: string): Promise<unknown> {
     try {
       valor = await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => new Date() },
+        cicloDeVida: montarCicloDeVidaDoBanco(banco),
         ambientes: undefined as unknown as AmbientesDoServico,
         demandas: montarDemandasDoBanco(banco),
         repositorio: montarRepositorio({ banco: banco }),

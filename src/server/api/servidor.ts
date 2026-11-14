@@ -8,6 +8,7 @@ import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
 import { montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
@@ -17,7 +18,7 @@ import { autenticarAgente } from "./agente/autenticacao.ts";
 import { rotasDeEvidenciaAdd } from "./agente/evidencia.ts";
 import { erroDaApiDoAgente, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente, rotasDoAgente } from "./agente/rotas.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
-import type { Agendador, AmbientesDoServico, Rota } from "./rotas.ts";
+import type { AmbientesDoServico, Rota } from "./rotas.ts";
 import { ROTAS_DO_CHAT } from "./rotas/sessoes/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_ETAPAS } from "./rotas/etapas.ts";
@@ -152,7 +153,7 @@ interface Web {
   /** A pasta de dados do serviço, onde vai o `web.url`. */
   raiz: string;
   porta: number;
-  agendador: Agendador;
+  cicloDeVida: CicloDeVida;
   ambientes: AmbientesDoServico;
   demandas: GestaoDeDemandas;
   repositorio: RepositorioDoProjeto;
@@ -171,7 +172,7 @@ export function servirWeb({
   banco,
   raiz,
   porta,
-  agendador,
+  cicloDeVida,
   ambientes,
   demandas,
   repositorio,
@@ -223,7 +224,7 @@ export function servirWeb({
       if (!params) continue;
       const valor: unknown = await rota.tratar({
         banco,
-        agendador,
+        cicloDeVida,
         ambientes,
         demandas,
         repositorio,
@@ -256,7 +257,15 @@ export function servirWeb({
         200,
         await rota.tratar({
           banco,
-          modulos: { banco, ambientes: ambientes.gestao, repositorio, sessoes: montarSessoesDeAgente({ banco }) },
+          modulos: {
+            banco,
+            ambientes: ambientes.gestao,
+            repositorio,
+            sessoes: montarSessoesDeAgente({ banco }),
+            // ponytail: os casos de uso do agente não conduzem Etapa; o 6c-2 os passa ao Ciclo de Vida do serviço.
+            /* node:coverage ignore next */
+            emParada: () => false,
+          },
           relogio,
           agente,
           params,

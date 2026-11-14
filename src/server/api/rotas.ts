@@ -5,21 +5,14 @@ import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
-import type { ModulosDoCiclo, MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
-import { montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import type { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import { Id } from "../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import type { Parametros } from "../web/compartilhado/caminhos.ts";
 
-/** O que o serviço expõe do agendador ao web (F4 §4). */
-export interface Agendador {
-  proximaBusca(): Date;
-  /** O "Executar agora" (F4 §4) do ticket de uma demanda, que só o serviço sabe iniciar; devolve o motivo quando o Despacho o recusa. Opcional para os testes das outras rotas. */
-  executarAgora?(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined>;
-}
 /** O que o serviço expõe do Ambiente ao web: a gestão que ele montou e a gravação da Configuração com que a montou. */
 export interface AmbientesDoServico {
   gestao: GestaoDeAmbientes;
@@ -28,7 +21,8 @@ export interface AmbientesDoServico {
 }
 export interface Pedido {
   banco: DatabaseSync;
-  agendador: Agendador;
+  /** O Ciclo de Vida que o serviço montou, com o agendador. */
+  cicloDeVida: CicloDeVida;
   ambientes: AmbientesDoServico;
   demandas: GestaoDeDemandas;
   repositorio: RepositorioDoProjeto;
@@ -43,15 +37,6 @@ export interface Pedido {
   /** Para a rota que responde fora do JSON (texto, download, SSE); depois que ela responde, o servidor não mexe. */
   resposta: ServerResponse;
 }
-
-/** Os módulos que a condução do Ciclo de Vida recebe, como o serviço os montou. */
-export const modulosDoCiclo = ({ banco, ambientes, repositorio }: Pedido): ModulosDoCiclo => ({
-  banco,
-  ambientes: ambientes.gestao,
-  repositorio,
-  // O motor das sessões é um por banco: estas Sessões são as que o serviço montou.
-  sessoes: montarSessoesDeAgente({ banco }),
-});
 
 interface RotaDaApi {
   metodo: "GET" | "POST" | "DELETE";

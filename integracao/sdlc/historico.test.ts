@@ -35,10 +35,12 @@ import {
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
@@ -59,12 +61,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
-  const fins = cicloDoDespacho(
-    modulosDoCicloDeTeste(c.banco),
-    config,
-    despacho(),
-    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-  );
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), config, despacho(), liberacaoDasDemandas(c.banco));
   assert.equal(fins.length, 2);
   await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);
@@ -73,11 +70,9 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   const execucoesAntes = carregarSessoesDoContexto(c.banco, refA).execucoes.length;
 
   const { canceladas } = cancelarDemandaEmCascata(
-    modulosDoCicloDeTeste(c.banco),
+    cicloDeVidaNoContexto(c.banco, CTX),
     montarDemandasDoBanco(c.banco),
     a,
-    AUDITOR,
-    CTX,
   );
   assert.deepEqual([...canceladas].sort(), [a, aberta].sort());
   assert.equal(demanda(c, a).demanda.estado, "cancelada");
@@ -102,8 +97,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.equal(carregarSessoesDoContexto(c.banco, refA).sessoes.length > 0, true);
   // A terminada não se cancela de novo.
   assert.throws(
-    () =>
-      cancelarDemandaEmCascata(modulosDoCicloDeTeste(c.banco), montarDemandasDoBanco(c.banco), terminada, AUDITOR, CTX),
+    () => cancelarDemandaEmCascata(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), terminada),
     /já terminou/,
   );
 
@@ -131,7 +125,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   );
   assert.equal(demanda(c, dependeDaFeita).demanda.estado, "entender_e_desenhar");
   assert.throws(
-    () => cancelarDemandaEmCascata(modulosDoCicloDeTeste(c.banco), montarDemandasDoBanco(c.banco), feita, AUDITOR, CTX),
+    () => cancelarDemandaEmCascata(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), feita),
     /já terminou/,
   );
 });
@@ -153,7 +147,7 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
     )
     .run(avaliacao, "Achado 1", "desc 1", "ev 1");
   const { demanda: nova } = registrarPedidoComProcesso(
-    c.banco,
+    cicloDeVidaNoContexto(c.banco, CTX),
     montarDemandasDoBanco(c.banco),
     {
       projeto: c.projeto,
@@ -162,7 +156,6 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
       descricao: `desc 1\n\nEvidência: ev 1\n\nOrigem: avaliação ${avaliacao}, achado 1.`,
     },
     autor,
-    CTX,
   );
   c.banco.prepare("UPDATE achado_avaliacao SET demanda_id = ? WHERE avaliacao_id = ?").run(nova.id, avaliacao);
 
@@ -189,14 +182,8 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
     [anexoHtml()],
   );
-  enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), nova.id, autor, CTX);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), nova.id, autor);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
-  decidirGateDaDemanda(
-    modulosDoCicloDeTeste(c.banco),
-    montarDemandasDoBanco(c.banco),
-    nova.id,
-    { resultado: "aprovado" },
-    AUDITOR,
-  );
+  decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), nova.id, { resultado: "aprovado" });
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 });

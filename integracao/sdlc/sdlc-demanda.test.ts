@@ -4,7 +4,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  AUDITOR,
   despachoDasEtapas,
   interromperExecucaoDemanda,
   cicloDoDespacho,
@@ -30,11 +29,13 @@ import {
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarDependencia } from "../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 
@@ -44,7 +45,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
     modulosDoCicloDeTeste(c.banco),
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    liberacaoDasDemandas(c.banco),
   );
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
   await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
@@ -69,7 +70,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
 
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.
   assert.throws(
-    () => enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, CTX),
+    () => enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), id, AUTOR),
     (e: Error) => e.message.includes("desenho_solucao"),
   );
   assert.equal(demanda(c, id).demanda.enviada, false);
@@ -77,24 +78,24 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(demanda(c, id).tickets[0]?.estado, "em_execucao");
   assert.throws(
     () =>
-      decidirGateDaDemanda(
-        modulosDoCicloDeTeste(c.banco),
-        montarDemandasDoBanco(c.banco),
-        id,
-        { resultado: "aprovado" },
-        AUDITOR,
-      ),
+      decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }),
     /não espera decisão/,
   );
   assert.equal(montarDemandasDoBanco(c.banco).editar(id, { titulo: "Corrigido" }, AUTOR).titulo, "Corrigido");
   assert.throws(
-    () => enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, OUTRA_SESSAO, CTX),
+    () =>
+      enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), id, OUTRA_SESSAO),
     ErroDeEscopo,
   );
 
   // Completo: congela a definição e registra a origem (ferramenta e sessão).
   submeterObrigatorias(c, id);
-  const enviada = enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, CTX).demanda;
+  const enviada = enviarAoDesenvolvimento(
+    cicloDeVidaNoContexto(c.banco, CTX),
+    montarDemandasDoBanco(c.banco),
+    id,
+    AUTOR,
+  ).demanda;
   assert.equal(enviada.estado, "gate_demanda");
   assert.equal(enviada.enviada, true);
   assert.deepEqual(enviada.criada_por, { tipo: "externo", ferramenta: "claude", sessao: "S1" });
@@ -112,13 +113,10 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
 
   // Reprovação: cancelada, motivo gravado, nenhum ticket novo e nada a despachar.
   const reprovada = demandaEnviada(c);
-  const { demanda: r } = decidirGateDaDemanda(
-    modulosDoCicloDeTeste(c.banco),
-    montarDemandasDoBanco(c.banco),
-    reprovada,
-    { resultado: "reprovado", motivo: "fora do escopo" },
-    AUDITOR,
-  );
+  const { demanda: r } = decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), reprovada, {
+    resultado: "reprovado",
+    motivo: "fora do escopo",
+  });
   assert.equal(r.demanda.estado, "cancelada");
   assert.deepEqual([r.decisoes[0]?.resultado, r.decisoes[0]?.motivo], ["reprovado", "fora do escopo"]);
   assert.deepEqual(
@@ -126,25 +124,17 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
     [["entender_e_desenhar", "cancelado"]],
   );
   assert.equal(
-    cicloDoDespacho(
-      modulosDoCicloDeTeste(c.banco),
-      c.config,
-      despachoDasEtapas(),
-      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-    ).length,
+    cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, despachoDasEtapas(), liberacaoDasDemandas(c.banco))
+      .length,
     0,
   );
   assert.equal(pi.prompts().length, 0);
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
   const aprovada = demandaEnviada(c);
-  const { demanda: a } = decidirGateDaDemanda(
-    modulosDoCicloDeTeste(c.banco),
-    montarDemandasDoBanco(c.banco),
-    aprovada,
-    { resultado: "aprovado" },
-    AUDITOR,
-  );
+  const { demanda: a } = decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), aprovada, {
+    resultado: "aprovado",
+  });
   assert.equal(a.demanda.estado, "planejar");
   assert.equal(a.decisoes[0]?.resultado, "aprovado");
   assert.deepEqual(
@@ -166,12 +156,8 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const a = demandaEnviada(c, undefined, "outro");
   const b = await demandaAprovada(c, [a]);
   assert.equal(
-    cicloDoDespacho(
-      modulosDoCicloDeTeste(c.banco),
-      c.config,
-      despachoDasEtapas(),
-      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-    ).length,
+    cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, despachoDasEtapas(), liberacaoDasDemandas(c.banco))
+      .length,
     0,
   );
   assert.equal(pi.prompts().length, 0);

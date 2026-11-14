@@ -23,7 +23,7 @@ import { ROTAS } from "../servidor.ts";
 import { montarAmbientesDoServico } from "../../composicao/ambientes_do_servico.ts";
 import { noLog } from "../../../shared/infra/registro.ts";
 import { buscarProjeto, gravarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
-import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 
 // realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
@@ -90,7 +90,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     try {
       valor = await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => PROXIMA },
+        cicloDeVida: { ...montarCicloDeVidaDoBanco(banco), proximaBusca: () => PROXIMA.toISOString() },
         ambientes,
         demandas: montarDemandasDoBanco(banco),
         repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),

@@ -11,7 +11,7 @@ import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
 import { buscarProjeto, gravarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
-import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 import { montarRepositorio } from "../../../../modulos/repositorio/publico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -32,7 +32,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     try {
       valor = await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => new Date() },
+        cicloDeVida: montarCicloDeVidaDoBanco(banco),
         ambientes: undefined as unknown as AmbientesDoServico,
         demandas: montarDemandasDoBanco(banco),
         repositorio: montarRepositorio({ banco: banco }),

@@ -1,9 +1,9 @@
 // O banco da Fabriquinha com as migrações dos domínios (MELHORIAS §5.1.6): o histórico congelado do shared e, depois dele,
 // as que cada domínio registra. Todo processo que abre o banco (serviço, CLI, testes) passa por aqui: quem abrisse sem as
 // migrações dos domínios acharia o banco numa versão mais nova que a que conhece. Por isso é aqui também que a composição
-// liga ao Ciclo de Vida o que ele lê de Demandas como dado: os projetos cadastrados e o conteúdo dos pedidos (MELHORIAS §11,
-// regra 2), à Condução os limites das sessões, da configuração do serviço do Despacho, e o fluxo da conclusão do
-// desenvolvimento, que conclui o pedido em Demandas junto do encerramento do processo.
+// monta o Ciclo de Vida com o que ele lê de Demandas como dado: os projetos cadastrados, o conteúdo dos pedidos, as
+// predecessoras pendentes (MELHORIAS §11, regra 2) e o fluxo da conclusão do desenvolvimento, que conclui o pedido em
+// Demandas junto do encerramento do processo.
 import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
@@ -13,12 +13,11 @@ import { MIGRACOES_DE_SESSOES } from "../../shared/armazenamento/migracoes/migra
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { type Modelo, montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import {
-  configuracao,
-  ligarConclusaoDoDesenvolvimento,
-  ligarLeituraDosLimitesDasSessoes,
-  ligarLeituraDosPedidosRecebidos,
-  ligarLeituraDosProjetosCadastrados,
+  type CicloDeVida,
+  type DemandasDoCicloDeVida,
   MIGRACOES_DO_CICLO_DE_VIDA,
+  type MontagemDoCicloDeVida,
+  montarCicloDeVida,
 } from "../../modulos/ciclo_de_vida/publico.ts";
 import { type GestaoDeDemandas, montarGestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { montarRepositorio } from "../../modulos/repositorio/publico.ts";
@@ -48,24 +47,31 @@ export const montarDemandasDoBanco = (banco: DatabaseSync): GestaoDeDemandas =>
     repositorio: montarRepositorio({ banco }),
   });
 
-ligarLeituraDosProjetosCadastrados({
-  projetoExistente: (banco, nome, orientacao) => montarDemandasDoBanco(banco).projeto(nome, orientacao),
-});
-ligarLeituraDosPedidosRecebidos({
-  lerPedidosEmLote: (banco, ids) =>
-    new Map(
-      montarDemandasDoBanco(banco)
-        .pedidos({ ids })
-        .map((pedido) => [pedido.id, pedido]),
-    ),
-});
-ligarConclusaoDoDesenvolvimento((banco, demandaId, gravarEncerramentoDoProcesso) => {
-  montarDemandasDoBanco(banco).concluir(demandaId, gravarEncerramentoDoProcesso);
-});
-ligarLeituraDosLimitesDasSessoes({
-  timeoutMin: (banco) => configuracao(banco).timeoutMin,
-  ociosidadeMin: (banco) => configuracao(banco).ociosidadeMin,
-});
+/** O que o Ciclo de Vida lê de Demandas sobre o `banco`: o projeto, os pedidos, as predecessoras pendentes e a conclusão. */
+export const demandasDoCicloDeVida = (banco: DatabaseSync): DemandasDoCicloDeVida => {
+  const gestaoDeDemandas = montarDemandasDoBanco(banco);
+  return {
+    projeto: (nome, orientacao) => gestaoDeDemandas.projeto(nome, orientacao),
+    pedidos: (ids) => new Map(gestaoDeDemandas.pedidos({ ids }).map((pedido) => [pedido.id, pedido])),
+    predecessorasPendentes: (ids) =>
+      new Map(gestaoDeDemandas.pedidos({ ids }).map((pedido) => [pedido.id, pedido.predecessorasPendentes])),
+    concluir: (id, gravarEncerramentoDoProcesso) => {
+      gestaoDeDemandas.concluir(id, gravarEncerramentoDoProcesso);
+    },
+  };
+};
+
+/**
+ * O Ciclo de Vida sobre o `banco`, com a leitura de Demandas da composição e os `modulos` que o serviço montou (sem eles,
+ * os do banco, sem a gestão de Ambientes).
+ */
+export const montarCicloDeVidaDoBanco = (
+  banco: DatabaseSync,
+  {
+    repositorio = montarRepositorio({ banco }),
+    ...modulos
+  }: Partial<Omit<MontagemDoCicloDeVida, "banco" | "demandas">> = {},
+): CicloDeVida => montarCicloDeVida({ ...modulos, banco, repositorio, demandas: demandasDoCicloDeVida });
 
 const MIGRACOES_DOS_DOMINIOS = [
   MIGRACOES_DE_DEMANDAS,
@@ -74,8 +80,15 @@ const MIGRACOES_DOS_DOMINIOS = [
   MIGRACOES_DE_SESSOES,
 ];
 
-/** Abre o banco da `raiz` (padrão: a do serviço) e aplica as migrações pendentes, do histórico e dos domínios. */
-export const abrirBancoDaFabriquinha = (raiz?: string): DatabaseSync => abrir(raiz, MIGRACOES_DOS_DOMINIOS);
+/**
+ * Abre o banco da `raiz` (padrão: a do serviço) e aplica as migrações pendentes, do histórico e dos domínios. Monta o
+ * Ciclo de Vida sobre ele, o que liga a leitura de Demandas antes de qualquer leitura do agregado.
+ */
+export const abrirBancoDaFabriquinha = (raiz?: string): DatabaseSync => {
+  const banco = abrir(raiz, MIGRACOES_DOS_DOMINIOS);
+  montarCicloDeVidaDoBanco(banco);
+  return banco;
+};
 
 /**
  * Leva o banco já aberto à versão atual, ou só até `versao`, pelas mesmas migrações que a abertura aplica.
@@ -84,4 +97,5 @@ export const abrirBancoDaFabriquinha = (raiz?: string): DatabaseSync => abrir(ra
 export const migrarBancoDaFabriquinha = (banco: DatabaseSync, versao?: number): void => {
   const migracoes = enfileirarDepoisDoHistorico(MIGRACOES_DOS_DOMINIOS);
   migrar(banco, versao === undefined ? migracoes : migracoes.slice(0, versao - VERSAO_LINHA_DE_BASE));
+  montarCicloDeVidaDoBanco(banco);
 };

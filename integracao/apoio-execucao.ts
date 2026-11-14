@@ -22,11 +22,10 @@ import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
-import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -233,12 +232,7 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
-  const fins = cicloDoDespacho(
-    modulosDoCicloDeTeste(c.banco),
-    c.config,
-    deps,
-    predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
-  );
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();

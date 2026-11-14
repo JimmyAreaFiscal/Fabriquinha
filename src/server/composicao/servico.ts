@@ -5,16 +5,14 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
+import { ErroDeRegra, existe, mensagem } from "../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../shared/nucleo/relogio.ts";
-import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "./banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, demandasDoCicloDeVida, montarDemandasDoBanco } from "./banco_da_fabriquinha.ts";
 import { garantirPacoteDoAgente } from "./pacote_do_agente.ts";
 import { noLog } from "../../shared/infra/registro.ts";
 import { servirWeb } from "../api/servidor.ts";
-import { configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
-import type { SessoesDeAgente } from "../../modulos/sessoes/publico.ts";
-import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
-import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+import { type CicloDeVida, montarCicloDeVida, type MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import { montarSessoesDeAgente, type SessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import { montarRepositorio, type RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
 import type { AmbientesDoServico } from "../api/rotas.ts";
 import { montarAmbientesDoServico } from "./ambientes_do_servico.ts";
@@ -52,20 +50,6 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   const noLogDoServico = (erro: unknown): void => {
     noLog(erro, relogio);
   };
-  // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
-  let minutos = 0;
-  /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */
-  let batida = Date.parse(relogio.agora());
-  /**
-   * Uma etapa despachada terminou depois do último ciclo: o trabalho que ela liberou (a revisão depois da
-   * implementação, o encerramento depois da revisão...) é buscado na batida seguinte, sem esperar o intervalo inteiro.
-   * ponytail: no máximo um ciclo por batida, o mesmo ritmo do intervaloMin 1; disparar no próprio fim da etapa se o
-   * minuto de espera pesar.
-   */
-  let etapaTerminou = false;
-  /** A batida em que `minutos` chega ao intervalo; desligado além dele, o ciclo roda na batida seguinte. */
-  const proximaBusca = (): Date =>
-    new Date(batida + Math.max(1, etapaTerminou ? 1 : configuracao(banco).intervaloMin - minutos) * 60_000);
   // O tratador do web (F7 §4.1) entra depois do banco aberto; antes disso, ninguém tem o link de entrada.
   const web = createServer();
   await new Promise<void>((pronto, falhou) => {
@@ -82,8 +66,9 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   const { port: porta } = web.address() as AddressInfo;
   let aberto: DatabaseSync | undefined;
   let ambientesMontados: AmbientesDoServico | undefined;
-  let sessoesMontadas: SessoesDeAgente | undefined;
   let repositorioMontado: RepositorioDoProjeto | undefined;
+  let cicloMontado: CicloDeVida | undefined;
+  let sessoesDaSubida: SessoesDeAgente | undefined;
   try {
     aberto = abrirBancoDaFabriquinha(raiz);
     // A montagem confere as sandboxes com o docker antes da recuperação, que mata os processos da instância anterior.
@@ -94,14 +79,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       registrarErro: noLogDoServico,
       relogio,
     });
-    // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
-    // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
-    sessoesMontadas = await recuperarAposReinicio(aberto, {
-      ambientes: ambientesMontados.gestao,
-      urlDaApi: `http://127.0.0.1:${String(porta)}`,
-      catalogo: { relogio, registrarErro: noLogDoServico },
-    });
     const bancoAberto = aberto;
+    const gestaoDosAmbientes = ambientesMontados.gestao;
     const demandasDoBanco = montarDemandasDoBanco(aberto);
     // F4 §4, passo 1: o Repositório varre em segundo plano, a cada intervalo do agendador ligado, a base dos projetos sem
     // varredura há 24 horas; o `parar` a espera antes de fechar o banco.
@@ -109,13 +88,32 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     // log em cada; guardar a última tentativa se o log incomodar.
     repositorioMontado = montarRepositorio({
       banco: aberto,
-      ambientes: ambientesMontados.gestao,
+      ambientes: gestaoDosAmbientes,
       varredura: {
         projetos: () => demandasDoBanco.projetos(),
-        cadencia: () => configuracao(bancoAberto),
+        cadencia: () => existe(cicloMontado, "o Ciclo de Vida ainda não subiu", "espere a subida").configuracao(),
         relogio,
         registrarErro: noLogDoServico,
       },
+    });
+    // A subida: as Sessões matam os processos da instância anterior, o Ciclo de Vida falha os tickets que ficaram sem
+    // processo e liga o agendador. O catálogo de preços com que Sessões estima o custo que o harness não informa é lido
+    // do harness a cada subida, em segundo plano; a falha só vai ao log, e o catálogo fica como estava.
+    cicloMontado = await montarCicloDeVida({
+      banco: aberto,
+      demandas: demandasDoCicloDeVida,
+      ambientes: gestaoDosAmbientes,
+      repositorio: repositorioMontado,
+      relogio,
+      registrarErro: noLogDoServico,
+      subirSessoes: async (subida) =>
+        (sessoesDaSubida = await montarSessoesDeAgente({
+          banco: bancoAberto,
+          ambientes: gestaoDosAmbientes,
+          urlDaApi: `http://127.0.0.1:${String(porta)}`,
+          catalogo: { relogio, registrarErro: noLogDoServico },
+          subida,
+        })),
     });
     web.on(
       "request",
@@ -123,7 +121,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
         banco: aberto,
         raiz,
         porta,
-        agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
+        cicloDeVida: cicloMontado,
         ambientes: ambientesMontados,
         demandas: demandasDoBanco,
         repositorio: repositorioMontado,
@@ -132,6 +130,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       }),
     );
   } catch (error_) {
+    await cicloMontado?.parar();
     await repositorioMontado?.parar();
     await ambientesMontados?.gestao.parar();
     aberto?.close();
@@ -140,41 +139,15 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   }
   const banco = aberto;
   const ambientes = ambientesMontados.gestao;
-  const demandas = montarDemandasDoBanco(banco);
-  const sessoes = sessoesMontadas;
-  // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
-  const despachoDoServico = despachoDasEtapas();
   const repositorio = repositorioMontado;
-  const modulos = { banco, ambientes, repositorio, sessoes };
-
-  /**
-   * F4 §4, passos 2 a 4, numa batida do relógio (o passo 1 é a varredura do Repositório). Nunca lança: qualquer erro
-   * vai para o log, e a batida seguinte roda.
-   */
-  function ciclo(): void {
-    batida = Date.parse(relogio.agora());
-    try {
-      const c = configuracao(banco);
-      // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
-      if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
-      minutos = 0;
-      etapaTerminou = false;
-      // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of despacharTrabalho(modulos, demandas, c, despachoDoServico, relogio))
-        void fim.then(() => {
-          etapaTerminou = true;
-        });
-    } catch (error_) {
-      noLogDoServico(error_);
-    }
-  }
-  const intervaloDoCiclo = setInterval(ciclo, 60_000);
+  const cicloDeVida = cicloMontado;
+  // As Sessões da subida: o `parar` delas espera a gravação do catálogo de preços.
+  const sessoes = existe(sessoesDaSubida, "a subida não montou as Sessões", "confira a montagem");
 
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = despacharAgora(modulos, demandas, ref, configuracao(banco), despachoDoServico, relogio);
-      return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
+      return Promise.resolve(cicloDeVida.executarAgora(ref));
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
       return Promise.reject(erro);
@@ -185,11 +158,12 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
     banco,
     porta,
     executarAgora: executarAgoraDaDemanda,
-    proximaBusca,
+    proximaBusca: () => new Date(cicloDeVida.proximaBusca()),
     async parar() {
-      // Antes de qualquer `await`: o condutor que acordar depois não lança pi novo.
+      // Antes de qualquer `await`: a condução que falhar daqui em diante falha como "serviço reiniciado", e o condutor
+      // que acordar depois não lança pi novo.
+      const paradaDoCiclo = cicloDeVida.parar();
       const paradaDasSessoes = sessoes.parar();
-      clearInterval(intervaloDoCiclo);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
       web.closeAllConnections();
@@ -198,6 +172,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       rmSync(join(raiz, "web.url"), { force: true });
       await repositorio.parar();
       await ambientes.parar();
+      await paradaDoCiclo;
       await paradaDasSessoes;
       banco.close();
     },

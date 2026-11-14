@@ -1,7 +1,7 @@
 // O cenário dos testes de /api/agente/*: banco real com a I-206, que tem um ticket de cada etapa que o agente usa, e a
 // I-207, de outra demanda. Cada ticket tem a execução aberta, com o token `token-<ticket>`; a pasta do que o agente anexa
 // (worktree da rodada e saída) existe na raiz temporária.
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
@@ -119,7 +119,10 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
       banco,
       raiz: raizDo(banco),
       porta,
-      agendador: { proximaBusca: () => new Date() },
+      cicloDeVida: {
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao }),
+        proximaBusca: () => new Date().toISOString(),
+      },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
       repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),

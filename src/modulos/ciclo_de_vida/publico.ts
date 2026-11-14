@@ -9,3 +9,4 @@ export * from "./processo/publico.ts";
 export * from "./metricas_de_qualidade/publico.ts";
 export * from "./conducao/publico.ts";
 export * from "./despacho/publico.ts";
+export * from "./coordenacao/publico.ts";

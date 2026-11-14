@@ -10,6 +10,7 @@ import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { cicloDeVidaNoContexto } from "../ciclo_de_vida_de_teste.ts";
 
 export const INSTANTE_DOS_PEDIDOS = "2026-01-01T00:00:00.000Z";
 export const CONTEXTO_DOS_PEDIDOS = { agora: INSTANTE_DOS_PEDIDOS };
@@ -49,11 +50,10 @@ export const registrarPedidoDeTeste = (
   { autor = AUTORA_DOS_PEDIDOS, projeto = "fabriquinha" } = {},
 ): string =>
   registrarPedidoComProcesso(
-    banco,
+    cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
     montarDemandasDoBanco(banco),
     { projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc", dependencias },
     autor,
-    CONTEXTO_DOS_PEDIDOS,
   ).demanda.id;
 
 /** Submete as evidências obrigatórias da definição, como a autora do pedido. */
@@ -82,7 +82,12 @@ export function completarDefinicao(banco: DatabaseSync, id: string): void {
 export function pedidoEnviadoDeTeste(banco: DatabaseSync, dependencias?: string[]): string {
   const id = registrarPedidoDeTeste(banco, dependencias);
   completarDefinicao(banco, id);
-  enviarAoDesenvolvimento(banco, montarDemandasDoBanco(banco), id, AUTORA_DOS_PEDIDOS, CONTEXTO_DOS_PEDIDOS);
+  enviarAoDesenvolvimento(
+    cicloDeVidaNoContexto(banco, CONTEXTO_DOS_PEDIDOS),
+    montarDemandasDoBanco(banco),
+    id,
+    AUTORA_DOS_PEDIDOS,
+  );
   return id;
 }
 

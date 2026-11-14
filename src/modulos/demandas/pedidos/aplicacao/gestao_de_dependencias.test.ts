@@ -8,6 +8,7 @@ import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
 import { registrarDependencia } from "./gestao_de_dependencias.ts";
+import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 type Banco = ReturnType<typeof bancoComProjeto>;
 const dependentesNaoConcluidosDoPedido = (banco: Banco, id: string): unknown =>
@@ -80,7 +81,9 @@ test("dependentesNaoConcluidosDoPedido dentro de escrever não fecha a transaç�
   const conteudo = { projeto: "fabriquinha", titulo: "T", tipo: "funcionalidade", descricao: "D" };
   const ctx = { agora: "2026-01-01T00:00:00.000Z" };
   const [a, b] = [1, 2].map(
-    () => registrarPedidoComProcesso(banco, montarDemandasDoBanco(banco), conteudo, autor, ctx).demanda.id,
+    () =>
+      registrarPedidoComProcesso(cicloDeVidaNoContexto(banco, ctx), montarDemandasDoBanco(banco), conteudo, autor)
+        .demanda.id,
   ) as [string, string];
   const outra = abrirBancoDaFabriquinha(raiz);
   try {

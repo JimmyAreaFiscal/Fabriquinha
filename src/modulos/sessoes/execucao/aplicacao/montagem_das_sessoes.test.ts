@@ -40,9 +40,6 @@ test("os pedidos chegam ao motor do banco, o mesmo de toda montagem sobre ele, e
   assert.deepEqual(abortar.mock.calls[0]?.arguments, ["e1"]);
   assert.deepEqual(mandar.mock.calls[0]?.arguments, ["e1", { type: "steer", message: "oi" }]);
   assert.deepEqual(responder.mock.calls[0]?.arguments, ["e1", "d1", { cancelled: true }]);
-  assert.equal(montarSessoesDeAgente({ banco }).emParada(), false);
-  motor.marcarParada();
-  assert.equal(montarSessoesDeAgente({ banco }).emParada(), true);
   banco.close();
   outro.close();
 });

@@ -1,6 +1,5 @@
 // Rotas da página do projeto (F7 §4.2): as demandas do projeto com as rodadas e os tickets, o arquivamento das
 // concluídas e o heatmap do projeto.
-import { arquivarConcluidas } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { consultarHeatmapDoProjeto } from "../../../consultas/projeto/heatmap.ts";
 import { montarRepositorio } from "../../../../modulos/repositorio/publico.ts";
 import {
@@ -22,9 +21,10 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome/arquivar",
-    tratar: ({ banco, demandas, params, relogio }) => {
+    tratar: ({ cicloDeVida, demandas, params }) => {
       const { nome } = demandas.projeto(String(params.nome), ORIENTACAO_PROJETO_INEXISTENTE);
-      return arquivarConcluidas(banco, idsDasDemandasDoProjeto(demandas, nome), relogio);
+      const arquivadas = cicloDeVida.arquivar(idsDasDemandasDoProjeto(demandas, nome), { soAsConcluidas: true });
+      return { arquivadas: arquivadas.length };
     },
     resposta: DemandasArquivadas,
   },

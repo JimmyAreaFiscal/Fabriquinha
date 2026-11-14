@@ -87,7 +87,7 @@ const plano = {
  * I-206 num dos três gates: `demanda` (aprovação da demanda), `planejamento` (plano submetido) ou `pr` (R2 com o PR 1
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
-async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true, recusa?: MotivoDeRecusa) {
+async function cenario(gate: "demanda" | "planejamento" | "pr", recusa?: MotivoDeRecusa) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   banco
@@ -195,7 +195,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   return {
     c,
     banco,
-    ...(await servir(banco, comExecutarDemanda, recusa)),
+    ...(await servir(banco, recusa)),
     ag: () => carregarDemanda(banco, DEMANDA),
     estado: (id = DEMANDA) => carregarDemanda(banco, id).demanda.estado,
   };
@@ -534,26 +534,19 @@ test("CA-30: Executar agora entrega o ticket ao agendador e responde 204", async
 
 test("Executar agora recusado pelo Despacho responde 200 com o MotivoDeRecusa", async () => {
   const recusa = { tipo: "limite_de_paralelismo", em_uso: 3, limite: 3 } as const;
-  const { pedir } = await cenario("demanda", true, recusa);
+  const { pedir } = await cenario("demanda", recusa);
   const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
   assert.equal(r.status, 200);
   assert.deepEqual(MotivoDeRecusaEmJson.parse(r.json()), recusa);
 });
 
 test("Executar agora recusado por dependência responde os endereços em texto", async () => {
-  const { pedir } = await cenario("demanda", true, {
+  const { pedir } = await cenario("demanda", {
     tipo: "dependencia_pendente",
     aguarda: [Endereco.doTicket("I-206", 2)],
   });
   const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
   assert.deepEqual(r.json(), { tipo: "dependencia_pendente", aguarda: ["I-206.T2"] });
-});
-
-test("Executar agora sem o agendador das demandas devolve erro claro", async () => {
-  const { pedir } = await cenario("demanda", false);
-  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
-  assert.equal(r.status, 409);
-  assert.match(erro(r), /não executa tickets de demanda/);
 });
 
 test("CA-32: cancelar leva a dependente e o histórico fica", async () => {

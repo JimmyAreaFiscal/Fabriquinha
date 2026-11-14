@@ -15,6 +15,7 @@ import * as gestao from "./gestao_do_processo.ts";
 import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../../../server/fluxos/envio_ao_desenvolvimento.ts";
 import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -31,11 +32,10 @@ const novoBanco = () => {
 
 const registrar = (b: DatabaseSync) =>
   registrarPedidoComProcesso(
-    b,
+    cicloDeVidaNoContexto(b, ctx),
     montarDemandasDoBanco(b),
     { projeto: "fabriquinha", titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     autor,
-    ctx,
   ).demanda.id;
 
 const criterios = {
@@ -160,7 +160,7 @@ test("CA-15: depois do envio criterios_aceite está congelado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
-  enviarAoDesenvolvimento(b, montarDemandasDoBanco(b), id, autor, ctx);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(b, ctx), montarDemandasDoBanco(b), id, autor);
   assert.throws(
     () => submeter(b, id, "criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
@@ -188,19 +188,19 @@ test("arquivarConcluidas: arquiva só as concluídas do projeto, no instante do 
   b.prepare("UPDATE processo_demanda SET estado = 'concluida' WHERE demanda_id = ?").run(concluida);
   const relogio = relogioFixo("2026-03-01T00:00:00.000Z");
   const demandasDoProjeto = [andamento, concluida];
-  assert.deepEqual(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio), { arquivadas: 1 });
+  assert.equal(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio).length, 1);
   const arquivada = carregarDemanda(b, concluida).demanda;
   assert.equal(arquivada.estado, "arquivada");
   assert.equal(arquivada.estado_alterado_em, "2026-03-01T00:00:00.000Z");
   assert.notEqual(carregarDemanda(b, andamento).demanda.estado, "arquivada");
-  assert.deepEqual(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio), { arquivadas: 0 });
+  assert.equal(gestao.arquivarConcluidas(b, demandasDoProjeto, relogio).length, 0);
 });
 
 test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
-  enviarAoDesenvolvimento(b, montarDemandasDoBanco(b), id, autor, ctx);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(b, ctx), montarDemandasDoBanco(b), id, autor);
   assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só no estado concluida/);
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });

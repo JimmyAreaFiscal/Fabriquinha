@@ -21,7 +21,9 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { AmbienteHostLocal } from "../../src/modulos/ambiente/execucao/infra/host_local/ambiente_host_local.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
-import type { ModulosDoCiclo } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida, ModulosDoCiclo } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import type { Relogio } from "../../src/shared/nucleo/relogio.ts";
+import { montarCicloDeVidaDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 
 export { AmbienteHostLocal };
 export { AmbienteContainer } from "../../src/modulos/ambiente/execucao/infra/container/ambiente_container.ts";
@@ -69,7 +71,14 @@ export function modulosDoCicloDeTeste(banco: DatabaseSync): ModulosDoCiclo {
     ambientes,
     repositorio: montarRepositorio({ banco, ambientes }),
     sessoes: montarSessoesDeAgente({ banco, ambientes }),
+    emParada: () => false,
   };
+}
+
+/** O Ciclo de Vida sobre `banco` com os módulos de {@link modulosDoCicloDeTeste} e o `relogio` do teste. */
+export function cicloDeVidaDeTeste(banco: DatabaseSync, relogio?: Relogio): CicloDeVida {
+  const { ambientes, repositorio, sessoes } = modulosDoCicloDeTeste(banco);
+  return montarCicloDeVidaDoBanco(banco, { ambientes, repositorio, sessoes, ...(relogio && { relogio }) });
 }
 
 export interface ComandoRegistrado {
