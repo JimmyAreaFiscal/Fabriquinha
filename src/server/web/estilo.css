@@ -43,6 +43,15 @@
   --closed-bg: #1d2a18;
   --danger: #f39274;
   --danger-bg: #351c14;
+  --danger-line: #5a2a1c;
+  --open-line: #5a4720;
+  --gate-line: #4a3c22;
+  --gate-stripe: #201d18;
+  --dica-bg: #0d0c0b;
+  --accent-halo: rgb(229 173 111 / 0.18);
+  --open-halo: rgb(234 178 76 / 0.22);
+  --danger-halo: rgb(243 146 116 / 0.22);
+  --claimed-halo: rgb(142 188 233 / 0.22);
   --font: "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
   --fs-xs: 11.5px;
@@ -71,6 +80,43 @@
   --base: #8a765c;
   --resto: #4a4034;
   --grade: #2c2924;
+}
+
+/* Tema claro: só os valores de cor mudam; a estrutura dos tokens é a do :root. */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f3ec;
+  --surface: #fffdf9;
+  --surface-2: #efeadf;
+  --line: #d9d1c1;
+  --ink: #26231e;
+  --muted: #6b6455;
+  --accent: #9a5410;
+  --accent-ink: #fffdf9;
+  --open: #8a5a00;
+  --open-bg: #fbefd0;
+  --claimed: #1f5f9e;
+  --claimed-bg: #e1ecf8;
+  --closed: #2f6b24;
+  --closed-bg: #e2f0dc;
+  --danger: #b23a1a;
+  --danger-bg: #fbe4dc;
+  --danger-line: #e6b4a3;
+  --open-line: #e0c68a;
+  --gate-line: #d9c48f;
+  --gate-stripe: #f1ead8;
+  --dica-bg: #fffdf9;
+  --accent-halo: rgb(154 84 16 / 0.18);
+  --open-halo: rgb(138 90 0 / 0.2);
+  --danger-halo: rgb(178 58 26 / 0.2);
+  --claimed-halo: rgb(31 95 158 / 0.2);
+  --serie-1: #1f6fd1;
+  --serie-2: #c4491a;
+  --serie-3: #107a56;
+  --foco: #9a5410;
+  --base: #8a765c;
+  --resto: #cfc4b0;
+  --grade: #e4ddcf;
 }
 
 * {
@@ -632,7 +678,7 @@ span.mono {
   font-size: var(--fs-sm);
   color: var(--danger);
   background: var(--danger-bg);
-  border: 1px solid #5a2a1c;
+  border: 1px solid var(--danger-line);
   border-radius: var(--r-md);
 }
 .aviso[hidden] {
@@ -744,7 +790,6 @@ textarea {
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 6px var(--s-2);
-  color-scheme: dark;
   min-width: 0;
 }
 input.mono {
@@ -811,7 +856,6 @@ input.erro {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  color-scheme: dark;
 }
 
 /* Configuração: menu lateral e o formulário do item escolhido. */
@@ -1656,7 +1700,7 @@ body:has(.pagina-chat) {
   gap: var(--s-3);
   padding: var(--s-4);
   background: var(--surface);
-  border: 1px solid #5a4720;
+  border: 1px solid var(--open-line);
   border-top: 3px solid var(--open);
   border-radius: var(--r-lg);
 }
@@ -1744,7 +1788,7 @@ body:has(.pagina-chat) {
 .erro-bloco {
   padding: var(--s-3) var(--s-4);
   background: var(--danger-bg);
-  border: 1px solid #5a2a1d;
+  border: 1px solid var(--danger-line);
   border-radius: var(--r-md);
   color: var(--ink);
   font-size: var(--fs-sm);
@@ -2120,7 +2164,7 @@ svg.barras :not(.hit) {
   min-width: 160px;
   padding: var(--s-2) var(--s-3);
   font-size: var(--fs-sm);
-  background: #0d0c0b;
+  background: var(--dica-bg);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
@@ -3263,12 +3307,18 @@ svg.barras :not(.hit) {
   color: var(--muted);
 }
 .coluna-gate .coluna-corpo {
-  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 8px, #201d18 8px, #201d18 16px);
-  border-color: #4a3c22;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface),
+    var(--surface) 8px,
+    var(--gate-stripe) 8px,
+    var(--gate-stripe) 16px
+  );
+  border-color: var(--gate-line);
 }
 .tag-gate {
   color: var(--open);
-  border-color: #5a4720;
+  border-color: var(--open-line);
 }
 .cartao-ticket {
   font-size: var(--fs-xs);
@@ -3682,7 +3732,7 @@ svg.barras :not(.hit) {
   height: 16px;
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px rgb(229 173 111 / 0.18);
+  box-shadow: 0 0 0 4px var(--accent-halo);
 }
 .trilho-estados .atual.gate .marco {
   width: 14px;
@@ -3691,17 +3741,17 @@ svg.barras :not(.hit) {
 .trilho-estados.aguarda .atual .marco {
   background: var(--open);
   border-color: var(--open);
-  box-shadow: 0 0 0 4px rgb(234 178 76 / 0.22);
+  box-shadow: 0 0 0 4px var(--open-halo);
 }
 .trilho-estados.falha .atual .marco {
   background: var(--danger);
   border-color: var(--danger);
-  box-shadow: 0 0 0 4px rgb(243 146 116 / 0.22);
+  box-shadow: 0 0 0 4px var(--danger-halo);
 }
 .trilho-estados.rodando .atual .marco {
   background: var(--claimed);
   border-color: var(--claimed);
-  box-shadow: 0 0 0 4px rgb(142 188 233 / 0.22);
+  box-shadow: 0 0 0 4px var(--claimed-halo);
   animation: pulsar 1.4s ease-in-out infinite;
 }
 .trilho-estados.cancelada .atual .marco {
