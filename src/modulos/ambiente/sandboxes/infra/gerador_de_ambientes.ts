@@ -142,19 +142,51 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
 const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
 
 /**
+ * O que vai de cada pasta para o container: só a configuração (credenciais, ajustes, instruções, skills, extensões e
+ * pacotes do harness). Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
+ * read it") e o agente do container não precisa deles. Caminhos relativos à raiz da pasta; o que não existe é pulado.
+ */
+const CONFIGURACAO_POR_DESTINO = {
+  // npm/ e git/ são os pacotes do `settings.json` (o pi-claude-bridge); bin/ tem o rg e o fd das ferramentas do pi.
+  [DIR_DO_PI_NO_HOME]: [
+    "auth.json",
+    "settings.json",
+    "trust.json",
+    "models.json",
+    "claude-bridge.json",
+    "AGENTS.md",
+    "SYSTEM.md",
+    "skills",
+    "extensions",
+    "agents",
+    "npm",
+    "git",
+    "bin",
+  ],
+  ".claude": [".credentials.json", "settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
+  ".codex": ["auth.json", "config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
+} as const;
+
+type DestinoNoHome = keyof typeof CONFIGURACAO_POR_DESTINO;
+
+/**
  * Copia `origem` (uma pasta do host) para `destinoNoHome`, relativo ao `HOME` do container, por `tar` no `docker exec`:
  * é cópia, e não montagem, então o que o agente altera ali não volta ao host.
  */
 function copiarParaOHomeDoContainer(
   containerId: string,
   origem: string,
-  destinoNoHome: string,
+  destinoNoHome: DestinoNoHome,
   limiteMs: number,
 ): Promise<void> {
+  const configuracao = CONFIGURACAO_POR_DESTINO[destinoNoHome].filter((item) => existsSync(join(origem, item)));
+  // Sem nada da configuração, não há o que copiar (e o tar recusa criar um arquivo vazio).
+  if (configuracao.length === 0) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const sinal = AbortSignal.timeout(limiteMs);
     // O tar e o docker vêm do PATH do serviço, como em `executar`; o docker falso dos testes entra assim.
-    const empacotar = spawn("tar", ["-C", origem, "-c", "."], { stdio: ["ignore", "pipe", "pipe"], signal: sinal }); // NOSONAR
+    const argumentosDoTar = ["-C", origem, "-c", "--", ...configuracao];
+    const empacotar = spawn("tar", argumentosDoTar, { stdio: ["ignore", "pipe", "pipe"], signal: sinal }); // NOSONAR
     const extrair = spawn(
       "docker", // NOSONAR
       [
@@ -207,8 +239,8 @@ function exigirLoginDoPi({ dir_do_pi }: Copias): void {
 
 /** Copia para o container o pi do Auditor e, se existem, o `.claude` e o `.codex` do usuário. */
 async function copiarParaOContainer(containerId: string, { dir_do_pi, home_do_usuario }: Copias): Promise<void> {
-  const copias: [string, string][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
-  for (const pasta of [".claude", ".codex"])
+  const copias: [string, DestinoNoHome][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
+  for (const pasta of [".claude", ".codex"] as const)
     if (existsSync(join(home_do_usuario, pasta))) copias.push([join(home_do_usuario, pasta), pasta]);
   for (const [origem, destinoNoHome] of copias)
     await copiarParaOHomeDoContainer(containerId, origem, destinoNoHome, LIMITE_COMANDO_MS);
