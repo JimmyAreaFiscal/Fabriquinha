@@ -1,6 +1,7 @@
-# Imagem do Ambiente (sandbox) da Fabriquinha: o pacote do pi é montado pela Fabriquinha; a imagem só traz Node e Git.
+# Imagem do Ambiente (sandbox) da Fabriquinha: o pacote do pi é montado pela Fabriquinha; a imagem traz Node, Git e Python,
+# para os agentes rodarem código Python.
 FROM node:22-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/* \
     # A worktree montada tem dono diferente do usuário do container; sem isto o git recusa o repositório.
     && git config --system --add safe.directory '*' \
     # O container não tem a configuração do git do host: o commit do ticket precisa de uma identidade.
