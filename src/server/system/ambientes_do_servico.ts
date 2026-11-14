@@ -3,7 +3,7 @@
 import { homedir } from "node:os";
 import type { DatabaseSync } from "node:sqlite";
 import { montarGestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../shared/infra/isolamento_do_ambiente.ts";
+import { dirDoPiDoAuditor, instalacaoDoPi, PACOTE } from "../../shared/infra/isolamento_do_ambiente.ts";
 import {
   configuracaoDoAmbiente,
   salvarConfiguracaoDoAmbiente,
@@ -36,6 +36,7 @@ export async function montarAmbientesDoServico({
       porta_da_api: porta,
       home_do_usuario: homedir(),
       pacote_do_harness: PACOTE,
+      instalacao_do_harness: instalacaoDoPi,
       dir_do_harness_do_auditor: dirDoPiDoAuditor(),
     },
     relogio,

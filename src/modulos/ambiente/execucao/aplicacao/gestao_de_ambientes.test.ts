@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
@@ -49,6 +50,7 @@ const SERVICO = {
   porta_da_api: 4999,
   home_do_usuario: base,
   pacote_do_harness: PACOTE,
+  instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
   dir_do_harness_do_auditor: dirDoPiDoAuditorDoTeste,
 };
 const LIMITES = { tipo: "container", memoria_maxima_mb: 768, cpus: 1.5, ociosidade_para_eliminar_min: 30 };

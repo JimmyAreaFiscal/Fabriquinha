@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
-import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
+import { instalarPiFalso, INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
 import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
@@ -351,6 +351,7 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
     porta_da_api: 4999,
     home_do_usuario: c.raiz,
     pacote_do_harness: PACOTE,
+    instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
     dir_do_harness_do_auditor: c.raiz,
   };
   const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });

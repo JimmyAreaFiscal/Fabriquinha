@@ -142,17 +142,24 @@ test("criar recusa o container que não conhece o host.docker.internal e o elimi
   }
 });
 
-test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas próprias de sessão e de execução e o pacote (ro)", async () => {
+test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas próprias de sessão e de execução, o pacote e o harness (ro)", async () => {
   const raiz = join(base, "fabriquinha-raiz");
   mkdirSync(raiz);
   writeFileSync(join(raiz, "fabriquinha.db"), "banco");
   const pastaDasWorktreesDoProjeto = join(raiz, "worktrees", "projeto");
   const pacote = join(base, "pacote-pi");
+  const harness = {
+    comando: "pi",
+    executavel: join(base, "pi-do-host", "dist", "cli.js"),
+    raiz: join(base, "pi-do-host"),
+  };
+  const antes = docker.registro().length;
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, {
     pastaDasWorktreesDoProjeto,
     raiz_git: raizGit,
     raiz,
     pacote,
+    harness,
   });
   const montagens = docker
     .containers()
@@ -176,9 +183,21 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
     { origem: sessoes, destino: join(raiz, "sessoes"), modo: "rw" },
     { origem: execucoes, destino: join(raiz, "execucoes"), modo: "rw" },
     mesmoCaminho(pacote, "ro"),
+    // O pi do host entra só em leitura, e o `pi` do container aponta para o executável dele.
+    mesmoCaminho(harness.raiz, "ro"),
   ]);
+  assert.ok(
+    docker
+      .registro()
+      .slice(antes)
+      .some(
+        (chamada) =>
+          chamada.join(" ") ===
+          `exec -u 0 ${criado.container_id} sh -c mkdir -p /usr/local/bin && ln -sf '${harness.executavel}' /usr/local/bin/pi`,
+      ),
+  );
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
-  assert.equal(run.filter((argumento) => argumento === "-v").length, 9);
+  assert.equal(run.filter((argumento) => argumento === "-v").length, 10);
   assert.ok(!run.includes("--mount"));
   assert.ok(!run.some((argumento) => argumento.includes("fabriquinha.db") || argumento === `${raiz}:${raiz}:rw`));
   assert.deepEqual([readdirSync(sessoes), readdirSync(execucoes)], [[], []]);

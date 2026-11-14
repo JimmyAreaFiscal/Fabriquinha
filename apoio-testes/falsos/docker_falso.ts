@@ -273,7 +273,7 @@ function executarDockerFalso(): void {
     for (const container of resto.map((id) => achar(id)))
       console.log(`${container.id}\t${container.uso?.cpu ?? "0.00%"}\t${container.uso?.memoria ?? "0B / 0B"}`);
   } else if (comando === "exec") {
-    const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file"]);
+    const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file", "-u"]);
     const container = achar(resto[0] ?? "");
     if (container.estado !== "running") sair(1, `Error response from daemon: container ${container.id} is not running`);
     const programa = resto.slice(1);

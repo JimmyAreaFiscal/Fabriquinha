@@ -1,5 +1,6 @@
 // O conjunto fixo ou variável de sandboxes (MELHORIAS §8, regras 3 e 4, e §13, item 1): a capacidade, a vaga que um
 // parado cede e a ociosidade que só o variável elimina, até o mínimo.
+import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -30,6 +31,7 @@ const SERVICO = {
   porta_da_api: 4999,
   home_do_usuario: base,
   pacote_do_harness: PACOTE,
+  instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
   dir_do_harness_do_auditor: dirDoPiDoAuditorDoTeste,
 };
 const projetoDaImagem = (imagem_do_ambiente: string) => ({ nome: "loja", raiz_git: base, imagem_do_ambiente });

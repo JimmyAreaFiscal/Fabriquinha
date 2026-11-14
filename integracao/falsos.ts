@@ -1,5 +1,6 @@
 // Falso da suíte de integração do SDLC: a hospedagem (`gh` na frente do PATH, com o estado dos PRs num JSON). O pi falso
 // é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
+import { INSTALACAO_DO_PI_FALSO } from "../apoio-testes/falsos/pi_falso.ts";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -97,6 +98,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
       porta_da_api: portaDaApi,
       home_do_usuario: c.raiz,
       pacote_do_harness: PACOTE,
+      instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
       dir_do_harness_do_auditor: dirDoPiDoAuditor(),
     },
     registrarErro: noLog,
