@@ -21,6 +21,7 @@ import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import { despacharAgora, despacharTrabalho, predecessorasPendentesPelasDependencias } from "./despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { registrarDependencia } from "../../../../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 /** Grava a demanda `id` em `estado` e, antes do envio, as dependências dela. */
 function gravarDemandaComPredecessoras(
@@ -86,14 +87,33 @@ test("o ciclo e o Executar agora só despacham o planejar do pedido cujas predec
   };
   const planejarDaI2 = { demanda_id: "I-2", ticket_id: 2 };
   const c = configuracao(banco);
-  await Promise.all(despacharTrabalho(banco, montarDemandasDoBanco(banco), c, conducoes, relogioDoSistema));
-  assert.deepEqual(despacharAgora(banco, montarDemandasDoBanco(banco), planejarDaI2, c, conducoes, relogioDoSistema), {
-    tipo: "dependencia_pendente",
-    aguarda: [Endereco.daDemanda("I-1")],
-  });
+  await Promise.all(
+    despacharTrabalho(modulosDoCicloDeTeste(banco), montarDemandasDoBanco(banco), c, conducoes, relogioDoSistema),
+  );
+  assert.deepEqual(
+    despacharAgora(
+      modulosDoCicloDeTeste(banco),
+      montarDemandasDoBanco(banco),
+      planejarDaI2,
+      c,
+      conducoes,
+      relogioDoSistema,
+    ),
+    {
+      tipo: "dependencia_pendente",
+      aguarda: [Endereco.daDemanda("I-1")],
+    },
+  );
   assert.deepEqual(conduzidos, []);
   banco.prepare("UPDATE demanda SET situacao = 'concluido' WHERE id = 'I-1'").run();
-  await despacharAgora(banco, montarDemandasDoBanco(banco), planejarDaI2, c, conducoes, relogioDoSistema);
+  await despacharAgora(
+    modulosDoCicloDeTeste(banco),
+    montarDemandasDoBanco(banco),
+    planejarDaI2,
+    c,
+    conducoes,
+    relogioDoSistema,
+  );
   assert.deepEqual(conduzidos, ["I-2.T2"]);
   banco.close();
 });

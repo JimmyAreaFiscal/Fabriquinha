@@ -46,8 +46,8 @@ export const removerProjetoComOQueDependeDele = (
   gestaoDeDemandas.removerProjeto(nome, (pedidos) => {
     const sessoesDeAgente = montarSessoesDeAgente({ banco });
     recusarExecucaoEmAndamento(banco, sessoesDeAgente, nome, pedidos);
-    montarRepositorio({ banco }).esquecer(nome, pedidos);
+    const removerWorktrees = montarRepositorio({ banco }).esquecer(gestaoDeDemandas.projeto(nome), pedidos);
     const { execucoes, sessoes } = sessoesDeAgente.esquecer(pedidos);
     const anexosSemEvidencia = apagarDesenvolvimentoDasDemandas(banco, pedidos);
-    return { execucoes, sessoes, anexosSemEvidencia };
+    return { execucoes, sessoes, anexosSemEvidencia, removerWorktrees };
   });

@@ -15,7 +15,7 @@ import { configuracao, despachoDasEtapas, type MotivoDeRecusa } from "../../modu
 import type { SessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import { despacharAgora, despacharTrabalho } from "../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { recuperarAposReinicio } from "../fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
-import { ligarGestaoDeAmbientes, montarRepositorio } from "../../modulos/repositorio/publico.ts";
+import { montarRepositorio, type RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
 import type { AmbientesDoServico } from "../api/rotas.ts";
 import { montarAmbientesDoServico } from "./ambientes_do_servico.ts";
 
@@ -83,6 +83,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   let aberto: DatabaseSync | undefined;
   let ambientesMontados: AmbientesDoServico | undefined;
   let sessoesMontadas: SessoesDeAgente | undefined;
+  let repositorioMontado: RepositorioDoProjeto | undefined;
   try {
     aberto = abrirBancoDaFabriquinha(raiz);
     // A montagem confere as sandboxes com o docker antes da recuperação, que mata os processos da instância anterior.
@@ -93,13 +94,28 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       registrarErro: noLogDoServico,
       relogio,
     });
-    ligarGestaoDeAmbientes(ambientesMontados.gestao);
     // O catálogo de preços com que Sessões estima o custo que o harness não informa: lido do harness a cada subida, em
     // segundo plano; a falha só vai ao log, e o catálogo fica como estava.
     sessoesMontadas = await recuperarAposReinicio(aberto, {
       ambientes: ambientesMontados.gestao,
       urlDaApi: `http://127.0.0.1:${String(porta)}`,
       catalogo: { relogio, registrarErro: noLogDoServico },
+    });
+    const bancoAberto = aberto;
+    const demandasDoBanco = montarDemandasDoBanco(aberto);
+    // F4 §4, passo 1: o Repositório varre em segundo plano, a cada intervalo do agendador ligado, a base dos projetos sem
+    // varredura há 24 horas; o `parar` a espera antes de fechar o banco.
+    // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada intervalo, com uma linha de
+    // log em cada; guardar a última tentativa se o log incomodar.
+    repositorioMontado = montarRepositorio({
+      banco: aberto,
+      ambientes: ambientesMontados.gestao,
+      varredura: {
+        projetos: () => demandasDoBanco.projetos(),
+        cadencia: () => configuracao(bancoAberto),
+        relogio,
+        registrarErro: noLogDoServico,
+      },
     });
     web.on(
       "request",
@@ -109,12 +125,14 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
         porta,
         agendador: { proximaBusca, executarAgora: executarAgoraDaDemanda },
         ambientes: ambientesMontados,
-        demandas: montarDemandasDoBanco(aberto),
+        demandas: demandasDoBanco,
+        repositorio: repositorioMontado,
         relogio,
         registrarErro: noLogDoServico,
       }),
     );
   } catch (error_) {
+    await repositorioMontado?.parar();
     await ambientesMontados?.gestao.parar();
     aberto?.close();
     web.close();
@@ -126,26 +144,8 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   const sessoes = sessoesMontadas;
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
-  // F4 §4, passo 1: o Repositório varre em segundo plano, de minuto em minuto com o agendador ligado, a base dos projetos
-  // sem varredura há 24 horas; o `parar` a espera antes de fechar o banco.
-  // ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada minuto, com uma linha de log
-  // em cada; guardar a última tentativa se o log incomodar.
-  const repositorio = montarRepositorio({
-    banco,
-    varredura: {
-      projetos: () => demandas.projetos(),
-      // A configuração que não se lê é a mesma que a batida do agendador lê e já leva ao log: sem ela, a varredura espera.
-      ligada: () => {
-        try {
-          return configuracao(banco).agendadorAtivo;
-        } catch {
-          return false;
-        }
-      },
-      relogio,
-      registrarErro: noLogDoServico,
-    },
-  });
+  const repositorio = repositorioMontado;
+  const modulos = { banco, ambientes, repositorio };
 
   /**
    * F4 §4, passos 2 a 4, numa batida do relógio (o passo 1 é a varredura do Repositório). Nunca lança: qualquer erro
@@ -160,7 +160,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
       minutos = 0;
       etapaTerminou = false;
       // As etapas nunca rejeitam (`cicloDoDespacho`).
-      for (const fim of despacharTrabalho(banco, demandas, c, despachoDoServico, relogio))
+      for (const fim of despacharTrabalho(modulos, demandas, c, despachoDoServico, relogio))
         void fim.then(() => {
           etapaTerminou = true;
         });
@@ -173,7 +173,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // Síncrono até a reserva: a recusa do Despacho volta como motivo, o erro de regra vira rejeição e a etapa segue em segundo plano.
   function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<MotivoDeRecusa | undefined> {
     try {
-      const aceitoOuRecusa = despacharAgora(banco, demandas, ref, configuracao(banco), despachoDoServico, relogio);
+      const aceitoOuRecusa = despacharAgora(modulos, demandas, ref, configuracao(banco), despachoDoServico, relogio);
       return Promise.resolve(aceitoOuRecusa instanceof Promise ? undefined : aceitoOuRecusa);
     } catch (error_) {
       const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)

@@ -185,11 +185,15 @@ export const editarProjetoDoFormulario = (
   conferencias: ConferenciasDoCadastro,
 ) => conferirEGravar(banco, formulario, editarProjeto, conferencias);
 
-/** O que sobra para apagar no disco do que dependia do projeto: as execuções, as conversas das sessões e os anexos que nenhuma evidência cita mais. */
+/**
+ * O que sobra para apagar no disco do que dependia do projeto: as execuções, as conversas das sessões, os anexos que
+ * nenhuma evidência cita mais e as worktrees, que o Repositório remove depois do commit (cada falha vira um aviso).
+ */
 export interface SobrasNoDisco {
   execucoes: readonly string[];
   sessoes: readonly string[];
   anexosSemEvidencia: readonly string[];
+  removerWorktrees: () => Promise<string[]>;
 }
 
 /**
@@ -213,11 +217,10 @@ export async function removerProjeto(
   banco: DatabaseSync,
   nome: string,
   apagarOQueDependeDoProjeto: ApagarOQueDependeDoProjeto,
-  repositorio: Pick<RepositorioDoProjeto, "apagarEspacosDoProjeto">,
 ): Promise<{ projeto: Projeto; avisos: string[] }> {
-  const { removido, execucoes, sessoes, simuladas, orfaos } = escrever(banco, () => {
+  const { removido, execucoes, sessoes, simuladas, orfaos, removerWorktrees } = escrever(banco, () => {
     const removido = projetoExistente(banco, nome);
-    const { execucoes, sessoes, anexosSemEvidencia } = apagarOQueDependeDoProjeto();
+    const { execucoes, sessoes, anexosSemEvidencia, removerWorktrees } = apagarOQueDependeDoProjeto();
     const { simuladas } = apagarCadastroDoProjeto(banco, nome);
     const deUsuarioSimulado = anexosDeUsuariosSimulados(banco, anexosSemEvidencia);
     return {
@@ -226,6 +229,7 @@ export async function removerProjeto(
       sessoes,
       simuladas,
       orfaos: anexosSemEvidencia.filter((sha256) => !deUsuarioSimulado.has(sha256)),
+      removerWorktrees,
     };
   });
 
@@ -257,6 +261,6 @@ export async function removerProjeto(
     ...sessoes.map((conversa) => apagar(join(dirSessoes, conversa))), // a pasta própria da sessão
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
   ]);
-  avisos.push(...(await repositorio.apagarEspacosDoProjeto(removido)));
+  avisos.push(...(await removerWorktrees()));
   return { projeto: removido, avisos };
 }

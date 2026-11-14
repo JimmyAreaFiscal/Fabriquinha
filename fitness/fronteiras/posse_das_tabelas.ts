@@ -21,7 +21,6 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   arquivo_commit_demanda: "repositorio/commits",
   commit_humano_posterior: "repositorio/commits",
   varredura_base: "repositorio/commits",
-  pull_request: "repositorio/hospedagem",
 
   // Ciclo de Vida
   // A linha única da configuração do serviço; as colunas `ambiente_*` ficaram sem uso na migração 54, que deu à
@@ -37,6 +36,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   caminho_ticket: "ciclo_de_vida/planejamento",
   criterio_citado_rodada: "ciclo_de_vida/planejamento",
   processo_demanda: "ciclo_de_vida/processo",
+  pull_request: "ciclo_de_vida/processo",
   decisao_ticket: "ciclo_de_vida/processo",
   tentativa: "ciclo_de_vida/processo",
   iteracao_demanda: "ciclo_de_vida/processo",

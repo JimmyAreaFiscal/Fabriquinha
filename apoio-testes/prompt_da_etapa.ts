@@ -9,10 +9,11 @@ import {
   montarPromptDemanda,
   condutor,
 } from "../src/modulos/ciclo_de_vida/publico.ts";
+import { modulosDoCicloDeTeste } from "./falsos/ambiente_falso.ts";
 import type { ContextoDoPrompt } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/prompt/contexto_do_prompt.ts";
 
 const CONDUCOES_DO_PROMPT = montarConducoesDasEtapas({
-  banco: new DatabaseSync(":memory:"),
+  ...modulosDoCicloDeTeste(new DatabaseSync(":memory:")),
   relogio: relogioDoSistema,
   condutor,
   registro: anotar,

@@ -41,6 +41,7 @@ import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git }
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../falsos.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const gh = ghFalso(base);
 
@@ -333,7 +334,13 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   await encerrar(c, id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   assert.equal(gh.prs().length, 1);
-  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "aprovado", nota: 4 },
+    AUDITOR,
+  );
   assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   assert.equal(demanda(c, id).decisoes.find((d) => d.ticket_id === atual(c, id, "encerrar_rodada").ticket_id)?.nota, 4);
 
@@ -361,7 +368,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   pi.roteirizar([{ agente: intruso }]);
   const chamadasAntes = pisAteAgora();
   await decidirGate(
-    humana.banco,
+    modulosDoCicloDeTeste(humana.banco),
     "gate_pr",
     Endereco.daRodada(idHumana, 1),
     { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -379,7 +386,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(
     cicloDoDespacho(
-      humana.banco,
+      modulosDoCicloDeTeste(humana.banco),
       humana.config,
       despacho(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(humana.banco)),
@@ -397,7 +404,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
       { agora: agora() },
     ),
   );
-  await concluirSessaoAjustes(humana.banco, ref, AUDITOR); // aguarda o fim da conversa
+  await concluirSessaoAjustes(modulosDoCicloDeTeste(humana.banco), ref, AUDITOR); // aguarda o fim da conversa
   assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "implementar");
   assert.equal(atual(humana, idHumana, "implementar").estado, "aberto");
   assert.equal(ponta(branchRodada), rodadaAntes);

@@ -45,6 +45,7 @@ import {
   AmbienteHostLocal,
   gestaoQueSoUsa,
   ligarGestaoDeAmbientesNosModulos,
+  modulosDoCicloDeTeste,
 } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { recuperarAposReinicio } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { promptDaEtapa } from "../../../../../../apoio-testes/prompt_da_etapa.ts";
@@ -165,7 +166,7 @@ const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 /** O fechamento do implementar (falhar, devolver, concluir) é da condução; estes testes a usam para ver o ticket. */
 const conduzirImplementar = (banco: DatabaseSync, ticket_id: number) =>
   new ConducaoDeImplementar({
-    banco,
+    ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     condutor,
     registro: anotar,
@@ -183,8 +184,8 @@ test("sessão nova explícita não retoma a anterior; commits e anexos gravados 
   banco
     .prepare("INSERT INTO arquivo_evidencia VALUES ('manual', 1, 'manual.txt', ?, 'text/plain', 3)")
     .run("b".repeat(64));
-  await iniciarExecucaoDemanda(banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
-  await iniciarExecucaoDemanda(banco, ref(3), {
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(3), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     iniciarEmSessaoNova: true,
@@ -201,7 +202,10 @@ test("sessão nova explícita não retoma a anterior; commits e anexos gravados 
 test("CA-1: sessão ligada ao ticket e execução aberta com o grupo de processo do pi", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 0.05 });
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 0.05,
+  });
   let e = sessoes(1).execucoes[0];
   assert.equal(e?.id, id);
   assert.equal(e.fim, null);
@@ -230,8 +234,12 @@ test("CA-1: sessão ligada ao ticket e execução aberta com o grupo de processo
 
 test("CA-2: retomar o ticket usa a mesma sessão e passa o identificador ao pi", async () => {
   const { banco, sessoes, registro } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1, modo: "interativo" }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+    modo: "interativo",
+  }).fim;
   const { sessoes: ss, execucoes } = sessoes(1);
   assert.equal(ss.length, 1);
   assert.equal(ss[0]?.modo, "autonomo"); // o modo é o da sessão
@@ -253,7 +261,7 @@ test("CA-3: effort do ticket e modelo da etapa, gravados e passados ao pi", asyn
   const { banco, sessoes, registro } = await cenario({
     etapas: [{ etapa: "implementar", configuracao_agente: { modelo: MODELO_DA_ETAPA, effort: "low" } }],
   });
-  await iniciarExecucaoDemanda(banco, ref(2), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(2), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   assert.deepEqual(sessoes(2).execucoes[0]?.configuracao_agente, { modelo: MODELO_DA_ETAPA, effort: "high" });
   const argv = registro()[0]?.argv ?? [];
   assert.deepEqual(
@@ -293,7 +301,8 @@ test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo
       },
       { chamadaUnica: { saida: { decisao: "responder", resposta: "Sim", justificativa: "Sonar se corrige" } } },
     ]);
-    await iniciarExecucaoDemanda(banco, ref(2), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+    await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(2), { montarPrompt: promptDaEtapa, limiteMin: 1 })
+      .fim;
     const triagem = registro().find((r) => r.evento === "chamada_unica");
     const argv = triagem?.argv ?? [];
     assert.equal(
@@ -307,7 +316,7 @@ test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo
 
 test("CA-4: sem modelo nem effort, nada é gravado e o pi roda com o padrão", async () => {
   const { banco, sessoes, registro } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   assert.equal(sessoes(1).execucoes[0]?.configuracao_agente, undefined);
   const argv = registro()[0]?.argv ?? [];
   for (const opcao of ["--provider", "--model", "--thinking"]) assert.equal(argv.includes(opcao), false);
@@ -315,14 +324,17 @@ test("CA-4: sem modelo nem effort, nada é gravado e o pi roda com o padrão", a
 
 test("CA-5: ticket de rodada roda na worktree da rodada", async () => {
   const { c, banco, registro } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   assert.equal(registro()[0]?.cwd, join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2"));
 });
 
 test("CA-6: ticket global roda na worktree da demanda", async () => {
   const { c, banco, registro } = await cenario({ semWorktree: true });
   for (const ticket of [3, 4, 5, 6])
-    await iniciarExecucaoDemanda(banco, ref(ticket), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+    await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(ticket), {
+      montarPrompt: promptDaEtapa,
+      limiteMin: 1,
+    }).fim;
   assert.deepEqual(
     registro()
       .filter((r) => r.evento === "inicio")
@@ -333,15 +345,15 @@ test("CA-6: ticket global roda na worktree da demanda", async () => {
 
 test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
   const { banco, registro } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
-  await iniciarExecucaoDemanda(banco, ref(1), {
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     retomada: montarRetornoAoAgente(
       tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { motivoDaReprovacao: "testes falharam" }),
     ),
   }).fim;
-  await iniciarExecucaoDemanda(banco, ref(1), {
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     retomada: montarRetornoAoAgente(tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { instrucao: "faltou X" })),
@@ -356,8 +368,8 @@ test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
 
 test("a opção mensagem é o prompt da retomada, sem remontar o contexto", async () => {
   const { banco, sessoes, registro } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, mensagem: "segue assim" }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { limiteMin: 1, mensagem: "segue assim" }).fim;
   const prompts = registro()
     .filter((r) => r.comando?.type === "prompt")
     .map((r) => r.comando?.message);
@@ -368,7 +380,10 @@ test("a opção mensagem é o prompt da retomada, sem remontar o contexto", asyn
 
 test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e custo", async () => {
   const { banco, sessoes, c } = await cenario();
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   await fim;
   const { execucoes, usos } = sessoes(1);
   assert.equal(execucoes[0]?.falha, false);
@@ -392,7 +407,12 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
 test("o início e o fim da execução vêm do relógio", async () => {
   const { banco, sessoes } = await cenario();
   const instante = "2031-05-06T07:08:09.000Z";
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }, relogioFixo(instante)).fim;
+  await iniciarExecucaoDemanda(
+    modulosDoCicloDeTeste(banco),
+    ref(1),
+    { montarPrompt: promptDaEtapa, limiteMin: 1 },
+    relogioFixo(instante),
+  ).fim;
   const [execucao] = sessoes(1).execucoes;
   assert.deepEqual([execucao?.inicio, execucao?.fim], [instante, instante]);
 });
@@ -400,7 +420,7 @@ test("o início e o fim da execução vêm do relógio", async () => {
 test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, custo: null }]);
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   const [uso] = sessoes(1).usos;
   assert.equal(uso?.tokens_entrada, 10);
   assert.equal("custo" in uso, false);
@@ -411,7 +431,10 @@ test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async (
 test("CA-12, CA-14: pi que falha encerra com falha e erro, sem tocar a demanda", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
-  const execucao = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const execucao = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   const antes = carregarDemanda(banco, "I-1");
   const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
@@ -429,7 +452,10 @@ test("CA-12, CA-14: pi que falha encerra com falha e erro, sem tocar a demanda",
 test("CA-12, CA-14: tempo limite estourado encerra com falha e erro, sem tocar a demanda", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  const execucao = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 0.01 });
+  const execucao = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 0.01,
+  });
   const antes = carregarDemanda(banco, "I-1");
   const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
@@ -441,7 +467,10 @@ test("CA-12, CA-14: tempo limite estourado encerra com falha e erro, sem tocar a
 test("CA-12, CA-14: pi que não sobe encerra com falha e erro, sem grupo de processo", async () => {
   const { banco, sessoes } = await cenario();
   process.env.FABRIQUINHA_PI = join(temporario, "nao-existe");
-  const execucao = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const execucao = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   const antes = carregarDemanda(banco, "I-1");
   const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
@@ -455,7 +484,10 @@ test("CA-12, CA-14: pi que não sobe encerra com falha e erro, sem grupo de proc
 test("falha antes do pi (worktree da rodada ocupada) encerra com o erro e sem lançar o pi", async () => {
   const { c, banco, sessoes, registro } = await cenario();
   mkdirSync(join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "1"), { recursive: true });
-  const falha = await iniciarExecucaoDemanda(banco, ref(7), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  const falha = await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(7), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  }).fim;
   const e = sessoes(7).execucoes[0];
   assert.equal(e?.falha, true);
   assert.match(falha?.motivo ?? "", /destino ocupado/);
@@ -465,7 +497,10 @@ test("falha antes do pi (worktree da rodada ocupada) encerra com o erro e sem la
 test("a coleta de uso que falha vai para o log e não impede o encerramento", async () => {
   const { c, banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 0.02 });
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 0.02,
+  });
   const sessao = sessoes(1).sessoes[0]?.id ?? "";
   const dir = join(c.raiz, "sessoes");
   mkdirSync(dir, { recursive: true });
@@ -480,7 +515,7 @@ test("a coleta de uso que falha vai para o log e não impede o encerramento", as
 test("a recusa é síncrona: ticket inexistente", async () => {
   const { banco } = await cenario();
   assert.throws(
-    () => iniciarExecucaoDemanda(banco, ref(99), { montarPrompt: promptDaEtapa, limiteMin: 1 }),
+    () => iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(99), { montarPrompt: promptDaEtapa, limiteMin: 1 }),
     ErroDeInexistente,
   );
 });
@@ -488,9 +523,12 @@ test("a recusa é síncrona: ticket inexistente", async () => {
 test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como interrompida", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   while (sessoes(1).execucoes[0]?.grupo_processo === undefined) await dormir(20);
-  interromperExecucaoDemanda(banco, ref(1));
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1));
   assert.deepEqual(await fim, falhaInterrompidaPeloAuditor);
   const [e] = sessoes(1).execucoes;
   assert.notEqual(e?.fim, null);
@@ -500,7 +538,10 @@ test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como i
 
 test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal e na interrupção órfã", async () => {
   const { banco, sessoes } = await cenario();
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   const sessao = sessoes(1).sessoes[0]?.id ?? "";
   let fimNoUltimoEstado: string | null | undefined = undefined;
   const parar = condutor.assinar(sessao, (e) => {
@@ -521,15 +562,18 @@ test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal 
   condutor.assinar("s-aviso", (e) => {
     if (e.type === "estado") aberta = orfa.sessoes(2).execucoes[0]?.fim == null;
   });
-  interromperExecucaoDemanda(orfa.banco, ref(2));
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(orfa.banco), ref(2));
   assert.equal(aberta, false);
 });
 
 test("CA-8: interromper durante a preparação da worktree encerra interrompida e o pi recebe o término ao subir", async () => {
   const { banco, sessoes } = await cenario({ semWorktree: true, preparacao: "sleep 1" });
-  const { fim } = iniciarExecucaoDemanda(banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(3), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   await dormir(300);
-  interromperExecucaoDemanda(banco, ref(3));
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(3));
   assert.deepEqual(await fim, falhaInterrompidaPeloAuditor);
   const [e] = sessoes(3).execucoes;
   assert.deepEqual([e?.falha, Object.hasOwn(e ?? {}, "erro"), e?.fim !== null], [true, false, true]);
@@ -547,7 +591,7 @@ test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrad
     const execucao = { id: "e-orfa", trabalho_id: "s-orfa", inicio: em, falha: false, grupo_processo: pgid };
     return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
   });
-  interromperExecucaoDemanda(banco, ref(1));
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1));
   await morreu;
   const [e] = sessoes(1).execucoes;
   assert.deepEqual([e?.falha, motivoDe(banco, 1), e?.fim !== null], [true, "interrompida pelo Auditor", true]);
@@ -555,10 +599,10 @@ test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrad
 
 test("CA-9: sem execução aberta a interrupção é reprovada e nada muda", async () => {
   const { banco, sessoes } = await cenario();
-  await iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   const antes = sessoes(1);
   assert.throws(() => {
-    interromperExecucaoDemanda(banco, ref(1));
+    interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1));
   }, ErroDeRegra);
   assert.deepEqual(sessoes(1), antes);
 });
@@ -637,7 +681,7 @@ test("o fechamento recebe a falha e o fim só resolve depois dele", async () => 
   const { banco, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
   const chamadas: unknown[] = [];
-  await iniciarExecucaoDemanda(banco, ref(1), {
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     fechar: async (_b, r, o) => {
@@ -652,7 +696,7 @@ test("o fechamento recebe a falha e o fim só resolve depois dele", async () => 
 test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => {
   const { banco, c } = await cenario();
   emExecucao(banco, 1);
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), {
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     fechar: () => Promise.reject(new Error("boom")),
@@ -665,7 +709,7 @@ test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => 
 
 test("erro do fechamento com falhar também falhando só é anotado", async () => {
   const { banco, c } = await cenario();
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), {
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     fechar: () => {
@@ -689,7 +733,7 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
     });
   abrirOrfa(1, "e1");
   abrirOrfa(2, "e2");
-  interromperExecucaoDemanda(banco, ref(1));
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1));
   await recuperarAposReinicio(banco);
   assert.equal(motivoDe(banco, 1), "interrompida pelo Auditor");
   assert.equal(motivoDe(banco, 2), "serviço reiniciado");
@@ -698,7 +742,7 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
 test("reinício falha o ticket em execução cuja execução já foi encerrada (fechamento interrompido)", async () => {
   const { banco } = await cenario();
   emExecucao(banco, 1);
-  await iniciarExecucaoDemanda(banco, ref(1), {
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
     montarPrompt: promptDaEtapa,
     limiteMin: 1,
     fechar: () => Promise.resolve(),
@@ -744,19 +788,23 @@ test("a varredura da base roda só quando a worktree da demanda busca a base, e 
     readFileSync(join(raiz, "execucoes", String(readdirSync(join(raiz, "execucoes"))[0]), "log"), "utf8");
   const nova = await cenario({ semWorktree: true });
   nova.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
-  await iniciarExecucaoDemanda(nova.banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(nova.banco), ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 })
+    .fim;
   assert.match(logDaExecucao(nova.c.raiz), /varrerCommitsHumanos falhou: .*varredura_base/);
   assert.equal(nova.registro()[0]?.evento, "inicio");
   const existente = await cenario();
   existente.banco.exec("DROP TABLE varredura_base");
-  await iniciarExecucaoDemanda(existente.banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(existente.banco), ref(3), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  }).fim;
   assert.doesNotMatch(logDaExecucao(existente.c.raiz), /varrerCommitsHumanos falhou/);
 });
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
   const { c, banco } = await cenario({ semWorktree: true });
   banco.prepare("UPDATE projeto SET raiz_git = '/nao/existe' WHERE nome = 'loja'").run();
-  await iniciarExecucaoDemanda(banco, ref(7), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(7), { montarPrompt: promptDaEtapa, limiteMin: 1 }).fim;
   const [dir] = readdirSync(join(c.raiz, "execucoes"));
   assert.match(readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"), /preparação falhou: /);
 });
@@ -831,7 +879,10 @@ test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço 
 test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: aguardarTodos volta no limite", async () => {
   const { banco } = await cenario({ preparacao: "sleep 1" });
   emExecucao(banco, 1);
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   await new Promise((r) => setTimeout(r, 300)); // o condutor está na preparação
   const inicio = Date.now();
   await condutor.aguardarTodos(50, 100);
@@ -906,7 +957,10 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
       .map((l) => JSON.stringify(l))
       .join("\n"),
   ); // a sessão s-9 fica sem arquivo
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(10), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(10), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 1,
+  });
   await fim;
   const prompt = readFileSync(join(c.raiz, "execucoes", `E-${id}`, "prompt.md"), "utf8");
   assert.match(prompt, /I-1\.T8 \(revisar_rodada\), reprovado: falta teste de X/);
@@ -926,7 +980,10 @@ test("I-287: o pi recebe o token do processo e a URL da API; o token vale até o
       termina: "nunca",
     },
   ]);
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { montarPrompt: promptDaEtapa, limiteMin: 0.05 });
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(1), {
+    montarPrompt: promptDaEtapa,
+    limiteMin: 0.05,
+  });
   const arquivoDoAmbiente = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2", "ambiente-do-pi.txt");
   while (!existsSync(arquivoDoAmbiente)) await dormir(20);
   const variaveis = new Map(
@@ -981,7 +1038,10 @@ test("I-287: o prompt leva worktree, saída e anexos pelo caminho que o Ambiente
     gestaoQueSoUsa(Object.assign(new AmbienteHostLocal(), { caminhoNoAmbiente: noAmbiente })),
   );
   try {
-    const { id, fim } = iniciarExecucaoDemanda(banco, ref(3), { montarPrompt: promptDaEtapa, limiteMin: 1 });
+    const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref(3), {
+      montarPrompt: promptDaEtapa,
+      limiteMin: 1,
+    });
     await fim;
     const prompt = readFileSync(join(pastasDoProcesso(c.raiz, id).dir, "prompt.md"), "utf8");
     const worktree = join(c.raiz, "worktrees", "loja", "I-1", "demanda");

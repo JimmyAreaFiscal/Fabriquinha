@@ -34,13 +34,14 @@ import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_ca
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarDependencia } from "../../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const pi = instalarPiFalso(base);
 
 /** O planejamento é uma sessão interativa: dispara o ciclo, espera o pi receber o prompt e interrompe a execução. */
 async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<void> {
   const fins = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     despachoDasEtapas(),
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -48,7 +49,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
   await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
   const ref = { demanda_id: id, ticket_id: 2 };
-  interromperExecucaoDemanda(c.banco, ref);
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), ref);
   await Promise.all(fins);
   assert.equal(carregarSessoesDoContexto(c.banco, ref).execucoes.length, 1);
 }
@@ -75,7 +76,14 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(demanda(c, id).demanda.estado, "entender_e_desenhar");
   assert.equal(demanda(c, id).tickets[0]?.estado, "em_execucao");
   assert.throws(
-    () => decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR),
+    () =>
+      decidirGateDaDemanda(
+        modulosDoCicloDeTeste(c.banco),
+        montarDemandasDoBanco(c.banco),
+        id,
+        { resultado: "aprovado" },
+        AUDITOR,
+      ),
     /não espera decisão/,
   );
   assert.equal(montarDemandasDoBanco(c.banco).editar(id, { titulo: "Corrigido" }, AUTOR).titulo, "Corrigido");
@@ -105,7 +113,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
   // Reprovação: cancelada, motivo gravado, nenhum ticket novo e nada a despachar.
   const reprovada = demandaEnviada(c);
   const { demanda: r } = decidirGateDaDemanda(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     montarDemandasDoBanco(c.banco),
     reprovada,
     { resultado: "reprovado", motivo: "fora do escopo" },
@@ -119,7 +127,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
   );
   assert.equal(
     cicloDoDespacho(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       c.config,
       despachoDasEtapas(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -131,7 +139,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percu
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
   const aprovada = demandaEnviada(c);
   const { demanda: a } = decidirGateDaDemanda(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     montarDemandasDoBanco(c.banco),
     aprovada,
     { resultado: "aprovado" },
@@ -159,7 +167,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const b = await demandaAprovada(c, [a]);
   assert.equal(
     cicloDoDespacho(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       c.config,
       despachoDasEtapas(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),

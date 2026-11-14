@@ -31,6 +31,7 @@ import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_casca
 import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));
@@ -155,7 +156,12 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
 export async function ciclo(c: Cenario, deps: DepsDespacho = despachoDasEtapas()): Promise<void> {
   await Promise.all(
-    cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+    cicloDoDespacho(
+      modulosDoCicloDeTeste(c.banco),
+      c.config,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ),
   );
 }
 
@@ -218,7 +224,13 @@ export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.
 /** Demanda aprovada pelo Auditor: em `planejar`, com o ticket `planejar` aberto. */
 export function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): Promise<string> {
   const id = demandaEnviada(c, dependencias, projeto);
-  decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR);
+  decidirGateDaDemanda(
+    modulosDoCicloDeTeste(c.banco),
+    montarDemandasDoBanco(c.banco),
+    id,
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
   return Promise.resolve(id);
 }
 

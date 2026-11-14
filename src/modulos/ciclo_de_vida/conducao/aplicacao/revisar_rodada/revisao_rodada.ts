@@ -2,23 +2,24 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA, formatarTicketRef, Endereco } from "../../../etapas/publico.ts";
 import { encontrado, ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { ambienteDoEspaco, espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
+import type { Ambiente } from "../../../../ambiente/publico.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { escrever, raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { carregarDemanda, submeterEvidencia } from "../../../processo/publico.ts";
 import { VerificacaoDeFitness, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /**
  * `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui).
  * Devolve o Espaço da rodada que ela criou para rodar a fitness.
  */
 export async function prepararRevisaoRodada(
-  banco: DatabaseSync,
+  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
   ref: { demanda_id: string; ticket_id: number },
-): Promise<{ pasta: string }> {
+): Promise<{ pasta: string; ambiente: Ambiente }> {
   const { demanda_id, ticket_id } = ref;
   const ag = carregarDemanda(banco, demanda_id);
   const { rodada_id } = encontrado(
@@ -36,9 +37,7 @@ export async function prepararRevisaoRodada(
 
   const raiz = raizDo(banco);
   const espacoDaRodada = espacoDoTicket(ag, { rodada_id }, projeto, raiz);
-  const repositorio = montarRepositorio({ banco });
-  const worktree = await repositorio.prepararEspaco(projeto, espacoDaRodada, `${raiz}/log`);
-  const ambiente = ambienteDoEspaco(espacoDaRodada);
+  const { pasta: worktree, ambiente } = await repositorio.prepararEspaco(projeto, espacoDaRodada, `${raiz}/log`);
 
   // O que a rodada fez desde o ancestral comum com a demanda, mesmo se a demanda avançou depois.
   const { base, head, arquivos } = await repositorio.alteracoesDoEspaco(projeto, espacoDaRodada);
@@ -98,5 +97,5 @@ export async function prepararRevisaoRodada(
   } finally {
     rmSync(pastaDosLogs, { recursive: true, force: true });
   }
-  return { pasta: worktree };
+  return { pasta: worktree, ambiente };
 }

@@ -9,6 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
+import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import { casar } from "../web/compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
@@ -153,6 +154,7 @@ interface Web {
   agendador: Agendador;
   ambientes: AmbientesDoServico;
   demandas: GestaoDeDemandas;
+  repositorio: RepositorioDoProjeto;
   relogio: Relogio;
   /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
   registrarErro: (erro: unknown) => void;
@@ -171,6 +173,7 @@ export function servirWeb({
   agendador,
   ambientes,
   demandas,
+  repositorio,
   relogio,
   registrarErro,
   rotasDoAgente: rotasDaApiDoAgente = ROTAS_DO_AGENTE,
@@ -222,6 +225,7 @@ export function servirWeb({
         agendador,
         ambientes,
         demandas,
+        repositorio,
         relogio,
         params,
         query: url.searchParams,
@@ -246,7 +250,19 @@ export function servirWeb({
       let corpo: unknown;
       if (rota.corpoEmFluxo) corpo = pedido;
       else if (rota.metodo === "POST") corpo = await lerCorpo(pedido, LIMITE_DO_JSON_DO_AGENTE);
-      json(resposta, 200, await rota.tratar({ banco, relogio, agente, params, query: url.searchParams, corpo }));
+      json(
+        resposta,
+        200,
+        await rota.tratar({
+          banco,
+          modulos: { banco, ambientes: ambientes.gestao, repositorio },
+          relogio,
+          agente,
+          params,
+          query: url.searchParams,
+          corpo,
+        }),
+      );
       return;
     }
     throw new ErroHttp(404, `${String(pedido.method)} ${url.pathname} não existe`);

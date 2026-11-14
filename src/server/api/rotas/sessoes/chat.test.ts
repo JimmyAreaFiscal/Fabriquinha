@@ -27,6 +27,7 @@ import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../../../mod
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
+import { modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -277,7 +278,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
       ],
     }),
   );
-  const { fim } = iniciarExecucaoDemanda(servico.banco, ref, {
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(servico.banco), ref, {
     montarPrompt: montarPromptDemanda,
     limiteMin: 5,
     modo: "interativo",
@@ -316,6 +317,6 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   await ate(() => dialogos().length === 1, "o diálogo da mensagem");
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
   await ate(() => condutor.situacao(sessao)?.ocupado === false, "o aborto");
-  interromperExecucaoDemanda(servico.banco, ref);
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(servico.banco), ref);
   await fim;
 });

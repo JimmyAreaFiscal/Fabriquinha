@@ -27,7 +27,7 @@ import { anotar, noLog } from "../../../../shared/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/configuracao_do_servico.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import { condutor, type DepsDaConducao, type DepsDespacho } from "../../conducao/publico.ts";
+import { condutor, type DepsDaConducao, type DepsDespacho, type ModulosDoCiclo } from "../../conducao/publico.ts";
 
 /**
  * As predecessoras ainda não satisfeitas de cada demanda de `demandaIds`; a que não tem nenhuma está liberada. Quem chama
@@ -58,8 +58,8 @@ export function demandasParaDespacho(
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
 const acompanhar = (fim: Promise<unknown>): Promise<void> => fim.then(() => undefined, noLog);
 
-const depsDaConducaoDe = (banco: DatabaseSync, { timeoutMin }: Configuracao, relogio: Relogio): DepsDaConducao => ({
-  banco,
+const depsDaConducaoDe = (modulos: ModulosDoCiclo, { timeoutMin }: Configuracao, relogio: Relogio): DepsDaConducao => ({
+  ...modulos,
   limiteMin: timeoutMin,
   relogio,
   condutor,
@@ -104,7 +104,7 @@ export const reservarTicketParaAFabriquinha = (
  * plano (as revisões, que são `async`, recusam por ela).
  */
 function entregarAConducao(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   c: Configuracao,
   predecessorasSatisfeitas: boolean,
   t: TicketDemanda,
@@ -112,8 +112,8 @@ function entregarAConducao(
   relogio: Relogio,
 ): Promise<unknown> {
   exigirEtapaConduzida(t.etapa);
-  if (t.estado === "aberto") reservarTicketParaAFabriquinha(banco, t, relogio, predecessorasSatisfeitas);
-  const conducaoDaEtapa = deps.montarConducoes(depsDaConducaoDe(banco, c, relogio))[t.etapa];
+  if (t.estado === "aberto") reservarTicketParaAFabriquinha(modulos.banco, t, relogio, predecessorasSatisfeitas);
+  const conducaoDaEtapa = deps.montarConducoes(depsDaConducaoDe(modulos, c, relogio))[t.etapa];
   return conducaoDaEtapa.conduzir(Endereco.doTicket(t.demanda_id, t.ticket_id));
 }
 
@@ -137,12 +137,13 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
  * Devolve as etapas em segundo plano (nunca rejeitam); o ciclo não as espera.
  */
 export function cicloDoDespacho(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   c: Configuracao,
   deps: DepsDespacho,
   predecessorasPendentes: PredecessorasPendentes,
   relogio: Relogio = relogioDoSistema,
 ): Promise<void>[] {
+  const { banco } = modulos;
   const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco, relogio);
   if (retomadosPorInfraestrutura.length > 0) {
     noLog(`retomados depois de falha de ambiente: ${retomadosPorInfraestrutura.join(", ")}`);
@@ -160,7 +161,7 @@ export function cicloDoDespacho(
   recusasDoUltimoCiclo = recusas;
   const liberada = (t: TicketDemanda) =>
     situacao.demandas.some((d) => d.agregado.demanda.id === t.demanda_id && d.predecessoras_pendentes.length === 0);
-  return prontos.flatMap((t) => disparar(banco, () => entregarAConducao(banco, c, liberada(t), t, deps, relogio)));
+  return prontos.flatMap((t) => disparar(banco, () => entregarAConducao(modulos, c, liberada(t), t, deps, relogio)));
 }
 
 /**
@@ -169,13 +170,14 @@ export function cicloDoDespacho(
  * ticket já em execução e lança). Aceito, devolve a etapa em segundo plano, que nunca rejeita.
  */
 export function executarAgora(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   ref: { demanda_id: string; ticket_id: number },
   c: Configuracao,
   deps: DepsDespacho,
   predecessorasPendentes: PredecessorasPendentes,
   relogio: Relogio = relogioDoSistema,
 ): MotivoDeRecusa | Promise<void> {
+  const { banco } = modulos;
   return escrever(banco, () => {
     const situacao = situacaoDoDespacho(banco, predecessorasPendentes);
     const { agregado, predecessoras_pendentes } = existe(
@@ -200,6 +202,6 @@ export function executarAgora(
     if (recusa && !(recusa.tipo === "limite_de_paralelismo" && recusa.em_uso < recusa.limite)) return recusa;
     // Sem recusa, a reserva ainda diz por que a seleção não escolheria o ticket (outro aberto vem antes, etapa fora do
     // estado): ela lança, e a transação desfaz tudo.
-    return acompanhar(entregarAConducao(banco, c, predecessoras_pendentes.length === 0, ticket, deps, relogio));
+    return acompanhar(entregarAConducao(modulos, c, predecessoras_pendentes.length === 0, ticket, deps, relogio));
   });
 }

@@ -38,7 +38,7 @@ interface MontagemDaGestaoDeDemandas {
   /** F4 §9: o modelo novo ou trocado de cada etapa do projeto só é gravado depois de o harness conhecê-lo. */
   conferirModeloNoHarness: ConferirModeloNoHarness;
   /** Confere o repositório do projeto, fixa o cursor da varredura no cadastro e apaga os Espaços na remoção. */
-  repositorio: Pick<RepositorioDoProjeto, "conferir" | "varrerBase" | "apagarEspacosDoProjeto">;
+  repositorio: Pick<RepositorioDoProjeto, "conferir" | "varrerBase">;
 }
 
 /** O pedido como a consulta o lê: o conteúdo, a situação, o histórico, a origem e as relações com os outros pedidos. */
@@ -120,21 +120,16 @@ export function montarGestaoDeDemandas({
       editarProjetoDoFormulario(banco, formulario, { conferirModeloNoHarness, repositorio }),
     configurarSdlc: (configurado) => gravarConfiguracaoSdlc(banco, configurado),
     removerProjeto: (nome, apagarOQueDependeDasDemandas) =>
-      removerProjeto(
-        banco,
-        nome,
-        () => {
-          // Dos mais novos para os mais antigos, a ordem em que a remoção sempre entregou as demandas.
-          const demandas = lerPedidosDoFiltro(banco, { projeto: nome })
-            .map(({ id }) => id)
-            .reverse();
-          const sobras = apagarOQueDependeDasDemandas(demandas);
-          apagarDependenciasDosPedidos(banco, demandas);
-          apagarPedidosDoProjeto(banco, nome);
-          return sobras;
-        },
-        repositorio,
-      ),
+      removerProjeto(banco, nome, () => {
+        // Dos mais novos para os mais antigos, a ordem em que a remoção sempre entregou as demandas.
+        const demandas = lerPedidosDoFiltro(banco, { projeto: nome })
+          .map(({ id }) => id)
+          .reverse();
+        const sobras = apagarOQueDependeDasDemandas(demandas);
+        apagarDependenciasDosPedidos(banco, demandas);
+        apagarPedidosDoProjeto(banco, nome);
+        return sobras;
+      }),
 
     pedidos: (filtro = {}) => pedidosConsultados(filtro),
     pedido: (id) =>

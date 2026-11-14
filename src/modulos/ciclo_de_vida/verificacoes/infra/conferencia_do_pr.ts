@@ -11,17 +11,17 @@ import type {
 } from "../../../repositorio/publico.ts";
 import { Verificacao } from "./verificacao.ts";
 
-/** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `problemasDoPR`. */
+/** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `situacaoDoPR` com a espera. */
 export class ConferenciaDoPR extends Verificacao {
   readonly tipo = "conferencia_do_pr";
-  readonly #repositorio: Pick<RepositorioDoProjeto, "problemasDoPR">;
+  readonly #repositorio: Pick<RepositorioDoProjeto, "situacaoDoPR">;
   readonly #projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">;
   readonly #idDoPR: string;
   readonly #log: string;
   readonly #opcoes: OpcoesVerificacao | undefined;
 
   constructor(
-    repositorio: Pick<RepositorioDoProjeto, "problemasDoPR">,
+    repositorio: Pick<RepositorioDoProjeto, "situacaoDoPR">,
     projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">,
     idDoPR: string,
     log: string,
@@ -37,7 +37,7 @@ export class ConferenciaDoPR extends Verificacao {
 
   /** Os problemas com o detalhe que o chamador transforma em correções; a hospedagem que não decide lança ErroExterno. */
   conferir(): Promise<ProblemasDoPR> {
-    return this.#repositorio.problemasDoPR(this.#projeto, this.#idDoPR, this.#log, this.#opcoes);
+    return this.#repositorio.situacaoDoPR(this.#projeto, this.#idDoPR, { log: this.#log, opcoes: this.#opcoes });
   }
 
   /** Só o erro externo da hospedagem vira resultado; qualquer outro propaga. */

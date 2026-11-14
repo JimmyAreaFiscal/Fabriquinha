@@ -15,7 +15,7 @@ import {
   type TicketDemanda,
 } from "../../../processo/publico.ts";
 import { existe } from "../../../../../shared/nucleo/erros.ts";
-import { type EspacoDeTrabalho, espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
@@ -25,6 +25,7 @@ import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/rel
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import type { RefRodada } from "../encerrar_rodada/encerramento_rodada.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 interface Ponta {
   branch: string;
@@ -63,7 +64,10 @@ export const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDeman
   );
 
 /** Volta as duas branches aos SHAs do marco e descarta o que a conversa deixou nas worktrees, sem verificar nem commitar. */
-export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
+export async function restaurar(
+  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
+  ref: RefRodada,
+): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
   const projeto = projetosCadastrados().projetoExistente(banco, ag.demanda.projeto);
@@ -73,7 +77,6 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
     [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz)],
     [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz)],
   ];
-  const repositorio = montarRepositorio({ banco });
   // A branch do marco é a do Espaço: o marco a guarda para o leitor do arquivo.
   for (const [{ sha }, espaco] of pontas) await repositorio.voltarEspaco(espaco, sha, log);
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
@@ -83,7 +86,11 @@ export async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<vo
  * Grava o marco (os SHAs da rodada e da demanda) antes de reprovar o PR: é a ele que a sessão volta ao terminar. Fica
  * em disco, fora da transação, então vem antes da Decisão.
  */
-export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
+export async function guardarMarcoDaSessao(
+  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
+  ref: RefRodada,
+  ag: AgregadoDemanda,
+): Promise<void> {
   const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
   const espacoDaDemanda = espacoDoTicket(
     ag,
@@ -91,11 +98,7 @@ export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, 
     projetosCadastrados().projetoExistente(banco, ag.demanda.projeto),
     raizDo(banco),
   );
-  const demanda = await montarRepositorio({ banco }).gitNoEspaco(
-    espacoDaDemanda,
-    "rev-parse",
-    `refs/heads/${ag.demanda.branch}`,
-  );
+  const demanda = await repositorio.gitNoEspaco(espacoDaDemanda, "rev-parse", `refs/heads/${ag.demanda.branch}`);
   const marco: Marco = {
     rodada: { branch, sha: pr.head },
     demanda: { branch: ag.demanda.branch, sha: demanda.trim() },
@@ -109,7 +112,7 @@ export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, 
  * em qualquer retomada interativa; o fim da execução restaura as branches, como o da execução que a abriu.
  */
 export function retomarSessaoAjustes(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   ticket: TicketDemanda,
   mensagem: string,
   opcoes: Pick<OpcoesExecucaoDemanda, "limiteMin">,
@@ -120,21 +123,22 @@ export function retomarSessaoAjustes(
     "confira o banco",
   );
   const ref = { demanda_id: ticket.demanda_id, rodada_id };
-  iniciarExecucaoDemanda(banco, ticket, {
+  iniciarExecucaoDemanda(modulos, ticket, {
     ...opcoes,
     modo: "interativo",
     mensagem,
-    fechar: () => restaurar(banco, ref),
+    fechar: () => restaurar(modulos, ref),
   });
 }
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */
 export async function concluirSessaoAjustes(
-  banco: DatabaseSync,
+  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio">,
   ref: RefRodada,
   ator: Ator,
   relogio: Relogio = relogioDoSistema,
 ): Promise<AgregadoDemanda> {
+  const { banco } = modulos;
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = sessaoDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id, rodada_id: ref.rodada_id };
@@ -144,6 +148,6 @@ export async function concluirSessaoAjustes(
   const maisRecente = carregarSessoesDoContexto(banco, ticket).execucoes.at(-1)?.id;
   encerrarPiVivo(banco, ticket);
   if (maisRecente !== undefined) await condutor.aguardarFim(maisRecente);
-  await restaurar(banco, ref);
+  await restaurar(modulos, ref);
   return concluirSessaoDeAjustes(banco, ref.demanda_id, entrada, ator, relogio);
 }

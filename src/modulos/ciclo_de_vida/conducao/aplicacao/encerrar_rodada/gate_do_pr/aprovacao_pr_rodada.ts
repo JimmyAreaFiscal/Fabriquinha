@@ -1,6 +1,6 @@
 // Aprovação automática do PR da rodada (comparacao-sdlc-implementacao.md §§4 e 6): no projeto que a ligou, a Fabriquinha
 // decide o gate do PR sozinha; a decisão em si é de `decidirGate`.
-import type { DatabaseSync } from "node:sqlite";
+import type { ModulosDoCiclo } from "../../modulos_do_ciclo.ts";
 import { type AgregadoDemanda, MOTIVO_APROVACAO_AUTOMATICA_PR } from "../../../../processo/publico.ts";
 import { FABRIQUINHA, Endereco } from "../../../../etapas/publico.ts";
 import { noLog } from "../../../../../../shared/infra/registro.ts";
@@ -24,7 +24,7 @@ const aprovaPRDaRodadaSozinho = (projeto: string, env: NodeJS.ProcessEnv): boole
  * demanda com o PR aprovado, ou `ag` como veio.
  */
 export async function aprovarPRRodadaSeAutomatico(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   ag: AgregadoDemanda,
   ref: RefRodada,
   env: NodeJS.ProcessEnv = process.env,
@@ -32,7 +32,7 @@ export async function aprovarPRRodadaSeAutomatico(
   const noGate = ag.rodadas.some((r) => r.rodada_id === ref.rodada_id && r.estado === "gate_pr");
   if (!noGate || !aprovaPRDaRodadaSozinho(ag.demanda.projeto, env)) return ag;
   const decisao = { resultado: "aprovado", motivo: MOTIVO_APROVACAO_AUTOMATICA_PR };
-  return decidirGate(banco, "gate_pr", Endereco.daRodada(ref.demanda_id, ref.rodada_id), decisao, FABRIQUINHA).then(
+  return decidirGate(modulos, "gate_pr", Endereco.daRodada(ref.demanda_id, ref.rodada_id), decisao, FABRIQUINHA).then(
     ({ demanda }) => demanda,
     (erro: unknown) => {
       noLog(erro);

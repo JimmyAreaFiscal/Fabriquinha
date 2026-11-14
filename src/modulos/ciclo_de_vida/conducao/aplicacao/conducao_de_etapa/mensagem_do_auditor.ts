@@ -1,7 +1,6 @@
 // A mensagem do Auditor à sessão de um ticket, pelo chat (comparacao-sdlc-implementacao.md §9.1): a sessão rodando a
 // recebe redirecionada ou enfileirada, a parada em conversa a recebe como prompt e volta a rodar. A sessão de ajustes do
 // PR reprovado volta pelo caminho dela, que restaura as branches no fim; as outras, pela execução da demanda.
-import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 import { formatarTicketRef, etapaDoPapel } from "../../../etapas/publico.ts";
@@ -16,19 +15,21 @@ import {
 } from "../chat_do_auditor/sessao_do_ticket.ts";
 import { retomarSessaoAjustes } from "../ajustar_resultado/sessao_ajustes.ts";
 import { limitesDasSessoes } from "../limites_das_sessoes.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
 type ModoEnvio = "prompt" | "steer" | "follow_up";
 
 /** Envia a mensagem do Auditor; `false` se o id não é de uma sessão da demanda. */
 export function enviarDemanda(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   id: string,
   texto: string,
   modo: ModoEnvio,
-  limiteMin = limitesDasSessoes().ociosidadeMin(banco),
+  limiteMin = limitesDasSessoes().ociosidadeMin(modulos.banco),
   relogio: Relogio = relogioDoSistema,
 ): boolean {
+  const { banco } = modulos;
   const ref = contextoDaSessao(banco, id);
   if (!ref) return false;
   const c = carregarSessaoDoTicket(banco, ref, id);
@@ -49,8 +50,8 @@ export function enviarDemanda(
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
   if (estado === "rodando" || viva) condutor.mandar(execucaoDaSessao(c).id, { type: modo, message: texto });
   else if (c.ticket.etapa === etapaDoPapel("ajusta_o_pr_reprovado"))
-    retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
-  else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto }, relogio);
+    retomarSessaoAjustes(modulos, c.ticket, texto, { limiteMin });
+  else iniciarExecucaoDemanda(modulos, ref, { limiteMin, modo: "interativo", mensagem: texto }, relogio);
   return true;
 }
 

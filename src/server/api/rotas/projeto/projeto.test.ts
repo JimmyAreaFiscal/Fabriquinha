@@ -21,6 +21,7 @@ import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
 import type { ListaDoProjeto } from "../../../contrato/projeto.ts";
 import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import { montarRepositorio } from "../../../../modulos/repositorio/publico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -52,6 +53,7 @@ async function chamar(metodo: string, endereco: string): Promise<unknown> {
         agendador: { proximaBusca: () => new Date() },
         ambientes: undefined as unknown as AmbientesDoServico,
         demandas: montarDemandasDoBanco(banco),
+        repositorio: montarRepositorio({ banco: banco }),
         relogio: relogioDoSistema,
         params,
         query: url.searchParams,

@@ -24,6 +24,7 @@ import { montarAmbientesDoServico } from "../../composicao/ambientes_do_servico.
 import { noLog } from "../../../shared/infra/registro.ts";
 import { buscarProjeto, gravarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 
 // realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-config-")));
@@ -92,6 +93,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
         agendador: { proximaBusca: () => PROXIMA },
         ambientes,
         demandas: montarDemandasDoBanco(banco),
+        repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
         relogio: relogioDoSistema,
         params,
         query: new URLSearchParams(),

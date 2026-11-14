@@ -1,4 +1,5 @@
 // As consultas da tela de Métricas: as duas visões do período, lidas num snapshot só. O mês corrente vem do relógio.
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { somarMeses } from "../../../shared/nucleo/periodo.ts";
@@ -26,7 +27,7 @@ export const consultarMetricasDosMeses = (
 ) =>
   lerEmSnapshot(banco, () =>
     metricasDosMeses(
-      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      { banco, repositorio: montarRepositorio({ banco }), pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
       periodoDoFiltro(filtro, relogio),
     ),
   );
@@ -40,7 +41,7 @@ export const consultarMetricasDasDemandas = (
 ) =>
   lerEmSnapshot(banco, () =>
     metricasDasDemandasDoPeriodo(
-      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      { banco, repositorio: montarRepositorio({ banco }), pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
       periodoDoFiltro(filtro, relogio),
     ),
   );

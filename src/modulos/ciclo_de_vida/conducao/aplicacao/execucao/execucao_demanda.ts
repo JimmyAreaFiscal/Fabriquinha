@@ -23,12 +23,8 @@ import {
   falharTicketEmExecucao,
   type TicketDemanda,
 } from "../../../processo/publico.ts";
-import {
-  ambienteDoEspaco,
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  montarRepositorio,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket, ocupanteDoDono } from "../../../../repositorio/publico.ts";
+import type { Ambiente } from "../../../../ambiente/publico.ts";
 import { encontrado, existe, mensagem } from "../../../../../shared/nucleo/erros.ts";
 import {
   carregarSessoesDoContexto,
@@ -54,6 +50,7 @@ import { encerrarProcessoOrfao, type TicketRef } from "../politica_dos_agentes/p
 import { lancamentoDoTicket } from "./lancamento_do_ticket.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
 import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 interface OpcoesComunsDaExecucao {
   limiteMin: number;
@@ -64,8 +61,8 @@ interface OpcoesComunsDaExecucao {
   iniciarEmSessaoNova?: boolean;
   /** O que fazer com o ticket depois do encerramento do processo; sem ele, quem conduz a etapa o fecha. */
   fechar?: (banco: DatabaseSync, ref: TicketRef, resultado: { falha?: FalhaDaTentativa }) => Promise<void>;
-  /** O Espaço que a condução já criou; sem ele, a execução o cria. */
-  espaco?: { pasta: string };
+  /** O Espaço que a condução já criou, com o Ambiente dele; sem ele, a execução o cria. */
+  espaco?: { pasta: string; ambiente: Ambiente };
 }
 
 /** O prompt da execução: a mensagem do Auditor ou a montagem da Etapa, com o contexto que a execução junta. */
@@ -79,8 +76,7 @@ export type OpcoesExecucaoDemanda = OpcoesComunsDaExecucao &
     | { mensagem?: undefined; montarPrompt: (contexto: ContextoDoPrompt) => string }
   );
 
-interface Conducao {
-  banco: DatabaseSync;
+interface Conducao extends ModulosDoCiclo {
   ref: TicketRef;
   ag: AgregadoDemanda;
   ticket: TicketDemanda;
@@ -91,13 +87,13 @@ interface Conducao {
   relogio: Relogio;
 }
 
-/** O ticket roda na worktree do seu Espaço de Trabalho. */
-async function worktreeDoEspacoDoTicket(
-  { banco, projeto, opcoes }: Conducao,
+/** O ticket roda na worktree do seu Espaço de Trabalho, no Ambiente que o Repositório alocou a ele. */
+async function espacoPreparadoDoTicket(
+  { repositorio, projeto, opcoes }: Conducao,
   espaco: EspacoDeTrabalho,
   log: string,
-): Promise<string> {
-  return opcoes.espaco?.pasta ?? (await montarRepositorio({ banco }).prepararEspaco(projeto, espaco, log));
+): Promise<{ pasta: string; ambiente: Ambiente }> {
+  return opcoes.espaco ?? (await repositorio.prepararEspaco(projeto, espaco, log));
 }
 
 /** Grava o grupo de processo do pi e o Ambiente que o lançou, para o reinício do serviço poder interrompê-lo (§4.2). */
@@ -131,14 +127,9 @@ function perguntasDosTicketsReprovadosDaRodada({
 }
 
 /** O SHA do commit de cada ticket da demanda que tem um (as revisões leem o que a Fabriquinha já verificou nele). */
-function commitsDosTickets({ banco, ag }: Conducao): ContextoDoPrompt["commitsDosTickets"] {
-  const repositorio = montarRepositorio({ banco });
-  return new Map(
-    ag.tickets.flatMap((t) => {
-      const commit = repositorio.commitDoTicket(ag.demanda.id, t.ticket_id);
-      return commit ? [[t.ticket_id, commit.sha] as const] : [];
-    }),
-  );
+function commitsDosTickets({ repositorio, ag }: Conducao): ContextoDoPrompt["commitsDosTickets"] {
+  const { commits } = repositorio.metricas({ demandas: [ag.demanda.id], periodo: {} });
+  return new Map(commits.map((commit) => [commit.ticket_id, commit.sha] as const));
 }
 
 async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
@@ -151,9 +142,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
     const espaco = espacoDoTicket(c.ag, c.ticket, projeto, raiz);
-    const worktree = await worktreeDoEspacoDoTicket(c, espaco, log);
     // O agente enxerga o Espaço pelo Ambiente (o container, depois de alocado): no host local os caminhos são os do host.
-    const ambiente = ambienteDoEspaco(espaco);
+    const { pasta: worktree, ambiente } = await espacoPreparadoDoTicket(c, espaco, log);
     // O container só enxerga a pasta do processo e a da sessão que o core pôs nas pastas montadas dele.
     ambiente.abrigarProcesso(dir, sessao.id);
     const caminhoNoAmbiente = (caminhoNoHost: string): string => ambiente.caminhoNoAmbiente(caminhoNoHost);
@@ -243,11 +233,12 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
  * uso gravado.
  */
 export function iniciarExecucaoDemanda(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   ref: TicketRef,
   opcoes: OpcoesExecucaoDemanda,
   relogio: Relogio = relogioDoSistema,
 ): { id: string; fim: Promise<FalhaDaTentativa | undefined> } {
+  const { banco } = modulos;
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = encontrado(
     ag.tickets.find((t) => t.ticket_id === ref.ticket_id),
@@ -291,7 +282,7 @@ export function iniciarExecucaoDemanda(
   });
   abrirTentativaDoTicket(banco, ref, execucao);
   const fim = condutor.acompanhar(execucao.id, () =>
-    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes, relogio }),
+    conduzir({ ...modulos, ref, ag, ticket, projeto, sessao, execucao, opcoes, relogio }),
   );
   return { id: execucao.id, fim };
 }
@@ -301,7 +292,7 @@ export function iniciarExecucaoDemanda(
  * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
  */
 export function interromperExecucaoDemanda(
-  banco: DatabaseSync,
+  { banco, ambientes }: Pick<ModulosDoCiclo, "banco" | "ambientes">,
   ref: TicketRef,
   relogio: Relogio = relogioDoSistema,
 ): void {
@@ -320,7 +311,7 @@ export function interromperExecucaoDemanda(
       "use um ticket da demanda",
     );
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
-    const ambiente = ambienteDoEspaco(espacoDoTicket(ag, ticket, projeto, raizDo(banco)));
+    const ambiente = ambientes.ambienteDo(ocupanteDoDono(espacoDoTicket(ag, ticket, projeto, raizDo(banco)).dono));
     // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
     ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: execucao.grupo_processo }, "SIGKILL").catch(noLog);
   }
@@ -337,10 +328,13 @@ export function interromperExecucaoDemanda(
 }
 
 /** Interrompe, uma vez por ticket, as execuções abertas das demandas `canceladas`; roda depois do commit. */
-export function interromperExecucoesDasDemandas(banco: DatabaseSync, canceladas: readonly string[]): void {
-  const abertas = execucoesAbertas(banco).filter((e) => canceladas.includes(e.demanda_id));
+export function interromperExecucoesDasDemandas(
+  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes">,
+  canceladas: readonly string[],
+): void {
+  const abertas = execucoesAbertas(modulos.banco).filter((e) => canceladas.includes(e.demanda_id));
   const tickets = new Map(
     abertas.map(({ demanda_id, ticket_id }) => [`${demanda_id}.${String(ticket_id)}`, { demanda_id, ticket_id }]),
   );
-  for (const ref of tickets.values()) interromperExecucaoDemanda(banco, ref);
+  for (const ref of tickets.values()) interromperExecucaoDemanda(modulos, ref);
 }

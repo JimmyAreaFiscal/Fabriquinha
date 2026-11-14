@@ -30,7 +30,7 @@ import {
   apagarPullRequestsQueSumiram,
   gravarPullRequestsNovosEMudados,
   lerPullRequestsDaDemanda,
-} from "../../../repositorio/publico.ts";
+} from "./pull_requests.ts";
 import {
   apagarItensDasDemandas,
   apagarItensQueSumiram,

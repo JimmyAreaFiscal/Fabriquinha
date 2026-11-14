@@ -8,7 +8,7 @@ import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { abortarDemanda, enviarDemanda, responderDialogoDemanda } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { abrirChatDemanda, type ChatDemanda, exportarHistoricoDemanda } from "../../../consultas/sessoes/chat.ts";
 import { DadosDoChatDemanda, NovaMensagemDoChat, RespostaDoDialogo } from "../../../contrato/sessoes/chat.ts";
-import { SemCorpoEmJson, type Rota } from "../../rotas.ts";
+import { modulosDoCiclo, SemCorpoEmJson, type Rota } from "../../rotas.ts";
 import { abrirFluxoSse } from "../../sse.ts";
 
 /** O erro da sessão que não é de nenhuma demanda. */
@@ -49,10 +49,10 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/mensagens",
     resposta: SemCorpoEmJson,
-    tratar: ({ banco, params, corpo }) => {
-      const { texto, modo } = NovaMensagemDoChat.parse(corpo);
-      const sessao = String(params.sessao);
-      if (!enviarDemanda(banco, sessao, texto, modo)) throw naoExiste(sessao);
+    tratar: (pedido) => {
+      const { texto, modo } = NovaMensagemDoChat.parse(pedido.corpo);
+      const sessao = String(pedido.params.sessao);
+      if (!enviarDemanda(modulosDoCiclo(pedido), sessao, texto, modo)) throw naoExiste(sessao);
     },
   },
   {
@@ -85,9 +85,9 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/abortar",
     resposta: SemCorpoEmJson,
-    tratar: ({ banco, params }) => {
-      const sessao = String(params.sessao);
-      if (!abortarDemanda(banco, sessao)) throw naoExiste(sessao);
+    tratar: (pedido) => {
+      const sessao = String(pedido.params.sessao);
+      if (!abortarDemanda(modulosDoCiclo(pedido), sessao)) throw naoExiste(sessao);
     },
   },
 ];

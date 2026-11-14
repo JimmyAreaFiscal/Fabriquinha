@@ -72,7 +72,7 @@ export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_
       metodo: "POST",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}evidencias`,
       resposta: RespostaEvidenciaAdd,
-      tratar: async ({ banco, agente, corpo }) => {
+      tratar: async ({ modulos, agente, corpo }) => {
         const { ticket, tipo, dados, anexos } = PedidoEvidenciaAdd.parse(corpo);
         exigirTicketProprio(agente, ticket, true);
         const doProcesso = conferidos.get(agente.ator.trabalho_id) ?? new Set<string>();
@@ -85,7 +85,7 @@ export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_
           }
         }
         const resposta = await casos.adicionarEvidencia(
-          banco,
+          modulos,
           processoDoAgente(agente),
           { ticket, tipo, dados: dados === undefined ? undefined : PRESENTE, anexos },
           () => Promise.resolve(dados),

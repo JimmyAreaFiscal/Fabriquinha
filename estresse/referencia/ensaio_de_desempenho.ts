@@ -22,6 +22,7 @@ import { medir } from "../medir.ts";
 import { contarExecucoesSql } from "./contador_de_execucoes_sql.ts";
 import { type MedicaoDaRota, type MedicoesDoVolume, montarRelatorioDaReferencia } from "./relatorio_da_referencia.ts";
 import { type AlvosDasRotas, semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 const CHAMADAS_POR_ROTA = 20;
 
@@ -63,6 +64,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
       agendador: { proximaBusca: () => new Date() },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
+      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

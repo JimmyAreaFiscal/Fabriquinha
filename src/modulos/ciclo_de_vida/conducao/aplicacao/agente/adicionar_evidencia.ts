@@ -8,12 +8,7 @@ import {
   submeterEvidencia,
   type TicketDemanda,
 } from "../../../processo/publico.ts";
-import {
-  ambienteDoEspaco,
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  montarRepositorio,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket, ocupanteDoDono } from "../../../../repositorio/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import {
   agregadoDaRodada,
@@ -25,6 +20,7 @@ import {
 import { CATALOGO_ETAPAS, Endereco, TipoEvidencia } from "../../../etapas/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { gerarAula, type Trecho } from "../encerrar_rodada/documentacao_do_pr/aula.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 import {
   enderecoDoTicketDoAgente,
   type EscopoDoAgente,
@@ -96,7 +92,7 @@ function origensDosAnexos(banco: DatabaseSync, agente: EscopoDoAgente, espaco: E
  * Reprovação (D10-1).
  */
 export async function adicionarEvidenciaComAnexosEnviados(
-  banco: DatabaseSync,
+  { banco, ambientes, repositorio }: ModulosDoCiclo,
   processo: ProcessoDoAgente,
   pedido: PedidoDeEvidencia,
   lerJson: LeitorDeJson,
@@ -125,7 +121,7 @@ export async function adicionarEvidenciaComAnexosEnviados(
     // O HTML nasce dos trechos, antes de a submissão ser avaliada; a API devolve o ZodError como 422.
     const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
     const html = await gerarAula(
-      (...argumentos) => montarRepositorio({ banco }).gitNoEspaco(espaco, ...argumentos),
+      (...argumentos) => repositorio.gitNoEspaco(espaco, ...argumentos),
       agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
       trechos as Trecho[],
     );
@@ -141,7 +137,10 @@ export async function adicionarEvidenciaComAnexosEnviados(
     { tipo, dono: Endereco.doTicket(demanda_id, ticket_id), produtor: agente.ator, dados, anexos },
     {
       origens,
-      enviados: anexosEnviados && { anexos: anexosEnviados, ambiente: ambienteDoEspaco(espaco) },
+      enviados: anexosEnviados && {
+        anexos: anexosEnviados,
+        ambiente: ambientes.ambienteDo(ocupanteDoDono(espaco.dono)),
+      },
       conferirAntesDeGravar(agregado) {
         reconferirExecucao(banco, agente);
         exigirTicketAberto(agregado, agente);

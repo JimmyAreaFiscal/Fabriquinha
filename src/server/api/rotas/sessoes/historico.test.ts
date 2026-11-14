@@ -14,6 +14,7 @@ import { casar } from "../../../web/compartilhado/caminhos.ts";
 import { traduzir } from "../../erros.ts";
 import { ROTAS } from "../../servidor.ts";
 import type { SessaoDeDemanda } from "./historico.ts";
+import { montarRepositorio } from "../../../../modulos/repositorio/publico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -75,6 +76,7 @@ async function sessoes(query: string): Promise<unknown> {
       agendador: { proximaBusca: () => new Date() },
       ambientes: undefined as unknown as AmbientesDoServico,
       demandas: montarDemandasDoBanco(banco),
+      repositorio: montarRepositorio({ banco: banco }),
       relogio: relogioDoSistema,
       params: {},
       query: new URLSearchParams(query),

@@ -26,6 +26,7 @@ import {
   montarRodada,
   montarTicket,
 } from "./cenarios_de_demanda.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 // Os testes do cliente do agente (que não importa o armazenamento) dão o token ao processo por aqui.
 export { gravarTokenDaExecucao };
@@ -121,6 +122,7 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
       agendador: { proximaBusca: () => new Date() },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
+      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
       relogio: relogioDoSistema,
       registrarErro: noLog,
       rotasDoAgente: rotas,

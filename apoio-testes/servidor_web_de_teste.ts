@@ -24,6 +24,7 @@ import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
 } from "./cenarios/cenarios_de_demanda.ts";
+import { montarRepositorio } from "../src/modulos/repositorio/publico.ts";
 
 const fechamentos: (() => Promise<void>)[] = [];
 after(async () => {
@@ -92,6 +93,7 @@ export async function servir(
       agendador,
       ambientes,
       demandas: montarDemandasDoBanco(banco),
+      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

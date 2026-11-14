@@ -10,6 +10,7 @@ import { ROTAS_DO_CHAT } from "../../../server/api/rotas/sessoes/chat.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 5;
 const EM = "2026-01-01T00:00:00.000Z";
@@ -93,6 +94,7 @@ test("depois da migração 42 o chat da demanda concluída mostra a conversa e a
   const chat = rota.tratar({
     banco,
     demandas: montarDemandasDoBanco(banco),
+    repositorio: montarRepositorio({ banco: banco }),
     params: { sessao: "s-1" },
   } as unknown as Pedido) as DadosDoChatDemanda;
 

@@ -57,7 +57,7 @@ interface SituacaoDoPR {
 }
 
 /** O estado do PR lido na plataforma (F5 §5.2). */
-interface LeituraDoPR {
+export interface LeituraDoPR {
   estado: PRNaHospedagem["estado"];
   url: string;
   /** Só no PR mergeado, quando a plataforma informa. */

@@ -11,6 +11,7 @@ import { type DadosDoInicio, QuantidadeDePendencias } from "../../contrato/inici
 import { ROTAS_DO_INICIO } from "./inicio.ts";
 import { predecessorasPendentesPelasDependencias } from "../../fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { modulosDoCicloDeTeste } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -54,7 +55,7 @@ test("GET /api/despacho devolve as recusas do último ciclo, com os endereços e
   assert.deepEqual(RecusasDoDespacho.parse((await pedir("/api/despacho")).json()), { recusas: [] });
   await Promise.all(
     cicloDoDespacho(
-      banco,
+      modulosDoCicloDeTeste(banco),
       configuracao(banco),
       despachoDasEtapas(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(banco)),

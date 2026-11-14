@@ -21,12 +21,7 @@ import {
   submeterEvidencia,
   type TicketDemanda,
 } from "../../../processo/publico.ts";
-import {
-  ambienteDoEspaco,
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  montarRepositorio,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket, ocupanteDoDono } from "../../../../repositorio/publico.ts";
 import { evidenciasPendentes } from "../../../evidencias/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import {
@@ -127,13 +122,21 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
    * aprovar sem analisar; usa as evidências gravadas e só completa o registro do commit.
    */
   protected override async conferirResultado(endereco: Endereco): Promise<ResultadoDaConferencia> {
-    const { banco } = this.deps;
+    const { banco, ambientes, repositorio } = this.deps;
     const ticket = this.ticketDe(endereco);
     const ag = carregarDemanda(banco, ticket.demanda_id);
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const espaco = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
-    const ambiente = ambienteDoEspaco(espaco);
-    if (!(await montarRepositorio({ banco }).commitComMarca(espaco, marcaDoTicket(ticket)))) {
+    const ambiente = ambientes.ambienteDo(ocupanteDoDono(espaco.dono));
+    const commitComMarca = await repositorio.gitNoEspaco(
+      espaco,
+      "log",
+      "--fixed-strings",
+      "--grep",
+      marcaDoTicket(ticket),
+      "--format=%H",
+    );
+    if (commitComMarca.trim() === "") {
       const naoPassou = await this.verificarEGravarEvidencias(ticket, ag, projeto, espaco, ambiente);
       if (naoPassou) return naoPassou;
     }
@@ -155,7 +158,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia | undefined> {
-    const { banco, condutor } = this.deps;
+    const { banco, condutor, repositorio } = this.deps;
     const { pasta: worktree } = espaco;
     const e2e = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id)?.e2e ?? false;
     const verificacoes = await (this.opcoes.coletarVerificacoes ?? coletarVerificacoes)({
@@ -164,7 +167,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
       projeto,
       e2e,
       worktree,
-      lerGitDoEspaco: (...argumentos) => montarRepositorio({ banco }).gitNoEspaco(espaco, ...argumentos),
+      lerGitDoEspaco: (...argumentos) => repositorio.gitNoEspaco(espaco, ...argumentos),
       opcoes: this.opcoes.opcoesSonar,
     });
     if (condutor.emParada()) return falhaPorServicoReiniciado;
@@ -189,12 +192,12 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia> {
-    const { banco, condutor } = this.deps;
+    const { condutor } = this.deps;
     const { hooks_do_commit: hooks } = montarVerificacoesDaEtapa(ticket.etapa, {
       hooks_do_commit: () =>
         new HooksDoCommit(async ({ limiteMs }) => {
           await commitarTicketDemanda(
-            banco,
+            this.deps.repositorio,
             ticket,
             {
               projeto,

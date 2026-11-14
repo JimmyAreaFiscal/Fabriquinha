@@ -19,13 +19,19 @@ import { MotorDasSessoes } from "../../../../sessoes/publico.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
 const conducao = (banco: Banco, condutorDeTeste: MotorDasSessoes = condutor) =>
-  new ConducaoDeRevisarRodada({ banco, relogio: RELOGIO, condutor: condutorDeTeste, registro: anotar });
+  new ConducaoDeRevisarRodada({
+    ...modulosDoCicloDeTeste(banco),
+    relogio: RELOGIO,
+    condutor: condutorDeTeste,
+    registro: anotar,
+  });
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");

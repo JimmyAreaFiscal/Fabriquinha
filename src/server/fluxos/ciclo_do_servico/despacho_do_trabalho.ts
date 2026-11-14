@@ -1,7 +1,6 @@
 // O fluxo do despacho do trabalho (MELHORIAS §5.3), entre Demandas e o Ciclo de Vida: Demandas informa, a cada chamada,
 // as predecessoras que ainda não concluíram de cada pedido (o pedido sem nenhuma está liberado), e o Despacho escolhe e
 // reserva os tickets. O ciclo do agendador e o "Executar agora" passam por aqui, com a mesma liberação.
-import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import {
@@ -9,6 +8,7 @@ import {
   type Configuracao,
   type DepsDespacho,
   executarAgora,
+  type ModulosDoCiclo,
   type MotivoDeRecusa,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 
@@ -23,14 +23,14 @@ export const predecessorasPendentesPelasDependencias =
 
 /** Um ciclo do agendador com os pedidos liberados por Demandas; devolve as etapas em segundo plano, que nunca rejeitam. */
 export const despacharTrabalho = (
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   gestaoDeDemandas: GestaoDeDemandas,
   configuracaoDoServico: Configuracao,
   conducoes: DepsDespacho,
   relogio: Relogio,
 ): Promise<void>[] =>
   cicloDoDespacho(
-    banco,
+    modulos,
     configuracaoDoServico,
     conducoes,
     predecessorasPendentesPelasDependencias(gestaoDeDemandas),
@@ -39,7 +39,7 @@ export const despacharTrabalho = (
 
 /** O "Executar agora" de um ticket, com a mesma liberação do ciclo; o que o Despacho recusa volta como motivo. */
 export const despacharAgora = (
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   gestaoDeDemandas: GestaoDeDemandas,
   ticket: { demanda_id: string; ticket_id: number },
   configuracaoDoServico: Configuracao,
@@ -47,7 +47,7 @@ export const despacharAgora = (
   relogio: Relogio,
 ): MotivoDeRecusa | Promise<void> =>
   executarAgora(
-    banco,
+    modulos,
     ticket,
     configuracaoDoServico,
     conducoes,

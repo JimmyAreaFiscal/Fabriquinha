@@ -24,7 +24,7 @@ export class ConducaoDeEncerrarRodada extends ConducaoAgentica {
   protected override async conferirResultado(endereco: Endereco): Promise<ResultadoDaConferencia> {
     const { banco, relogio, registro } = this.deps;
     try {
-      await conferirEncerramentoRodada(banco, relogio, this.rodadaDe(endereco));
+      await conferirEncerramentoRodada(this.deps, relogio, this.rodadaDe(endereco));
       return { tipo: "sucesso" };
     } catch (erro) {
       const falha = falhaDoErro(erro);
@@ -37,7 +37,7 @@ export class ConducaoDeEncerrarRodada extends ConducaoAgentica {
   protected override async aoConcluir(endereco: Endereco): Promise<void> {
     const { banco } = this.deps;
     const ref = this.rodadaDe(endereco);
-    await aprovarPRRodadaSeAutomatico(banco, carregarDemanda(banco, ref.demanda_id), ref);
+    await aprovarPRRodadaSeAutomatico(this.deps, carregarDemanda(banco, ref.demanda_id), ref);
   }
 
   private rodadaDe(endereco: Endereco): RefRodada {

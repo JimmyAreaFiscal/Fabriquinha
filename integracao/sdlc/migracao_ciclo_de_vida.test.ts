@@ -68,6 +68,7 @@ import {
 import { ghFalso } from "../falsos.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];
@@ -86,7 +87,7 @@ async function rodadaNaSessaoDeAjustes(c: Cenario): Promise<string> {
   pi.roteirizar([{ agente: agenteMudo }]);
   const chamadasAntes = pisAteAgora();
   await decidirGate(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     "gate_pr",
     Endereco.daRodada(id, 1),
     { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -126,13 +127,25 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
         enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, CTX);
         break;
       case "gate_demanda":
-        decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR);
+        decidirGateDaDemanda(
+          modulosDoCicloDeTeste(c.banco),
+          montarDemandasDoBanco(c.banco),
+          id,
+          { resultado: "aprovado" },
+          AUDITOR,
+        );
         break;
       case "planejar":
         await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);
         break;
       case "gate_planejamento":
-        await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+        await decidirGate(
+          modulosDoCicloDeTeste(c.banco),
+          "gate_planejamento",
+          Endereco.daDemanda(id),
+          { resultado: "aprovado" },
+          AUDITOR,
+        );
         break;
       case "em_execucao": {
         const rodada = rodadas.find((r) => r.estado !== "concluida");
@@ -176,7 +189,7 @@ async function conduzirRodada(c: Cenario, id: string, rodada: number, estado: st
       comDemanda(c.banco, id, (ag) =>
         registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
       );
-      await concluirSessaoAjustes(c.banco, ref, AUDITOR); // aguarda o fim da conversa
+      await concluirSessaoAjustes(modulosDoCicloDeTeste(c.banco), ref, AUDITOR); // aguarda o fim da conversa
       break;
     }
     default:

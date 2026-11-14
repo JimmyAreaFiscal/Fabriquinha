@@ -42,7 +42,7 @@ async function lerCommit(ambiente: Ambiente, worktree: string, sha: string): Pro
   };
 }
 
-/** O commit da worktree cuja mensagem tem a `marca`, ou `undefined`. */
+/** O commit da worktree cuja mensagem tem a `marca`, ou `undefined`. @testes o teste confere a busca pela marca; a produção a usa só no commit */
 export async function acharCommitComMarca(
   ambiente: Ambiente,
   worktree: string,

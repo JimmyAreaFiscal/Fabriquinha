@@ -5,6 +5,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { spawn } from "node:child_process";
 import { createRequire, syncBuiltinESMExports } from "node:module";
+import type { DatabaseSync } from "node:sqlite";
 import type { TestContext } from "node:test";
 import {
   type Ambiente,
@@ -19,7 +20,8 @@ import {
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { AmbienteHostLocal } from "../../src/modulos/ambiente/execucao/infra/host_local/ambiente_host_local.ts";
 import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { ligarGestaoDeAmbientes } from "../../src/modulos/repositorio/publico.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import type { ModulosDoCiclo } from "../../src/modulos/ciclo_de_vida/publico.ts";
 
 export { AmbienteHostLocal };
 export { AmbienteContainer } from "../../src/modulos/ambiente/execucao/infra/container/ambiente_container.ts";
@@ -42,13 +44,22 @@ export const gestaoQueSoUsa = (ambiente: Ambiente): GestaoDeAmbientes => ({
 /** A gestão dos testes, sem montagem: o host local, como a do serviço no `host_local`. */
 const GESTAO_DOS_TESTES = gestaoQueSoUsa(new AmbienteHostLocal());
 
+/** A gestão que os módulos montados nos testes recebem, como a da composição. */
+let gestaoLigadaNosTestes = GESTAO_DOS_TESTES;
+
 /**
- * Liga `gestao` aos módulos que pedem Ambiente (o Repositório e as Sessões do condutor), como a composição faz; sem ela,
- * a gestão dos testes. O harness dos testes liga a dos testes antes de cada arquivo.
+ * Liga `gestao` aos módulos que pedem Ambiente (os de `modulosDoCicloDeTeste` e as Sessões do condutor), como a
+ * composição faz; sem ela, a gestão dos testes. O harness dos testes liga a dos testes antes de cada arquivo.
  */
 export function ligarGestaoDeAmbientesNosModulos(gestao: GestaoDeAmbientes = GESTAO_DOS_TESTES): void {
-  ligarGestaoDeAmbientes(gestao);
+  gestaoLigadaNosTestes = gestao;
   condutor.montarAmbientes(gestao);
+}
+
+/** Os módulos que a condução do Ciclo de Vida recebe da composição, montados sobre `banco` com a gestão ligada agora. */
+export function modulosDoCicloDeTeste(banco: DatabaseSync): ModulosDoCiclo {
+  const ambientes = gestaoLigadaNosTestes;
+  return { banco, ambientes, repositorio: montarRepositorio({ banco, ambientes }) };
 }
 
 export interface ComandoRegistrado {

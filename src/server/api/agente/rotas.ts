@@ -38,6 +38,8 @@ export const PREFIXO_DA_API_DO_AGENTE = "/api/agente/";
 /** O que a rota recebe: o agente que o token autenticou e o pedido já separado em caminho, query e corpo JSON. */
 interface PedidoDoAgente {
   banco: DatabaseSync;
+  /** Os módulos que os casos de uso do agente recebem, como o serviço os montou. */
+  modulos: Parameters<CasosDeUsoDoAgente["adicionarEvidencia"]>[0];
   relogio: Relogio;
   agente: EscopoDoAgente;
   params: Parametros;
@@ -149,13 +151,13 @@ export function rotasDoAgente(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_AGENTE
       metodo: "POST",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}revisoes`,
       resposta: RespostaRevisaoDecidir,
-      tratar: ({ banco, agente, corpo }) => {
+      tratar: ({ modulos, agente, corpo }) => {
         const pedido = PedidoRevisaoDecidir.parse(corpo);
         exigirTicketProprio(agente, pedido.ticket, true);
         const { correcoes, plano } = pedido;
         const jsonPorOpcao: Record<string, unknown> = { "--correcoes": correcoes, "--plano": plano };
         return casos.decidirRevisao(
-          banco,
+          modulos,
           processoDoAgente(agente),
           {
             ...pedido,

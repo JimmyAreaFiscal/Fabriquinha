@@ -4,7 +4,7 @@
 // integracao/falsos.ts. O tempo vai do despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da
 // abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { ligarGestaoDeAmbientesNosModulos } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { ligarGestaoDeAmbientesNosModulos, modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import {
   chmodSync,
   mkdirSync,
@@ -211,14 +211,20 @@ function demandaAprovada(c: Cenario): Promise<string> {
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
   enviarAoDesenvolvimento(c.banco, montarDemandasDoBanco(c.banco), id, AUTOR, ctx);
-  decidirGateDaDemanda(c.banco, montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" }, AUDITOR);
+  decidirGateDaDemanda(
+    modulosDoCicloDeTeste(c.banco),
+    montarDemandasDoBanco(c.banco),
+    id,
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
   return Promise.resolve(id);
 }
 
 /** O planejamento em curso (`fim`) até a aprovação do plano de uma rodada com um ticket: a demanda vai a `execucao`. */
 async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes: number): Promise<void> {
   await esperar(() => chamadas(c) > antes, "o pi receber o prompt do planejamento");
-  interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), { demanda_id: id, ticket_id: 2 });
   await fim;
   const plano = {
     demanda_id: id,
@@ -227,7 +233,13 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
   };
   comDemanda(c.banco, id, (ag) => comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, agora()));
-  await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_planejamento",
+    Endereco.daDemanda(id),
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
 }
 
 const verificacoes = (): RegistroDaVerificacao[] =>
@@ -242,7 +254,12 @@ const deps = despachoDasEtapas({
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
   await Promise.all(
-    cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+    cicloDoDespacho(
+      modulosDoCicloDeTeste(c.banco),
+      c.config,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ),
   );
 }
 
@@ -251,7 +268,7 @@ async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Pro
   portao(c, false);
   const antes = chamadas(c);
   const fins = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -290,7 +307,7 @@ const revisarRodada = (c: Cenario, id: string) =>
     const { ticket_id } = ticket(c, id, "revisar_rodada");
     comoAgente(c, id, ticket_id, [["explicacao_fitness", { explicacoes: [] }], comprovacao]);
     await decidirGate(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       "gate_revisao_rodada",
       Endereco.daRodada(id, 1),
       { resultado: "aprovado" },
@@ -315,7 +332,13 @@ const encerrarRodada = (c: Cenario, id: string) =>
   });
 
 const aprovarRodada = (c: Cenario, id: string) =>
-  decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
+  decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "aprovado", nota: 4 },
+    AUDITOR,
+  );
 
 const revisarDemanda = (c: Cenario, id: string) =>
   cicloComAgente(c, async () => {
@@ -326,7 +349,7 @@ const revisarDemanda = (c: Cenario, id: string) =>
       ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
     ]);
     await decidirGate(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       "gate_revisao_demanda",
       Endereco.daDemanda(id),
       { resultado: "aprovado" },
@@ -347,7 +370,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
   const [fim] = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -467,7 +490,7 @@ const ETAPAS: Record<string, Preparar> = {
       executar: async () => {
         const antes = chamadas(c);
         await decidirGate(
-          c.banco,
+          modulosDoCicloDeTeste(c.banco),
           "gate_pr",
           Endereco.daRodada(id, 1),
           { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -495,7 +518,7 @@ const ETAPAS: Record<string, Preparar> = {
         comDemanda(c.banco, id, (ag) =>
           registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
         );
-        await concluirSessaoAjustes(c.banco, ref, AUDITOR);
+        await concluirSessaoAjustes(modulosDoCicloDeTeste(c.banco), ref, AUDITOR);
       },
     };
   },

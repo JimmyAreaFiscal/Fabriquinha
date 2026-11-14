@@ -30,6 +30,7 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { publicarPRDe } from "../../apoio-testes/repositorio_de_teste.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");
@@ -261,6 +262,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       agendador: { proximaBusca: () => new Date() },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
+      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

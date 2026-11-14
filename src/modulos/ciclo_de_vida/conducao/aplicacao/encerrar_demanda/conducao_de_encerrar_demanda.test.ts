@@ -37,7 +37,7 @@ import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
-import { AmbienteHostLocal } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
@@ -194,7 +194,7 @@ async function cenario({
 /** Conduz o `encerrar_demanda` aberto, como o agendador, e devolve a demanda no fim do que deu para fazer. */
 async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDemanda = {}) {
   await new ConducaoDeEncerrarDemanda(
-    { banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar },
+    { ...modulosDoCicloDeTeste(banco), relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar },
     opcoes,
   ).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket(D, 8)));
   return carregarDemanda(banco, D);

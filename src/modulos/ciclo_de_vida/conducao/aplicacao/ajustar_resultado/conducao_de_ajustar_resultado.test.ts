@@ -31,11 +31,12 @@ import { concluirSessaoAjustes, guardarMarcoDaSessao, sessaoDaRodada } from "./s
 import { enviarDemanda } from "../conducao_de_etapa/mensagem_do_auditor.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeAjustarResultado } from "./conducao_de_ajustar_resultado.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 /** O mesmo caminho de efeitos do gate, com o pi de ociosidade curta para a execução terminar logo e o `fim` poder ser esperado. */
 async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: string) {
   limitarTempoDoPi(banco, 0.02);
-  await guardarMarcoDaSessao(banco, REF, carregarDemanda(banco, DEMANDA));
+  await guardarMarcoDaSessao(modulosDoCicloDeTeste(banco), REF, carregarDemanda(banco, DEMANDA));
   const reprovada = comDemanda(banco, DEMANDA, (a) =>
     GATES.gate_pr.regra.decidir(a, ENDERECO, { resultado: "reprovado", motivo }, AUDITOR, {
       agora: "2026-01-01T00:00:00.000Z",
@@ -43,7 +44,7 @@ async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: strin
   );
   const ticket = sessaoDaRodada(reprovada, REF);
   const execucao = await new ConducaoDeAjustarResultado({
-    banco,
+    ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     condutor,
     registro: anotar,
@@ -105,15 +106,18 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
   const sessao = prompts()[0]?.sessao ?? "";
   await ate(() => condutor.situacao(sessao)?.ocupado === false);
 
-  enviarDemanda(banco, sessao, "Cobre o erro de rede também", "prompt", 5);
+  enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "Cobre o erro de rede também", "prompt", 5);
 
   await ate(() => prompts().length === 2);
   assert.equal(prompts()[1]?.prompt, "Cobre o erro de rede também");
   assert.equal(prompts()[1]?.sessao, sessao);
 
   // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é reprovada e a sessão segue aberta.
-  await assert.rejects(concluirSessaoAjustes(banco, REF, AUDITOR), /trabalho corretivo/);
-  await assert.rejects(concluirSessaoAjustes(banco, REF, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
+  await assert.rejects(concluirSessaoAjustes(modulosDoCicloDeTeste(banco), REF, AUDITOR), /trabalho corretivo/);
+  await assert.rejects(
+    concluirSessaoAjustes(modulosDoCicloDeTeste(banco), REF, { tipo: "agente", trabalho_id: "1" }),
+    ErroDeEscopo,
+  );
   assert.equal(ag().rodadas[0]?.estado, "ajustar_resultado");
 
   // CA-19 e CA-21: com a correção registrada, o Auditor conclui e a rodada volta ao desenvolvimento.
@@ -131,7 +135,7 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
   await fim;
   const sessao = prompts()[0]?.sessao ?? "";
 
-  enviarDemanda(banco, sessao, "Voltei", "prompt", 0.02);
+  enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "Voltei", "prompt", 0.02);
 
   await ate(() => prompts().length === 2);
   assert.equal(prompts()[1]?.sessao, sessao);

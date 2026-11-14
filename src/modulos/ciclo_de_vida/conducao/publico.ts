@@ -57,6 +57,7 @@ export {
 export { exigirTrabalhoDoTicket } from "./aplicacao/politica_dos_agentes/trabalho_do_ticket.ts";
 export { montarPromptDemanda } from "./aplicacao/prompt/prompt_demanda.ts";
 export { ligarLeituraDosLimitesDasSessoes } from "./aplicacao/limites_das_sessoes.ts";
+export type { ModulosDoCiclo } from "./aplicacao/modulos_do_ciclo.ts";
 export {
   ligarLeituraDosProjetosCadastrados,
   type ProjetoConduzido,

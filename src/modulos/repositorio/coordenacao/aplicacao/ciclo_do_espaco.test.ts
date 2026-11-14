@@ -17,6 +17,7 @@ import {
   listarAmbientes,
   AmbienteHostLocal,
   AmbienteContainer,
+  gestaoQueSoUsa,
 } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
@@ -49,9 +50,16 @@ function cenario(comandosDePreparacao: string[] = []) {
     c,
     espacoDemanda,
     espacoRodada,
-    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro, ambiente),
-    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro, ambiente),
-    daRodadaComPr: () => new CicloDoEspacoDaRodada({ ...espacoRodada, pr: prAberto }, c.projeto, registro, ambiente),
+    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)),
+    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)),
+    daRodadaComPr: () =>
+      new CicloDoEspacoDaRodada(
+        { ...espacoRodada, pr: prAberto },
+        c.projeto,
+        registro,
+        ambiente,
+        gestaoQueSoUsa(ambiente),
+      ),
   };
 }
 
@@ -121,7 +129,13 @@ test("integrar da rodada integra o PR pela hospedagem e avança a demanda local 
 test("o ciclo da rodada recusa o Espaço sem PR e o que não é de rodada", async () => {
   const { c, espacoDemanda, daRodada } = cenario();
   await assert.rejects(daRodada().integrar(), /não tem PR publicado/);
-  const semRodada = new CicloDoEspacoDaRodada(espacoDemanda, c.projeto, { raiz: c.raiz, log: c.log }, ambiente);
+  const semRodada = new CicloDoEspacoDaRodada(
+    espacoDemanda,
+    c.projeto,
+    { raiz: c.raiz, log: c.log },
+    ambiente,
+    gestaoQueSoUsa(ambiente),
+  );
   await assert.rejects(semRodada.criar(), ErroDeRegra);
   await assert.rejects(semRodada.atualizarComBase(), ErroDeRegra);
 });
@@ -135,8 +149,14 @@ test("o ciclo da demanda não atualiza com a base nem integra: o PR final é do 
 test("cicloDoEspaco escolhe o ciclo pelo dono do Espaço", () => {
   const { c, espacoDemanda, espacoRodada } = cenario();
   const registro = { raiz: c.raiz, log: c.log };
-  assert.ok(cicloDoEspaco(espacoDemanda, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaDemanda);
-  assert.ok(cicloDoEspaco(espacoRodada, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaRodada);
+  assert.ok(
+    cicloDoEspaco(espacoDemanda, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)) instanceof
+      CicloDoEspacoDaDemanda,
+  );
+  assert.ok(
+    cicloDoEspaco(espacoRodada, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)) instanceof
+      CicloDoEspacoDaRodada,
+  );
 });
 
 test("limpar remove a worktree e as branches do Espaço, local e remota, e nada além dele", async () => {

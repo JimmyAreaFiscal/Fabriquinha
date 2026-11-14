@@ -9,7 +9,6 @@ import {
   type EspacoDeTrabalho,
   garantirWorktreeDemandaDizendoSeBuscouBase,
   garantirWorktreeRodada,
-  gestaoDeAmbientes,
   limparDemanda,
   ocupanteDoAmbiente,
   ocupanteDoDono,
@@ -42,7 +41,7 @@ abstract class CicloDoEspaco {
     projeto: ProjetoDoCiclo,
     registro: RegistroDoCiclo,
     ambiente: Ambiente,
-    ambientes: GestaoDeAmbientes = gestaoDeAmbientes(),
+    ambientes: GestaoDeAmbientes,
   ) {
     this.espaco = espaco;
     this.projeto = projeto;
@@ -170,8 +169,9 @@ export function cicloDoEspaco(
   projeto: ProjetoDoCiclo,
   registro: RegistroDoCiclo,
   ambiente: Ambiente,
+  ambientes: GestaoDeAmbientes,
 ): CicloDoEspaco {
   return espaco.dono.rodada_id === undefined
-    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente)
-    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente);
+    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente, ambientes)
+    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente, ambientes);
 }

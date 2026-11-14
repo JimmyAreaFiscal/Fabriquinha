@@ -12,6 +12,7 @@ import {
   reprovarPRRodada,
 } from "../../../../../../apoio-testes/cenarios/cenario_de_ajustes.ts";
 import { decidirGate } from "../gates.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 test("CA-13: reprovar sem motivo, como agente ou fora do gate é reprovado sem gravar o marco nem abrir a sessão", async () => {
   const { ag, banco, marco, prompts } = await cenarioDeAjustes();
@@ -42,7 +43,13 @@ test("rodada sem PR publicado não reprova", async () => {
 test("o endereço da demanda não reprova o PR, que é da rodada", async () => {
   const { banco, marco } = await cenarioDeAjustes();
   await assert.rejects(
-    decidirGate(banco, "gate_pr", Endereco.daDemanda(DEMANDA), { resultado: "reprovado", motivo: MOTIVO }, AUDITOR),
+    decidirGate(
+      modulosDoCicloDeTeste(banco),
+      "gate_pr",
+      Endereco.daDemanda(DEMANDA),
+      { resultado: "reprovado", motivo: MOTIVO },
+      AUDITOR,
+    ),
     /não é de uma rodada/,
   );
   assert.equal(existsSync(marco()), false);

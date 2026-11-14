@@ -1,6 +1,6 @@
-// Os PRs de cada Espaço de Trabalho (MELHORIAS §10): o único SQL de `pull_request`. O Ciclo de Vida guarda no agregado
-// da demanda o PR de cada rodada e o final, e os lê e grava por aqui, na unidade de trabalho dele; o Repositório só
-// guarda a situação observada na hospedagem, e as decisões sobre o PR continuam do Ciclo de Vida (§10, regra 6).
+// Os PRs de cada Espaço de Trabalho (MELHORIAS §10): o único SQL de `pull_request`. O agregado da demanda guarda o PR de
+// cada rodada e o final, com a situação observada na hospedagem, e os lê e grava por aqui, na unidade de trabalho dele; o
+// Repositório publica e lê o PR na hospedagem, e as decisões sobre o PR são do Ciclo de Vida (§10, regra 6).
 import type { DatabaseSync } from "node:sqlite";
 import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
 import {

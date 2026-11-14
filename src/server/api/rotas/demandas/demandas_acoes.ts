@@ -20,7 +20,7 @@ import {
   TicketReaberto,
 } from "../../../contrato/demanda.ts";
 import { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
-import type { Pedido, Rota } from "../../rotas.ts";
+import { modulosDoCiclo, type Pedido, type Rota } from "../../rotas.ts";
 import { recusaEmJson } from "../inicio.ts";
 
 /** O `:ref` do caminho como rodada (`I-206.R2`). */
@@ -32,12 +32,13 @@ function refDaRodada({ params }: Pedido): RefRodada {
 }
 
 /** O corpo é a entrada do gate (`resultado`, `nota` e `motivo`): quem valida é o gate. */
-const decisaoDaDemanda = ({ banco, demandas, params, corpo }: Pedido) =>
-  decidirGateDaDemanda(banco, demandas, String(params.id), corpo, AUDITOR);
+const decisaoDaDemanda = (pedido: Pedido) =>
+  decidirGateDaDemanda(modulosDoCiclo(pedido), pedido.demandas, String(pedido.params.id), pedido.corpo, AUDITOR);
 
-async function decisaoDoPlanejamento({ banco, params, corpo }: Pedido) {
+async function decisaoDoPlanejamento(pedido: Pedido) {
+  const { params, corpo } = pedido;
   const { demanda } = await decidirGate(
-    banco,
+    modulosDoCiclo(pedido),
     "gate_planejamento",
     Endereco.daDemanda(String(params.id)),
     corpo,
@@ -49,7 +50,7 @@ async function decisaoDoPlanejamento({ banco, params, corpo }: Pedido) {
 async function decisaoDoPR(pedido: Pedido) {
   const { demanda_id, rodada_id } = refDaRodada(pedido);
   const { demanda, sessao } = await decidirGate(
-    pedido.banco,
+    modulosDoCiclo(pedido),
     "gate_pr",
     Endereco.daRodada(demanda_id, rodada_id),
     pedido.corpo,
@@ -58,7 +59,7 @@ async function decisaoDoPR(pedido: Pedido) {
   return sessao === undefined ? demanda : { sessao };
 }
 
-const concluir = (pedido: Pedido) => concluirSessaoAjustes(pedido.banco, refDaRodada(pedido), AUDITOR);
+const concluir = (pedido: Pedido) => concluirSessaoAjustes(modulosDoCiclo(pedido), refDaRodada(pedido), AUDITOR);
 
 /** O `:ref` do caminho como ticket (`I-206.T3`). */
 function refDoTicket({ params }: Pedido) {
@@ -86,8 +87,10 @@ async function executar(pedido: Pedido): Promise<unknown> {
   return recusa && recusaEmJson(recusa);
 }
 
-const cancelamento = ({ banco, demandas, params, relogio }: Pedido) =>
-  cancelarDemandaEmCascata(banco, demandas, String(params.id), AUDITOR, { agora: relogio.agora() });
+const cancelamento = (pedido: Pedido) =>
+  cancelarDemandaEmCascata(modulosDoCiclo(pedido), pedido.demandas, String(pedido.params.id), AUDITOR, {
+    agora: pedido.relogio.agora(),
+  });
 const arquivamento = ({ banco, params, relogio }: Pedido) => ({
   demanda: arquivar(banco, String(params.id), AUDITOR, { agora: relogio.agora() }),
 });

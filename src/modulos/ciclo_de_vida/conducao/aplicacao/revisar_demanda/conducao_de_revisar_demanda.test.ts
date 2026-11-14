@@ -14,12 +14,18 @@ import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 3);
 
 const conducao = (banco: Banco) =>
-  new ConducaoDeRevisarDemanda({ banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar });
+  new ConducaoDeRevisarDemanda({
+    ...modulosDoCicloDeTeste(banco),
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    condutor,
+    registro: anotar,
+  });
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");

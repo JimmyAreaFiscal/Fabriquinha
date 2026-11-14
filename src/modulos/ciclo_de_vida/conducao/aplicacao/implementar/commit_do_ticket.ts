@@ -1,9 +1,8 @@
 // O commit do ticket da demanda (comparacao-sdlc-implementacao.md §6) como o Ciclo de Vida o pede ao Repositório: a marca
 // `[I-n.Tm]`, que o torna idempotente, a mensagem `feat|fix: <título> [I-n.Tm]` e a recusa do ticket do Plano sem alteração.
-import type { DatabaseSync } from "node:sqlite";
 import { PRIMEIRA_ETAPA_DA_RODADA, type TicketDemanda } from "../../../processo/publico.ts";
 import { formatarTicketRef } from "../../../etapas/publico.ts";
-import { type Commit, type EspacoDeTrabalho, montarRepositorio } from "../../../../repositorio/publico.ts";
+import type { Commit, EspacoDeTrabalho, RepositorioDoProjeto } from "../../../../repositorio/publico.ts";
 import type { ProjetoConduzido } from "../projetos_cadastrados.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
@@ -17,7 +16,7 @@ export const marcaDoTicket = (ref: Ref): string => `[${formatarTicketRef(ref)}]`
  * Etapa da rodada) sem alteração não gera commit vazio e é rejeitado com `ErroDeReprovacao`.
  */
 export function commitarTicketDemanda(
-  banco: DatabaseSync,
+  repositorio: Pick<RepositorioDoProjeto, "commitar">,
   ref: Ref,
   {
     projeto,
@@ -35,7 +34,7 @@ export function commitarTicketDemanda(
   limiteMs?: number,
 ): Promise<Commit> {
   const marca = marcaDoTicket(ref);
-  return montarRepositorio({ banco }).commitar(
+  return repositorio.commitar(
     projeto,
     espaco,
     {

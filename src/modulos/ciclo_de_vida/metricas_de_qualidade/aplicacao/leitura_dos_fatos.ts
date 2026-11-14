@@ -4,28 +4,30 @@
 // que mais de uma Métrica pede é feita uma vez por escopo: as Métricas do mesmo pedido recebem o mesmo escopo.
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado, ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
-import { montarRepositorio } from "../../../repositorio/publico.ts";
+import type { RepositorioDoProjeto } from "../../../repositorio/publico.ts";
 import { primeiraEvidenciaDasDemandas } from "../../evidencias/publico.ts";
 import { type ResumoDoTicket, ticketsDasDemandas } from "../../planejamento/publico.ts";
 import { decisoesEmLote } from "../../processo/publico.ts";
 import type { PedidoDasMetricas, Recorte } from "../nucleo/metrica.ts";
 
-/** De onde as Métricas leem: o banco, pelos donos de cada fato, e os pedidos de todas as demandas, como dado. */
+/** De onde as Métricas leem: o banco, pelos donos de cada fato, o Repositório e os pedidos de todas as demandas, como dado. */
 export interface OrigemDosFatos {
   banco: DatabaseSync;
+  repositorio: Pick<RepositorioDoProjeto, "metricas">;
   pedidos: readonly PedidoDasMetricas[];
 }
 
 /** O recorte resolvido: o período e os pedidos das demandas que ele alcança, pelo projeto e pela demanda. */
 export interface EscopoDosFatos {
   banco: DatabaseSync;
+  repositorio: Pick<RepositorioDoProjeto, "metricas">;
   periodo: Pick<Recorte, "inicio" | "fim">;
   pedidos: readonly PedidoDasMetricas[];
   demandas: readonly string[];
 }
 
 /** O recorte de uma Demanda que não existe falha: zero seria um total que ninguém registrou. */
-export function escopoDoRecorte({ banco, pedidos }: OrigemDosFatos, recorte: Recorte): EscopoDosFatos {
+export function escopoDoRecorte({ banco, repositorio, pedidos }: OrigemDosFatos, recorte: Recorte): EscopoDosFatos {
   const { inicio, fim, projeto, demandaId } = recorte;
   if (demandaId !== undefined && !pedidos.some((pedido) => pedido.id === demandaId))
     throw new ErroDeInexistente(`a demanda ${demandaId} não existe`, "confira o id da demanda");
@@ -34,7 +36,13 @@ export function escopoDoRecorte({ banco, pedidos }: OrigemDosFatos, recorte: Rec
       (projeto === undefined || projeto === null || pedido.projeto === projeto) &&
       (demandaId === undefined || pedido.id === demandaId),
   );
-  return { banco, periodo: { inicio, fim }, pedidos: doRecorte, demandas: doRecorte.map((pedido) => pedido.id) };
+  return {
+    banco,
+    repositorio,
+    periodo: { inicio, fim },
+    pedidos: doRecorte,
+    demandas: doRecorte.map((pedido) => pedido.id),
+  };
 }
 
 /** A leitura feita uma vez por escopo: a segunda Métrica que a pede recebe o que a primeira leu. */
@@ -88,8 +96,7 @@ export const lerDecisoesDoRecorte = lidaUmaVezPorEscopo((escopo) => {
 /**
  * Os commits de ticket das demandas do escopo, de qualquer período, com os arquivos, lidos do Repositório: a conformidade
  * compara a rodada inteira.
- * ponytail: o Repositório montado por banco; o passo 6 entrega ao Ciclo de Vida o Repositório da composição.
  */
 export const lerCommitsDoEscopo = lidaUmaVezPorEscopo(
-  (escopo) => montarRepositorio({ banco: escopo.banco }).metricas({ demandas: escopo.demandas, periodo: {} }).commits,
+  (escopo) => escopo.repositorio.metricas({ demandas: escopo.demandas, periodo: {} }).commits,
 );

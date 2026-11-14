@@ -37,6 +37,7 @@ import { criarRepositorioDeTeste } from "../../../../apoio-testes/repositorio_de
 import { abrirChatDemanda, exportarHistoricoDemanda } from "./chat.ts";
 import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 /** O cabeçalho da sessão, como o chat o abre; `undefined` se o id não é de uma sessão da demanda. */
 const cabecalhoDaSessao = (banco: DatabaseSync, id: string) =>
@@ -469,7 +470,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
     demanda("I-302", "planejar", "pergunte perguntar", [ticket("I-302", 1, "planejar", "em_execucao")]),
   );
   const ref = { demanda_id: "I-302", ticket_id: 1 };
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref, {
+  const { id, fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref, {
     montarPrompt: montarPromptDemanda,
     limiteMin: 5,
     modo: "interativo",
@@ -501,7 +502,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   );
 
   cancelar();
-  interromperExecucaoDemanda(banco, ref);
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref);
   await fim;
   const parada = cabecalhoDaSessao(banco, sessao);
   assert.equal(parada?.sessao.estado, "aguardando_humano");
@@ -518,7 +519,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
     demanda("I-303", "planejar", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
   );
   const ref = { demanda_id: "I-303", ticket_id: 1 };
-  const { fim } = iniciarExecucaoDemanda(banco, ref, {
+  const { fim } = iniciarExecucaoDemanda(modulosDoCicloDeTeste(banco), ref, {
     montarPrompt: montarPromptDemanda,
     limiteMin: 5,
     modo: "interativo",
@@ -528,7 +529,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
 
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.throws(
-    () => enviarDemanda(banco, sessao, "oi", "prompt", 5),
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "oi", "prompt", 5),
     /aguardando_humano: dialogo_do_agente e não recebe prompt/,
   );
   const dialogo = String(condutor.situacao(sessao)?.dialogos[0]?.id);
@@ -536,24 +537,27 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
 
   // Conversa com o pi vivo ocioso: a mensagem vai ao mesmo pi, sem nova execução.
-  assert.throws(() => enviarDemanda(banco, sessao, "oi", "steer", 5), /não recebe steer.*envie com prompt/);
+  assert.throws(
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "oi", "steer", 5),
+    /não recebe steer.*envie com prompt/,
+  );
   // O pi vivo recebe a mensagem sem nova execução e volta a perguntar; o aborto vai a ele.
-  assert.equal(enviarDemanda(banco, sessao, "pergunte perguntar de novo", "prompt", 5), true);
+  assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "pergunte perguntar de novo", "prompt", 5), true);
   assert.equal(carregarSessoesDoContexto(banco, ref).execucoes.length, 1);
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
-  assert.equal(abortarDemanda(banco, sessao), true);
+  assert.equal(abortarDemanda(modulosDoCicloDeTeste(banco), sessao), true);
   await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
   assert.notEqual(cabecalhoDaSessao(banco, sessao)?.sessao.estado, "rodando");
-  interromperExecucaoDemanda(banco, ref);
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref);
   await fim;
 
   // Sem pi e sem execução aberta: o prompt é a mensagem e a mesma sessão é retomada.
-  assert.equal(enviarDemanda(banco, sessao, "retoma", "prompt", 5), true);
+  assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "retoma", "prompt", 5), true);
   const execucoes = carregarSessoesDoContexto(banco, ref).execucoes;
   assert.equal(execucoes.length, 2);
   assert.equal(execucoes.at(-1)?.trabalho_id, sessao);
   await ate(() => condutor.situacao(sessao)?.ocupado === false);
-  interromperExecucaoDemanda(banco, ref);
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref);
   await ate(() => carregarSessoesDoContexto(banco, ref).execucoes.at(-1)?.fim != null);
 });
 
@@ -565,7 +569,7 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
     demanda("I-304", "planejar", "trabalhe", [ticket("I-304", 1, "planejar", "em_execucao")]),
   );
   const execucao = iniciarExecucaoDemanda(
-    banco,
+    modulosDoCicloDeTeste(banco),
     { demanda_id: "I-304", ticket_id: 1 },
     { montarPrompt: montarPromptDemanda, limiteMin: 1 },
   );
@@ -573,8 +577,8 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
   assert.ok(sessaoDoTicket);
   const sessao = sessaoDoTicket.id;
   await ate(() => condutor.situacao(sessao)?.ocupado === true);
-  assert.equal(enviarDemanda(banco, sessao, "ajuste o teste", "steer", 1), true);
-  assert.equal(enviarDemanda(banco, sessao, "confira o lint", "follow_up", 1), true);
+  assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "ajuste o teste", "steer", 1), true);
+  assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "confira o lint", "follow_up", 1), true);
   condutor.encerrar(execucao.id);
   await execucao.fim;
   instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
@@ -582,25 +586,28 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
 
 test("CA-12: abortar sem execução em andamento avisa; órfã é interrompida; outros estados recusam o envio", () => {
   const { banco } = cenario();
-  assert.throws(() => abortarDemanda(banco, "s4"), /não há execução para abortar/);
+  assert.throws(() => abortarDemanda(modulosDoCicloDeTeste(banco), "s4"), /não há execução para abortar/);
   // Execução aberta sem pi (serviço reiniciado): interrompe e falha o ticket.
-  assert.throws(() => enviarDemanda(banco, "s2", "x", "steer", 5), /não tem pi rodando/);
-  assert.equal(abortarDemanda(banco, "s2"), true);
+  assert.throws(() => enviarDemanda(modulosDoCicloDeTeste(banco), "s2", "x", "steer", 5), /não tem pi rodando/);
+  assert.equal(abortarDemanda(modulosDoCicloDeTeste(banco), "s2"), true);
   assert.equal(cabecalhoDaSessao(banco, "s2")?.sessao.pendencia?.tipo, "item_bloqueado");
   assert.throws(
-    () => enviarDemanda(banco, "s3", "x", "prompt", 5),
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), "s3", "x", "prompt", 5),
     /aguardando_humano: item_bloqueado e não recebe prompt/,
   );
-  assert.throws(() => enviarDemanda(banco, "s4", "x", "prompt", 5), /terminada e não recebe prompt/);
   assert.throws(
-    () => enviarDemanda(banco, "s301", "x", "prompt", 5),
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), "s4", "x", "prompt", 5),
+    /terminada e não recebe prompt/,
+  );
+  assert.throws(
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), "s301", "x", "prompt", 5),
     /aguardando_humano: gate_humano e não recebe prompt/,
   );
   assert.throws(() => responderDialogoDemanda(banco, "s4", "d", { value: "x" }), /não tem pi rodando/);
   for (const f of [
-    () => enviarDemanda(banco, "nao-existe", "x", "prompt", 5),
+    () => enviarDemanda(modulosDoCicloDeTeste(banco), "nao-existe", "x", "prompt", 5),
     () => responderDialogoDemanda(banco, "nao-existe", "d", { value: "x" }),
-    () => abortarDemanda(banco, "nao-existe"),
+    () => abortarDemanda(modulosDoCicloDeTeste(banco), "nao-existe"),
   ]) {
     assert.equal(f(), false);
   }

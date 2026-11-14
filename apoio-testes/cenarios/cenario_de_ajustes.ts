@@ -19,7 +19,7 @@ import {
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
-import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
@@ -146,7 +146,7 @@ export const ENDERECO = Endereco.daRodada(DEMANDA, 2);
 
 /** Reprova o PR da rodada pelo gate, que abre a sessão de ajustes com o limite de tempo da configuração. */
 export const reprovarPRRodada = (banco: DatabaseSync, motivo: string, ator: Ator = AUDITOR) =>
-  decidirGate(banco, "gate_pr", ENDERECO, { resultado: "reprovado", motivo }, ator);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_pr", ENDERECO, { resultado: "reprovado", motivo }, ator);
 
 /** O mesmo caminho de efeitos do gate, com um limite curto para o pi terminar logo e o `fim` poder ser esperado. */
 
@@ -170,5 +170,5 @@ export async function concluirComCorrecao(banco: DatabaseSync, ag: () => Agregad
     ),
   );
   assert.ok(ag().tickets.some((t) => t.etapa === "implementar" && t.estado === "aberto"));
-  return concluirSessaoAjustes(banco, REF, AUDITOR);
+  return concluirSessaoAjustes(modulosDoCicloDeTeste(banco), REF, AUDITOR);
 }

@@ -14,7 +14,7 @@ export class ConducaoDeRevisarRodada extends ConducaoAgentica {
   }
 
   protected override prepararEspaco(ticket: TicketDemanda): ReturnType<typeof prepararRevisaoRodada> {
-    return prepararRevisaoRodada(this.deps.banco, ticket);
+    return prepararRevisaoRodada(this.deps, ticket);
   }
 
   // A Decisão do gate já concluiu o ticket.

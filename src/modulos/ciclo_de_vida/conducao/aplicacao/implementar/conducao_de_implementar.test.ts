@@ -1,5 +1,6 @@
 // Condução do implementar com pi falso, banco real e git real; só as verificações são injetadas (concluir, reprovar e
 // falhar: CA-1 a CA-16 do fechamento do ticket, agora feito pela condução).
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -196,7 +197,7 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
 test("CA-16: commit sem as evidências devolve o ticket citando o que falta", async () => {
   const c = await cenarioDeImplementacao();
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
-  await commitarTicketDemanda(c.banco, ref(1), {
+  await commitarTicketDemanda(modulosDoCicloDeTeste(c.banco).repositorio, ref(1), {
     projeto: c.c.projeto,
     espaco: espacoDoTicket(c.ag(), { rodada_id: 1 }, c.c.projeto, c.c.raiz),
     tipo: "feat",

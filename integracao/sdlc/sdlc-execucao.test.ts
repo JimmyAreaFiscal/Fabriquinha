@@ -45,6 +45,7 @@ import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParaleli
 import { recuperarAposReinicio } from "../../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
   const agregado = demanda(c, id);
@@ -75,7 +76,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é negado.
   gravarLimiteParalelismo(c.banco, 1);
   const primeiro = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     configuracao(c.banco),
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -83,7 +84,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   assert.equal(primeiro.length, 1);
   assert.equal(
     cicloDoDespacho(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       configuracao(c.banco),
       deps,
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -94,7 +95,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   assert.equal(statusDe(c, r2t1), "aberto");
   assert.deepEqual(
     executarAgora(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       r2t1,
       c.config,
       deps,
@@ -114,7 +115,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   fecharPortao();
   gravarLimiteParalelismo(c.banco, 4);
   const juntas = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     configuracao(c.banco),
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -127,7 +128,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   assert.equal(
     (
       executarAgora(
-        c.banco,
+        modulosDoCicloDeTeste(c.banco),
         r3t1,
         c.config,
         deps,
@@ -138,7 +139,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   );
   assert.equal(
     cicloDoDespacho(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       configuracao(c.banco),
       deps,
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -169,14 +170,14 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
 
   // "Executar agora" da demanda d primeiro, o agendador logo depois: o ciclo reserva só o que sobra (a), não d de novo.
   const manual = executarAgora(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     td,
     c.config,
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
   );
   const ciclo = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     deps,
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -188,7 +189,7 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
   assert.throws(
     () =>
       executarAgora(
-        c.banco,
+        modulosDoCicloDeTeste(c.banco),
         ta,
         c.config,
         deps,
@@ -199,7 +200,7 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
   assert.throws(
     () =>
       executarAgora(
-        c.banco,
+        modulosDoCicloDeTeste(c.banco),
         td,
         c.config,
         deps,
@@ -208,8 +209,12 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
     /está em_execucao/,
   );
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)))
-      .length,
+    cicloDoDespacho(
+      modulosDoCicloDeTeste(c.banco),
+      c.config,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ).length,
     0,
   );
   await esperar(() => pisAteAgora() === 2, "o pi receber um prompt por ticket");
@@ -233,7 +238,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
 
   // O pi termina bem, mas as verificações reprovam: devolvido com a instrução, sem commit nem conclusão.
   await executarAgora(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     ref,
     c.config,
     deps,
@@ -259,7 +264,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   // Reexecutado (mesma sessão) e aprovado: a aplicação grava as evidências, commita e conclui; o agente não submeteu nada.
   verificacoesPassam = true;
   await executarAgora(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     ref,
     c.config,
     deps,
@@ -300,15 +305,24 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   // Falha: o pi sai com erro; o ticket falha, a segunda tarefa da rodada não avança e o estado não muda.
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await Promise.all(
-    cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+    cicloDoDespacho(
+      modulosDoCicloDeTeste(c.banco),
+      c.config,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ),
   );
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /código 1|falha do pi falso/);
   assert.equal(execucoesDe(c, t1).length, 1);
   const bloqueado = () => {
     assert.equal(
-      cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)))
-        .length,
+      cicloDoDespacho(
+        modulosDoCicloDeTeste(c.banco),
+        c.config,
+        deps,
+        predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+      ).length,
       0,
     );
     assert.equal(statusDe(c, t2), "aberto");
@@ -316,7 +330,13 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   };
   bloqueado();
   assert.deepEqual(
-    executarAgora(c.banco, t2, c.config, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+    executarAgora(
+      modulosDoCicloDeTeste(c.banco),
+      t2,
+      c.config,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ),
     {
       tipo: "ocupado",
       por: Endereco.doTicket(id, t1.ticket_id),
@@ -337,7 +357,12 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   pi.roteirizar([{ termina: "trava" }]);
   const curto = { ...c.config, timeoutMin: 0.01 };
   await Promise.all(
-    cicloDoDespacho(c.banco, curto, deps, predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco))),
+    cicloDoDespacho(
+      modulosDoCicloDeTeste(c.banco),
+      curto,
+      deps,
+      predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
+    ),
   );
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /Reabertura[\s\S]*tente de novo, com atenção ao cache/);
   assert.equal(statusDe(c, t1), "falhou");

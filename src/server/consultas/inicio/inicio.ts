@@ -1,6 +1,7 @@
 // A consulta do Início: numa leitura só (um snapshot), o mês corrente de todos os projetos, o que aguarda o Auditor, as
 // sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e arquivadas ficam fora. Fora do
 // Início, o menu conta o que aguarda pela consulta leve de quantidade_de_pendencias.ts, com as mesmas Pendências.
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { mesDoInstante, type Relogio } from "../../../shared/nucleo/relogio.ts";
@@ -96,7 +97,7 @@ export function consultarInicio(
     const mes = mesDoInstante(agora);
     // Um mês pedido, um mês devolvido.
     const [doMes] = metricasDosMeses(
-      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      { banco, repositorio: montarRepositorio({ banco }), pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
       { de: mes, ate: mes },
     ) as [DadosDoInicio["mes"]];
     const demandas = listarResumosDasDemandas(banco, { soNaoTerminadas: true });

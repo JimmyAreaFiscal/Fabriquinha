@@ -3,7 +3,6 @@
 import { DEFINICAO_DO_RESOLVER_CONFLITO, type Endereco, FABRIQUINHA } from "../../../etapas/publico.ts";
 import { encontrado } from "../../../../../shared/nucleo/erros.ts";
 import { concluirResolucaoDoConflito } from "../../../processo/publico.ts";
-import { montarRepositorio } from "../../../../repositorio/publico.ts";
 import type { DepsDaConducao } from "../conducao_de_etapa/conducao_de_etapa.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "../implementar/conducao_de_implementar.ts";
 
@@ -13,10 +12,11 @@ export class ConducaoDeResolverConflito extends ConducaoDeImplementar {
   }
 
   protected override aoConcluir(endereco: Endereco): Promise<void> {
-    const { banco, relogio } = this.deps;
+    const { banco, relogio, repositorio } = this.deps;
     const ticket = this.ticketDe(endereco);
+    const { commits } = repositorio.metricas({ demandas: [ticket.demanda_id], periodo: {} });
     const { sha } = encontrado(
-      montarRepositorio({ banco }).commitDoTicket(ticket.demanda_id, ticket.ticket_id),
+      commits.find((commit) => commit.ticket_id === ticket.ticket_id),
       `o ticket ${endereco.toString()} não tem commit registrado`,
       "o commit da resolução é gravado antes da conclusão",
     );

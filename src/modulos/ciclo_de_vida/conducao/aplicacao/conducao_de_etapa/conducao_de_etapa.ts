@@ -18,9 +18,8 @@ import {
   type TicketDemanda,
 } from "../../../processo/publico.ts";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import { espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
 import type { MotorDasSessoes } from "../../../../sessoes/publico.ts";
@@ -30,10 +29,10 @@ import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import { limitesDasSessoes } from "../limites_das_sessoes.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
-export interface DepsDaConducao {
-  banco: DatabaseSync;
+export interface DepsDaConducao extends ModulosDoCiclo {
   relogio: Relogio;
   condutor: MotorDasSessoes;
   registro: typeof anotar;
@@ -123,7 +122,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const { banco } = this.deps;
     // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
     // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
-    return iniciarExecucaoDemanda(banco, ticket, {
+    return iniciarExecucaoDemanda(this.deps, ticket, {
       limiteMin: this.deps.limiteMin ?? limitesDasSessoes().timeoutMin(banco),
       modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
       ...this.retomadaDe(ticket),
@@ -149,9 +148,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     const espaco = espacoDoTicket(ag, ticket, projeto, raiz);
-    return montarRepositorio({ banco })
-      .prepararEspaco(projeto, espaco, `${raiz}/log`)
-      .then((pasta) => ({ pasta }));
+    return this.deps.repositorio.prepararEspaco(projeto, espaco, `${raiz}/log`);
   }
 
   /**

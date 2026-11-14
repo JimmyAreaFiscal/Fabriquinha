@@ -5,6 +5,7 @@ import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { contextoDaSessao, montarSessoesDeAgente, type RespostaAoDialogo } from "../../../../sessoes/publico.ts";
 import { interromperExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { carregarSessaoDoTicket, execucaoDaSessao } from "./sessao_do_ticket.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** Responde o diálogo `dialogo` do agente; `false` se o id não é de uma sessão da demanda. */
 export function responderDialogoDemanda(
@@ -24,13 +25,14 @@ export function responderDialogoDemanda(
 }
 
 /** Aborta a execução em andamento (pi vivo: `abort`; aberta sem pi: interrupção); `false` se o id não é da demanda. */
-export function abortarDemanda(banco: DatabaseSync, id: string): boolean {
+export function abortarDemanda(modulos: Pick<ModulosDoCiclo, "banco" | "ambientes">, id: string): boolean {
+  const { banco } = modulos;
   const ref = contextoDaSessao(banco, id);
   if (!ref) return false;
   const ultima = execucaoDaSessao(carregarSessaoDoTicket(banco, ref, id));
   const sessoes = montarSessoesDeAgente({ banco });
   if (sessoes.listar({ sessoes: [id] })[0]?.situacao) sessoes.abortar(ultima.id);
-  else if (ultima.fim == null) interromperExecucaoDemanda(banco, ref);
+  else if (ultima.fim == null) interromperExecucaoDemanda(modulos, ref);
   else throw new ErroDeRegra("não há execução para abortar", "a sessão não está rodando");
   return true;
 }

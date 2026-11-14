@@ -18,6 +18,7 @@ import { type AgregadoDemanda, carregarDemanda } from "../../processo/publico.ts
 import { type Ator, AUDITOR, Endereco, type NomeGate } from "../../etapas/publico.ts";
 import { GATES, decidirGate } from "./gates.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+import { modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -74,7 +75,7 @@ test("CA-4: o gate de revisão da rodada grava o instante do Relogio injetado", 
     depende: [],
   };
   const { demanda } = await decidirGate(
-    banco,
+    modulosDoCicloDeTeste(banco),
     "gate_revisao_rodada",
     Endereco.daRodada("I-1", 1),
     { resultado: "reprovado", motivo: "corrigir", correcoes: [correcao] },
@@ -100,7 +101,7 @@ for (const { nome, agregado, endereco, entrada, ator } of casos) {
     }
     assert.ok(esperado, "o ensaio do núcleo devia reprovar a entrada");
 
-    await assert.rejects(decidirGate(banco, nome, endereco, entrada, decisor), (erro) => {
+    await assert.rejects(decidirGate(modulosDoCicloDeTeste(banco), nome, endereco, entrada, decisor), (erro) => {
       assert.deepEqual(erro, esperado);
       return true;
     });

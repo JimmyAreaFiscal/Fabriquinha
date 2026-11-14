@@ -1,5 +1,6 @@
 // A consulta da página de uma demanda, montada no contrato da API (contrato/) a partir de um snapshot só, com as leituras
 // em lote, sem uma consulta por ticket ou por dependente. O board é de board_de_demandas.ts.
+import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
@@ -87,7 +88,11 @@ export function consultarDemanda(
     const sessoes = new Map(sessaoDeCadaTicketDasDemandas(banco, [id]).get(id));
     const comPiAtivo = ticketsComPiAtivo(banco);
     const { modelos, custo, textoDoCusto } = usoDaDemanda(
-      { banco, pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas, [id]) },
+      {
+        banco,
+        repositorio: montarRepositorio({ banco }),
+        pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas, [id]),
+      },
       id,
     );
     const elegiveis = new Set(

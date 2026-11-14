@@ -23,11 +23,12 @@ import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const pi = instalarPiFalso(base);
 
 const decidirPlanejamento = (banco: DatabaseSync, id: string, entrada: object) =>
-  decidirGate(banco, "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -61,14 +62,15 @@ const plano = (id: string, titulo: string, rodadas = 1) => ({
 async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> {
   const antes = pi.prompts().length;
   const fins = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     despachoDasEtapas(),
     predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
   );
   assert.equal(fins.length, ids.length, "o ciclo deveria iniciar só o planejamento de cada demanda");
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
-  for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
+  for (const id of ids)
+    interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), { demanda_id: id, ticket_id: PLANEJAR });
   await Promise.all(fins);
   return ids.map((id) => carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
 }
@@ -97,7 +99,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
   assert.equal(
     cicloDoDespacho(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       c.config,
       despachoDasEtapas(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(c.banco)),
@@ -190,7 +192,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
   assert.equal(
     cicloDoDespacho(
-      banco,
+      modulosDoCicloDeTeste(banco),
       c.config,
       despachoDasEtapas(),
       predecessorasPendentesPelasDependencias(montarDemandasDoBanco(banco)),
@@ -264,7 +266,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   const tA = dono(a).tickets.find((x) => x.etapa === "implementar");
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await executarAgora(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 },
     c.config,
     despachoDasEtapas(),

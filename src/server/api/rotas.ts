@@ -5,8 +5,9 @@ import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
-import type { MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { ModulosDoCiclo, MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
+import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
 import type { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import { Id } from "../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
@@ -29,6 +30,7 @@ export interface Pedido {
   agendador: Agendador;
   ambientes: AmbientesDoServico;
   demandas: GestaoDeDemandas;
+  repositorio: RepositorioDoProjeto;
   relogio: Relogio;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;
@@ -40,6 +42,13 @@ export interface Pedido {
   /** Para a rota que responde fora do JSON (texto, download, SSE); depois que ela responde, o servidor não mexe. */
   resposta: ServerResponse;
 }
+
+/** Os módulos que a condução do Ciclo de Vida recebe, como o serviço os montou. */
+export const modulosDoCiclo = ({ banco, ambientes, repositorio }: Pedido): ModulosDoCiclo => ({
+  banco,
+  ambientes: ambientes.gestao,
+  repositorio,
+});
 
 interface RotaDaApi {
   metodo: "GET" | "POST" | "DELETE";

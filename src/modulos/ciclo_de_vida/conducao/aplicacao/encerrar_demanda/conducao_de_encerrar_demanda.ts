@@ -25,7 +25,7 @@ import {
 } from "../../../processo/publico.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import { espacoDaDemanda, montarRepositorio, type OpcoesVerificacao } from "../../../../repositorio/publico.ts";
+import { espacoDaDemanda, type OpcoesVerificacao } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { carregarSessoesDoContexto, lerUsoDeclarado } from "../../../../sessoes/publico.ts";
 import { logDaOperacao } from "../../../../../shared/infra/registro.ts";
@@ -120,7 +120,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const log = this.logDoEncerramento(demanda_id);
     // O erro até a tentativa registrada sobe e a base falha o ticket.
-    const publicado = await publicarPRFinal(banco, ag, projeto, log);
+    const publicado = await publicarPRFinal(this.deps, ag, projeto, log);
     registrarTentativaDoEncerramento(
       banco,
       demanda_id,
@@ -137,7 +137,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     try {
       const { conferencia_do_pr: conferenciaDoPR } = montarVerificacoesDaEtapa("encerrar_demanda", {
         conferencia_do_pr: () =>
-          new ConferenciaDoPR(montarRepositorio({ banco }), projeto, publicado.id, log, this.opcoes.verificacao),
+          new ConferenciaDoPR(this.deps.repositorio, projeto, publicado.id, log, this.opcoes.verificacao),
       });
       const problemas = await conferenciaDoPR.conferir();
       if (problemas.conflito) {
@@ -174,7 +174,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     };
     let leitura;
     try {
-      leitura = await montarRepositorio({ banco }).situacaoDoPR(projeto, String(pr.numero), relogio);
+      leitura = await this.deps.repositorio.situacaoDoPR(projeto, String(pr.numero), relogio);
     } catch (erro) {
       devolverParaEspera(); // a leitura que falha não é decisão do humano: o próximo ciclo relê
       throw erro;
@@ -196,7 +196,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a hospedagem não informou o merge do PR ${pr.url}`,
       "confira o PR na plataforma",
     );
-    const pendentes = await montarRepositorio({ banco }).pendenciasDeLimpeza(projeto, ag);
+    const pendentes = await this.deps.repositorio.pendenciasDeLimpeza(projeto, ag);
     registrarIntegracaoFinal(
       banco,
       demanda_id,
@@ -217,7 +217,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       `a demanda ${demanda_id} não tem progresso de encerramento`,
       "registre a tentativa antes",
     ).limpeza_pendente;
-    const feito = await montarRepositorio({ banco }).limparEspaco(
+    const feito = await this.deps.repositorio.limparEspaco(
       projeto,
       espacoDaDemanda(projeto, demanda_id, raizDo(banco)),
       this.logDoEncerramento(demanda_id),

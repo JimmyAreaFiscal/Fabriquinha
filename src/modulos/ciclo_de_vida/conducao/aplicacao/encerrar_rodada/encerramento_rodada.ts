@@ -13,7 +13,7 @@ import {
 } from "../../../processo/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
-import { espacoDoTicket, montarRepositorio } from "../../../../repositorio/publico.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { LIMITE_DO_CORPO } from "./documentacao_do_pr/corpo_do_pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./documentacao_do_pr/pr_rodada.ts";
 import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
@@ -24,6 +24,7 @@ import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { carregarSessoesDoContexto, registrarUsoDaConsulta } from "../../../../sessoes/publico.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -152,10 +153,11 @@ function conferir(
  * O erro sobe para a condução falhar o ticket; o `pr_aberto` só existe com o PR publicado.
  */
 export async function conferirEncerramentoRodada(
-  banco: DatabaseSync,
+  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio">,
   relogio: Relogio,
   ref: RefRodada,
 ): Promise<AgregadoDemanda> {
+  const { banco } = modulos;
   const ag = carregarDemanda(banco, ref.demanda_id);
   const rodada = rodadaEmEncerramento(ag, ref);
   const ticket = encerramentoEmExecucao(ag, ref);
@@ -167,11 +169,11 @@ export async function conferirEncerramentoRodada(
       check_falho: false,
     });
   }
-  return publicarEConferir(banco, relogio, ag, ref, rodada.branch, ticket);
+  return publicarEConferir(modulos, relogio, ag, ref, rodada.branch, ticket);
 }
 
 async function publicarEConferir(
-  banco: DatabaseSync,
+  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
   relogio: Relogio,
   ag: AgregadoDemanda,
   ref: RefRodada,
@@ -190,9 +192,8 @@ async function publicarEConferir(
   submeterEvidenciaDoEncerramento(banco, ticket, "relatorio_produtividade", relatorio);
 
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
-  const repositorio = montarRepositorio({ banco });
-  const atualizacao = await repositorio.atualizarComBase(projeto, espaco, log);
-  if (atualizacao.status === "conflito") {
+  const { atualizacao } = await repositorio.prepararEspaco(projeto, espaco, log, { atualizarComBase: true });
+  if (atualizacao?.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
     const arquivosEmConflito = atualizacao.arquivos.join(", ");
     const correcoes = [
@@ -227,11 +228,6 @@ async function publicarEConferir(
       return resumo;
     },
   );
-  const commitsRegistrados = new Set(
-    doRodada
-      .filter((t) => t.etapa === "implementar")
-      .map((t) => repositorio.commitDoTicket(demanda.id, t.ticket_id)?.sha),
-  );
   const recusarCommitOrfao = (orfao: string) =>
     new ErroDeRegra(
       `a branch ${branchRodada} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${refRodada} registrou: ` +
@@ -254,7 +250,7 @@ async function publicarEConferir(
       corpo: pr.publicado,
       conhecidos,
       marca: marcaDoPRRodada(demanda.id, ticket.ticket_id),
-      commitsRegistrados,
+      tickets: doRodada.filter((t) => t.etapa === "implementar").map((t) => t.ticket_id),
       recusarCommitOrfao,
     },
     log,
