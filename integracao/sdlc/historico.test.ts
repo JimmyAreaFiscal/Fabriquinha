@@ -9,8 +9,8 @@ import {
   bloqueiosDaDemanda,
   predecessorasDasDemandas,
   predecessorasDe,
-} from "../../src/server/consultas/demandas/predecessoras.ts";
-import { consultarDemanda } from "../../src/server/consultas/demandas/demanda.ts";
+} from "../../src/server/system/api/demandas/leituras/predecessoras.ts";
+import { consultarDemanda } from "../../src/server/system/api/demandas/leituras/demanda.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
 import {
@@ -33,10 +33,13 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "../apoio.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import {
+  cancelarDemandaEmCascata,
+  decidirGateDaDemanda,
+} from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";

@@ -23,7 +23,7 @@ import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import type { CicloDeVida, ModulosDoCiclo } from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { Relogio } from "../../src/shared/nucleo/relogio.ts";
-import { montarCicloDeVidaDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 
 export { AmbienteHostLocal };
 export { AmbienteContainer } from "../../src/modulos/ambiente/execucao/infra/container/ambiente_container.ts";

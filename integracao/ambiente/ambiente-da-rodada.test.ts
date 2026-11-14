@@ -21,7 +21,7 @@ import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste
 import { base, ciclo, criarCenario, demanda } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 
 // O `gh` falso, e com ele o `bin` do PATH onde também fica o sonar-scanner falso.
 ghFalso(base);

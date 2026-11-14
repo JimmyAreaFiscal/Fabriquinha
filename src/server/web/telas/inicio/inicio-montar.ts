@@ -1,11 +1,11 @@
 // Início (F7 §4.4) no DOM: lê `GET /api/inicio` e `GET /api/despacho` (os itens parados) e desenha com a função pura de
 // inicio.ts. O app.ts o redesenha a cada 5 s e, nesta página, mostra no menu quanto aguarda pela mesma resposta, sem pedir
 // o contador. Os testes de ponta a ponta (e2e/) o exercitam.
-import type { DadosDoInicio } from "../../../contrato/inicio.ts";
+import type { DadosDoInicio } from "../../../system/api/contrato/inicio.ts";
 import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api } from "../../dom.ts";
-import type { RecusasDoDespacho } from "../../../contrato/despacho.ts";
+import type { RecusasDoDespacho } from "../../../system/api/contrato/despacho.ts";
 import { inicio } from "./inicio.ts";
 
 /**

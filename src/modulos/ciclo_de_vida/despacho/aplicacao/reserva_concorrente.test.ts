@@ -64,7 +64,7 @@ test("duas reservas simultâneas do mesmo ticket: só uma vence, e a outra o enc
   const dados = {
     raiz,
     largada,
-    banco: moduloDe("../../../../server/composicao/banco_da_fabriquinha.ts"),
+    banco: moduloDe("../../../../server/system/banco_da_fabriquinha.ts"),
     despacho: moduloDe("../publico.ts"),
     relogio: moduloDe("../../../../shared/nucleo/relogio.ts"),
   };

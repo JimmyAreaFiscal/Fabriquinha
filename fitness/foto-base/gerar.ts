@@ -34,10 +34,10 @@ import {
   abrirBancoDaFabriquinha,
   montarCicloDeVidaDoBanco,
   montarDemandasDoBanco,
-} from "../../src/server/composicao/banco_da_fabriquinha.ts";
+} from "../../src/server/system/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { publicarPRDe } from "../../apoio-testes/repositorio_de_teste.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.

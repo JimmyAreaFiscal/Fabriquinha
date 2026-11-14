@@ -14,7 +14,7 @@ import {
   configuracao,
 } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { integrarPR } from "../../apoio-testes/repositorio_de_teste.ts";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
@@ -66,8 +66,8 @@ import {
   submeterObrigatorias,
 } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";

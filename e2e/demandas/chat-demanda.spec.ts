@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { falharTicketEmExecucao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";

@@ -22,12 +22,12 @@ import {
   gravarConfiguracaoSdlc,
   registrarProjeto,
 } from "./cadastro.ts";
-import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
+import { removerProjetoComOQueDependeDele } from "../../../../server/system/api/configuracao/remocao_do_projeto.ts";
 import {
   conferirModeloNaLista,
   montarCicloDeVidaDoBanco,
   montarDemandasDoBanco,
-} from "../../../../server/composicao/banco_da_fabriquinha.ts";
+} from "../../../../server/system/banco_da_fabriquinha.ts";
 import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 
 /** As conferências do formulário: o modelo pelos modelos de Sessões (o pi falso) e o repositório, montados sobre o `banco`. */

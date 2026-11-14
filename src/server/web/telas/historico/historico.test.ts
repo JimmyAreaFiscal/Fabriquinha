@@ -2,11 +2,11 @@ import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Execucao } from "../../../../modulos/sessoes/publico.ts";
-import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
-import type { SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
+import type { DadosDoChatDemanda } from "../../../system/api/contrato/sessoes/chat.ts";
+import type { SessaoDeDemanda } from "../../../system/api/contrato/sessoes/historico.ts";
 import type { Entrada } from "../chat/chat.ts";
 import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));

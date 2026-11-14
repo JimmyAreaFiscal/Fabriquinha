@@ -5,7 +5,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import "../src/server/composicao/banco_da_fabriquinha.ts";
+import "../src/server/system/banco_da_fabriquinha.ts";
 import { ligarGestaoDeAmbientesNosModulos } from "./falsos/ambiente_falso.ts";
 
 // Nenhum teste lê o `~/.pi/agent` do Auditor: copiado para o container falso, ele mudava no meio da cópia pelo pi de

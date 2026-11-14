@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { expect, projeto, test } from "../apoio.ts";
 import { buscarProjeto, gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";

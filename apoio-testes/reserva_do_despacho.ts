@@ -6,7 +6,7 @@ import {
   type Endereco,
   carregarDemanda,
 } from "./ciclo_de_vida/ciclo_de_vida_internos.ts";
-import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 
 /**

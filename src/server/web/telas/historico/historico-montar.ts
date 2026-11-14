@@ -3,8 +3,8 @@
 // terminado. Os testes de ponta a ponta (e2e/telas/historico.spec.ts) o exercitam.
 import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
-import type { DadosDoChatDemanda } from "../../../contrato/sessoes/chat.ts";
-import type { SessaoDeDemanda } from "../../../contrato/sessoes/historico.ts";
+import type { DadosDoChatDemanda } from "../../../system/api/contrato/sessoes/chat.ts";
+import type { SessaoDeDemanda } from "../../../system/api/contrato/sessoes/historico.ts";
 import { api, avisar, elemento, mostrarErro } from "../../dom.ts";
 import { verSaida } from "../chat/chat-montar.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";

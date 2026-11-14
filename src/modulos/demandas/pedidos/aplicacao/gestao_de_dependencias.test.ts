@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bancoComProjeto, registrarPedidoDeTeste } from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
-import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../../../server/system/banco_da_fabriquinha.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
-import { registrarPedidoComProcesso } from "../../../../server/fluxos/registro_do_pedido.ts";
+import { registrarPedidoComProcesso } from "../../../../server/system/cli/demanda_externa/registro_do_pedido.ts";
 import { registrarDependencia } from "./gestao_de_dependencias.ts";
 import { cicloDeVidaNoContexto } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 

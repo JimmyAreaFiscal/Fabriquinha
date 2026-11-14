@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { salvarConfiguracaoDoAmbiente } from "../../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { expect, fotografar, projeto, test } from "../apoio.ts";

@@ -1,6 +1,6 @@
 // Servidor web de verdade para os testes das rotas: banco real, projeto `loja` e um agendador falso que só anota o que
 // lhe pedem. Fica fora de cenarios_de_demanda.ts porque fecha o servidor num `after()` do arquivo de teste.
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer, request } from "node:http";
@@ -11,9 +11,9 @@ import { type MotivoDeRecusa, gravarAnexos } from "./ciclo_de_vida/ciclo_de_vida
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { raizDo } from "../src/shared/armazenamento/banco.ts";
-import { montarAmbientesDoServico } from "../src/server/composicao/ambientes_do_servico.ts";
-import { servirWeb } from "../src/server/api/servidor.ts";
-import type { AmbientesDoServico } from "../src/server/api/rotas.ts";
+import { montarAmbientesDoServico } from "../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../src/server/system/api/servidor.ts";
+import type { AmbientesDoServico } from "../src/server/system/api/rotas.ts";
 import type { GestaoDeAmbientes } from "../src/modulos/ambiente/publico.ts";
 import { salvarConfiguracaoDoAmbiente } from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { noLog } from "../src/shared/infra/registro.ts";

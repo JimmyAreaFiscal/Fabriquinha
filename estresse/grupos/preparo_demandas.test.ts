@@ -2,7 +2,7 @@
 // Sobe o ambiente de verdade e confere que cada preparo deixa a rota que o usa responder o esperado (CA-2).
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { carregarDemanda } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { type Ambiente, subirAmbiente } from "../instancia_descartavel.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";

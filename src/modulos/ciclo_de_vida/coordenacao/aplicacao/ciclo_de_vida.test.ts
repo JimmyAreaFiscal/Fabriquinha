@@ -12,7 +12,7 @@ import { registrarDependencia } from "../../../../../apoio-testes/demandas_de_te
 import { cicloDeVidaDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { comSessoesDoContexto, motorDoBanco } from "../../../../../apoio-testes/sessoes_de_teste.ts";
 import { recuperarAposReinicio } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
-import { demandasDoCicloDeVida, montarCicloDeVidaDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { demandasDoCicloDeVida, montarCicloDeVidaDoBanco } from "../../../../server/system/banco_da_fabriquinha.ts";
 import { Endereco } from "../../etapas/publico.ts";
 
 test("o Executar agora só aceita o planejar do pedido cujas predecessoras concluíram", () => {

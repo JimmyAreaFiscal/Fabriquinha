@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco/banco_temporario.ts";
 import { Configuracao, salvarConfiguracao } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
-import { migrarBancoDaFabriquinha } from "../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../server/system/banco_da_fabriquinha.ts";
 import type { ConfiguracaoDoAmbiente } from "../nucleo/configuracao_do_ambiente.ts";
 import {
   configuracaoDoAmbiente,

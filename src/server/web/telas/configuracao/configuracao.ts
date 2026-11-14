@@ -4,7 +4,11 @@ import type { Projeto } from "../../../../modulos/demandas/publico.ts";
 import type { Hospedagem } from "../../../../modulos/repositorio/publico.ts";
 import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
 import type { EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
-import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
+import type {
+  EstadoDaConfiguracao,
+  EstadoDoAmbiente,
+  ProjetoCadastrado,
+} from "../../../system/api/contrato/configuracao.ts";
 import { escapar, hora, nomeDoModelo } from "../../apresentacao/render.ts";
 import { etapasDoSdlc } from "../../apresentacao/etapas.ts";
 import type { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";

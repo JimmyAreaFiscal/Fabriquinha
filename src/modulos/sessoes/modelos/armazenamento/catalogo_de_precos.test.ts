@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 import type { PrecoDoModelo } from "../nucleo/preco_do_modelo.ts";
 import { gravarCatalogoDePrecos, lerPrecoVigente } from "./catalogo_de_precos.ts";
 

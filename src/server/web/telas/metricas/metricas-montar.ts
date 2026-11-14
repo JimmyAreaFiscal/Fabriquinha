@@ -3,7 +3,7 @@
 // Não se atualiza sozinha. Os testes de ponta a ponta (e2e/) a exercitam.
 import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
-import type { MetricasDasDemandas, MetricasDoMes } from "../../../contrato/metricas.ts";
+import type { MetricasDasDemandas, MetricasDoMes } from "../../../system/api/contrato/metricas.ts";
 import { api, mostrarErro } from "../../dom.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";
 import {

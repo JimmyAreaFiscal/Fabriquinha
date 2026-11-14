@@ -23,9 +23,9 @@ import {
   iniciarExecucao,
   comSessoesDoContexto,
 } from "../../apoio-testes/sessoes_de_teste.ts";
-import type { PaginaDaDemanda } from "../../src/server/contrato/demanda.ts";
+import type { PaginaDaDemanda } from "../../src/server/system/api/contrato/demanda.ts";
 import { pagina } from "../../src/server/web/telas/demandas/demandas.ts";
-import { descreverEtapasDoSdlc } from "../../src/server/consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../src/server/system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../src/server/web/apresentacao/etapas.ts";
 
 definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));

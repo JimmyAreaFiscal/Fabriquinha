@@ -1,8 +1,8 @@
 // Entrada do cliente (F7 §4.4): escolhe a página pelo caminho, troca de página pela History API sem recarregar (os
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda. As Etapas do
 // SDLC vêm da API antes da primeira página: as telas as desenham sem citá-las pelo nome.
-import type { EtapasDoSdlc } from "../contrato/etapas.ts";
-import type { QuantidadeDePendencias } from "../contrato/inicio.ts";
+import type { EtapasDoSdlc } from "../system/api/contrato/etapas.ts";
+import type { QuantidadeDePendencias } from "../system/api/contrato/inicio.ts";
 import type { Parametros } from "./compartilhado/caminhos.ts";
 import { type Pagina, rotear } from "./caminhos.ts";
 import { definirEtapasDoSdlc } from "./apresentacao/etapas.ts";

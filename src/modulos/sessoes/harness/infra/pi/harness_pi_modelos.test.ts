@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarPiFalso } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { conferirModeloNaLista } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { conferirModeloNaLista } from "../../../../../server/system/banco_da_fabriquinha.ts";
 import { HarnessPi } from "./harness_pi.ts";
 
 const harness = new HarnessPi();

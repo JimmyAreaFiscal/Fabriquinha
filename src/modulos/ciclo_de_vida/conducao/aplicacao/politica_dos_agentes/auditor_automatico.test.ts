@@ -11,7 +11,7 @@ import {
 } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../../server/system/banco_da_fabriquinha.ts";
 import { montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
 
 type ArgumentosDaTriagem = Parameters<typeof triarPergunta> extends [unknown, ...infer Resto] ? Resto : never;

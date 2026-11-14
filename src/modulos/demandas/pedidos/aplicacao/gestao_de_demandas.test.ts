@@ -8,7 +8,7 @@ import {
   situacaoGravada,
   registrarPedidoDeTeste,
 } from "../../../../../apoio-testes/cenarios/pedidos_de_teste.ts";
-import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../../../../server/system/banco_da_fabriquinha.ts";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 
 const concluirDesenvolvimento = (banco: ReturnType<typeof bancoComProjeto>, id: string, gravar: () => void) => {

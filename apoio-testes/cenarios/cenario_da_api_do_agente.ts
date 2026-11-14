@@ -1,7 +1,7 @@
 // O cenário dos testes de /api/agente/*: banco real com a I-206, que tem um ticket de cada etapa que o agente usa, e a
 // I-207, de outra demanda. Cada ticket tem a execução aberta, com o token `token-<ticket>`; a pasta do que o agente anexa
 // (worktree da rodada e saída) existe na raiz temporária.
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,8 +12,8 @@ import { after } from "node:test";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { gravarTokenDaExecucao } from "../sessoes_de_teste.ts";
-import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "../banco/banco_temporario.ts";
 import {

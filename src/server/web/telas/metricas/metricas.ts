@@ -4,7 +4,11 @@
 // lista de meses lida das tabelas da demanda.
 import type { EstadoDemanda, EtapaTicket, TipoMetrica } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { CustoDoUso, LinhaDeUso } from "../../../../modulos/sessoes/publico.ts";
-import type { MetricasDasDemandas, MetricasDoMes, ValorDaMetricaDoTipo } from "../../../contrato/metricas.ts";
+import type {
+  MetricasDasDemandas,
+  MetricasDoMes,
+  ValorDaMetricaDoTipo,
+} from "../../../system/api/contrato/metricas.ts";
 import { caminhoDaDemanda, compacto, custo, duracao, escapar, plural as pluralDe } from "../../apresentacao/render.ts";
 import { aparenciaDoEstado, etapaDoSdlc, etapasNaOrdemDoFluxo } from "../../apresentacao/etapas.ts";
 import { pilula } from "../demandas/demandas.ts";

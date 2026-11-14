@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import { cadastrarProjetoLoja } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha, montarDemandasDoBanco } from "../../../server/system/banco_da_fabriquinha.ts";
 import { EstadoDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { MIGRACOES_DE_DEMANDAS } from "./migracoes_de_demandas.ts";
 

@@ -10,7 +10,7 @@ import {
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 import { origemDe } from "../../../../apoio-testes/banco/banco_de_metricas.ts";
-import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
 
 const VERSAO_48 = VERSAO_LINHA_DE_BASE + 12;
 const EM = "2026-01-01T00:00:00.000Z";

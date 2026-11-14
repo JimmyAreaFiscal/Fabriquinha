@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import type { Pedido } from "../../../server/api/rotas.ts";
-import type { DadosDoChatDemanda } from "../../../server/contrato/sessoes/chat.ts";
-import { ROTAS_DO_CHAT } from "../../../server/api/rotas/sessoes/chat.ts";
+import type { Pedido } from "../../../server/system/api/rotas.ts";
+import type { DadosDoChatDemanda } from "../../../server/system/api/contrato/sessoes/chat.ts";
+import { ROTAS_DO_CHAT } from "../../../server/system/api/sessoes/chat.ts";
 import { migrar } from "../banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 import {
   migrarBancoDaFabriquinha,
   montarCicloDeVidaDoBanco,
   montarDemandasDoBanco,
-} from "../../../server/composicao/banco_da_fabriquinha.ts";
+} from "../../../server/system/banco_da_fabriquinha.ts";
 import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 5;

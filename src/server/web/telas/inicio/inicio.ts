@@ -2,9 +2,9 @@
 // board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
 import type { EtapaTicket, TipoPendencia } from "../../../../modulos/ciclo_de_vida/publico.ts";
-import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../contrato/inicio.ts";
-import type { PendenciaDoInicio } from "../../../contrato/demanda.ts";
-import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../../contrato/despacho.ts";
+import type { CartaoDoBoard, DadosDoInicio, SessaoRodando } from "../../../system/api/contrato/inicio.ts";
+import type { PendenciaDoInicio } from "../../../system/api/contrato/demanda.ts";
+import type { MotivoDeRecusaEmJson, RecusaDoDespacho } from "../../../system/api/contrato/despacho.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,

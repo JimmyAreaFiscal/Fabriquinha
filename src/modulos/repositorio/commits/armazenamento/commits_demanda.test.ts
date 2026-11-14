@@ -10,7 +10,7 @@ import {
   gravarCommitHumanoPosterior,
   metricasDosCommits,
 } from "./commits_demanda.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (c: string) => c.repeat(40);

@@ -7,8 +7,8 @@ import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
-import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/system/cli/demanda_externa/demanda_externa.ts";
+import { COMANDOS_DO_AGENTE } from "../../src/server/system/cli/agente/comandos.ts";
 import {
   type AgregadoDemanda,
   submeterEvidenciaDaEntradaExterna,
@@ -19,9 +19,9 @@ import {
   iniciarExecucao,
   comSessoesDoContexto,
 } from "../../apoio-testes/sessoes_de_teste.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
@@ -43,7 +43,7 @@ const BUSY = /SQLITE_BUSY|database is locked/i;
 
 const CLI_EXTERNO = [
   "--disable-warning=ExperimentalWarning",
-  join(import.meta.dirname, "../../src/server/composicao/fabriquinha.ts"),
+  join(import.meta.dirname, "../../src/server/system/fabriquinha.ts"),
 ];
 const CLI_DO_AGENTE = [join(import.meta.dirname, "../../pacote-pi/bin/fabriquinha")];
 

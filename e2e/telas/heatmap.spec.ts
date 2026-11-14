@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { expect, test } from "../apoio.ts";
 import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 

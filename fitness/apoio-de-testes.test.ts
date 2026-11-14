@@ -15,7 +15,7 @@ const PASTAS_DE_APOIO_A_TESTE = ["integracao", "e2e", "estresse", "apoio-testes"
 const REFERENCIA_AO_SERVICO_REAL = /4317|~\/fabriquinha|homedir\(\)[^;]*["'/]fabriquinha/;
 // Estes dois testes fixam os padrões de produção (porta do serviço, raiz de `abrir()`) sem subir o serviço nem tocar o banco real.
 const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = [
-  "src/server/composicao/servico.test.ts",
+  "src/server/system/montagem.test.ts",
   "src/shared/armazenamento/banco.test.ts",
 ];
 
@@ -97,7 +97,7 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
     escrever("estresse/limpo.ts", 'const raiz = join(tmpdir(), "fabriquinha-estresse");\n');
     // Fora do alcance da regra: código de produção, teste sem sufixo em src/ e as exceções listadas.
     escrever("src/a/producao.ts", "const PORTA = 4317;\n");
-    escrever("src/server/composicao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
+    escrever("src/server/system/montagem.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
     escrever("src/shared/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
     escrever("e2e/node_modules/x/index.ts", "4317\n");
     escrever("estresse/resultados/medicao.json", '{"url":"http://127.0.0.1:4317/"}\n');

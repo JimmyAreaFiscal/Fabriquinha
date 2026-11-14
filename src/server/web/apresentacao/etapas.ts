@@ -1,7 +1,7 @@
 // As Etapas do SDLC como a API as serve (`GET /api/etapas`): o app.ts as carrega antes da primeira página, e as telas
 // leem daqui o rótulo, a ordem, os estados e o papel de cada Etapa, sem citá-las pelo nome. Acrescentar uma Etapa ao
 // catálogo a faz aparecer nas telas sem mexer na web.
-import type { EtapaDoSdlc, EtapasDoSdlc } from "../../contrato/etapas.ts";
+import type { EtapaDoSdlc, EtapasDoSdlc } from "../../system/api/contrato/etapas.ts";
 import type {
   EstadoDemanda,
   EstadoRodada,

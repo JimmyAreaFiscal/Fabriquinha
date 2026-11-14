@@ -19,7 +19,7 @@ import {
   PASTA_DA_INTERFACE_DO_CICLO_DE_VIDA,
   PASTAS_QUE_CITAM_NOME_DE_ETAPA,
 } from "./fronteiras/dominios/ciclo_de_vida.ts";
-import { PASTA_DA_API_DO_AGENTE, PASTA_DA_COMPOSICAO } from "./fronteiras/dominios/server.ts";
+import { PASTA_DA_API, PASTA_DA_API_DO_AGENTE, PASTA_DA_MONTAGEM } from "./fronteiras/dominios/server.ts";
 import { ARQUIVO_DO_CONDUTOR, ARQUIVO_DO_HARNESS } from "./fronteiras/dominios/sessoes.ts";
 import {
   ARQUIVO_DO_PROCESSO,
@@ -87,10 +87,18 @@ test("api/agente só alcança, da aplicação dos domínios, a interface do Cicl
   assert.deepEqual(deAplicacaoFora, []);
 });
 
-test("nenhum importador da API fora de composicao e da própria API", () => {
+test("nenhum importador da API, fora do contrato, além da montagem e da própria API", () => {
+  const importaARotaDaApi = (arquivo: string): boolean =>
+    [...readFileSync(join(SRC, arquivo), "utf8").matchAll(/from ['"](\.\.?\/[^'"]+)['"]/g)].some(([, alvo]) => {
+      const destino = relative(SRC, resolve(SRC, dirname(arquivo), alvo ?? ""));
+      return destino.startsWith(PASTA_DA_API) && !destino.startsWith(`${PASTA_DA_API}contrato/`);
+    });
   const importadores = listarArquivosDeProducao(SRC)
-    .filter((arquivo) => !arquivo.startsWith(PASTA_DA_COMPOSICAO) && !arquivo.startsWith("server/api/"))
-    .filter((arquivo) => /from ['"](\.\.\/)+(server\/)?api\//.test(readFileSync(join(SRC, arquivo), "utf8")));
+    .filter((arquivo) => !["montagem", "api"].includes(moduloDe(arquivo) ?? ""))
+    .filter(importaARotaDaApi);
+  assert.ok(
+    listarArquivosDeProducao(SRC).some((arquivo) => moduloDe(arquivo) === "montagem" && importaARotaDaApi(arquivo)),
+  );
   assert.deepEqual(importadores, []);
 });
 
@@ -116,53 +124,52 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     "shared/nucleo/erros.ts": 'import { z } from "zod";\n',
     "shared/armazenamento/snapshot.ts": 'import { e } from "../nucleo/erros.ts";\n',
     "server/web/compartilhado/ok.ts": "export const c = 1;\n",
-    "server/contrato/ok.ts":
-      'import { z } from "zod";\nimport { Id } from "../../modulos/ambiente/publico.ts";\nimport { e } from "../../shared/nucleo/erros.ts";\n',
-    "server/cli-agente/ok.ts":
-      'import { Resposta } from "../contrato/ok.ts";\nimport { readFileSync } from "node:fs";\nimport { b } from "./sub.ts";\n',
-    "server/api/ok.ts":
-      'import { a } from "../../modulos/ambiente/publico.ts";\nimport { c } from "../web/compartilhado/ok.ts";\nimport { Resposta } from "../contrato/ok.ts";\nimport { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
-    "server/cli/ok.ts": 'import { t } from "../consultas/tela.ts";\nimport { f } from "../fluxos/fluxo.ts";\n',
-    // A consulta da tela junta os domínios no formato do contrato, pelas fachadas (fronteiras-de-destino.test.ts).
-    "server/consultas/tela.ts":
-      'import type { R } from "../contrato/ok.ts";\nimport { l } from "../../shared/armazenamento/snapshot.ts";\n',
-    // O fluxo coordena os domínios pela fachada.
-    "server/fluxos/fluxo.ts":
-      'import { a } from "../../modulos/ambiente/publico.ts";\nimport { e } from "../../shared/nucleo/erros.ts";\n',
+    "server/system/api/contrato/ok.ts":
+      'import { z } from "zod";\nimport { Id } from "../../../../modulos/ambiente/publico.ts";\nimport { e } from "../../../../shared/nucleo/erros.ts";\n',
+    "server/system/cli/agente/ok.ts":
+      'import { Resposta } from "../../api/contrato/ok.ts";\nimport { readFileSync } from "node:fs";\nimport { b } from "./sub.ts";\n',
+    // A rota chama as fachadas e lê num snapshot (a leitura da tela mora junto dela).
+    "server/system/api/ok.ts":
+      'import { a } from "../../../modulos/ambiente/publico.ts";\nimport { c } from "../../web/compartilhado/ok.ts";\nimport { Resposta } from "./contrato/ok.ts";\nimport { l } from "../../../shared/armazenamento/snapshot.ts";\n',
+    "server/system/cli/api_do_agente/ok.ts": 'import { a } from "../../api/ok.ts";\n',
+    "server/system/cli/ok.ts":
+      'import type { R } from "../api/contrato/ok.ts";\nimport { a } from "../../../modulos/ambiente/publico.ts";\n',
     "server/web/ok.ts":
-      'import type { N } from "../../modulos/ambiente/publico.ts";\nimport type { R } from "../contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "./compartilhado/ok.ts";\n',
+      'import type { N } from "../../modulos/ambiente/publico.ts";\nimport type { R } from "../system/api/contrato/ok.ts";\nimport { b } from "./sub.ts";\nimport { c } from "./compartilhado/ok.ts";\n',
     "server/web/sub.ts": 'export type { Z } from "../../modulos/ambiente/publico.ts";\n',
     "server/web/pacotes.ts":
       'import markdownit from "markdown-it/browser";\nimport { createRoot } from "react-dom/client";\nimport { useThread } from "@assistant-ui/react";\n',
-    "server/composicao/ok.ts":
-      'import { a } from "../api/ok.ts";\nimport express from "express";\nimport { a } from "../../modulos/ambiente/publico.ts";\n',
+    "server/system/ok.ts":
+      'import { a } from "./api/ok.ts";\nimport { c } from "./cli/ok.ts";\nimport express from "express";\nimport { a } from "../../modulos/ambiente/publico.ts";\n',
     // Proibidos
     [`${SANDBOXES}/nucleo/fs.ts`]: 'import { readFileSync } from "node:fs";\n',
     [`${SANDBOXES}/infra/armazenamento.ts`]: 'import { b } from "../armazenamento/ok.ts";\n',
     "server/web/compartilhado/impuro.ts":
       'import { z } from "../../../shared/nucleo/erros.ts";\nimport { readFileSync } from "node:fs";\n',
-    "server/contrato/impuro.ts":
-      'import { readFileSync } from "node:fs";\nimport { l } from "../../shared/armazenamento/snapshot.ts";\n',
+    "server/system/api/contrato/impuro.ts":
+      'import { readFileSync } from "node:fs";\nimport { l } from "../../../../shared/armazenamento/snapshot.ts";\n',
     "server/web/fachada_valor.ts": 'import { a } from "../../modulos/ambiente/publico.ts";\n',
-    "server/web/contrato_valor.ts": 'import { Resposta } from "../contrato/ok.ts";\n',
+    "server/web/contrato_valor.ts": 'import { Resposta } from "../system/api/contrato/ok.ts";\n',
+    "server/web/rota.ts": 'import type { R } from "../system/api/ok.ts";\n',
     "server/web/nucleo_valor.ts": 'import { e } from "../../shared/nucleo/erros.ts";\n',
     "server/web/lodash.ts": 'import _ from "lodash";\n',
     "server/web/node.ts": 'import { readFileSync } from "node:fs";\n',
     "server/web/react_puro.ts": 'import { useState } from "react";\n',
     "server/web/node.test.ts":
       'import { test } from "node:test";\nimport { a } from "../../modulos/ambiente/publico.ts";\n',
-    "server/cli-agente/fachada.ts": 'import { a } from "../../modulos/ambiente/publico.ts";\n',
-    "server/cli-agente/shared.ts": 'import { e } from "../../shared/nucleo/erros.ts";\n',
-    "server/cli-agente/sqlite.ts": 'import { DatabaseSync } from "node:sqlite";\n',
-    "server/cli-agente/zod.ts": 'import { z } from "zod";\n',
-    "server/api/usa_o_interior.ts": `import { a } from "../../${SANDBOXES}/armazenamento/ok.ts";\n`,
-    // A consulta só lê: não chama fluxo. O fluxo não fala o contrato, não lê pela consulta nem pelo banco.
-    "server/consultas/usa_o_fluxo.ts": 'import { f } from "../fluxos/fluxo.ts";\n',
-    "server/fluxos/usa_o_contrato.ts": 'import type { R } from "../contrato/ok.ts";\n',
-    "server/fluxos/usa_a_consulta.ts": 'import { t } from "../consultas/tela.ts";\n',
-    "server/fluxos/usa_o_banco.ts": 'import { l } from "../../shared/armazenamento/snapshot.ts";\n',
-    // Nenhum domínio importa o servidor, nem o contrato da API: a consulta que o devolve é do servidor.
-    [`${SANDBOXES}/aplicacao/usa_o_contrato.ts`]: 'import type { R } from "../../../../server/contrato/ok.ts";\n',
+    "server/system/cli/agente/fachada.ts": 'import { a } from "../../../../modulos/ambiente/publico.ts";\n',
+    "server/system/cli/agente/shared.ts": 'import { e } from "../../../../shared/nucleo/erros.ts";\n',
+    "server/system/cli/agente/sqlite.ts": 'import { DatabaseSync } from "node:sqlite";\n',
+    "server/system/cli/agente/zod.ts": 'import { z } from "zod";\n',
+    "server/system/api/usa_o_interior.ts": `import { a } from "../../../${SANDBOXES}/armazenamento/ok.ts";\n`,
+    // A rota não chama o CLI nem a montagem, nem a infra; o comando não chama a rota nem lê o banco.
+    "server/system/api/usa_o_cli.ts": 'import { c } from "../cli/ok.ts";\n',
+    "server/system/api/usa_a_infra.ts": 'import { p } from "../../../shared/infra/processo.ts";\n',
+    "server/system/cli/usa_a_api.ts": 'import { a } from "../api/ok.ts";\n',
+    "server/system/cli/usa_o_banco.ts": 'import { l } from "../../../shared/armazenamento/snapshot.ts";\n',
+    // Nenhum domínio importa o servidor, nem o contrato da API.
+    [`${SANDBOXES}/aplicacao/usa_o_contrato.ts`]:
+      'import type { R } from "../../../../server/system/api/contrato/ok.ts";\n',
     [`${SANDBOXES}/aplicacao/sql.ts`]: 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
     // Toda pasta de src/modulos/ é um domínio declarado; fora de `modulos/`, `server/` e `shared/`, o módulo é desconhecido.
     "modulos/sem_regras/aplicacao/x.ts": "export const x = 1;\n",
@@ -178,43 +185,44 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
     [
       `${SANDBOXES}/aplicacao/sql.ts importa SQL .exec(`,
       `${SANDBOXES}/aplicacao/sql.ts importa SQL .prepare(`,
-      `${SANDBOXES}/aplicacao/usa_o_contrato.ts importa ../../../../server/contrato/ok.ts (um domínio não importa src/server/)`,
+      `${SANDBOXES}/aplicacao/usa_o_contrato.ts importa ../../../../server/system/api/contrato/ok.ts (um domínio não importa src/server/)`,
       `${SANDBOXES}/infra/armazenamento.ts importa ../armazenamento/ok.ts`,
       `${SANDBOXES}/nucleo/fs.ts importa node:fs`,
       "modulos/sem_regras/aplicacao/x.ts importa fora da organização: domínio sem_regras não declarado em fitness/fronteiras/dominios/",
-      `server/api/usa_o_interior.ts importa ../../${SANDBOXES}/armazenamento/ok.ts (de fora do domínio ambiente, só pela fachada publico.ts)`,
-      "server/cli-agente/fachada.ts importa ../../modulos/ambiente/publico.ts",
-      "server/cli-agente/shared.ts importa ../../shared/nucleo/erros.ts",
-      "server/cli-agente/sqlite.ts importa node:sqlite",
-      "server/cli-agente/zod.ts importa zod",
-      "server/consultas/usa_o_fluxo.ts importa ../fluxos/fluxo.ts",
-      "server/consultas/usa_o_fluxo.ts importa ciclo entre módulos: consultas → fluxos → consultas",
-      "server/contrato/impuro.ts importa ../../shared/armazenamento/snapshot.ts",
-      "server/contrato/impuro.ts importa node:fs",
-      "server/fluxos/usa_a_consulta.ts importa ../consultas/tela.ts",
-      "server/fluxos/usa_o_banco.ts importa ../../shared/armazenamento/snapshot.ts",
-      "server/fluxos/usa_o_contrato.ts importa ../contrato/ok.ts",
+      `server/system/api/usa_o_interior.ts importa ../../../${SANDBOXES}/armazenamento/ok.ts (de fora do domínio ambiente, só pela fachada publico.ts)`,
+      "server/system/api/contrato/impuro.ts importa ../../../../shared/armazenamento/snapshot.ts",
+      "server/system/api/contrato/impuro.ts importa node:fs",
+      "server/system/api/usa_a_infra.ts importa ../../../shared/infra/processo.ts",
+      "server/system/api/usa_o_cli.ts importa ../cli/ok.ts",
+      "server/system/api/usa_o_cli.ts importa ciclo entre módulos: api → cli → api",
+      "server/system/cli/agente/fachada.ts importa ../../../../modulos/ambiente/publico.ts",
+      "server/system/cli/agente/shared.ts importa ../../../../shared/nucleo/erros.ts",
+      "server/system/cli/agente/sqlite.ts importa node:sqlite",
+      "server/system/cli/agente/zod.ts importa zod",
+      "server/system/cli/usa_a_api.ts importa ../api/ok.ts",
+      "server/system/cli/usa_o_banco.ts importa ../../../shared/armazenamento/snapshot.ts",
       "server/web/compartilhado/impuro.ts importa ../../../shared/nucleo/erros.ts",
       "server/web/compartilhado/impuro.ts importa node:fs",
-      "server/web/contrato_valor.ts importa ../contrato/ok.ts",
+      "server/web/contrato_valor.ts importa ../system/api/contrato/ok.ts",
       "server/web/fachada_valor.ts importa ../../modulos/ambiente/publico.ts",
       "server/web/lodash.ts importa lodash",
       "server/web/node.ts importa node:fs",
       "server/web/nucleo_valor.ts importa ../../shared/nucleo/erros.ts",
       "server/web/react_puro.ts importa react",
+      "server/web/rota.ts importa ../system/api/ok.ts",
       "solto.ts importa módulo desconhecido: ",
     ].sort(),
   );
 });
 
-// O relógio é do `composicao` (que o injeta) e de `nucleo/relogio.ts`: `new Date(` em qualquer outro .ts de src/ (cliente web
+// O relógio é da montagem (os arquivos direto em system/, que o injeta) e de `nucleo/relogio.ts`: `new Date(` em qualquer outro .ts de src/ (cliente web
 // e compartilhado inclusive) lê a hora ou faz conta de calendário fora dele. Os *.test.ts (já fora da lista) e *_cenario.ts ficam de fora.
 
 function acharNewDateForaDoRelogio(src: string): string[] {
   return listarArquivosDeProducao(src)
     .filter(
       (arquivo) =>
-        arquivo !== ARQUIVO_DO_RELOGIO && !arquivo.startsWith(PASTA_DA_COMPOSICAO) && !arquivo.endsWith("_cenario.ts"),
+        arquivo !== ARQUIVO_DO_RELOGIO && dirname(arquivo) !== PASTA_DA_MONTAGEM && !arquivo.endsWith("_cenario.ts"),
     )
     .filter((arquivo) => {
       const chamadas: ts.Node[] = [];
@@ -229,20 +237,21 @@ function acharNewDateForaDoRelogio(src: string): string[] {
     .map((arquivo) => `${arquivo} chama new Date(`);
 }
 
-test("new Date( só em composicao/ e nucleo/relogio.ts", () => {
+test("new Date( só na montagem (system/) e em nucleo/relogio.ts", () => {
   assert.deepEqual(acharNewDateForaDoRelogio(SRC), []);
 });
 
-test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio.ts e aceita o resto", (t) => {
+test("a fitness do relógio acusa new Date( fora da montagem (system/) e de nucleo/relogio.ts e aceita o resto", (t) => {
   const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-relogio-"));
   t.after(() => {
     rmSync(raiz, { recursive: true, force: true });
   });
   const arquivos: Record<string, string> = {
     [ARQUIVO_DO_RELOGIO]: "export const agora = () => new Date().toISOString();\n",
-    [`${PASTA_DA_COMPOSICAO}servico.ts`]: "const batida = new Date(inicio);\n",
+    [`${PASTA_DA_MONTAGEM}/montagem.ts`]: "const batida = new Date(inicio);\n",
     "aplicacao/ruim.ts": "const agora = new Date().toISOString();\n",
     "web/ruim.ts": "const ano = new Date(instante).getFullYear();\n",
+    [`${PASTA_DA_MONTAGEM}/api/ruim.ts`]: "const d = new Date();\n",
     "web/compartilhado/ruim.ts": "export const dia = (i: string) => new Date(i);\n",
     "aplicacao/inocente.ts":
       "// new Date() em comentário\nconst d = Date.parse(x);\nconst n = Date.now();\nconst o = new Datas();\n",
@@ -256,6 +265,7 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
 
   assert.deepEqual(acharNewDateForaDoRelogio(raiz).sort(), [
     "aplicacao/ruim.ts chama new Date(",
+    `${PASTA_DA_MONTAGEM}/api/ruim.ts chama new Date(`,
     "web/compartilhado/ruim.ts chama new Date(",
     "web/ruim.ts chama new Date(",
   ]);
@@ -455,10 +465,10 @@ test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou
   ]);
 });
 
-// Os domínios de src/ (as duas primeiras pastas, `modulos/<domínio>` e `server/<parte>`, e o shared inteiro) não formam
+// Os domínios de src/ (as duas primeiras pastas, `modulos/<domínio>`, cada módulo da matriz do servidor e o shared inteiro) não formam
 // ciclo de import, de valor ou de tipo.
 test("os domínios de src/ não formam ciclo de import", () => {
-  assert.deepEqual(acharCiclosEntreDominios(SRC), []);
+  assert.deepEqual(acharCiclosEntreDominios(SRC, ARQUITETURA_DE_SRC), []);
 });
 
 test("a fitness de ciclos entre domínios acusa o ciclo, de valor ou de tipo, e ignora os testes", (t) => {
@@ -469,19 +479,26 @@ test("a fitness de ciclos entre domínios acusa o ciclo, de valor ou de tipo, e 
   const arquivos: Record<string, string> = {
     "modulos/processo/nucleo/gate.ts": 'import { Demanda } from "../../pedidos/nucleo/demanda.ts";\n',
     "modulos/pedidos/nucleo/demanda.ts": 'import type { Gate } from "../../processo/nucleo/gate.ts";\n',
-    "modulos/pedidos/aplicacao/tela.tsx": 'import { c } from "../../../server/contrato/x.ts";\n',
-    "server/contrato/x.ts": 'import { z } from "zod";\n',
-    "server/api/rota.ts":
-      'import { a } from "../../modulos/pedidos/nucleo/demanda.ts";\nimport { c } from "../contrato/x.ts";\n',
-    "modulos/processo/nucleo/gate.test.ts": 'import { r } from "../../../server/api/rota.ts";\n',
+    "modulos/pedidos/aplicacao/tela.tsx": 'import { c } from "../../../server/system/api/contrato/x.ts";\n',
+    "server/system/api/contrato/x.ts": 'import { z } from "zod";\n',
+    "server/system/api/rota.ts":
+      'import { a } from "../../../modulos/pedidos/nucleo/demanda.ts";\nimport { c } from "./contrato/x.ts";\nimport { w } from "../../web/compartilhado/w.ts";\n',
+    // Cada módulo da matriz do servidor é um nó: a web importar o contrato, que mora em system/api/, não fecha ciclo.
+    "server/web/compartilhado/w.ts": "export const w = 1;\n",
+    "server/web/tela.ts":
+      'import type { R } from "../system/api/contrato/x.ts";\nimport { w } from "./compartilhado/w.ts";\n',
+    "server/system/cli/comando.ts": 'import { m } from "../montagem.ts";\n',
+    "server/system/montagem.ts": 'import { c } from "./cli/comando.ts";\n',
+    "modulos/processo/nucleo/gate.test.ts": 'import { r } from "../../../server/system/api/rota.ts";\n',
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
     mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
     writeFileSync(join(raiz, caminho), conteudo);
   }
 
-  assert.deepEqual(acharCiclosEntreDominios(raiz), [
+  assert.deepEqual(acharCiclosEntreDominios(raiz, ARQUITETURA_DE_SRC), [
     "ciclo entre módulos: modulos/pedidos → modulos/processo → modulos/pedidos",
+    "ciclo entre módulos: server/cli → server/montagem → server/cli",
   ]);
 });
 

@@ -27,9 +27,9 @@ import {
   submeterObrigatorias,
 } from "../apoio.ts";
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { registrarDependencia } from "../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";

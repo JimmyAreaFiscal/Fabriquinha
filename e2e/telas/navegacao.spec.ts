@@ -1,7 +1,7 @@
 // Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7): a página inicial é o Início, em
 // /home, e o menu não tem Demandas nem Auditoria.
 import type { TestInfo } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { expect, fotografar, test } from "../apoio.ts";
 
 const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";

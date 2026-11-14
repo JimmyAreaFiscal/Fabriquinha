@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Endereco } from "../../etapas/publico.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "./despacho_demanda.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const ESTADOS_LIDOS = ["planejar", "em_execucao", "revisar_demanda", "encerrar_demanda"] as const;
 const T = "'2026-01-01T00:00:00.000Z'";

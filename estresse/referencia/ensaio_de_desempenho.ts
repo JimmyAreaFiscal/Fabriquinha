@@ -3,7 +3,7 @@
 // leitura das telas, uma por vez: 1 chamada conta as execuções SQL, e as seguintes dão o p50 e o p95. Grava o relatório
 // em estresse/referencia/referencia.md, ou no arquivo pedido (`npm run estresse:referencia -- <arquivo>`), para comparar
 // com a referência sem sobrescrevê-la.
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -15,8 +15,8 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.
 import { somarMeses } from "../../src/shared/nucleo/periodo.ts";
 import { mesDoInstante, relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
-import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { cronometrar } from "../grupos/http_leitura.ts";
 import { medir } from "../medir.ts";
 import { contarExecucoesSql } from "./contador_de_execucoes_sql.ts";

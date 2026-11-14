@@ -2,7 +2,7 @@
 import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { descreverEtapasDoSdlc } from "../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../system/api/configuracao/consulta_etapas.ts";
 import { EstadoDemanda, EstadoRodada } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   aparenciaDoEstado,

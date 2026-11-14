@@ -15,9 +15,9 @@ import {
   lerAnexo,
   primeiraEvidenciaDasDemandas,
 } from "./evidencia_demanda.ts";
-import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
+import { removerProjetoComOQueDependeDele } from "../../../../server/system/api/configuracao/remocao_do_projeto.ts";
 import { comEvidencia } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

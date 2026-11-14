@@ -12,7 +12,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/system/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
 import { recuperarAposReinicio } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
@@ -90,7 +90,7 @@ export const test = base.extend<{
         process.execPath,
         [
           "--disable-warning=ExperimentalWarning",
-          join(import.meta.dirname, "../src/server/composicao/fabriquinha.ts"),
+          join(import.meta.dirname, "../src/server/system/fabriquinha.ts"),
           "servidor",
         ],
         {

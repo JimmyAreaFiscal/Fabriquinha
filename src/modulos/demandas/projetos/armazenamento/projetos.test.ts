@@ -8,7 +8,7 @@ import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../apli
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 import { buscarProjeto, donoDoRepositorio, gravarProjeto, listarProjetos, projetoExistente } from "./projetos.ts";
 
 const TABELAS = [

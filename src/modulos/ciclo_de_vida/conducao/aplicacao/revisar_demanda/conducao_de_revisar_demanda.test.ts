@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../../../../server/system/banco_da_fabriquinha.ts";
 import { servir } from "../../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { caminhoDaWorktreeDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";

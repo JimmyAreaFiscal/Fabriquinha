@@ -40,7 +40,7 @@ import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../apoi
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
-import { montarDemandasDoBanco } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../../../../../server/system/banco_da_fabriquinha.ts";
 
 const ambiente = new AmbienteHostLocal();
 

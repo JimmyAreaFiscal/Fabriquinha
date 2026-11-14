@@ -2,7 +2,7 @@
 // cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { projeto, expect, test } from "../apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "../pendencias-apoio.ts";
 import {

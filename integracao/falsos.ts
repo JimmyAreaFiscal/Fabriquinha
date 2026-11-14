@@ -21,7 +21,7 @@ import { dirDoPiDoAuditor, PACOTE } from "../src/shared/infra/isolamento_do_ambi
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
-import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
 
 /** O `gh` falso (a hospedagem já testada em `apoio-testes/falsos/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
 export function ghFalso(dir: string) {

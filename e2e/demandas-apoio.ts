@@ -7,7 +7,7 @@ import {
   gravarAnexos,
 } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { Page } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/system/banco_da_fabriquinha.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";

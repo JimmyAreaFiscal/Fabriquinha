@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { encerrarExecucao, iniciarExecucao, type Execucao, type Sessao } from "../nucleo/sessao.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
-import { ticketsComPiAtivo } from "../../../../server/consultas/sessoes/historico_demanda.ts";
+import { ticketsComPiAtivo } from "../../../../server/system/api/sessoes/historico_demanda.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../aplicacao/sessoes_do_contexto.ts";
 import {
   gravarAmbienteDaExecucao,
@@ -16,7 +16,7 @@ import {
 /** A execução aberta que tem o token, pela lista das sessões filtrada por ele. */
 const execucaoVivaDoToken = (b: DatabaseSync, token: string): string | undefined =>
   resumosDasSessoesEmLote(b, { token })[0]?.execucoes.find((e) => e.fim == null)?.id;
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";

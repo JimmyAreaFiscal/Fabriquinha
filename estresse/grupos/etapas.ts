@@ -45,15 +45,15 @@ import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/proces
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { integrarPR, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { carregarSessoesDoContexto, motorDoBanco } from "../../apoio-testes/sessoes_de_teste.ts";
 import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 

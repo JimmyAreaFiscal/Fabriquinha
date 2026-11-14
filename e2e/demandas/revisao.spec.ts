@@ -8,7 +8,7 @@ import {
   motivoDaFalhaDoTicket,
   carregarDemanda,
 } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "../apoio.ts";

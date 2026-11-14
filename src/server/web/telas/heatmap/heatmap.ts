@@ -1,7 +1,7 @@
 // Aba Heatmap da página do projeto (F7 §4.4) como funções puras: o cabeçalho com a janela, a árvore de pastas e arquivos
 // com a cor de calor e o detalhe de cada arquivo. Tudo o que vem do git passa por `escapar`. O DOM e a rede ficam em
 // heatmap-montar.ts.
-import type { Heatmap } from "../../../contrato/projeto.ts";
+import type { Heatmap } from "../../../system/api/contrato/projeto.ts";
 import { escapar, plural } from "../../apresentacao/render.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";
 import { abas, caminhoDoProjeto, seletor } from "../projeto/projeto.ts";

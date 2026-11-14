@@ -1,7 +1,7 @@
 // I-288.R3: o trabalho de um Espaço no container de verdade (CONCEITOS.md §7). O projeto de teste é o de
 // `projeto-container/` (imagem com node e git, teste, e2e e hook de commit) e o pi é o falso da imagem. Pulado sem
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e constrói a imagem na primeira vez.
-import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -32,9 +32,9 @@ import { dirDoPiDoAuditor, PACOTE } from "../../src/shared/infra/isolamento_do_a
 import { anotar, noLog } from "../../src/shared/infra/registro.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { caminhoDaWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
-import { iniciarServico } from "../../src/server/composicao/servico.ts";
+import { iniciarServico } from "../../src/server/system/montagem.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import {
   atual,
   demandaEmExecucao,
@@ -53,7 +53,7 @@ import {
   projetoDeTesteEmContainer,
   raizCompartilhadaComODocker,
 } from "../falsos.ts";
-import { cancelarDemandaEmCascata } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { cancelarDemandaEmCascata } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
 import { reservadoPeloDespacho } from "../../apoio-testes/reserva_do_despacho.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";

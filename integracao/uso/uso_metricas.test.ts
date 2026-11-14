@@ -13,8 +13,8 @@ import {
   metricasDasEtapas,
   metricasDosMeses,
   usoDaDemanda,
-} from "../../src/server/consultas/metricas/metricas_do_periodo.ts";
-import { usoPorEtapa } from "../../src/server/consultas/metricas/metrica_de_uso.ts";
+} from "../../src/server/system/api/metricas/metricas_do_periodo.ts";
+import { usoPorEtapa } from "../../src/server/system/api/metricas/metrica_de_uso.ts";
 import { mesDoInstante } from "../../src/shared/nucleo/relogio.ts";
 import {
   abrirPortao,

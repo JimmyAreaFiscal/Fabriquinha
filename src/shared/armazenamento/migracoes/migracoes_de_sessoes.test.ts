@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { migrarBancoDaFabriquinha } from "../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
 import { lerUsoDasExecucoes } from "../../../modulos/sessoes/metricas_de_execucao/armazenamento/uso_das_execucoes.ts";
 import { gravarCatalogoDePrecos } from "../../../modulos/sessoes/modelos/armazenamento/catalogo_de_precos.ts";
 import { MIGRACOES_DE_SESSOES, VERSAO_DO_CATALOGO_DE_PRECOS } from "./migracoes_de_sessoes.ts";

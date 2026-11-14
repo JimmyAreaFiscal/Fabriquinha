@@ -11,7 +11,7 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { type ComandoNoAmbiente } from "../../../ambiente/publico.ts";
 import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { acharCommitComMarca, commitarTicket, type PedidoDeCommit } from "./commit_do_ticket.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-commit-demanda-")));
 after(() => {
