@@ -4,6 +4,7 @@
 import type { EtapasDoSdlc } from "../system/api/contrato/etapas.ts";
 import type { QuantidadeDePendencias } from "../system/api/contrato/inicio.ts";
 import type { Parametros } from "./compartilhado/caminhos.ts";
+import { alternarTema } from "./compartilhado/tema.ts";
 import { type Pagina, rotear } from "./caminhos.ts";
 import { definirEtapasDoSdlc } from "./apresentacao/etapas.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
@@ -47,10 +48,29 @@ let aguardando = 0;
 /** O da página na tela; trocar de página o aborta. */
 let pagina = new AbortController();
 
+/** O botão que alterna o tema claro/escuro; o tema já foi aplicado no `<head>` do index.html antes da primeira pintura. */
+function botaoDoTema(): HTMLButtonElement {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className = "btn";
+  botao.style.marginLeft = "auto";
+  botao.textContent = document.documentElement.dataset.theme === "light" ? "Tema escuro" : "Tema claro";
+  botao.addEventListener("click", () => {
+    botao.textContent = alternarTema(localStorage, document.documentElement) === "light" ? "Tema escuro" : "Tema claro";
+  });
+  return botao;
+}
+
+/** Desenha a navegação (e o botão de tema, que o `navegacao` não conhece) no cabeçalho. */
+function desenharNavegacao(paginaAtual: Pagina | undefined): void {
+  cabeca.innerHTML = navegacao(paginaAtual, aguardando);
+  cabeca.append(botaoDoTema());
+}
+
 /** Redesenha a navegação com quanto aguarda o Auditor, no contador do Início. */
 function desenharOQueAguarda(quantidade: number): void {
   aguardando = quantidade;
-  cabeca.innerHTML = navegacao(rotear(location.pathname)?.pagina, aguardando);
+  desenharNavegacao(rotear(location.pathname)?.pagina);
 }
 
 /** Pede ao servidor quanto aguarda o Auditor, pela consulta leve do contador. */
@@ -68,7 +88,7 @@ function desenhar(): void {
   if (LEVAM_AO_INICIO.has(location.pathname)) history.replaceState(null, "", "/home");
   const rota = rotear(location.pathname);
   document.title = rota ? `${TITULOS[rota.pagina]} · Fabriquinha` : "Fabriquinha";
-  cabeca.innerHTML = navegacao(rota?.pagina, aguardando);
+  desenharNavegacao(rota?.pagina);
   avisar();
   pagina.abort();
   pagina = new AbortController();

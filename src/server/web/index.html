@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Fabriquinha</title>
     <link rel="icon" href="data:," />
+    <script>
+      // Aplica o tema salvo antes da primeira pintura (sem piscar); sem escolha ou sem localStorage, o escuro.
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("fabriquinha.tema") === "light" ? "light" : "dark";
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
     <link rel="stylesheet" href="/static/estilo.css" />
     <script type="importmap">
       {
