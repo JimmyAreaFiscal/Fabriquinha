@@ -325,6 +325,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-livre",
       container_id: "c1",
+      slot: null,
       imagem: "fabriquinha/loja:abc",
       estado: "livre",
       alocado_para: null,
@@ -335,6 +336,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-sujo",
       container_id: "c2",
+      slot: null,
       imagem: "alpine",
       estado: "sujo",
       alocado_para: null,
@@ -344,6 +346,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-<x>",
       container_id: "c3",
+      slot: null,
       imagem: "alpine",
       estado: "alocado",
       alocado_para: "I-1",
