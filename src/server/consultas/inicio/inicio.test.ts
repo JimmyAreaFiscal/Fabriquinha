@@ -6,7 +6,8 @@ import { test } from "node:test";
 import { cenarioDoInicio, em, rodada, ticket } from "../../../../apoio-testes/cenarios/cenario_do_inicio.ts";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco/banco_temporario.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { condutor, Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { motorDoBanco } from "../../../../apoio-testes/sessoes_de_teste.ts";
 import { relogioDoSistema, relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import type { DadosDoInicio } from "../../contrato/inicio.ts";
 import type { SessaoDeDemanda } from "../sessoes/historico_demanda.ts";
@@ -253,7 +254,7 @@ test("rodando: as sessões que rodam com o que o agente faz, ou o título do tic
 
 test("rodando, sem situação injetada: o processo vivo vem das Sessões, só das sessões com execução aberta", (t) => {
   const banco = cenario();
-  t.mock.method(condutor, "situacao", (sessao: string) =>
+  t.mock.method(motorDoBanco(banco), "situacao", (sessao: string) =>
     sessao === "s-viva" ? viva("lendo src/cupom.ts") : undefined,
   );
   assert.deepEqual(

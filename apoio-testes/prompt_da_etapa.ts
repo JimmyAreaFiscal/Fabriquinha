@@ -7,7 +7,6 @@ import {
   ConducaoAgentica,
   montarConducoesDasEtapas,
   montarPromptDemanda,
-  condutor,
 } from "../src/modulos/ciclo_de_vida/publico.ts";
 import { modulosDoCicloDeTeste } from "./falsos/ambiente_falso.ts";
 import type { ContextoDoPrompt } from "../src/modulos/ciclo_de_vida/conducao/aplicacao/prompt/contexto_do_prompt.ts";
@@ -15,7 +14,6 @@ import type { ContextoDoPrompt } from "../src/modulos/ciclo_de_vida/conducao/apl
 const CONDUCOES_DO_PROMPT = montarConducoesDasEtapas({
   ...modulosDoCicloDeTeste(new DatabaseSync(":memory:")),
   relogio: relogioDoSistema,
-  condutor,
   registro: anotar,
 });
 

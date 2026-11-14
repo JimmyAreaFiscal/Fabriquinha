@@ -18,8 +18,12 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type AgregadoDemanda, type TicketDemanda, EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
-import { comSessoesDoContexto, criarSessao, iniciarExecucao } from "../../src/modulos/sessoes/publico.ts";
-import { gravarTokenDaExecucao } from "../../apoio-testes/sessoes_de_teste.ts";
+import {
+  gravarTokenDaExecucao,
+  comSessoesDoContexto,
+  criarSessao,
+  iniciarExecucao,
+} from "../../apoio-testes/sessoes_de_teste.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";

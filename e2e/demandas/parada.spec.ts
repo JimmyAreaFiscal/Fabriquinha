@@ -10,11 +10,11 @@ import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { sinalNoGrupo } from "../../src/shared/infra/processo.ts";
 import { expect, projeto, test } from "../apoio.ts";
 import { semearTicketAberto } from "../demandas-apoio.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 // Um pi que não termina sozinho: só o sinal o encerra.
 const roteiroDoPiParado: PassoPi[] = [{ termina: "trava" }];

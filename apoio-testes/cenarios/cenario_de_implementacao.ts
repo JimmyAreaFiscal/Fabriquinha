@@ -1,19 +1,18 @@
 // O cenário das conduções do `implementar` e do `resolver_conflito`: git real temporário, banco real, pi falso que escreve
 // na pasta de trabalho e a demanda I-1 com a rodada 1 em `implementar` (ou, com `conflito`, em `encerrar_demanda`).
-import type { MotorDasSessoes } from "../../src/modulos/sessoes/publico.ts";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import {
   type AgregadoDemanda,
   Endereco,
   type RegistroDaVerificacao,
-  condutor as condutorDoServico,
   motivoDaFalhaDoTicket,
   type DepsDaConducao,
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
+import type { SessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
@@ -181,13 +180,16 @@ export async function cenarioDeImplementacao({
         resultado: { tipo: "reprovacao" as const, motivo: "corrija" },
       })),
     }));
-  /** As dependências da condução; `condutor` troca o do serviço (a parada do serviço, por exemplo). */
-  const deps = (condutor: MotorDasSessoes = condutorDoServico): DepsDaConducao => ({
-    ...modulosDoCicloDeTeste(banco),
-    relogio: relogioDoSistema,
-    condutor,
-    registro: anotar,
-  });
+  /** As dependências da condução; `trocarSessoes` muda o que a condução vê das Sessões (a parada do serviço, por exemplo). */
+  const deps = (trocarSessoes: Partial<SessoesDeAgente> = {}): DepsDaConducao => {
+    const modulos = modulosDoCicloDeTeste(banco);
+    return {
+      ...modulos,
+      sessoes: { ...modulos.sessoes, ...trocarSessoes },
+      relogio: relogioDoSistema,
+      registro: anotar,
+    };
+  };
   return {
     c,
     banco,

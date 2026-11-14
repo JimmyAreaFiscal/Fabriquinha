@@ -17,13 +17,13 @@ import {
   executarAgora,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { Projeto } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "../apoio.ts";
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 

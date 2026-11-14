@@ -145,7 +145,7 @@ export async function iniciarServico(raiz: string, pastaDoPacote: string): Promi
   // As conduções das Etapas, com o fluxo que conclui o pedido junto do encerramento do processo.
   const despachoDoServico = despachoDasEtapas();
   const repositorio = repositorioMontado;
-  const modulos = { banco, ambientes, repositorio };
+  const modulos = { banco, ambientes, repositorio, sessoes };
 
   /**
    * F4 §4, passos 2 a 4, numa batida do relógio (o passo 1 é a varredura do Repositório). Nunca lança: qualquer erro

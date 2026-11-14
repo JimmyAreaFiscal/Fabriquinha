@@ -10,12 +10,16 @@ import {
   registrarPedidoDeTeste,
   situacaoGravada,
 } from "../../../apoio-testes/cenarios/pedidos_de_teste.ts";
-import { AUDITOR, type Ator, condutor, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, type Ator, carregarDemanda } from "../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
-import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../modulos/sessoes/publico.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "./cancelamento_em_cascata.ts";
 import { montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+  motorDoBanco,
+} from "../../../apoio-testes/sessoes_de_teste.ts";
 
 const ctx = CONTEXTO_DOS_PEDIDOS;
 const aprovar = { resultado: "aprovado" };
@@ -175,8 +179,8 @@ test("ordem: as execuções abertas só são interrompidas depois do commit do c
   abrirExecucao(banco, a, "s1");
   abrirExecucao(banco, registrarPedidoDeTeste(banco, [a]), "s2");
   const vistoNaInterrupcao: { emTransacao: boolean; situacao: unknown }[] = [];
-  const interromperDeVerdade = condutor.interromper.bind(condutor);
-  t.mock.method(condutor, "interromper", (execucao: string) => {
+  const interromperDeVerdade = motorDoBanco(banco).interromper.bind(motorDoBanco(banco));
+  t.mock.method(motorDoBanco(banco), "interromper", (execucao: string) => {
     vistoNaInterrupcao.push({ emTransacao: banco.isTransaction, situacao: situacaoGravada(banco, a) });
     return interromperDeVerdade(execucao);
   });

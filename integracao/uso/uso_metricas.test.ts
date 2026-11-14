@@ -4,12 +4,6 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  retomarSessao,
-  registrarUso,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-} from "../../src/modulos/sessoes/publico.ts";
 import { produtividadeDaRodada, type EtapaTicket, carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import {
   metricasDasEtapas,
@@ -32,6 +26,13 @@ import {
 } from "../apoio-execucao.ts";
 import { ciclo, criarCenario, declararUso, demanda, gravarLimiteParalelismo } from "../apoio.ts";
 import { origemDe } from "../../apoio-testes/banco/banco_de_metricas.ts";
+import {
+  retomarSessao,
+  registrarUso,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../apoio-testes/sessoes_de_teste.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 
 interface Ref {
   demanda_id: string;
@@ -101,9 +102,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   );
   assert.equal(depois.usos.length, 3);
   const { total } = produtividadeDaRodada(
-    depois.sessoes,
-    depois.execucoes,
-    depois.usos,
+    montarSessoesDeAgente({ banco: c.banco }).metricas({ demandas: [id], periodo: {} }),
     carregarDemanda(c.banco, id).tickets.filter((t) => t.ticket_id === ref.ticket_id),
   );
   assert.deepEqual([total.tokensEntrada, total.custo, total.custoIncompleto], [60, 3, true]);

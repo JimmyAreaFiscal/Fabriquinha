@@ -15,23 +15,26 @@ import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts"
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
-import { MotorDasSessoes } from "../../../../sessoes/publico.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
+import type { SessoesDeAgente } from "../../../../sessoes/publico.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
-const conducao = (banco: Banco, condutorDeTeste: MotorDasSessoes = condutor) =>
-  new ConducaoDeRevisarRodada({
-    ...modulosDoCicloDeTeste(banco),
+/** A condução com os módulos do teste; `trocarSessoes` muda o que ela vê das Sessões (a parada do serviço). */
+const conducao = (banco: Banco, trocarSessoes: Partial<SessoesDeAgente> = {}) => {
+  const modulos = modulosDoCicloDeTeste(banco);
+  return new ConducaoDeRevisarRodada({
+    ...modulos,
+    sessoes: { ...modulos.sessoes, ...trocarSessoes },
     relogio: RELOGIO,
-    condutor: condutorDeTeste,
     registro: anotar,
   });
+};
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
@@ -59,7 +62,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao();
   // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
   const { porta } = await servir(abrirBancoDaFabriquinha(raizDo(banco)));
-  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
+  motorDoBanco(banco).urlDaApi = `http://127.0.0.1:${String(porta)}`;
   piFalso.roteirizar([
     {
       cli: [
@@ -104,9 +107,7 @@ test("preparação que lança falha o ticket sem rodar o pi e vai ao log", async
 test("preparação interrompida pela parada do serviço falha como serviço reiniciado", async () => {
   const { banco } = await cenarioRevisao();
   banco.exec("DELETE FROM linguagem_projeto");
-  const emParada = new MotorDasSessoes();
-  emParada.marcarParada();
-  await conducao(banco, emParada).conduzir(reservadoPeloDespacho(banco, REVISOR));
+  await conducao(banco, { emParada: () => true }).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "serviço reiniciado");
 });
 

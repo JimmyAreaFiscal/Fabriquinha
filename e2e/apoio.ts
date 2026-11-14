@@ -2,7 +2,7 @@
 // mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/falsos/pi_falso.ts), e recebe o
 // navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`. O docker falso
 // (apoio-testes/falsos/docker_falso.ts) vai à frente no PATH, e o registro dele diz se o serviço chamou o docker.
-import { ligarGestaoDeAmbientesNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
+import { ligarGestaoDeAmbientesNosModulos, gestaoLigadaNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -50,7 +50,7 @@ async function parar(servico: ChildProcess): Promise<void> {
 async function matarPi(raiz: string): Promise<void> {
   ligarGestaoDeAmbientesNosModulos();
   const banco = abrirBancoDaFabriquinha(raiz);
-  await recuperarAposReinicio(banco);
+  await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
   banco.close();
 }
 

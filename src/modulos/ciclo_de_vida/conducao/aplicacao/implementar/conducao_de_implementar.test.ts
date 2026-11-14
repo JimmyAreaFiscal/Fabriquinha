@@ -22,13 +22,20 @@ import {
   verif,
 } from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { MotorDasSessoes } from "../../../../sessoes/publico.ts";
 import { commitarTicketDemanda } from "./commit_do_ticket.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import type { SessoesDeAgente } from "../../../../sessoes/publico.ts";
 
-const conduzir = (c: CenarioDeImplementacao, n: number, opcoes: OpcoesDaImplementacao, condutor?: MotorDasSessoes) =>
-  new ConducaoDeImplementar(c.deps(condutor), opcoes).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(n)));
+const conduzir = (
+  c: CenarioDeImplementacao,
+  n: number,
+  opcoes: OpcoesDaImplementacao,
+  trocarSessoes?: Partial<SessoesDeAgente>,
+) =>
+  new ConducaoDeImplementar(c.deps(trocarSessoes), opcoes).conduzir(
+    reservadoPeloDespacho(c.banco, enderecoDoTicket(n)),
+  );
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenarioDeImplementacao();
@@ -289,12 +296,7 @@ test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit
     const c = await cenarioDeImplementacao();
     if (hookCorpo) hook(c, hookCorpo);
     let consultas = 0;
-    class CondutorQueParaNaConsulta extends MotorDasSessoes {
-      override emParada(): boolean {
-        return ++consultas === chamada;
-      }
-    }
-    await conduzir(c, 1, coletor(todas(true)), new CondutorQueParaNaConsulta());
+    await conduzir(c, 1, coletor(todas(true)), { emParada: () => ++consultas === chamada });
     const t = c.status(1);
     assert.deepEqual([t?.estado, c.reprovacoes(1), c.motivo(1)], ["falhou", 0, "serviço reiniciado"]);
     if (chamada === 1) assert.deepEqual(c.evidencias(1), []);

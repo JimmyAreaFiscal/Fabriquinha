@@ -10,9 +10,12 @@ import {
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
   execucoesAbertas,
-  execucaoVivaDoToken,
-  contextoDaSessao,
+  resumosDasSessoesEmLote,
 } from "./sessoes_e_execucoes.ts";
+
+/** A execução aberta que tem o token, pela lista das sessões filtrada por ele. */
+const execucaoVivaDoToken = (b: DatabaseSync, token: string): string | undefined =>
+  resumosDasSessoesEmLote(b, { token })[0]?.execucoes.find((e) => e.fim == null)?.id;
 import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -224,17 +227,19 @@ test("o Ambiente gravado no processo aberto volta em processosAbertos, para a re
   assert.equal(execucoesAbertas(b)[0]?.ambiente_id, "amb-9"); // o upsert do processo não o apaga
 });
 
-test("o ticket dono do trabalho; id desconhecido volta sem ticket", () => {
+test("a lista pelas sessões e pelas execuções traz a sessão dona; id desconhecido não traz nenhuma", () => {
   const b = banco();
-  gravar(b, [sessao("s1")], [], []);
+  gravar(b, [sessao("s1")], [execucao("e1")], []);
   gravar(b, [sessao("s2", 2)], [], [], noTicket2);
-  assert.deepEqual({ ...contextoDaSessao(b, "s2") }, noTicket2);
-  assert.equal(contextoDaSessao(b, "nao-existe"), undefined);
+  assert.partialDeepStrictEqual(resumosDasSessoesEmLote(b, { sessoes: ["s2"] }), [{ id: "s2", ...noTicket2 }]);
+  assert.deepEqual(resumosDasSessoesEmLote(b, { sessoes: ["nao-existe"] }), []);
+  assert.partialDeepStrictEqual(resumosDasSessoesEmLote(b, { execucoes: ["e1"] }), [{ id: "s1", ...ref }]);
+  assert.deepEqual(resumosDasSessoesEmLote(b, { execucoes: ["nao-existe"] }), []);
 });
 
 test("o token resolve só o processo vivo dono dele; encerrado, de outro e desconhecido não resolvem", () => {
   const b = banco();
-  gravar(b, [sessao()], [execucao("e1"), execucao("e2")], []);
+  gravar(b, [sessao(), sessao("s2")], [execucao("e1"), execucao("e2", "s2")], []);
   gravarTokenDaExecucao(b, "e1", "token-1");
   gravarTokenDaExecucao(b, "e2", "token-2");
 

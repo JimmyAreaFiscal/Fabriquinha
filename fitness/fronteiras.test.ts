@@ -261,10 +261,17 @@ test("a fitness do relógio acusa new Date( fora de composicao/ e nucleo/relogio
   ]);
 });
 
-// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
+// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede às Sessões (`sessoes.lancar(`, a interface
+// `SessoesDeAgente`). O harness lança pelo Ambiente.
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
-// shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
+/** A chamada feita às Sessões montadas (`sessoes.lancar(`, `modulos.sessoes.lancar(`): o pedido, não o harness. */
+const chamadaAsSessoes = (receptor: ts.Expression): boolean =>
+  (ts.isIdentifier(receptor) && receptor.text === "sessoes") ||
+  (ts.isPropertyAccessExpression(receptor) && receptor.name.text === "sessoes");
+
+// shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não, menos o das
+// Sessões montadas; nenhum outro objeto de src/ usa esses nomes.
 function acharChamadasAoHarnessForaDoCondutor(src: string): string[] {
   return listarArquivosDeProducao(src)
     .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR && arquivo !== ARQUIVO_DO_HARNESS)
@@ -275,7 +282,8 @@ function acharChamadasAoHarnessForaDoCondutor(src: string): string[] {
         if (
           ts.isCallExpression(no) &&
           ts.isPropertyAccessExpression(no.expression) &&
-          METODOS_DO_HARNESS.has(no.expression.name.text)
+          METODOS_DO_HARNESS.has(no.expression.name.text) &&
+          !chamadaAsSessoes(no.expression.expression)
         ) {
           chamadas.push(`${arquivo} chama .${no.expression.name.text}(`);
         }
@@ -300,6 +308,8 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
     "aplicacao/lancador.ts": "new HarnessPi().lancar(args, opcoes, aoEvento);\n",
     "aplicacao/consultor.ts": "const resposta = await harness.perguntar(prompt);\n",
     "aplicacao/inocente.ts": "const lancar = 1;\nlancar(2);\nperguntar();\nconst lancamento = x.lancamento(3);\n",
+    "aplicacao/pedido.ts": "sessoes.lancar(pedido);\nmodulos.sessoes.lancar(pedido);\n",
+    "aplicacao/disfarce.ts": "sessoes.harness.lancar(args);\n",
     "aplicacao/teste_de_quem_lanca.test.ts": "harness.lancar(args);\n",
   };
   for (const [caminho, conteudo] of Object.entries(arquivos)) {
@@ -309,6 +319,7 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
 
   assert.deepEqual(acharChamadasAoHarnessForaDoCondutor(raiz).sort(), [
     "aplicacao/consultor.ts chama .perguntar(",
+    "aplicacao/disfarce.ts chama .lancar(",
     "aplicacao/lancador.ts chama .lancar(",
   ]);
 });

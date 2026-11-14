@@ -11,7 +11,6 @@ import {
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { ErroDeEscopo } from "../../src/shared/nucleo/erros.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import {
   adicionarProjeto,
   AUTOR,
@@ -35,6 +34,7 @@ import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { registrarDependencia } from "../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 

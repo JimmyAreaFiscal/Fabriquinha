@@ -1,14 +1,6 @@
 // Relatório de produtividade da rodada: consumo por ticket e total (comparacao-sdlc-implementacao.md §7.3).
 // Custo ausente não é zero: o ticket sem custo medido é incompleto e o total de custo vira piso.
-import {
-  type Execucao,
-  type LinhaDeUso,
-  linhaDeUsoDaExecucao,
-  registrarUso,
-  type Sessao,
-  Uso,
-  type UsoDaExecucao,
-} from "../../../sessoes/publico.ts";
+import { type LinhaDeUso, Uso, type UsoPorContexto } from "../../../sessoes/publico.ts";
 import { formatarTicketRef } from "../../etapas/publico.ts";
 
 /** O ticket da rodada, só com o que o relatório mostra. */
@@ -52,25 +44,27 @@ const consumo = (uso: Uso, execucoes: number, semMedida: boolean): ConsumoRodada
   };
 };
 
+/**
+ * As execuções das demandas, com o contexto, e o Uso medido de cada uma: a métrica "uso" de Sessões.
+ * @testes o teste monta a entrada com este tipo
+ */
+export type UsoDasExecucoes = Pick<UsoPorContexto, "execucoes" | "usoPorExecucao">;
+
 export function produtividadeDaRodada(
-  sessoes: readonly Sessao[],
-  execucoes: readonly Execucao[],
-  usos: readonly UsoDaExecucao[],
+  { execucoes, usoPorExecucao }: UsoDasExecucoes,
   tickets: readonly TicketDaRodada[],
 ): ProdutividadeRodada {
-  // Cada chave (execução, modelo) conta uma vez, mesmo em sessões retomadas.
-  const usosUnicos = usos.reduce<UsoDaExecucao[]>((acc, u) => registrarUso(acc, u), []);
   const consumos = tickets.map((t) => {
-    const ids = new Set(
-      sessoes.filter((s) => s.demanda_id === t.demanda_id && s.ticket_id === t.ticket_id).map((s) => s.id),
+    const execs = new Set(
+      execucoes.filter((e) => e.demanda_id === t.demanda_id && e.ticket_id === t.ticket_id).map((e) => e.id),
     );
-    const execs = new Set(execucoes.filter((e) => ids.has(e.trabalho_id)).map((e) => e.id));
-    const usosDoTicket = usosUnicos.filter((u) => execs.has(u.execucao_id));
+    // Na ordem em que o Uso foi gravado: é a ordem das somas.
+    const usosDoTicket = [...usoPorExecucao].filter(([execucao]) => execs.has(execucao)).map(([, uso]) => uso);
     return {
       ticket: formatarTicketRef(t),
       etapa: t.etapa,
       execucoes: execs.size,
-      uso: Uso.de(usosDoTicket.map(linhaDeUsoDaExecucao), 1),
+      uso: usosDoTicket.reduce((soma, uso) => soma.somar(uso), Uso.vazio()),
       // Sem nenhum uso registrado não há custo medido: nunca vale zero.
       semMedida: usosDoTicket.length === 0,
     };

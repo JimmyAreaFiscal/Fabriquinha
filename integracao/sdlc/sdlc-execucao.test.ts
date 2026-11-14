@@ -20,12 +20,6 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-  criarSessao,
-  iniciarExecucao,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-} from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
@@ -45,7 +39,13 @@ import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParaleli
 import { recuperarAposReinicio } from "../../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { modulosDoCicloDeTeste, gestaoLigadaNosModulos } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  criarSessao,
+  iniciarExecucao,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../apoio-testes/sessoes_de_teste.ts";
 
 const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
   const agregado = demanda(c, id);
@@ -393,7 +393,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarExecucao(criarSessao([], sessao), estado.execucoes, execucao),
   }));
-  await recuperarAposReinicio(c.banco);
+  await recuperarAposReinicio(c.banco, { ambientes: gestaoLigadaNosModulos() });
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

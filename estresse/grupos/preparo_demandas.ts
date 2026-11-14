@@ -10,12 +10,12 @@ import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/proces
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { AmbienteHostLocal } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { comSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

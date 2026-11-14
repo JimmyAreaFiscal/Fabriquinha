@@ -10,7 +10,7 @@ import { after, test } from "node:test";
 import { HarnessPi } from "../../apoio-testes/sessoes_de_teste.ts";
 import { PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { skillsDaEtapaDemanda } from "../../src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/lancamento_do_ticket.ts";
-import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { MotorDasSessoes } from "../../apoio-testes/sessoes_de_teste.ts";
 
 // A fumaça é do pi de verdade, o do PATH, e não do pi falso que o harness dos testes põe no lugar.
 delete process.env.FABRIQUINHA_PI;
@@ -88,7 +88,7 @@ test("a consulta do condutor, sem ferramentas, roda sem as credenciais de hosped
   for (const nome of credenciais) process.env[nome] = "segredo";
   process.env.FABRIQUINHA_PI = piQueImprimeOAmbiente;
   try {
-    const nomes = (await condutor.consultar("oi", undefined, 30_000))?.saida.split("\n") ?? [];
+    const nomes = (await new MotorDasSessoes().consultar("oi", undefined, 30_000))?.saida.split("\n") ?? [];
     assert.ok(nomes.includes("PATH"), "a consulta devolve o texto do pi");
     for (const nome of credenciais) assert.ok(!nomes.includes(nome), nome);
   } finally {

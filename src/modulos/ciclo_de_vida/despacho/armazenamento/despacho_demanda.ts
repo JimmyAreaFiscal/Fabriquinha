@@ -9,7 +9,7 @@ import {
 } from "../../processo/publico.ts";
 import { Endereco } from "../../etapas/publico.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
-import { execucoesAbertas } from "../../../sessoes/publico.ts";
+import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 
 /**
  * Os agregados das demandas em um dos `estados` (os da demanda em andamento em que o agendador despacha; quem os escolhe
@@ -20,4 +20,6 @@ export const agregadosParaDespacho = (banco: DatabaseSync, estados: readonly Est
 
 /** Os tickets com trabalho vivo: execução aberta, com ou sem o pi no ar. */
 export const trabalhosVivos = (banco: DatabaseSync): Endereco[] =>
-  execucoesAbertas(banco).map(({ demanda_id, ticket_id }) => Endereco.doTicket(demanda_id, ticket_id));
+  montarSessoesDeAgente({ banco })
+    .listar({ abertas: true })
+    .map(({ demanda_id, ticket_id }) => Endereco.doTicket(demanda_id, ticket_id));

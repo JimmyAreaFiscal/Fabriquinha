@@ -1,41 +1,34 @@
-// O condutor de trabalhos do serviço: o motor de Sessões (o mecanismo que lança, conversa e encerra o pi) com a política
-// do ticket por cima: o que cada falha técnica da execução significa para a Tentativa e, na subida do serviço, os tickets
-// que ficaram sem processo.
+// A política do ticket sobre as execuções que Sessões conduz: o que cada falha técnica da execução significa para a
+// Tentativa e, na subida do serviço, os tickets que ficaram sem processo.
 import type { DatabaseSync } from "node:sqlite";
 import {
   AUDITOR,
   type FalhaDaTentativa,
+  falhaDoErro,
+  falhaInterrompidaPeloAuditor,
   falhaPorServicoReiniciado,
   falhaQueExigeOAuditor,
 } from "../../../etapas/publico.ts";
 import { relogioDoSistema, type Relogio } from "../../../../../shared/nucleo/relogio.ts";
-import {
-  type FalhaDaExecucao,
-  motorDasSessoes,
-  type PedidoDeProcesso,
-  type SubidaDasSessoes,
-} from "../../../../sessoes/publico.ts";
+import type { FalhaDaExecucao, SubidaDasSessoes } from "../../../../sessoes/publico.ts";
 import { type FalharTicketSemProcesso, falharTicketsPresosNaSubida } from "./processo_do_ticket.ts";
 
-export {
-  atividadeDo,
-  type Dialogo,
-  type EventoDaSessao,
-  type PedidoDeProcesso,
-  PREFIXO_DA_RESPOSTA_AUTOMATICA,
-  type RespostaAutomatica,
-  type Situacao,
-} from "../../../../sessoes/publico.ts";
-
-/** A falha da Tentativa que cada falha técnica da execução é: o reinício e a infraestrutura se retomam; o resto pede o Auditor. */
-function falhaDaTentativaDaExecucao(falha: FalhaDaExecucao): FalhaDaTentativa {
+/**
+ * A falha da Tentativa que cada falha técnica da execução é: o reinício e a infraestrutura se retomam; a interrupção e o
+ * aborto são do Auditor; o erro da preparação é classificado como o de qualquer etapa; o resto pede o Auditor.
+ */
+export function falhaDaTentativaDaExecucao(falha: FalhaDaExecucao): FalhaDaTentativa {
   switch (falha.tipo) {
     case "falha_infraestrutura":
       return falha;
     case "servico_reiniciado":
       return falhaPorServicoReiniciado;
+    case "interrompida":
+      return falhaInterrompidaPeloAuditor;
     case "abortada":
       return { tipo: "interrompida", por: AUDITOR, motivo: falha.motivo };
+    case "preparacao_falhou":
+      return falhaDoErro(falha.erro);
     case "falha_do_agente":
       return falhaQueExigeOAuditor(falha.motivo);
   }
@@ -44,21 +37,6 @@ function falhaDaTentativaDaExecucao(falha: FalhaDaExecucao): FalhaDaTentativa {
 /** O que a subida do serviço recupera além dos processos dos tickets, dito por quem é dono de cada coisa. */
 export interface RecuperacaoDaSubida {
   falharTicket: FalharTicketSemProcesso;
-}
-
-/**
- * O condutor do serviço: todo pi e toda consulta ao modelo passam por ele.
- * ponytail: o motor de Sessões direto, até o passo 6 entregar ao Ciclo de Vida as Sessões montadas.
- */
-export const condutor = motorDasSessoes;
-
-/** Lança o pi do processo do ticket (`lancarExecucao`) e resolve com a falha da Tentativa, ou `undefined`. */
-export async function iniciarProcessoDoTicket(
-  r: PedidoDeProcesso,
-  relogio: Relogio = relogioDoSistema,
-): Promise<FalhaDaTentativa | undefined> {
-  const falha = await condutor.lancarExecucao(r, relogio);
-  return falha && falhaDaTentativaDaExecucao(falha);
 }
 
 /**

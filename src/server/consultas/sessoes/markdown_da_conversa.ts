@@ -32,7 +32,7 @@ const cortar = (t: string): string =>
   t.length <= CORTE ? t : `${t.slice(0, CORTE)}\n… (cortado em ${String(CORTE)} de ${String(t.length)} caracteres)`;
 
 /** Uma mensagem em Markdown: Fabriquinha, Auditor e agente na íntegra, chamadas e resultados cortados. */
-export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
+export function emMarkdown(m: Mensagem, daFabriquinha: ReadonlySet<string>): string[] {
   if (m.role === "user") return [`## ${daFabriquinha.has(texto(m)) ? "Fabriquinha" : "Auditor"}\n\n${texto(m)}`];
   if (m.role === "toolResult") {
     const erro = m.isError ? " (erro)" : "";

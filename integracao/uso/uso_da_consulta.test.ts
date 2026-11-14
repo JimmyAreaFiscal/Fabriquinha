@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cicloDoDespacho, produtividadeDaRodada } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
-import { gravarCatalogoDePrecos, HarnessPi } from "../../apoio-testes/sessoes_de_teste.ts";
+import { gravarCatalogoDePrecos, HarnessPi, carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   abrirPortao,
@@ -114,9 +114,10 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
   abrirPortao();
   await Promise.all(fins);
 
-  const { sessoes, execucoes, usos } = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: null });
+  const { usos } = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: null });
   const daRodada = demanda(c, id).tickets.filter((x) => x.rodada_id === 1);
-  const { total } = produtividadeDaRodada(sessoes, execucoes, usos, daRodada);
+  const usoDaDemanda = montarSessoesDeAgente({ banco: c.banco }).metricas({ demandas: [id], periodo: {} });
+  const { total } = produtividadeDaRodada(usoDaDemanda, daRodada);
   assert.equal(total.tokensEntrada, 7000);
   assert.equal(total.tokensSaida, 300);
   assert.equal(total.custo, 0.5);

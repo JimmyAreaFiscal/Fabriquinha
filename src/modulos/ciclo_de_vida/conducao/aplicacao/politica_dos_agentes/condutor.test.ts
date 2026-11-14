@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -17,28 +17,37 @@ import {
   AmbienteContainer,
   AmbienteHostLocal,
   gestaoQueSoUsa,
+  gestaoLigadaNosModulos,
 } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { type Relogio, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor, type EtapaTicket } from "../../../etapas/publico.ts";
-import { type Harness, type LancamentoDoTicket, MotorDasSessoes } from "../../../../sessoes/publico.ts";
+import { type Harness, type LancamentoDoTicket, montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
 import type { MensagemDoAgente } from "../../../../sessoes/harness/publico.ts";
-import { HarnessPi } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import {
   atividadeDo,
-  condutor,
-  iniciarProcessoDoTicket,
+  HarnessPi,
+  MotorDasSessoes,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type PedidoDeProcesso,
-} from "./condutor.ts";
+} from "../../../../../../apoio-testes/sessoes_de_teste.ts";
+import { falhaDaTentativaDaExecucao } from "./condutor.ts";
 import { recuperarAposReinicio } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
+
+/** O motor das Sessões, com o pi rodando no host local, e a política do ticket sobre o fim de cada execução. */
+const condutor = new MotorDasSessoes();
+condutor.montarAmbientes(gestaoQueSoUsa(new AmbienteHostLocal()));
+const iniciarProcessoDoTicket = async (pedido: PedidoDeProcesso, relogio?: Relogio) => {
+  const falha = await condutor.lancarExecucao(pedido, relogio);
+  return falha && falhaDaTentativaDaExecucao(falha);
+};
 
 /** Eventos da perguntar, incluindo as opções e descrições que a triagem recebe. */
 function eventosDaPergunta(
@@ -295,10 +304,11 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
 function triagemComSaida(etapa: EtapaTicket, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
   const piDaTriagem: typeof executar = () =>
     Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
-  return (p) => {
-    condutor.montarHarness(new HarnessPi(piDaTriagem));
-    return triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p);
-  };
+  const sessoesDaTriagem = montarSessoesDeAgente({
+    banco: new DatabaseSync(":memory:"),
+    harness: new HarnessPi(piDaTriagem),
+  });
+  return (p) => triarPergunta(sessoesDaTriagem, undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p);
 }
 const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede o Sonar"}';
 
@@ -562,7 +572,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)})`);
 
-    await recuperarAposReinicio(banco);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
 
     assert.deepEqual(await daTicket.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -575,7 +585,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
 test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    await recuperarAposReinicio(banco);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
       INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
@@ -583,7 +593,7 @@ test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", asyn
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    await recuperarAposReinicio(banco);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -615,7 +625,7 @@ test("recuperarNaSubida não sinaliza o pi que rodou num container, que a montag
   try {
     ticketComProcessoAberto(banco, "amb-1", 4321);
 
-    await recuperarAposReinicio(banco);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
 
     assert.deepEqual(docker.registro(), []);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });

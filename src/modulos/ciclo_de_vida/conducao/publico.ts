@@ -15,7 +15,7 @@ export {
 } from "./aplicacao/agente/escopo.ts";
 export { concluirSessaoAjustes } from "./aplicacao/ajustar_resultado/sessao_ajustes.ts";
 export { abortarDemanda, responderDialogoDemanda } from "./aplicacao/chat_do_auditor/acoes_do_auditor_no_chat.ts";
-export { marcadorDaConversa, promptsDaFabriquinha } from "./aplicacao/chat_do_auditor/marcas_da_conversa.ts";
+export { marcadorDaConversa } from "./aplicacao/chat_do_auditor/marcas_da_conversa.ts";
 export {
   type EstadoDaSessao,
   estadoEDesdeDaSessao,
@@ -48,12 +48,7 @@ export {
   interromperExecucoesDasDemandas,
   type OpcoesExecucaoDemanda,
 } from "./aplicacao/execucao/execucao_demanda.ts";
-export {
-  condutor,
-  iniciarProcessoDoTicket,
-  type RecuperacaoDaSubida,
-  recuperacaoDosTicketsNaSubida,
-} from "./aplicacao/politica_dos_agentes/condutor.ts";
+export { type RecuperacaoDaSubida, recuperacaoDosTicketsNaSubida } from "./aplicacao/politica_dos_agentes/condutor.ts";
 export { exigirTrabalhoDoTicket } from "./aplicacao/politica_dos_agentes/trabalho_do_ticket.ts";
 export { montarPromptDemanda } from "./aplicacao/prompt/prompt_demanda.ts";
 export { ligarLeituraDosLimitesDasSessoes } from "./aplicacao/limites_das_sessoes.ts";

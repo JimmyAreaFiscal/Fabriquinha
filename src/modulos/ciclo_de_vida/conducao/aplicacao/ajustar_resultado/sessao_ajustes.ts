@@ -2,7 +2,6 @@
 // `ConducaoDeAjustarResultado` abre na hora a conversa do Auditor com o agente, que só registra tickets corretivos. A
 // conversa acontece no chat da sessão. Ela não implementa nem integra: os SHAs da rodada e da demanda são gravados ao
 // abrir e restaurados quando a execução termina e quando a sessão conclui.
-import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -20,9 +19,8 @@ import { ticketAtualDaEtapa } from "../../../planejamento/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
-import { encerrarPiVivo } from "../conducao_de_etapa/pi_vivo.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
+import { execucoesDoTicket } from "../politica_dos_agentes/processo_do_ticket.ts";
 import type { RefRodada } from "../encerrar_rodada/encerramento_rodada.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
@@ -133,7 +131,7 @@ export function retomarSessaoAjustes(
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */
 export async function concluirSessaoAjustes(
-  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio">,
+  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio" | "sessoes">,
   ref: RefRodada,
   ator: Ator,
   relogio: Relogio = relogioDoSistema,
@@ -145,9 +143,9 @@ export async function concluirSessaoAjustes(
   // Ensaio: uma conclusão rejeitada não pode derrubar a conversa; nada é gravado.
   ensaiarConclusaoDaSessaoDeAjustes(banco, ref.demanda_id, entrada, ator, relogio);
 
-  const maisRecente = carregarSessoesDoContexto(banco, ticket).execucoes.at(-1)?.id;
-  encerrarPiVivo(banco, ticket);
-  if (maisRecente !== undefined) await condutor.aguardarFim(maisRecente);
+  // O pi ocioso da sessão para, e a condução dele termina antes da restauração.
+  const maisRecente = execucoesDoTicket(modulos.sessoes, ticket).at(-1)?.id;
+  if (maisRecente !== undefined) await modulos.sessoes.encerrar(maisRecente);
   await restaurar(modulos, ref);
   return concluirSessaoDeAjustes(banco, ref.demanda_id, entrada, ator, relogio);
 }

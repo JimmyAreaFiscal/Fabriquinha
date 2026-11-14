@@ -28,7 +28,7 @@ interface ResultadoDaCascata {
  * dos cancelados são interrompidas, uma vez por ticket.
  */
 function cancelarEmCascata(
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes">,
+  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   ator: Ator,
@@ -44,7 +44,7 @@ function cancelarEmCascata(
 
 /** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto e os dependentes saem junto. */
 export const cancelarDemandaEmCascata = (
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes">,
+  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   ator: Ator,
@@ -56,7 +56,7 @@ export const cancelarDemandaEmCascata = (
 
 /** CA-16 a CA-20: o Auditor decide o Gate da demanda; aprovar não cascateia, reprovar cancela a demanda e os dependentes. */
 export const decidirGateDaDemanda = (
-  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes">,
+  modulos: Pick<ModulosDoCiclo, "banco" | "ambientes" | "sessoes">,
   gestaoDeDemandas: GestaoDeDemandas,
   id: string,
   entrada: unknown,

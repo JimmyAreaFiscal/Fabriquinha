@@ -12,12 +12,6 @@ import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_te
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
-import {
-  criarSessao,
-  iniciarExecucao,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-} from "../../../sessoes/publico.ts";
 import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
@@ -44,6 +38,12 @@ import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto, registrarDependencia } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import {
+  criarSessao,
+  iniciarExecucao,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../../../../apoio-testes/sessoes_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 

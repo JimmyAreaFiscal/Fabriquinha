@@ -22,7 +22,6 @@ import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
-import type { MotorDasSessoes } from "../../../../sessoes/publico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
 import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
@@ -34,7 +33,6 @@ import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 /** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
 export interface DepsDaConducao extends ModulosDoCiclo {
   relogio: Relogio;
-  condutor: MotorDasSessoes;
   registro: typeof anotar;
   /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` que a composição liga (limites_das_sessoes.ts). */
   limiteMin?: number;
@@ -100,7 +98,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
    * nada, se a preparação falhou e o ticket já foi falhado).
    */
   async iniciar(endereco: Endereco): Promise<ExecucaoIniciada | undefined> {
-    const { banco, condutor, registro } = this.deps;
+    const { banco, sessoes, registro } = this.deps;
     const ticket = this.ticketDe(endereco);
     const preparacao = this.prepararEspaco(ticket);
     // Sem preparação a execução nasce já, na transação da reserva do Despacho: é ela que ocupa a vaga do limite global.
@@ -110,7 +108,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
       espaco = await preparacao;
     } catch (erro) {
       // Com o serviço parando, o erro é efeito da parada: o ticket é retomado em vez de esperar o Auditor.
-      const falha = condutor.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
+      const falha = sessoes.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
       registro(`${raizDo(banco)}/log`, `preparação falhou: ${falha.motivo}`);
       await this.falhar(ticket, falha);
       return undefined;

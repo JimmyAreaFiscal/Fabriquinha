@@ -27,7 +27,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, type OpcoesVerificacao } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { carregarSessoesDoContexto, lerUsoDeclarado } from "../../../../sessoes/publico.ts";
 import { logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { ConferenciaDoPR, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "./encerramento_demanda.ts";
@@ -225,7 +224,6 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
     );
     const sobras = [...feito.pendentes, ...feito.sobras];
     const demonstracao = montarDemonstracaoLimpeza(feito.removidos, sobras);
-    const { sessoes, execucoes, usos } = carregarSessoesDoContexto(banco, { demanda_id: demanda_id, ticket_id: null });
     // Com sobras só a demonstração é submetida: o Avaliador a recusa e nada é gravado.
     const submissoes = [
       ...(sobras.length === 0
@@ -234,10 +232,7 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
               tipo: "arvore_prs_criterios_custos" as const,
               dados: montarArvorePRs(
                 carregarDemanda(banco, demanda_id),
-                sessoes,
-                execucoes,
-                usos,
-                lerUsoDeclarado(banco, demanda_id),
+                this.deps.sessoes.metricas({ demandas: [demanda_id], periodo: {} }),
               ),
             },
           ]

@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
+import { montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import { casar } from "../web/compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
@@ -255,7 +256,7 @@ export function servirWeb({
         200,
         await rota.tratar({
           banco,
-          modulos: { banco, ambientes: ambientes.gestao, repositorio },
+          modulos: { banco, ambientes: ambientes.gestao, repositorio, sessoes: montarSessoesDeAgente({ banco }) },
           relogio,
           agente,
           params,

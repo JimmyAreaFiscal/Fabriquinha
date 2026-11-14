@@ -10,8 +10,12 @@ import type { DatabaseSync } from "node:sqlite";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
 import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
 import { type AgregadoDemanda, submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { criarSessao, iniciarExecucao, comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
-import { gravarTokenDaExecucao } from "../../apoio-testes/sessoes_de_teste.ts";
+import {
+  gravarTokenDaExecucao,
+  criarSessao,
+  iniciarExecucao,
+  comSessoesDoContexto,
+} from "../../apoio-testes/sessoes_de_teste.ts";
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";

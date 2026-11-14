@@ -19,8 +19,8 @@ import {
 } from "../../src/modulos/ambiente/publico.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { AmbienteHostLocal } from "../../src/modulos/ambiente/execucao/infra/host_local/ambiente_host_local.ts";
-import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import type { ModulosDoCiclo } from "../../src/modulos/ciclo_de_vida/publico.ts";
 
 export { AmbienteHostLocal };
@@ -48,18 +48,28 @@ const GESTAO_DOS_TESTES = gestaoQueSoUsa(new AmbienteHostLocal());
 let gestaoLigadaNosTestes = GESTAO_DOS_TESTES;
 
 /**
- * Liga `gestao` aos módulos que pedem Ambiente (os de `modulosDoCicloDeTeste` e as Sessões do condutor), como a
- * composição faz; sem ela, a gestão dos testes. O harness dos testes liga a dos testes antes de cada arquivo.
+ * Liga `gestao` aos módulos que pedem Ambiente (os de `modulosDoCicloDeTeste`), como a composição faz; sem ela, a
+ * gestão dos testes. O harness dos testes liga a dos testes antes de cada arquivo.
  */
 export function ligarGestaoDeAmbientesNosModulos(gestao: GestaoDeAmbientes = GESTAO_DOS_TESTES): void {
   gestaoLigadaNosTestes = gestao;
-  condutor.montarAmbientes(gestao);
 }
 
-/** Os módulos que a condução do Ciclo de Vida recebe da composição, montados sobre `banco` com a gestão ligada agora. */
+/** A gestão ligada agora: a que a composição daria às Sessões montadas na subida. */
+export const gestaoLigadaNosModulos = (): GestaoDeAmbientes => gestaoLigadaNosTestes;
+
+/**
+ * Os módulos que a condução do Ciclo de Vida recebe da composição, montados sobre `banco` com a gestão ligada agora; as
+ * Sessões falam com o motor do banco, o mesmo de toda montagem sobre ele.
+ */
 export function modulosDoCicloDeTeste(banco: DatabaseSync): ModulosDoCiclo {
   const ambientes = gestaoLigadaNosTestes;
-  return { banco, ambientes, repositorio: montarRepositorio({ banco, ambientes }) };
+  return {
+    banco,
+    ambientes,
+    repositorio: montarRepositorio({ banco, ambientes }),
+    sessoes: montarSessoesDeAgente({ banco, ambientes }),
+  };
 }
 
 export interface ComandoRegistrado {

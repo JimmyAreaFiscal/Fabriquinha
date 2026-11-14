@@ -8,6 +8,7 @@ import type { GestaoDeAmbientes } from "../../modulos/ambiente/publico.ts";
 import type { ModulosDoCiclo, MotivoDeRecusa } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
+import { montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import type { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import { Id } from "../../shared/nucleo/primitivos.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
@@ -48,6 +49,8 @@ export const modulosDoCiclo = ({ banco, ambientes, repositorio }: Pedido): Modul
   banco,
   ambientes: ambientes.gestao,
   repositorio,
+  // O motor das sessões é um por banco: estas Sessões são as que o serviço montou.
+  sessoes: montarSessoesDeAgente({ banco }),
 });
 
 interface RotaDaApi {

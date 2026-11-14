@@ -2,16 +2,8 @@
 // Auditor automático: a pergunta que o agente de um ticket autônomo faz com a `perguntar` vai antes a um modelo, numa
 // chamada única do pi sem ferramentas. Ele responde o que é banal pelas regras do Auditor e escala o estratégico, que
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
-import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { TicketRef } from "./processo_do_ticket.ts";
-import {
-  registrarUsoDaConsulta,
-  type Modelo,
-  type PerguntaDoAgente,
-  type RespostaAPergunta,
-} from "../../../../sessoes/publico.ts";
-import { condutor } from "./condutor.ts";
+import type { Modelo, PerguntaDoAgente, RespostaAPergunta, SessoesDeAgente } from "../../../../sessoes/publico.ts";
 import { type EtapaTicket, oAgenteDecideOGate } from "../../../etapas/publico.ts";
 
 interface ContextoDaPergunta {
@@ -118,30 +110,25 @@ export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: EtapaTicke
   return { resposta: decisao.resposta, justificativa: decisao.justificativa };
 }
 
-/** A execução do ticket que perguntou, onde o Uso da consulta da triagem é gravado. */
-interface ExecucaoQuePerguntou {
-  banco: DatabaseSync;
-  ticket: TicketRef;
-  execucao: string;
-}
-
 /** Tempo máximo da triagem; passado, escala. */
 const LIMITE_TRIAGEM_MS = 3 * 60_000;
 
 /**
  * Triagem da pergunta com o modelo do ticket (`provedor/nome`, ou o padrão do pi). Devolve a resposta para mandar ao
- * agente, ou `undefined` para deixar a pergunta com o Auditor humano. O Uso da consulta conta para o ticket que perguntou.
+ * agente, ou `undefined` para deixar a pergunta com o Auditor humano. O Uso da consulta conta para a execução que perguntou.
  */
 export async function triarPergunta(
+  sessoes: Pick<SessoesDeAgente, "consultar">,
   modelo: Modelo | undefined,
   contexto: ContextoDaPergunta,
   p: PerguntaDoAgente,
-  quemPerguntou?: ExecucaoQuePerguntou,
+  execucaoQuePerguntou?: string,
 ): Promise<RespostaAPergunta | undefined> {
-  const resposta = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS);
-  if (resposta === undefined) return undefined;
-  if (quemPerguntou) {
-    registrarUsoDaConsulta(quemPerguntou.banco, quemPerguntou.ticket, quemPerguntou.execucao, resposta.uso);
-  }
-  return lerDecisao(resposta.saida, p, contexto.etapa);
+  const saida = await sessoes.consultar({
+    prompt: promptDaTriagem(contexto, p),
+    ...(modelo && { modelo }),
+    limiteMs: LIMITE_TRIAGEM_MS,
+    ...(execucaoQuePerguntou !== undefined && { execucao: execucaoQuePerguntou }),
+  });
+  return saida === undefined ? undefined : lerDecisao(saida, p, contexto.etapa);
 }

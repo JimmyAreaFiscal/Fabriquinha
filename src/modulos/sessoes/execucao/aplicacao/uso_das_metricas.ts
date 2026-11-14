@@ -25,7 +25,7 @@ export interface UsoPorContexto {
   /** O Uso medido de cada execução que tem algum, na ordem em que foi gravado: a ordem das somas. */
   usoPorExecucao: ReadonlyMap<IdDaExecucao, Uso>;
   /** Cada sessão externa declarada das demandas, de qualquer período (a declaração não tem data), na ordem gravada. */
-  declarados: { demanda_id: DemandaId; uso: Uso }[];
+  declarados: { demanda_id: DemandaId; ferramenta: string; sessao: string; uso: Uso }[];
 }
 
 export function usoDasMetricas(banco: DatabaseSync, { demandas, periodo }: PedidoDasMetricasDeUso): UsoPorContexto {
@@ -42,8 +42,10 @@ export function usoDasMetricas(banco: DatabaseSync, { demandas, periodo }: Pedid
     usoPorExecucao: new Map(
       [...linhasPorExecucao].map(([execucao, usos]) => [execucao, Uso.de(usos.map(linhaDeUsoDaExecucao), 1)]),
     ),
-    declarados: lerUsoDeclaradoEmLote(banco, demandas).map(({ demanda_id, linhas }) => ({
+    declarados: lerUsoDeclaradoEmLote(banco, demandas).map(({ demanda_id, ferramenta, sessao, linhas }) => ({
       demanda_id,
+      ferramenta,
+      sessao,
       uso: Uso.de(linhas, 1),
     })),
   };

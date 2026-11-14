@@ -7,11 +7,11 @@ import { type AgregadoDemanda, gravarAnexos } from "../../src/modulos/ciclo_de_v
 import { guardarBytes } from "../../src/shared/armazenamento/arquivos.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { ROTAS } from "../../src/server/api/servidor.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { comSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 /** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoHttp {

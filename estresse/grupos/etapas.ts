@@ -28,7 +28,6 @@ import {
   despachoDasEtapas,
   decidirGate,
   concluirSessaoAjustes,
-  condutor,
   cicloDoDespacho,
   configuracao,
   interromperExecucaoDemanda,
@@ -43,12 +42,12 @@ import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { integrarPR, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { carregarSessoesDoContexto, motorDoBanco } from "../../apoio-testes/sessoes_de_teste.ts";
 import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
@@ -499,7 +498,9 @@ const ETAPAS: Record<string, Preparar> = {
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
           const sessao = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
-          return chamadas(c) > antes && sessao !== undefined && condutor.situacao(sessao.id)?.ocupado === false;
+          return (
+            chamadas(c) > antes && sessao !== undefined && motorDoBanco(c.banco).situacao(sessao.id)?.ocupado === false
+          );
         }, "a primeira resposta do pi");
         respondeu = true;
       },

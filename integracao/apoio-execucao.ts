@@ -11,7 +11,6 @@ import {
   decidirGate,
   despachoDasEtapas,
   ConducaoDePlanejar,
-  condutor,
   cicloDoDespacho,
   type DepsDespacho,
   interromperExecucaoDemanda,
@@ -20,7 +19,6 @@ import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { anotar } from "../src/shared/infra/registro.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
@@ -28,6 +26,7 @@ import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ci
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
 import { montarDemandasDoBanco } from "../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../apoio-testes/sessoes_de_teste.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -124,7 +123,6 @@ export async function planejarDemanda(
   const fim = new ConducaoDePlanejar({
     ...modulosDoCicloDeTeste(c.banco),
     relogio: relogioDoSistema,
-    condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => piEPortaoEmUso.pi.prompts().length >= 1, "o pi receber o prompt do planejamento");

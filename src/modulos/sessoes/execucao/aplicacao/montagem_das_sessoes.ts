@@ -1,43 +1,58 @@
-// A montagem de Sessões de IA e a interface `SessoesDeAgente` (MELHORIAS §9): a única entrada de fora do módulo. Lança
-// o pi das execuções, transmite mensagens e eventos, lista as sessões com o processo vivo de cada uma, devolve a
-// conversa guardada, informa os modelos e guarda o Uso declarado. O harness pi, o catálogo de preços, o encerramento
-// da execução órfã e o fim dos processos da instância anterior são internos: a montagem do serviço os liga, e `parar`
-// espera o que ficou em curso.
+// A montagem de Sessões de IA e a interface `SessoesDeAgente` (MELHORIAS §9): a única entrada de fora do módulo. Abre,
+// lança, interrompe e encerra as execuções do pi, faz a consulta ao modelo, transmite mensagens e eventos, lista as
+// sessões com o processo vivo de cada uma, devolve a conversa guardada, informa os modelos e guarda o Uso declarado. O
+// motor que guarda os pi vivos é um por arquivo do banco: toda montagem sobre ele, de qualquer conexão, fala com o mesmo, e no máximo um pi roda
+// por sessão. O harness pi, o catálogo de preços, o encerramento da execução órfã e o fim dos processos da instância
+// anterior são internos: a montagem do serviço os liga, e `parar` espera o que ficou em curso.
 import type { DatabaseSync } from "node:sqlite";
 import type { DemandaId } from "../../../../shared/nucleo/demanda_id.ts";
+import { existe } from "../../../../shared/nucleo/erros.ts";
 import type { Relogio } from "../../../../shared/nucleo/relogio.ts";
+import { noLog } from "../../../../shared/infra/registro.ts";
 import { raizDo } from "../../../../shared/armazenamento/banco.ts";
-import type { GestaoDeAmbientes } from "../../../ambiente/publico.ts";
+import type { Ambiente, GestaoDeAmbientes } from "../../../ambiente/publico.ts";
 import type { EventoDaSessao, Situacao } from "../../chat/publico.ts";
 import type { Harness } from "../../harness/publico.ts";
+import { type ConversaDaSessao, conversaDaSessao } from "./conversa_da_sessao.ts";
 import { gravarUsoDeclarado, type UsoDeclarado } from "../../metricas_de_execucao/publico.ts";
 import { gravarCatalogoDePrecos, type Modelo } from "../../modelos/publico.ts";
 import {
   apagarSessoesDasDemandas,
+  contextoDaExecucao,
   execucoesAbertas,
   type FiltroDeSessoes,
   type ResumoDaSessao,
   resumosDasSessoesEmLote,
 } from "../armazenamento/sessoes_e_execucoes.ts";
-import type { FalhaDaExecucao } from "../nucleo/falha_da_execucao.ts";
 import { pastasDoProcesso } from "../nucleo/pastas_da_execucao.ts";
 import type { ContextoDaSessao, IdDaExecucao, IdDaSessao } from "../nucleo/sessao.ts";
-import { encerrarExecucaoOrfa } from "./encerramento.ts";
-import { MotorDasSessoes, type PedidoDeProcesso, type RespostaAoDialogo } from "./motor_das_sessoes.ts";
+import { encerrarExecucaoOrfa, registrarUsoDaConsulta } from "./encerramento.ts";
+import { type ExecucaoLancada, lancarExecucaoDoPedido, type PedidoDeSessao } from "./lancamento_do_pedido.ts";
+import { MotorDasSessoes, type RespostaAoDialogo } from "./motor_das_sessoes.ts";
 import { type PedidoDasMetricasDeUso, usoDasMetricas, type UsoPorContexto } from "./uso_das_metricas.ts";
 
+/** Os motores, um por arquivo do banco: os pi vivos das sessões gravadas nele, de qualquer conexão a ele. */
+const motoresPorArquivo = new Map<string, MotorDasSessoes>();
+/** O motor de cada conexão já vista, que segue alcançável depois de ela fechar. */
+const motoresPorConexao = new WeakMap<DatabaseSync, MotorDasSessoes>();
+
 /**
- * O motor do serviço: um por processo, com os pi vivos de todas as sessões; toda montagem fala com ele.
- * ponytail: instância única enquanto o Ciclo de Vida usa o motor direto (`condutor`); o passo 6 entrega ao Ciclo de Vida
- * as Sessões montadas, e o motor nasce na montagem.
+ * O motor do `banco`, criado na primeira montagem sobre o arquivo dele.
+ * @testes os testes da política leem e trocam o motor direto
  */
-export const motorDasSessoes = new MotorDasSessoes();
+export function motorDoBanco(banco: DatabaseSync): MotorDasSessoes {
+  const daConexao = motoresPorConexao.get(banco);
+  if (daConexao) return daConexao;
+  // Sem SQL: o caminho vem da conexão; o banco em memória não tem arquivo, e os de memória dividem um motor.
+  const arquivo = banco.location() ?? ":memory:";
+  const motor = motoresPorArquivo.get(arquivo) ?? new MotorDasSessoes();
+  motoresPorArquivo.set(arquivo, motor);
+  motoresPorConexao.set(banco, motor);
+  return motor;
+}
 
 /** Quanto o `parar` espera as execuções em curso antes de matar os pi que restaram. */
 const LIMITE_PARADA_MS = 10_000;
-
-/** O pedido de lançamento: a execução já aberta, a política e o Ambiente prontos. */
-type PedidoDeSessao = Omit<PedidoDeProcesso, "banco">;
 
 /** O resumo da sessão com o processo vivo dela neste serviço, se há um. */
 export type ResumoDaSessaoComSituacao = ResumoDaSessao & { situacao?: Situacao };
@@ -48,11 +63,39 @@ interface MensagemAoAgente {
   message: string;
 }
 
+/** A consulta ao modelo (F4 §6.5): uma chamada única, sem ferramentas; o Uso dela conta para a `execucao` que a pediu. */
+interface PedidoDeConsulta {
+  prompt: string;
+  modelo?: Modelo;
+  limiteMs: number;
+  execucao?: IdDaExecucao;
+}
+
+/** A execução aberta sem pi vivo neste serviço, que a interrupção mata e encerra: o que quem pediu diz dela. */
+interface InterrupcaoDaOrfa {
+  /** O Ambiente onde o pi dela rodou; só é pedido se a execução gravou o grupo do processo. */
+  ambiente(): Ambiente;
+  /** Depois de a execução ser encerrada com falha e antes de o chat saber que o estado mudou. */
+  aoEncerrar(contexto: ContextoDaSessao): void;
+  relogio: Relogio;
+}
+
 export interface SessoesDeAgente {
-  /** Lança o pi da execução e conduz o protocolo até o fim; resolve com a falha técnica, ou `undefined`. */
-  lancar(pedido: PedidoDeSessao): Promise<FalhaDaExecucao | undefined>;
+  /** Abre a execução (sessão nova ou a retomada) e a conduz em segundo plano até o encerramento com o Uso. */
+  lancar(pedido: PedidoDeSessao): ExecucaoLancada;
   /** Manda `abort` ao pi vivo da execução, cancelando antes os diálogos pendentes. */
   abortar(execucao: IdDaExecucao): void;
+  /**
+   * Interrompe a execução: com condução em curso, o SIGTERM no grupo do pi (ou no que subir) a encerra como
+   * `interrompida`; órfã, mata o pi pelo Ambiente dela e a encerra com falha.
+   */
+  interromper(execucao: IdDaExecucao, orfa: InterrupcaoDaOrfa): void;
+  /** Para o pi vivo da execução, se há, como bem terminada, e espera a condução dela acabar. */
+  encerrar(execucao: IdDaExecucao): Promise<void>;
+  /** A consulta ao modelo; devolve a saída, ou `undefined` se o pi falhou ou passou do limite. */
+  consultar(pedido: PedidoDeConsulta): Promise<string | undefined>;
+  /** A parada do serviço começou (`parar`): o erro de quem prepara uma execução agora é efeito dela. */
+  emParada(): boolean;
   /** As sessões do filtro, sem a conversa, com o processo vivo de cada uma. */
   listar(filtro?: FiltroDeSessoes): ResumoDaSessaoComSituacao[];
   /** Os eventos do pi da sessão e `{ type: "estado" }` quando o estado dela pode ter mudado; devolve quem cancela. */
@@ -60,8 +103,8 @@ export interface SessoesDeAgente {
   mandar(execucao: IdDaExecucao, mensagem: MensagemAoAgente): void;
   /** Responde um diálogo pendente do pi vivo da execução. */
   responder(execucao: IdDaExecucao, dialogo: string, resposta: RespostaAoDialogo): void;
-  /** A conversa guardada da sessão: as entradas do arquivo que o harness grava, ou nenhuma antes de ele existir. */
-  conversa(sessao: IdDaSessao): unknown[];
+  /** A conversa guardada da sessão, com as marcas das mensagens; sessão desconhecida não tem conversa. */
+  conversa(sessao: IdDaSessao): ConversaDaSessao;
   /** Todos os pares provedor/modelo que o harness conhece. */
   modelos(): Promise<Modelo[]>;
   /** Guarda o Uso que uma sessão externa declara; a sessão já declarada por outra demanda fica com a dona. */
@@ -76,7 +119,7 @@ export interface SessoesDeAgente {
 
 export interface MontagemDasSessoesDeAgente {
   banco: DatabaseSync;
-  /** Troca o harness do motor (os testes passam o falso); sem ele, fica o do motor (o pi). */
+  /** Troca o harness do motor do banco (os testes passam o falso); sem ele, fica o do motor (o pi). */
   harness?: Harness;
   /** Onde roda o pi do pedido sem Ambiente, e quem sinaliza os processos da instância anterior. */
   ambientes?: GestaoDeAmbientes;
@@ -92,35 +135,86 @@ export interface SubidaDasSessoes {
   aoEncerrarExecucaoOrfa(contexto: ContextoDaSessao): void;
 }
 
+/** Encerra com falha a execução aberta sem pi vivo, depois de matar o pi dela pelo Ambiente em que rodou. */
+function interromperOrfa(banco: DatabaseSync, motor: MotorDasSessoes, execucao: IdDaExecucao, orfa: InterrupcaoDaOrfa) {
+  const [daOrfa] = resumosDasSessoesEmLote(banco, { execucoes: [execucao] }).flatMap((resumo) =>
+    resumo.execucoes.filter((e) => e.id === execucao && e.fim == null).map((aberta) => ({ resumo, aberta })),
+  );
+  const { resumo, aberta } = existe(
+    daOrfa,
+    `a execução ${execucao} não está aberta`,
+    "só se interrompe uma execução aberta",
+  );
+  if (aberta.grupo_processo !== undefined) {
+    const ambiente = orfa.ambiente();
+    // O host local sinaliza na hora; o encerramento abaixo não depende da resposta.
+    ambiente.sinalizar({ ambiente_id: ambiente.id, grupo_processo: aberta.grupo_processo }, "SIGKILL").catch(noLog);
+  }
+  const contexto = { demanda_id: resumo.demanda_id, ticket_id: resumo.ticket_id };
+  const { log } = pastasDoProcesso(raizDo(banco), execucao);
+  const sessao = encerrarExecucaoOrfa(banco, contexto, execucao, log, motor.harness, orfa.relogio);
+  orfa.aoEncerrar(contexto);
+  motor.avisar(sessao, log);
+}
+
 function sessoesDoBanco(banco: DatabaseSync, gravacaoDoCatalogo: Promise<void>): SessoesDeAgente {
-  const motor = motorDasSessoes;
+  // O motor só é procurado quando a operação precisa dele: as leituras do banco não pagam a consulta do arquivo.
+  const motor = (): MotorDasSessoes => motorDoBanco(banco);
   return {
-    lancar: (pedido) => motor.lancarExecucao({ ...pedido, banco }),
+    lancar: (pedido) => lancarExecucaoDoPedido(banco, motor(), pedido),
     abortar: (execucao) => {
-      motor.abortar(execucao);
+      motor().abortar(execucao);
     },
+    interromper: (execucao, orfa) => {
+      if (!motor().interromper(execucao)) interromperOrfa(banco, motor(), execucao, orfa);
+    },
+    async encerrar(execucao) {
+      motor().encerrar(execucao);
+      await motor().aguardarFim(execucao);
+    },
+    async consultar({ prompt, modelo, limiteMs, execucao }) {
+      const resposta = await motor().consultar(prompt, modelo, limiteMs);
+      if (resposta && execucao !== undefined) {
+        const contexto = existe(
+          contextoDaExecucao(banco, execucao),
+          `a execução ${execucao} não existe`,
+          "confira o banco",
+        );
+        registrarUsoDaConsulta(banco, contexto, execucao, resposta.uso);
+      }
+      return resposta?.saida;
+    },
+    emParada: () => motor().emParada(),
     listar: (filtro) =>
       resumosDasSessoesEmLote(banco, filtro).map((resumo) => {
-        const situacao = motor.situacao(resumo.id);
+        const situacao = motor().situacao(resumo.id);
         return situacao ? { ...resumo, situacao } : resumo;
       }),
-    assinar: (sessao, ouvinte) => motor.assinar(sessao, ouvinte),
+    assinar: (sessao, ouvinte) => motor().assinar(sessao, ouvinte),
     mandar: (execucao, mensagem) => {
-      motor.mandar(execucao, mensagem);
+      motor().mandar(execucao, mensagem);
     },
     responder: (execucao, dialogo, resposta) => {
-      motor.responder(execucao, dialogo, resposta);
+      motor().responder(execucao, dialogo, resposta);
     },
-    conversa: (sessao) => motor.lerConversa(raizDo(banco), sessao),
-    modelos: () => motor.harness.listarModelos(),
+    conversa: (sessao) => {
+      const raiz = raizDo(banco);
+      const [resumo] = resumosDasSessoesEmLote(banco, { sessoes: [sessao] });
+      return conversaDaSessao({
+        modo: resumo?.modo ?? "autonomo",
+        arquivo: motor().harness.arquivoDaSessao(raiz, sessao),
+        pastas: (resumo?.execucoes ?? []).map((e) => pastasDoProcesso(raiz, e.id)),
+      });
+    },
+    modelos: () => motor().harness.listarModelos(),
     declararUso: (uso) => gravarUsoDeclarado(banco, uso),
     metricas: (pedido) => usoDasMetricas(banco, pedido),
     esquecer: (demandas) => apagarSessoesDasDemandas(banco, demandas),
     async parar() {
-      motor.marcarParada();
-      motor.urlDaApi = undefined;
+      motor().marcarParada();
+      motor().urlDaApi = undefined;
       await gravacaoDoCatalogo;
-      await motor.aguardarTodos(LIMITE_PARADA_MS);
+      await motor().aguardarTodos(LIMITE_PARADA_MS);
     },
   };
 }
@@ -130,7 +224,7 @@ function sessoesDoBanco(banco: DatabaseSync, gravacaoDoCatalogo: Promise<void>):
  * avisando quem pediu e quem assina a sessão.
  */
 async function recuperarExecucoesDaInstanciaAnterior(banco: DatabaseSync, subida: SubidaDasSessoes): Promise<void> {
-  const motor = motorDasSessoes;
+  const motor = motorDoBanco(banco);
   await motor.matarProcessosDaInstanciaAnterior(banco);
   for (const { id, demanda_id, ticket_id } of execucoesAbertas(banco)) {
     const contexto = { demanda_id, ticket_id };
@@ -157,7 +251,7 @@ export function montarSessoesDeAgente({
   catalogo,
   subida,
 }: MontagemDasSessoesDeAgente & { subida?: SubidaDasSessoes }): SessoesDeAgente | Promise<SessoesDeAgente> {
-  const motor = motorDasSessoes;
+  const motor = motorDoBanco(banco);
   if (harness) motor.montarHarness(harness);
   if (ambientes) motor.montarAmbientes(ambientes);
   if (urlDaApi !== undefined) motor.urlDaApi = urlDaApi;

@@ -3,7 +3,6 @@
 // que não é de uma demanda dá 404.
 import {
   Endereco,
-  condutor,
   montarPromptDemanda,
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,
@@ -23,11 +22,15 @@ import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { carregarSessoesDoContexto, comSessoesDoContexto } from "../../../../modulos/sessoes/publico.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+  motorDoBanco,
+} from "../../../../../apoio-testes/sessoes_de_teste.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -204,7 +207,7 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
   await ate(() => sse.eventos.length > 0, "o retrato");
   const [retrato] = sse.eventos as [Evento & DadosDoChatDemanda];
   assert.deepEqual([retrato.type, retrato.origem, retrato.conversa.length], ["chat", "demanda", 2]);
-  condutor.avisar("sd-310", join(raiz, "log"));
+  motorDoBanco(servico.banco).avisar("sd-310", join(raiz, "log"));
   await ate(() => sse.eventos.length > 1, "o estado novo");
   assert.deepEqual([sse.eventos[1]?.type, sse.eventos[1]?.origem], ["estado", "demanda"]);
   sse.fechar();
@@ -285,11 +288,11 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     fechar: () => Promise.resolve(),
   });
   const sessao = String(carregarSessoesDoContexto(servico.banco, ref).sessoes[0]?.id);
-  const dialogos = () => condutor.situacao(sessao)?.dialogos ?? [];
+  const dialogos = () => motorDoBanco(servico.banco).situacao(sessao)?.dialogos ?? [];
   await ate(() => dialogos().length === 1, "o diálogo");
   const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });
   assert.equal(resposta.status, 204);
-  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o pi ocioso");
+  await ate(() => motorDoBanco(servico.banco).situacao(sessao)?.ocupado === false, "o pi ocioso");
 
   // Quem assina no meio da mensagem recebe, logo depois do retrato, o começo dela e os pedaços já escritos (F4 §5.4).
   const sse = await assinar(sessao);
@@ -308,7 +311,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   );
   tarde.fechar();
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
-  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o pi ocioso depois do aborto");
+  await ate(() => motorDoBanco(servico.banco).situacao(sessao)?.ocupado === false, "o pi ocioso depois do aborto");
 
   assert.equal(
     (await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "pergunte perguntar", modo: "prompt" })).status,
@@ -316,7 +319,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   );
   await ate(() => dialogos().length === 1, "o diálogo da mensagem");
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
-  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o aborto");
+  await ate(() => motorDoBanco(servico.banco).situacao(sessao)?.ocupado === false, "o aborto");
   interromperExecucaoDemanda(modulosDoCicloDeTeste(servico.banco), ref);
   await fim;
 });

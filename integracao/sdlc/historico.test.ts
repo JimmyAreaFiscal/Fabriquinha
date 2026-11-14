@@ -12,7 +12,6 @@ import {
 import { consultarDemanda } from "../../src/server/consultas/demandas/demanda.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import {
   abrirPortao,
   agente,
@@ -39,6 +38,7 @@ import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);

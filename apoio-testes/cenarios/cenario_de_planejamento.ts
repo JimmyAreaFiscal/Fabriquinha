@@ -10,13 +10,11 @@ import {
   Endereco,
   ConducaoDePlanejar,
   decidirGate,
-  condutor,
   type AgregadoDemanda,
   carregarDemanda,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
@@ -26,6 +24,7 @@ import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
 import { reservadoPeloDespacho } from "../reserva_do_despacho.ts";
 import { registrarDependencia, registrarProjeto } from "../demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../sessoes_de_teste.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
@@ -184,7 +183,6 @@ export async function planejar(banco: DatabaseSync, minutos: number): Promise<vo
   await new ConducaoDePlanejar({
     ...modulosDoCicloDeTeste(banco),
     relogio: relogioDoSistema,
-    condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 1)));
 }

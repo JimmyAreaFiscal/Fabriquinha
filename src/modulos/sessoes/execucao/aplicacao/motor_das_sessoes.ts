@@ -33,7 +33,6 @@ import type {
   RespostaDaConsulta,
 } from "../../harness/publico.ts";
 import { HarnessPi } from "../../harness/publico.ts";
-import { lerConversaDoArquivo, perguntasRespondidasNaConversa } from "../../historico/publico.ts";
 import type { Modelo } from "../../modelos/publico.ts";
 import { execucoesAbertas, gravarTokenDaExecucao } from "../armazenamento/sessoes_e_execucoes.ts";
 import { type FalhaDaExecucao, falhaDoErroDoModelo } from "../nucleo/falha_da_execucao.ts";
@@ -248,9 +247,9 @@ export class MotorDasSessoes {
     this.viva(execucao, "retome a sessão").mandar(comando);
   }
 
-  /** Para o pi do processo e o dá por bem terminado, como na ociosidade (F4 §6.6). */
+  /** Para o pi do processo, se há um vivo, e o dá por bem terminado, como na ociosidade (F4 §6.6). */
   encerrar(execucao: number | string): void {
-    this.viva(execucao, "nada a encerrar").encerrar();
+    this.vivas.get(execucao)?.encerrar();
   }
 
   /**
@@ -342,16 +341,6 @@ export class MotorDasSessoes {
       grupo_processo === null || ambiente_id !== doServico.id ? [] : [{ ambiente_id, grupo_processo }],
     );
     await Promise.all(processos.map((processo) => doServico.sinalizar(processo, "SIGKILL").catch(noLog)));
-  }
-
-  /** A conversa guardada da sessão: as entradas do arquivo que o harness grava, ou nenhuma antes de ele existir. */
-  lerConversa(raiz: string, sessao: string): unknown[] {
-    return lerConversaDoArquivo(this.harness.arquivoDaSessao(raiz, sessao));
-  }
-
-  /** As perguntas da `perguntar` que o Auditor respondeu na sessão; sessão sem conversa não tem perguntas. */
-  perguntasRespondidasNaSessao(raiz: string, sessao: string): { pergunta: string; resposta: string }[] {
-    return perguntasRespondidasNaConversa(this.lerConversa(raiz, sessao));
   }
 
   /**

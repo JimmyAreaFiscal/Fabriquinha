@@ -212,27 +212,6 @@ export const contextoDaExecucao = (banco: DatabaseSync, execucao: IdDaExecucao):
     )
     .get(execucao) as ContextoDaSessao | undefined;
 
-/** A execução com a sessão e o ticket dela; `fim` é nulo enquanto ela está aberta, e a inexistente dá `undefined`. */
-export function escopoDaExecucao(
-  banco: DatabaseSync,
-  execucao: IdDaExecucao,
-): (ContextoDaSessao & { fim: string | null; sessao: string }) | undefined {
-  const linha = banco
-    .prepare(
-      `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id
-         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id WHERE e.id = ?`,
-    )
-    .get(execucao);
-  return (
-    linha && {
-      fim: linha.fim === null ? null : String(linha.fim),
-      sessao: String(linha.sessao),
-      demanda_id: String(linha.demanda_id),
-      ticket_id: Number(linha.ticket_id),
-    }
-  );
-}
-
 const hashDoToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 
 /** Grava só o hash do token da execução aberta; execução inexistente ou já encerrada não recebe token. */
@@ -243,26 +222,18 @@ export function gravarTokenDaExecucao(banco: DatabaseSync, execucao: IdDaExecuca
   if (changes === 0) throw new ErroDeRegra(`processo ${execucao} não existe ou já terminou, e não recebe token`);
 }
 
-/** A execução dona do token, ou `undefined` se o token é desconhecido ou a execução já terminou (`fim` preenchido). */
-export const execucaoVivaDoToken = (banco: DatabaseSync, token: string): IdDaExecucao | undefined =>
-  (
-    banco
-      .prepare("SELECT id FROM processo_do_trabalho WHERE hash_do_token = ? AND fim IS NULL")
-      .get(hashDoToken(token)) as { id: string } | undefined
-  )?.id;
-
-/** O contexto da sessão; `undefined` se o id não é de uma sessão. */
-export const contextoDaSessao = (banco: DatabaseSync, sessao: IdDaSessao): ContextoDaSessao | undefined =>
-  banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(sessao) as
-    ContextoDaSessao | undefined;
-
 /** A sessão sem a conversa: o registro e as execuções dela. */
 export type ResumoDaSessao = Sessao & { execucoes: Execucao[] };
 
-/** Quais sessões ler: as de `sessoes`, as das `demandas`, só as que têm execução aberta; os filtros se somam, e sem nenhum vêm todas. */
+/**
+ * Quais sessões ler: as de `sessoes`, as das `demandas`, as das `execucoes`, a da execução aberta que tem o `token` do
+ * agente, só as que têm execução aberta; os filtros se somam, e sem nenhum vêm todas.
+ */
 export interface FiltroDeSessoes {
   sessoes?: readonly IdDaSessao[];
   demandas?: readonly string[];
+  execucoes?: readonly IdDaExecucao[];
+  token?: string;
   abertas?: true;
 }
 
@@ -274,11 +245,19 @@ export function resumosDasSessoesEmLote(banco: DatabaseSync, filtro: FiltroDeSes
   const condicoes = [
     ...(filtro.sessoes === undefined ? [] : ["id IN (SELECT value FROM json_each($sessoes))"]),
     ...(filtro.demandas === undefined ? [] : ["demanda_id IN (SELECT value FROM json_each($demandas))"]),
+    ...(filtro.execucoes === undefined
+      ? []
+      : ["id IN (SELECT trabalho_id FROM processo_do_trabalho WHERE id IN (SELECT value FROM json_each($execucoes)))"]),
+    ...(filtro.token === undefined
+      ? []
+      : ["id IN (SELECT trabalho_id FROM processo_do_trabalho WHERE hash_do_token = $token AND fim IS NULL)"]),
     ...(filtro.abertas === undefined ? [] : ["id IN (SELECT trabalho_id FROM processo_do_trabalho WHERE fim IS NULL)"]),
   ];
   const parametros = {
     ...(filtro.sessoes !== undefined && { sessoes: JSON.stringify(filtro.sessoes) }),
     ...(filtro.demandas !== undefined && { demandas: JSON.stringify(filtro.demandas) }),
+    ...(filtro.execucoes !== undefined && { execucoes: JSON.stringify(filtro.execucoes) }),
+    ...(filtro.token !== undefined && { token: hashDoToken(filtro.token) }),
   };
   const DO_FILTRO = condicoes.length === 0 ? "1" : condicoes.join(" AND ");
   const sessoes = z

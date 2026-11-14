@@ -1,14 +1,19 @@
-// A política do fim do processo de um ticket: o encerramento e o Uso são de Sessões (`encerrarExecucaoComUso`,
-// `registrarUsoDaConsulta`, pela fachada); aqui fica o que a falha significa para o ticket, na recuperação dos processos
-// que uma instância anterior do serviço deixou abertos.
+// A política do fim do processo de um ticket: o encerramento e o Uso são de Sessões; aqui fica o que a falha significa
+// para o ticket, na recuperação dos processos que uma instância anterior do serviço deixou abertos.
 import type { DatabaseSync } from "node:sqlite";
 import { CATALOGO_DE_ETAPAS, type FalhaDaTentativa, falhaPorServicoReiniciado } from "../../../etapas/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
-import { encerrarExecucaoOrfa, type Harness, pastasDoProcesso, type Sessao } from "../../../../sessoes/publico.ts";
-import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
+import type { Execucao, Sessao, SessoesDeAgente } from "../../../../sessoes/publico.ts";
 import { ticketsEmExecucaoDasEtapas } from "../../../planejamento/publico.ts";
 
 export type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
+
+/** As execuções das sessões do ticket, sessão a sessão na ordem em que foram criadas. */
+export const execucoesDoTicket = (sessoes: Pick<SessoesDeAgente, "listar">, ticket: TicketRef): Execucao[] =>
+  sessoes
+    .listar({ demandas: [ticket.demanda_id] })
+    .filter((s) => s.ticket_id === ticket.ticket_id)
+    .flatMap((s) => s.execucoes);
 
 /**
  * As Etapas cujo fechamento roda depois que a execução fecha: as que o agente faz sozinho ou a Fabriquinha faz (as
@@ -28,9 +33,6 @@ const ETAPAS_FECHADAS_DEPOIS_DA_EXECUCAO = {
     .map(({ nome }) => nome),
 };
 
-/** Avisa quem assina a sessão que o estado dela pode ter mudado (`condutor.avisar`). */
-type AvisarSessao = (sessao: string, log: string) => void;
-
 /** Falha o ticket que ficou sem processo, sem tocar etapa nem gate: é do motor do SDLC, que quem chama entrega. */
 export type FalharTicketSemProcesso = (
   banco: DatabaseSync,
@@ -38,26 +40,6 @@ export type FalharTicketSemProcesso = (
   falha: FalhaDaTentativa,
   relogio: Relogio,
 ) => void;
-
-/** Quem lê o Uso da sessão do agente: o harness do condutor. */
-type LeitorDeUso = Pick<Harness, "lerUsoDaSessao">;
-
-/** Processo aberto sem condutor: encerra com falha e falha o ticket em execução, sem tocar etapa nem gate. O pi já foi morto. */
-export function encerrarProcessoOrfao(
-  banco: DatabaseSync,
-  ref: TicketRef,
-  id: string,
-  falha: FalhaDaTentativa,
-  avisar: AvisarSessao,
-  harness: LeitorDeUso,
-  falharTicket: FalharTicketSemProcesso,
-  relogio: Relogio = relogioDoSistema,
-): void {
-  const { log } = pastasDoProcesso(raizDo(banco), id);
-  const sessao = encerrarExecucaoOrfa(banco, ref, id, log, harness, relogio);
-  falharTicket(banco, ref, falha, relogio);
-  avisar(sessao, log);
-}
 
 /** Reinício do serviço (§4.2), depois de Sessões encerrar as execuções abertas: o ticket preso sem processo falha. */
 export function falharTicketsPresosNaSubida(

@@ -22,9 +22,10 @@ import {
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
-import { Configuracao, salvarConfiguracao, condutor } from "../../modulos/ciclo_de_vida/publico.ts";
+import { Configuracao, salvarConfiguracao } from "../../modulos/ciclo_de_vida/publico.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 import { registrarProjeto } from "../../../apoio-testes/demandas_de_teste.ts";
+import { motorDoBanco } from "../../../apoio-testes/sessoes_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 /** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */
@@ -114,9 +115,9 @@ test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida"
   const link = new URL(readFileSync(join(raiz, "web.url"), "utf8"));
   assert.notEqual(link.port, "0");
   assert.equal((await fetch(link, { redirect: "manual" })).status, 303, "o link de entrada responde nela");
-  assert.equal(condutor.urlDaApi, `http://127.0.0.1:${link.port}`, "o condutor leva a URL da API ao pi");
+  assert.equal(motorDoBanco(s.banco).urlDaApi, `http://127.0.0.1:${link.port}`, "o condutor leva a URL da API ao pi");
   await s.parar();
-  assert.equal(condutor.urlDaApi, undefined);
+  assert.equal(motorDoBanco(s.banco).urlDaApi, undefined);
 });
 
 test("o pacote do agente é gerado antes de a porta abrir", async () => {

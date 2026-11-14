@@ -20,7 +20,6 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
@@ -212,7 +211,6 @@ test("ConducaoDePlanejar instanciada com as dependências recusa o ticket conclu
   const conducao = new ConducaoDePlanejar({
     ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
-    condutor,
     registro: anotar,
   });
   await assert.rejects(conducao.conduzir(Endereco.doTicket("I-1", 1)), /está concluido e não pode ser iniciado/);

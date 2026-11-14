@@ -7,7 +7,7 @@ import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { condutor, Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { Endereco, carregarDemanda, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../../../../modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import {
@@ -32,6 +32,7 @@ import {
 import { MotivoDeRecusaEmJson } from "../../../contrato/despacho.ts";
 import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { montarDemandasDoBanco } from "../../../composicao/banco_da_fabriquinha.ts";
+import { motorDoBanco } from "../../../../../apoio-testes/sessoes_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -424,7 +425,7 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   await ate(async () => (await conversa(c, c.sessao)).includes("com o pi vivo"));
 
   // Com o pi parado, a mensagem retoma a mesma sessão, e a sessão segue aberta depois que essa execução termina.
-  condutor.encerrar(c.execucao);
+  motorDoBanco(c.banco).encerrar(c.execucao);
   await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
   assert.equal(
     (await c.pedir(mensagens, { metodo: "POST", corpo: { texto: "com o pi parado", modo: "prompt" } })).status,
@@ -434,8 +435,8 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   const retomada = c.banco
     .prepare("SELECT id FROM processo_do_trabalho WHERE trabalho_id = ? ORDER BY inicio DESC LIMIT 1")
     .get(c.sessao) as { id: string };
-  await ate(() => Promise.resolve(condutor.situacao(c.sessao) !== undefined));
-  condutor.encerrar(retomada.id);
+  await ate(() => Promise.resolve(motorDoBanco(c.banco).situacao(c.sessao) !== undefined));
+  motorDoBanco(c.banco).encerrar(retomada.id);
   await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
   assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
   assert.equal(rodada(c)?.estado, "ajustar_resultado");

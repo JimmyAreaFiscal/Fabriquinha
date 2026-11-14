@@ -11,10 +11,10 @@ import { caminhoDaWorktreeDemanda } from "../../../../../../apoio-testes/reposit
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 3);
@@ -23,7 +23,6 @@ const conducao = (banco: Banco) =>
   new ConducaoDeRevisarDemanda({
     ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
-    condutor,
     registro: anotar,
   });
 
@@ -58,7 +57,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
   // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
   const { porta } = await servir(abrirBancoDaFabriquinha(raizDo(banco)));
-  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
+  motorDoBanco(banco).urlDaApi = `http://127.0.0.1:${String(porta)}`;
   comDemanda(banco, "I-1", (ag) => ({
     ...ag,
     evidencias: [

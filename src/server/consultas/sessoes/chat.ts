@@ -4,7 +4,6 @@
 // as marcas e no fluxo ao vivo; e o histórico da conversa em Markdown. A sessão que não é de um ticket não tem chat.
 import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
-import { raizDo } from "../../../shared/armazenamento/banco.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
@@ -24,7 +23,6 @@ import {
   type PendenciaDoChat,
   pendenciaDoChat,
   pendenciasDaDemanda,
-  promptsDaFabriquinha,
   type SessaoDoTicket,
   trabalhoVivoDaSessao,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
@@ -196,15 +194,15 @@ export function abrirChatDemanda(
 ): ChatDemanda | undefined {
   const c = lerSessaoDoTicket(banco, id);
   if (!c) return undefined;
-  const raiz = raizDo(banco);
   const sessoes = montarSessoesDeAgente({ banco });
-  const marcar = marcadorDaConversa(raiz, c);
+  const conversa = sessoes.conversa(id);
+  const marcar = marcadorDaConversa(conversa);
   // Cada evento relê a sessão, que já existia ao abrir o chat.
   const relida = () =>
     encontrado(lerSessaoDoTicket(banco, id), `a sessão ${id} não existe`, "confira o endereço do chat");
   return {
     cabecalho: montarCabecalho(banco, gestaoDeDemandas, c, relogio),
-    conversa: sessoes.conversa(id).map((e) => ({
+    conversa: conversa.entradas.map((e) => ({
       ...(e as EntradaDemanda),
       ...marcar((e as EntradaDemanda).message),
     })),
@@ -213,7 +211,8 @@ export function abrirChatDemanda(
         if (evento.type === "estado")
           ouvinte({ type: "estado", ...montarCabecalho(banco, gestaoDeDemandas, relida(), relogio) });
         else if (evento.type === "message_end") {
-          ouvinte({ ...evento, ...marcadorDaConversa(raiz, relida())(evento.message) });
+          // A conversa relida: a resposta automática pode ter chegado depois de o chat abrir.
+          ouvinte({ ...evento, ...marcadorDaConversa(sessoes.conversa(id))(evento.message) });
         } else ouvinte(evento);
       }),
   };
@@ -226,15 +225,13 @@ export function exportarHistoricoDemanda(
 ): { nome: string; markdown: string } | undefined {
   const c = lerSessaoDoTicket(banco, id);
   if (!c) return undefined;
-  const raiz = raizDo(banco);
   const { ag, ticket } = c;
   const enderecoDoTicket = formatarTicketRef(ticket);
-  const mensagens = montarSessoesDeAgente({ banco })
-    .conversa(id)
-    .flatMap((entrada) => {
-      const { type, message } = entrada as { type?: string; message?: Mensagem };
-      return type === "message" && message ? [message] : [];
-    });
+  const conversa = montarSessoesDeAgente({ banco }).conversa(id);
+  const mensagens = conversa.entradas.flatMap((entrada) => {
+    const { type, message } = entrada as { type?: string; message?: Mensagem };
+    return type === "message" && message ? [message] : [];
+  });
   const modelos = new Set(
     mensagens.filter((m) => m.role === "assistant").map((m) => `${String(m.provider)}/${String(m.model)}`),
   );
@@ -252,7 +249,7 @@ export function exportarHistoricoDemanda(
     `- Início: ${execucaoDaSessao(c, "primeira").inicio}`,
     `- Fim: ${execucaoDaSessao(c).fim ?? "em andamento"}`,
   ].join("\n");
-  const daFabriquinha = promptsDaFabriquinha(raiz, c);
+  const daFabriquinha = conversa.promptsDoPedido;
   return {
     nome: `historico-${enderecoDoTicket}.md`,
     markdown: [cabecalho, ...mensagens.flatMap((m) => emMarkdown(m, daFabriquinha))].join("\n\n") + "\n",

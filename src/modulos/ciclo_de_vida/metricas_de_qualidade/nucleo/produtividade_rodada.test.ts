@@ -1,39 +1,43 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Execucao, Sessao, UsoDaExecucao } from "../../../sessoes/publico.ts";
+import { type LinhaDeUso, Uso } from "../../../sessoes/publico.ts";
 import type { EtapaTicket } from "../../etapas/publico.ts";
-import { produtividadeDaRodada } from "./produtividade_rodada.ts";
+import { produtividadeDaRodada, type UsoDasExecucoes } from "./produtividade_rodada.ts";
 
 const ticket = (ticket_id: number, etapa: EtapaTicket) => ({ demanda_id: "I-206", ticket_id, etapa });
-const sessao = (ticket_id: number): Sessao => ({
-  id: `s${String(ticket_id)}`,
+const execucao = (id: string, ticket_id: number) => ({
+  id,
+  sessao: `s${String(ticket_id)}`,
   demanda_id: "I-206",
   ticket_id,
-  modo: "autonomo",
-  conversa_referencia: "c",
-});
-const exec = (ticket_id: number): Execucao => ({
-  id: `e${String(ticket_id)}`,
-  trabalho_id: `s${String(ticket_id)}`,
   inicio: "2026-01-01T10:00:00Z",
   falha: false,
+  duracaoMs: 0,
 });
-const uso = (ticket_id: number, custo?: number): UsoDaExecucao => ({
-  execucao_id: `e${String(ticket_id)}`,
-  modelo_provedor: "p",
-  modelo_nome: "m",
-  tokens_entrada: 10,
+const linha = (tokens_entrada: number, custo: number | null, modelo = "p/m"): LinhaDeUso => ({
+  modelo,
+  tokens_entrada,
   tokens_saida: 5,
   tokens_cache_leitura: 2,
   tokens_cache_escrita: 1,
-  ...(custo === undefined ? {} : { custo }),
+  custo,
+  chamadas: 0,
+});
+/** O Uso das execuções como `metricas` de Sessões o devolve: o de cada execução que tem algum. */
+const usoDas = (execucoes: ReturnType<typeof execucao>[], usos: [string, LinhaDeUso[]][]): UsoDasExecucoes => ({
+  execucoes,
+  usoPorExecucao: new Map(usos.map(([id, linhas]) => [id, Uso.de(linhas, 1)])),
 });
 
 test("soma os custos conhecidos por ticket e no total", () => {
   const r = produtividadeDaRodada(
-    [sessao(3), sessao(4)],
-    [exec(3), exec(4)],
-    [uso(3, 1.5), uso(4, 0.5)],
+    usoDas(
+      [execucao("e3", 3), execucao("e4", 4)],
+      [
+        ["e3", [linha(10, 1.5)]],
+        ["e4", [linha(10, 0.5)]],
+      ],
+    ),
     [ticket(3, "implementar"), ticket(4, "revisar_rodada")],
   );
   assert.deepEqual(
@@ -51,9 +55,13 @@ test("soma os custos conhecidos por ticket e no total", () => {
 
 test("ticket sem custo medido é incompleto e o total é piso, nunca zero somado", () => {
   const r = produtividadeDaRodada(
-    [sessao(3), sessao(4), sessao(5)],
-    [exec(3), exec(4)],
-    [uso(3, 1), uso(4)],
+    usoDas(
+      [execucao("e3", 3), execucao("e4", 4)],
+      [
+        ["e3", [linha(10, 1)]],
+        ["e4", [linha(10, null)]],
+      ],
+    ),
     [ticket(3, "implementar"), ticket(4, "implementar"), ticket(5, "implementar")],
   );
   assert.deepEqual(
@@ -65,23 +73,16 @@ test("ticket sem custo medido é incompleto e o total é piso, nunca zero somado
   assert.equal(r.total.custoIncompleto, true);
 });
 
-test("a mesma chave repetida conta uma vez, o custo ausente de um modelo deixa o ticket incompleto e uso sem execução é ignorado", () => {
-  const usoDe = (execucao_id: string, modelo_nome: string, tokens_entrada: number, custo?: number) => ({
-    ...uso(3, custo),
-    execucao_id,
-    modelo_nome,
-    tokens_entrada,
-  });
+test("as execuções retomadas do ticket se somam, o custo ausente de um modelo deixa o ticket incompleto e o Uso de outra demanda fica de fora", () => {
   const r = produtividadeDaRodada(
-    [sessao(3)],
-    [exec(3), { ...exec(3), id: "e3b" }],
-    [
-      usoDe("e3", "a", 10, 1),
-      usoDe("e3", "a", 10, 1),
-      usoDe("e3b", "a", 20, 2),
-      usoDe("e3b", "b", 30),
-      usoDe("x", "a", 5000, 9),
-    ],
+    usoDas(
+      [execucao("e3", 3), execucao("e3b", 3), { ...execucao("x", 3), demanda_id: "I-9" }],
+      [
+        ["e3", [linha(10, 1, "p/a")]],
+        ["e3b", [linha(20, 2, "p/a"), linha(30, null, "p/b")]],
+        ["x", [linha(5000, 9)]],
+      ],
+    ),
     [ticket(3, "implementar")],
   );
   assert.deepEqual(

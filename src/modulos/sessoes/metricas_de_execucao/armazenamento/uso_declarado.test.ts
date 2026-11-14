@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import type { LinhaDeUso } from "../../harness/publico.ts";
-import { lerUsoDeclaradoEmLote, gravarUsoDeclarado, lerUsoDeclarado } from "./uso_declarado.ts";
+import { lerUsoDeclaradoEmLote, gravarUsoDeclarado } from "./uso_declarado.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const T = "'2026-01-01T00:00:00.000Z'";
@@ -32,8 +32,8 @@ test("grava o Uso declarado e lê de volta, com o custo desconhecido null", () =
   const b = novoBanco();
   const uso = { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1.5), linha(null)] };
   assert.deepEqual(gravarUsoDeclarado(b, uso), { demandaDona: "I-1" });
-  assert.deepEqual(lerUsoDeclarado(b, "I-1"), [uso]);
-  assert.deepEqual(lerUsoDeclarado(b, "I-2"), []);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-1"]), [uso]);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-2"]), []);
 });
 
 test("gravar de novo a mesma sessão pela mesma demanda troca as linhas e deixa uma só linha", () => {
@@ -41,7 +41,7 @@ test("gravar de novo a mesma sessão pela mesma demanda troca as linhas e deixa 
   const uso = { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1)] };
   gravarUsoDeclarado(b, uso);
   gravarUsoDeclarado(b, { ...uso, linhas: [linha(2)] });
-  assert.deepEqual(lerUsoDeclarado(b, "I-1"), [{ ...uso, linhas: [linha(2)] }]);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-1"]), [{ ...uso, linhas: [linha(2)] }]);
 });
 
 test("a sessão que outra demanda já informou não muda de dona nem de linhas", () => {
@@ -49,8 +49,8 @@ test("a sessão que outra demanda já informou não muda de dona nem de linhas",
   gravarUsoDeclarado(b, { ferramenta: "claude", sessao: "s1", demanda_id: "I-1", linhas: [linha(1)] });
   const outra = { ferramenta: "claude", sessao: "s1", demanda_id: "I-2", linhas: [linha(9)] };
   assert.deepEqual(gravarUsoDeclarado(b, outra), { demandaDona: "I-1" });
-  assert.deepEqual(lerUsoDeclarado(b, "I-2"), []);
-  assert.deepEqual(lerUsoDeclarado(b, "I-1")[0]?.linhas, [linha(1)]);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-2"]), []);
+  assert.deepEqual(lerUsoDeclaradoEmLote(b, ["I-1"])[0]?.linhas, [linha(1)]);
 });
 
 test("o Uso declarado em lote: o das sessões de qualquer um dos contextos, na ordem em que foi gravado", () => {

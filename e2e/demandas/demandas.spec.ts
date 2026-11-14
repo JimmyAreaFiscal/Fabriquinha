@@ -3,7 +3,6 @@
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { execucoesAbertas } from "../../src/modulos/sessoes/publico.ts";
 import { projeto, expect, test } from "../apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "../pendencias-apoio.ts";
 import {
@@ -19,6 +18,7 @@ import {
   registrarCorrecaoDaSessao,
   semearTicketAberto,
 } from "../demandas-apoio.ts";
+import { execucoesAbertas } from "../../apoio-testes/sessoes_de_teste.ts";
 
 test("o quadro do projeto mostra só as demandas dele", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);

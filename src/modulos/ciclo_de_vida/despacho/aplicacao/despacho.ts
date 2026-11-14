@@ -27,7 +27,7 @@ import { anotar, noLog } from "../../../../shared/infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/configuracao_do_servico.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import { condutor, type DepsDaConducao, type DepsDespacho, type ModulosDoCiclo } from "../../conducao/publico.ts";
+import { type DepsDaConducao, type DepsDespacho, type ModulosDoCiclo } from "../../conducao/publico.ts";
 
 /**
  * As predecessoras ainda não satisfeitas de cada demanda de `demandaIds`; a que não tem nenhuma está liberada. Quem chama
@@ -62,7 +62,6 @@ const depsDaConducaoDe = (modulos: ModulosDoCiclo, { timeoutMin }: Configuracao,
   ...modulos,
   limiteMin: timeoutMin,
   relogio,
-  condutor,
   registro: anotar,
 });
 

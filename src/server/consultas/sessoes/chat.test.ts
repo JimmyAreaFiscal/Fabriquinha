@@ -11,7 +11,6 @@ import { instalarPiFalso } from "../../../../apoio-testes/falsos/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import {
   Endereco,
-  condutor,
   enviarDemanda,
   montarPromptDemanda,
   type AgregadoDemanda,
@@ -23,13 +22,7 @@ import {
   abortarDemanda,
   responderDialogoDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
-import {
-  type Execucao,
-  type Sessao,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-  PREFIXO_DA_RESPOSTA_AUTOMATICA,
-} from "../../../modulos/sessoes/publico.ts";
+import { type Execucao, montarSessoesDeAgente, type Sessao } from "../../../modulos/sessoes/publico.ts";
 import { emMarkdown } from "./markdown_da_conversa.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { gravarAgregadoPronto } from "../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
@@ -38,6 +31,12 @@ import { abrirChatDemanda, exportarHistoricoDemanda } from "./chat.ts";
 import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 import { modulosDoCicloDeTeste } from "../../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+  motorDoBanco,
+} from "../../../../apoio-testes/sessoes_de_teste.ts";
 
 /** O cabeçalho da sessão, como o chat o abre; `undefined` se o id não é de uma sessão da demanda. */
 const cabecalhoDaSessao = (banco: DatabaseSync, id: string) =>
@@ -358,9 +357,9 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
   );
   const recebidos: Record<string, unknown>[] = [];
   const cancelar = chat.assinar((evento) => recebidos.push({ ...evento }));
-  condutor.avisar("s1", join(c.raiz, "log"));
+  motorDoBanco(banco).avisar("s1", join(c.raiz, "log"));
   cancelar();
-  condutor.avisar("s1", join(c.raiz, "log"));
+  motorDoBanco(banco).avisar("s1", join(c.raiz, "log"));
   assert.equal(recebidos.length, 1);
   assert.deepEqual(
     [recebidos[0]?.type, recebidos[0]?.ticket, (recebidos[0]?.sessao as { estado: string }).estado],
@@ -482,7 +481,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   assert.equal(chat?.cabecalho.sessao.estado, "rodando");
   const cancelar = chat.assinar((e) => ao_vivo.push({ ...e }));
 
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
+  await ate(() => motorDoBanco(banco).situacao(sessao)?.dialogos.length === 1);
   const cab = cabecalhoDaSessao(banco, sessao);
   assert.deepEqual(
     [cab?.sessao.estado, cab?.sessao.pendencia?.tipo, cab?.sessao.dialogos[0]?.type],
@@ -527,14 +526,18 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   });
   const sessao = String(carregarSessoesDoContexto(banco, ref).sessoes[0]?.id);
 
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
+  await ate(() => motorDoBanco(banco).situacao(sessao)?.dialogos.length === 1);
   assert.throws(
     () => enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "oi", "prompt", 5),
     /aguardando_humano: dialogo_do_agente e não recebe prompt/,
   );
-  const dialogo = String(condutor.situacao(sessao)?.dialogos[0]?.id);
+  const dialogo = String(motorDoBanco(banco).situacao(sessao)?.dialogos[0]?.id);
   assert.equal(responderDialogoDemanda(banco, sessao, dialogo, { value: "alta" }), true);
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
+  await ate(
+    () =>
+      motorDoBanco(banco).situacao(sessao)?.dialogos.length === 0 &&
+      motorDoBanco(banco).situacao(sessao)?.ocupado === false,
+  );
 
   // Conversa com o pi vivo ocioso: a mensagem vai ao mesmo pi, sem nova execução.
   assert.throws(
@@ -544,9 +547,13 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   // O pi vivo recebe a mensagem sem nova execução e volta a perguntar; o aborto vai a ele.
   assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "pergunte perguntar de novo", "prompt", 5), true);
   assert.equal(carregarSessoesDoContexto(banco, ref).execucoes.length, 1);
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
+  await ate(() => motorDoBanco(banco).situacao(sessao)?.dialogos.length === 1);
   assert.equal(abortarDemanda(modulosDoCicloDeTeste(banco), sessao), true);
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
+  await ate(
+    () =>
+      motorDoBanco(banco).situacao(sessao)?.dialogos.length === 0 &&
+      motorDoBanco(banco).situacao(sessao)?.ocupado === false,
+  );
   assert.notEqual(cabecalhoDaSessao(banco, sessao)?.sessao.estado, "rodando");
   interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref);
   await fim;
@@ -556,7 +563,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   const execucoes = carregarSessoesDoContexto(banco, ref).execucoes;
   assert.equal(execucoes.length, 2);
   assert.equal(execucoes.at(-1)?.trabalho_id, sessao);
-  await ate(() => condutor.situacao(sessao)?.ocupado === false);
+  await ate(() => motorDoBanco(banco).situacao(sessao)?.ocupado === false);
   interromperExecucaoDemanda(modulosDoCicloDeTeste(banco), ref);
   await ate(() => carregarSessoesDoContexto(banco, ref).execucoes.at(-1)?.fim != null);
 });
@@ -576,10 +583,10 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
   const sessaoDoTicket = carregarSessoesDoContexto(banco, { demanda_id: "I-304", ticket_id: 1 }).sessoes.at(-1);
   assert.ok(sessaoDoTicket);
   const sessao = sessaoDoTicket.id;
-  await ate(() => condutor.situacao(sessao)?.ocupado === true);
+  await ate(() => motorDoBanco(banco).situacao(sessao)?.ocupado === true);
   assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "ajuste o teste", "steer", 1), true);
   assert.equal(enviarDemanda(modulosDoCicloDeTeste(banco), sessao, "confira o lint", "follow_up", 1), true);
-  condutor.encerrar(execucao.id);
+  motorDoBanco(banco).encerrar(execucao.id);
   await execucao.fim;
   instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 });
@@ -648,8 +655,8 @@ test("emMarkdown: Fabriquinha, Auditor e agente na íntegra; a chamada com os ar
 const chamada = (id: string, name: string, args?: object) => ({ type: "toolCall", id, name, arguments: args });
 const resultado = (toolCallId: string, texto: string) => mensagem("toolResult", texto, { toolCallId });
 
-test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelamento, vazio nem outras ferramentas", () => {
-  const { c } = cenario();
+test("perguntasRespondidas da conversa: casa a pergunta com a resposta, sem cancelamento, vazio nem outras ferramentas", () => {
+  const { c, banco } = cenario();
   mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
   const linhas = [
     { type: "session", id: "s2" },
@@ -685,7 +692,7 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
     join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s2.jsonl"),
     linhas.map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
-  assert.deepEqual(condutor.perguntasRespondidasNaSessao(c.raiz, "s2"), [
+  assert.deepEqual(montarSessoesDeAgente({ banco }).conversa("s2").perguntasRespondidas, [
     { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" },
     { pergunta: "Qual o escopo?", resposta: "só o servidor" },
     {
@@ -695,8 +702,8 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
   ]);
 });
 
-test("perguntasRespondidasNaSessao: ignora linha null e mensagem sem content, mantendo os pares válidos", () => {
-  const { c } = cenario();
+test("perguntasRespondidas da conversa: ignora linha null e mensagem sem content, mantendo os pares válidos", () => {
+  const { c, banco } = cenario();
   mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
   const linhas = [
     "null",
@@ -709,13 +716,13 @@ test("perguntasRespondidasNaSessao: ignora linha null e mensagem sem content, ma
     join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s3.jsonl"),
     linhas.map((l) => (typeof l === "string" ? l : JSON.stringify(l))).join("\n") + "\n",
   );
-  assert.deepEqual(condutor.perguntasRespondidasNaSessao(c.raiz, "s3"), [
+  assert.deepEqual(montarSessoesDeAgente({ banco }).conversa("s3").perguntasRespondidas, [
     { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
   ]);
 });
 
-test("perguntasRespondidasNaSessao: ignora bloco que não é objeto, mantendo os pares válidos", () => {
-  const { c } = cenario();
+test("perguntasRespondidas da conversa: ignora bloco que não é objeto, mantendo os pares válidos", () => {
+  const { c, banco } = cenario();
   mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
   const linhas = [
     mensagem("assistant", "", {
@@ -733,12 +740,12 @@ test("perguntasRespondidasNaSessao: ignora bloco que não é objeto, mantendo os
     join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s4.jsonl"),
     linhas.map((l) => JSON.stringify(l)).join("\n") + "\n",
   );
-  assert.deepEqual(condutor.perguntasRespondidasNaSessao(c.raiz, "s4"), [
+  assert.deepEqual(montarSessoesDeAgente({ banco }).conversa("s4").perguntasRespondidas, [
     { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
   ]);
 });
 
-test("perguntasRespondidasNaSessao: sessão sem arquivo não tem perguntas", () => {
-  const { c } = cenario();
-  assert.deepEqual(condutor.perguntasRespondidasNaSessao(c.raiz, "s-sem-arquivo"), []);
+test("perguntasRespondidas da conversa: sessão sem arquivo não tem perguntas", () => {
+  const { banco } = cenario();
+  assert.deepEqual(montarSessoesDeAgente({ banco }).conversa("s-sem-arquivo").perguntasRespondidas, []);
 });

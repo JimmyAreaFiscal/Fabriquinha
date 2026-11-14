@@ -16,7 +16,7 @@ import {
   type TicketDemanda,
   type TrabalhoVivo,
 } from "../../../processo/publico.ts";
-import { carregarSessoesDoContexto, type Execucao, type Sessao, type Situacao } from "../../../../sessoes/publico.ts";
+import { type Execucao, montarSessoesDeAgente, type Sessao, type Situacao } from "../../../../sessoes/publico.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
 export type EstadoDaSessao = "rodando" | "aguardando_humano" | "terminada";
@@ -57,18 +57,18 @@ export function carregarSessaoDoTicket(
   ag = carregarDemanda(banco, ref.demanda_id),
 ): SessaoDoTicket {
   const erro = [`a sessão ${id} não existe`, "confira o endereço do chat"] as const;
-  const { sessoes, execucoes } = carregarSessoesDoContexto(banco, ref);
+  const [resumo] = montarSessoesDeAgente({ banco })
+    .listar({ sessoes: [id] })
+    .filter((s) => s.demanda_id === ref.demanda_id && s.ticket_id === ref.ticket_id);
+  const { execucoes, situacao, ...sessao } = encontrado(resumo, ...erro);
   return {
     ag,
     ticket: encontrado(
       ag.tickets.find((t) => t.ticket_id === ref.ticket_id),
       ...erro,
     ),
-    sessao: encontrado(
-      sessoes.find((s) => s.id === id),
-      ...erro,
-    ),
-    execucoes: execucoes.filter((e) => e.trabalho_id === id),
+    sessao,
+    execucoes,
   };
 }
 

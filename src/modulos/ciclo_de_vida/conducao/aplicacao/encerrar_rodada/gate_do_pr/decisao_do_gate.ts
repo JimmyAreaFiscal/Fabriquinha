@@ -19,7 +19,6 @@ import { raizDo } from "../../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../../shared/infra/registro.ts";
 import { ConducaoDeAjustarResultado } from "../../ajustar_resultado/conducao_de_ajustar_resultado.ts";
 import { guardarMarcoDaSessao, sessaoDaRodada } from "../../ajustar_resultado/sessao_ajustes.ts";
-import { condutor } from "../../politica_dos_agentes/condutor.ts";
 import { projetosCadastrados } from "../../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../../modulos_do_ciclo.ts";
 
@@ -105,7 +104,7 @@ async function reprovarPR(
   gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() });
   await guardarMarcoDaSessao(modulos, ref, ag);
   const demanda = decidirGateNaDemanda(banco, gate, endereco, entrada, ator, relogio);
-  const conducao = new ConducaoDeAjustarResultado({ ...modulos, relogio, condutor, registro: anotar });
+  const conducao = new ConducaoDeAjustarResultado({ ...modulos, relogio, registro: anotar });
   const sessao = sessaoDaRodada(demanda, ref);
   const execucao = existe(
     await conducao.iniciar(Endereco.doTicket(ref.demanda_id, sessao.ticket_id)),

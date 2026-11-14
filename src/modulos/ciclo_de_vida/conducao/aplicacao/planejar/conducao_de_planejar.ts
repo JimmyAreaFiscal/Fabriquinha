@@ -1,6 +1,6 @@
 // A condução do `planejar` (comparacao-sdlc-implementacao.md §§3 e 6): sessão interativa em que o plano chega pelo CLI e
 // o gate do planejamento decide. A falha do pi não falha o ticket: ele segue em execução à espera de uma nova sessão.
-import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
+import { execucoesDoTicket } from "../politica_dos_agentes/processo_do_ticket.ts";
 import {
   carregarDemanda,
   CICLO_DA_DEMANDA,
@@ -59,7 +59,7 @@ export class ConducaoDePlanejar extends ConducaoInterativa {
       ...super.retomadaDe(ticket),
       iniciarEmSessaoNova:
         ultima?.resultado === "aprovado" &&
-        !carregarSessoesDoContexto(this.deps.banco, ticket).execucoes.some((e) => e.inicio >= ultima.em),
+        !execucoesDoTicket(this.deps.sessoes, ticket).some((e) => e.inicio >= ultima.em),
     };
   }
 

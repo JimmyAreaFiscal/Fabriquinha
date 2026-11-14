@@ -13,7 +13,6 @@ export { apagarUsoDasExecucoes, gravarUsoDasExecucoes, lerUsoDasExecucoes } from
 export {
   apagarUsoDeclaradoDasDemandas,
   gravarUsoDeclarado,
-  lerUsoDeclarado,
   lerUsoDeclaradoEmLote,
   type UsoDeclarado,
 } from "./armazenamento/uso_declarado.ts";

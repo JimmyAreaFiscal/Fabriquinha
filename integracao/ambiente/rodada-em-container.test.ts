@@ -16,18 +16,21 @@ import {
   despachoDasEtapas,
   ConducaoDePlanejar,
   enviarDemanda,
-  condutor,
   Endereco,
   AUDITOR,
   retomarFalhasDeInfraestrutura,
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
 import { AmbienteContainer, modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
-import { gravarTokenDaExecucao } from "../../apoio-testes/sessoes_de_teste.ts";
+import {
+  gravarTokenDaExecucao,
+  carregarSessoesDoContexto,
+  motorDoBanco,
+  pastasDoProcesso,
+} from "../../apoio-testes/sessoes_de_teste.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { anotar, noLog } from "../../src/shared/infra/registro.ts";
-import { pastasDoProcesso } from "../../src/modulos/sessoes/publico.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { caminhoDaWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { iniciarServico } from "../../src/server/composicao/servico.ts";
@@ -287,7 +290,6 @@ async function iniciarConversaDoPlanejamento(c: Cenario) {
   const fim = new ConducaoDePlanejar({
     ...modulosDoCicloDeTeste(c.banco),
     relogio: relogioDoSistema,
-    condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => carregarSessoesDoContexto(c.banco, ticket).sessoes.length === 1, "a sessão do planejamento");
@@ -297,8 +299,8 @@ async function iniciarConversaDoPlanejamento(c: Cenario) {
 }
 
 /** O pi vivo da sessão está ocioso, sem diálogo aberto: a conversa espera o Auditor. */
-const conversaOciosa = (sessao: string): boolean => {
-  const situacao = condutor.situacao(sessao);
+const conversaOciosa = (c: Cenario, sessao: string): boolean => {
+  const situacao = motorDoBanco(c.banco).situacao(sessao);
   return situacao?.dialogos.length === 0 && !situacao.ocupado;
 };
 
@@ -325,7 +327,7 @@ test(
     await esperar(() => mensagensDoSse(eventos).includes("assistant: ordem escolhida"), "a resposta do pi ao diálogo");
 
     // A mensagem do Auditor e a resposta do pi chegam pelo SSE.
-    await esperar(() => conversaOciosa(sessao), "o pi ocioso");
+    await esperar(() => conversaOciosa(c, sessao), "o pi ocioso");
     const mensagem = { texto: "como ficou a ordem?", modo: "prompt" };
     assert.equal((await pedir(`/api/sessoes/${sessao}/mensagens`, { metodo: "POST", corpo: mensagem })).status, 204);
     await esperar(() => mensagensDoSse(eventos).includes("assistant: resposta à mensagem"), "a resposta do pi");
@@ -334,7 +336,7 @@ test(
     // O pi sai, e a mensagem seguinte retoma a conversa na mesma sessão, com outro pi.
     const primeiraExecucao = execucoesDe(c, ticket).at(-1);
     assert.ok(primeiraExecucao);
-    condutor.encerrar(primeiraExecucao.id);
+    motorDoBanco(c.banco).encerrar(primeiraExecucao.id);
     await fim;
     const mensagemDaRetomada = { texto: "pode continuar?", modo: "prompt" };
     assert.equal(
@@ -353,7 +355,9 @@ test(
       readdirSync(join(c.raiz, "sessoes", sessao)).filter((nome) => nome.endsWith(`_${sessao}.jsonl`)).length,
       1,
     );
-    const conversa = condutor.lerConversa(c.raiz, sessao).map((entrada) => (entrada as { message?: unknown }).message);
+    const conversa = montarSessoesDeAgente({ banco: c.banco })
+      .conversa(sessao)
+      .entradas.map((entrada) => (entrada as { message?: unknown }).message);
     assert.deepEqual(
       conversa.filter(Boolean).map((m) => `${(m as { role: string }).role}: ${textoDe(m)}`),
       [
@@ -368,7 +372,7 @@ test(
 
     const segundaExecucao = execucoesDe(c, ticket).at(-1);
     assert.notEqual(segundaExecucao?.id, primeiraExecucao.id);
-    condutor.encerrar(String(segundaExecucao?.id));
+    motorDoBanco(c.banco).encerrar(String(segundaExecucao?.id));
   },
 );
 
@@ -419,16 +423,16 @@ test(
       },
     ]);
     const { ticket, sessao, fim } = await iniciarConversaDoPlanejamento(c);
-    await esperar(() => (condutor.situacao(sessao)?.dialogos.length ?? 0) === 1, "o diálogo");
-    condutor.responder(execucoesDe(c, ticket).at(-1)?.id ?? "", "d1", { value: "A" });
+    await esperar(() => (motorDoBanco(c.banco).situacao(sessao)?.dialogos.length ?? 0) === 1, "o diálogo");
+    motorDoBanco(c.banco).responder(execucoesDe(c, ticket).at(-1)?.id ?? "", "d1", { value: "A" });
     for (const mensagem of ["segunda mensagem", "terceira mensagem"]) {
-      await esperar(() => conversaOciosa(sessao), "o pi ocioso");
+      await esperar(() => conversaOciosa(c, sessao), "o pi ocioso");
       assert.equal(enviarDemanda(modulosDoCicloDeTeste(c.banco), sessao, mensagem, "prompt"), true);
     }
-    await esperar(() => conversaOciosa(sessao) && pi.prompts().length === 3, "a terceira resposta");
+    await esperar(() => conversaOciosa(c, sessao) && pi.prompts().length === 3, "a terceira resposta");
     const execucao = execucoesDe(c, ticket).at(-1);
     assert.ok(execucao);
-    condutor.encerrar(execucao.id);
+    motorDoBanco(c.banco).encerrar(execucao.id);
     await fim;
 
     const arquivo = readdirSync(join(c.raiz, "sessoes", sessao)).find((nome) => nome.endsWith(`_${sessao}.jsonl`));

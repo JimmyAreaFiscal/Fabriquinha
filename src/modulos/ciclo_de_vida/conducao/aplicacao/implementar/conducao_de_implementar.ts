@@ -158,7 +158,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia | undefined> {
-    const { banco, condutor, repositorio } = this.deps;
+    const { banco, sessoes, repositorio } = this.deps;
     const { pasta: worktree } = espaco;
     const e2e = ag.rodadas.find((r) => r.rodada_id === ticket.rodada_id)?.e2e ?? false;
     const verificacoes = await (this.opcoes.coletarVerificacoes ?? coletarVerificacoes)({
@@ -170,7 +170,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
       lerGitDoEspaco: (...argumentos) => repositorio.gitNoEspaco(espaco, ...argumentos),
       opcoes: this.opcoes.opcoesSonar,
     });
-    if (condutor.emParada()) return falhaPorServicoReiniciado;
+    if (sessoes.emParada()) return falhaPorServicoReiniciado;
     if (verificacoes.some((v) => v.passou === undefined)) {
       const falhasDeInfraestrutura = verificacoes.flatMap((v) => v.falhas.filter((f) => f.classe === "infraestrutura"));
       const [{ causa }] = falhasDeInfraestrutura as [Extract<Falha, { classe: "infraestrutura" }>];
@@ -192,7 +192,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     espaco: EspacoDeTrabalho,
     ambiente: Ambiente,
   ): Promise<ResultadoDaConferencia> {
-    const { condutor } = this.deps;
+    const { sessoes } = this.deps;
     const { hooks_do_commit: hooks } = montarVerificacoesDaEtapa(ticket.etapa, {
       hooks_do_commit: () =>
         new HooksDoCommit(async ({ limiteMs }) => {
@@ -218,10 +218,10 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
         limiteMs: this.opcoes.limiteCommitMs,
       });
     } catch (erro) {
-      if (!condutor.emParada()) throw erro;
+      if (!sessoes.emParada()) throw erro;
       return falhaPorServicoReiniciado;
     }
-    if (condutor.emParada()) return falhaPorServicoReiniciado;
+    if (sessoes.emParada()) return falhaPorServicoReiniciado;
     if (resultadoDosHooks.tipo === "reprovacao") return { tipo: "reprovacao", motivo: resultadoDosHooks.motivo };
     if (resultadoDosHooks.tipo === "falha_infraestrutura") {
       return { tipo: "falha_infraestrutura", causa: resultadoDosHooks.causa, motivo: resultadoDosHooks.motivo };

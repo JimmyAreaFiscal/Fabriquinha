@@ -4,7 +4,10 @@
 // distintas: `IdDaSessao`, `IdDaExecucao`, e a chamada só existe somada no Uso da execução.
 export {
   type ContextoDaSessao,
+  type ConversaDaSessao,
   Execucao,
+  type ExecucaoAberta,
+  type ExecucaoLancada,
   type FalhaDaExecucao,
   type FiltroDeSessoes,
   type IdDaExecucao,
@@ -12,6 +15,8 @@ export {
   type MontagemDasSessoesDeAgente,
   montarSessoesDeAgente,
   type PedidoDasMetricasDeUso,
+  type PedidoDeSessao,
+  type PreparoDoLancamento,
   type RespostaAoDialogo,
   type ResumoDaSessaoComSituacao as ResumoDaSessao,
   Sessao,
@@ -19,17 +24,9 @@ export {
   type SubidaDasSessoes,
   type UsoPorContexto,
 } from "./execucao/publico.ts";
-export {
-  type EventoDoAgente,
-  type Harness,
-  type LancamentoDoTicket,
-  ModoTrabalho,
-  type ProcessoDoAgente,
-  type RespostaDaConsulta,
-} from "./harness/publico.ts";
+export { type Harness, type LancamentoDoTicket, type LinhaDeUso, ModoTrabalho } from "./harness/publico.ts";
 export { ConfiguracaoDoModelo, Effort, Modelo } from "./modelos/publico.ts";
 export { type CustoDoUso, Uso, type UsoDeclarado } from "./metricas_de_execucao/publico.ts";
-export type { LinhaDeUso } from "./harness/publico.ts";
 export type { Mensagem } from "./historico/publico.ts";
 export type {
   Dialogo,
@@ -39,31 +36,3 @@ export type {
   RespostaAutomatica,
   Situacao,
 } from "./chat/publico.ts";
-
-// ponytail: provisórios do Ciclo de Vida, que ainda conduz a execução por dentro de Sessões; saem no passo 6 (o motor
-// vira as Sessões montadas entregues ao Ciclo de Vida). O relatório de produtividade e a árvore de custos do
-// encerramento ainda leem o Uso pela condução.
-export { lerUsoDeclarado, linhaDeUsoDaExecucao, registrarUso, UsoDaExecucao } from "./metricas_de_execucao/publico.ts";
-// Condução (passo 6):
-export { PREFIXO_DA_RESPOSTA_AUTOMATICA, atividadeDo } from "./chat/publico.ts";
-export { texto } from "./historico/publico.ts";
-export {
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-  contextoDaExecucao,
-  contextoDaSessao,
-  criarSessao,
-  encerrarExecucaoComUso,
-  encerrarExecucaoOrfa,
-  escopoDaExecucao,
-  execucaoVivaDoToken,
-  execucoesAbertas,
-  gravarAmbienteDaExecucao,
-  iniciarExecucao,
-  MotorDasSessoes,
-  motorDasSessoes,
-  pastasDoProcesso,
-  type PedidoDeProcesso,
-  registrarUsoDaConsulta,
-  retomarSessao,
-} from "./execucao/publico.ts";

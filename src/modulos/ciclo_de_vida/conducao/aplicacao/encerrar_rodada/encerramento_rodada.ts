@@ -21,8 +21,8 @@ import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { ConferenciaDoPR, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
-import { carregarSessoesDoContexto, registrarUsoDaConsulta } from "../../../../sessoes/publico.ts";
+import type { SessoesDeAgente } from "../../../../sessoes/publico.ts";
+import { execucoesDoTicket } from "../politica_dos_agentes/processo_do_ticket.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
@@ -39,7 +39,7 @@ const LIMITE_RESUMO_MS = 3 * 60_000;
  * para a rodada: vai à última execução do `encerrar_rodada`, que é da rodada.
  */
 async function resumirContextoDoPR(
-  banco: DatabaseSync,
+  sessoes: SessoesDeAgente,
   ticket: TicketDemanda,
   contexto: string,
   limite: number,
@@ -50,12 +50,13 @@ async function resumirContextoDoPR(
     "Não use títulos (#). Responda só com o resumo.",
     contexto,
   ].join("\n\n");
-  const resposta = await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS);
-  const execucaoDoEncerramento = carregarSessoesDoContexto(banco, ticket).execucoes.at(-1);
-  if (resposta && execucaoDoEncerramento) {
-    registrarUsoDaConsulta(banco, ticket, execucaoDoEncerramento.id, resposta.uso);
-  }
-  return resposta?.saida.trim();
+  const execucaoDoEncerramento = execucoesDoTicket(sessoes, ticket).at(-1);
+  const saida = await sessoes.consultar({
+    prompt,
+    limiteMs: LIMITE_RESUMO_MS,
+    ...(execucaoDoEncerramento && { execucao: execucaoDoEncerramento.id }),
+  });
+  return saida?.trim();
 }
 
 /** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */
@@ -153,7 +154,7 @@ function conferir(
  * O erro sobe para a condução falhar o ticket; o `pr_aberto` só existe com o PR publicado.
  */
 export async function conferirEncerramentoRodada(
-  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio">,
+  modulos: Pick<ModulosDoCiclo, "banco" | "repositorio" | "sessoes">,
   relogio: Relogio,
   ref: RefRodada,
 ): Promise<AgregadoDemanda> {
@@ -173,7 +174,7 @@ export async function conferirEncerramentoRodada(
 }
 
 async function publicarEConferir(
-  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
+  { banco, repositorio, sessoes }: Pick<ModulosDoCiclo, "banco" | "repositorio" | "sessoes">,
   relogio: Relogio,
   ag: AgregadoDemanda,
   ref: RefRodada,
@@ -187,8 +188,7 @@ async function publicarEConferir(
   const log = logDaOperacao(raiz, `encerramento-${refRodada}`);
 
   const doRodada = ag.tickets.filter((t) => t.rodada_id === ref.rodada_id);
-  const { sessoes, execucoes, usos } = carregarSessoesDoContexto(banco, { demanda_id: demanda.id, ticket_id: null });
-  const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
+  const relatorio = produtividadeDaRodada(sessoes.metricas({ demandas: [demanda.id], periodo: {} }), doRodada);
   submeterEvidenciaDoEncerramento(banco, ticket, "relatorio_produtividade", relatorio);
 
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
@@ -221,7 +221,7 @@ async function publicarEConferir(
     relatorio,
     LIMITE_DO_CORPO[projeto.hospedagem],
     async (contexto, limite) => {
-      const resumo = await resumirContextoDoPR(banco, ticket, contexto, limite);
+      const resumo = await resumirContextoDoPR(sessoes, ticket, contexto, limite);
       if (resumo === undefined || resumo.length > limite) {
         anotar(log, `${refRodada}: o pi não resumiu o contexto do PR em ${String(limite)} caracteres; vai sem ele`);
       }

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import { carregarDemanda } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const AGORA = new Date("2026-11-12T12:00:00.000Z");
 

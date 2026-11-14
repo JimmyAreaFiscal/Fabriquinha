@@ -18,7 +18,7 @@ import {
 } from "../../src/modulos/ciclo_de_vida/publico.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
-import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
+import { type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
@@ -42,6 +42,7 @@ import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../falsos.ts";
 import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { PREFIXO_DA_RESPOSTA_AUTOMATICA } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const gh = ghFalso(base);
 

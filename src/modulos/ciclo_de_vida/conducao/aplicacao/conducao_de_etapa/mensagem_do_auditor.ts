@@ -4,8 +4,7 @@
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { type Relogio, relogioDoSistema } from "../../../../../shared/nucleo/relogio.ts";
 import { formatarTicketRef, etapaDoPapel } from "../../../etapas/publico.ts";
-import { contextoDaSessao } from "../../../../sessoes/publico.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
+import { ticketDaSessao } from "../chat_do_auditor/acoes_do_auditor_no_chat.ts";
 import { iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import {
   carregarSessaoDoTicket,
@@ -29,11 +28,11 @@ export function enviarDemanda(
   limiteMin = limitesDasSessoes().ociosidadeMin(modulos.banco),
   relogio: Relogio = relogioDoSistema,
 ): boolean {
-  const { banco } = modulos;
-  const ref = contextoDaSessao(banco, id);
+  const { banco, sessoes } = modulos;
+  const ref = ticketDaSessao(banco, id);
   if (!ref) return false;
   const c = carregarSessaoDoTicket(banco, ref, id);
-  const viva = condutor.situacao(id);
+  const viva = sessoes.listar({ sessoes: [id] })[0]?.situacao;
   const estadoEDesde = estadoEDesdeDaSessao(c, viva);
   const [estado] = estadoEDesde;
   const tipoDaPendencia = pendenciaDaSessao(c, viva, estadoEDesde, relogio)?.tipo;
@@ -48,7 +47,7 @@ export function enviarDemanda(
     );
   }
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
-  if (estado === "rodando" || viva) condutor.mandar(execucaoDaSessao(c).id, { type: modo, message: texto });
+  if (estado === "rodando" || viva) sessoes.mandar(execucaoDaSessao(c).id, { type: modo, message: texto });
   else if (c.ticket.etapa === etapaDoPapel("ajusta_o_pr_reprovado"))
     retomarSessaoAjustes(modulos, c.ticket, texto, { limiteMin });
   else iniciarExecucaoDemanda(modulos, ref, { limiteMin, modo: "interativo", mensagem: texto }, relogio);
