@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AgregadoDemanda } from "../../../processo/publico.ts";
-import type { Execucao, Sessao, UsoDaExecucao } from "../../../../sessoes/publico.ts";
+import { Uso, type UsoPorContexto } from "../../../../sessoes/publico.ts";
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,
@@ -31,8 +31,8 @@ const linhas = (...custos: (number | null)[]) =>
     chamadas: 0,
   }));
 const usosDeclarados = [
-  { ferramenta: "claude", sessao: "a", demanda_id: "I-206", linhas: linhas(1, 2) },
-  { ferramenta: "codex", sessao: "b", demanda_id: "I-206", linhas: linhas(4, null) },
+  { ferramenta: "claude", sessao: "a", custos: [1, 2] },
+  { ferramenta: "codex", sessao: "b", custos: [4, null] },
 ];
 const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
   AgregadoDemanda.parse({
@@ -93,32 +93,31 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
         : []),
     ],
   });
-const sessao = (n: number): Sessao => ({
-  id: `s${String(n)}`,
-  demanda_id: "I-206",
-  ticket_id: n,
-  modo: "autonomo",
-  conversa_referencia: "c",
-});
-const exec = (n: number): Execucao => ({
-  id: `e${String(n)}`,
-  trabalho_id: `s${String(n)}`,
-  inicio: em,
-  falha: false,
-});
-const uso = (n: number, custo?: number): UsoDaExecucao => ({
-  execucao_id: `e${String(n)}`,
-  modelo_provedor: "p",
-  modelo_nome: "m",
-  tokens_entrada: 1,
-  tokens_saida: 1,
-  tokens_cache_leitura: 0,
-  tokens_cache_escrita: 0,
-  ...(custo === undefined ? {} : { custo }),
+/** O Uso da demanda como `metricas` de Sessões o devolve: o custo medido de cada execução (`null`: sem custo) e os declarados. */
+const usoDaDemanda = (
+  execucoes: [number, number | null][],
+  declarados: { ferramenta: string; sessao: string; custos: (number | null)[] }[] = [],
+): UsoPorContexto => ({
+  execucoes: execucoes.map(([n]) => ({
+    id: `e${String(n)}`,
+    sessao: `s${String(n)}`,
+    demanda_id: "I-206",
+    ticket_id: n,
+    inicio: em,
+    falha: false,
+    duracaoMs: 0,
+  })),
+  usoPorExecucao: new Map(execucoes.map(([n, custo]) => [`e${String(n)}`, Uso.de(linhas(custo), 1)])),
+  declarados: declarados.map(({ ferramenta, sessao, custos }) => ({
+    demanda_id: "I-206",
+    ferramenta,
+    sessao,
+    uso: Uso.de(linhas(...custos), 1),
+  })),
 });
 
 test("árvore: PR final, SHA, PR e critérios por rodada", () => {
-  const a = montarArvorePRs(agregado(), [], [], [], []);
+  const a = montarArvorePRs(agregado(), usoDaDemanda([]));
   assert.deepEqual(a.pr_final, { numero: 50, url: "http://pr/50" });
   assert.equal(a.base, "develop");
   assert.equal(a.sha_integracao, "abc123");
@@ -129,17 +128,20 @@ test("árvore: PR final, SHA, PR e critérios por rodada", () => {
 });
 
 test("árvore sem encerramento gravado usa nulos", () => {
-  const a = montarArvorePRs(agregado("problema", false), [], [], [], []);
+  const a = montarArvorePRs(agregado("problema", false), usoDaDemanda([]));
   assert.deepEqual([a.pr_final, a.sha_integracao, a.base], [null, null, null]);
 });
 
 test("custo conhecido x incompleto, externos separados dos internos", () => {
   const a = montarArvorePRs(
     agregado(),
-    [sessao(3), sessao(8)],
-    [exec(3), exec(8)],
-    [uso(3, 1.5), uso(8)],
-    usosDeclarados,
+    usoDaDemanda(
+      [
+        [3, 1.5],
+        [8, null],
+      ],
+      usosDeclarados,
+    ),
   );
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 1.5, situacao: "conhecido" });
   assert.deepEqual(a.rodadas[1]?.tickets[0]?.custo, { valor: 0, situacao: "incompleto" });
@@ -157,12 +159,18 @@ test("custo conhecido x incompleto, externos separados dos internos", () => {
 });
 
 test("ticket com todo uso medido é conhecido", () => {
-  const a = montarArvorePRs(agregado(), [sessao(3)], [exec(3)], [uso(3, 2)], []);
+  const a = montarArvorePRs(agregado(), usoDaDemanda([[3, 2]]));
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 2, situacao: "conhecido" });
 });
 
 test("ticket sem sessão não torna o total interno incompleto (CA-14)", () => {
-  const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 0.75), uso(8, 0.5)], []);
+  const a = montarArvorePRs(
+    agregado(),
+    usoDaDemanda([
+      [3, 0.75],
+      [8, 0.5],
+    ]),
+  );
   assert.deepEqual(a.custos.internos, { valor: 1.25, situacao: "conhecido" });
 });
 

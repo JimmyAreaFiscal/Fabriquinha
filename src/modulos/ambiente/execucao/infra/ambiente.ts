@@ -1,49 +1,6 @@
 // O Ambiente (CONCEITOS.md §7): o lugar físico onde o Espaço de Trabalho roda. Todo processo do Espaço passa por aqui.
 import type { Readable, Writable } from "node:stream";
 
-// O limite de cada comando do Espaço mora com o processo do serviço, que também o aplica ao git do core.
-export { LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
-/** Variáveis com credencial de hospedagem ou do SonarQube (F4 §6.1, F5 §5.0). */
-const CREDENCIAIS = new Set([
-  "GH_TOKEN",
-  "GITHUB_TOKEN",
-  "GH_ENTERPRISE_TOKEN",
-  "GITHUB_ENTERPRISE_TOKEN",
-  "AZURE_DEVOPS_EXT_PAT",
-  "SYSTEM_ACCESSTOKEN",
-  "SONAR_TOKEN",
-]);
-
-export const ehCredencialDeHospedagemOuSonar = (nome: string): boolean => CREDENCIAIS.has(nome);
-
-/**
- * `base` sem as credenciais, com `gh` e `az` lendo a configuração de `dirVazio`, onde não há login salvo. Para o que
- * roda código do agente: o pi e os coletores de testes e fitness.
- */
-export function ambienteSemCredenciais(base: NodeJS.ProcessEnv, dirVazio: string): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [nome, valor] of Object.entries(base))
-    if (valor !== undefined && !ehCredencialDeHospedagemOuSonar(nome)) env[nome] = valor;
-  return { ...env, GH_CONFIG_DIR: dirVazio, AZURE_CONFIG_DIR: dirVazio };
-}
-
-const SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM = "_API_KEY";
-// O pi aceita `AZURE_OPENAI_API_KEY`, mas o Ambiente que isola as variáveis do serviço nunca recebe variável de
-// hospedagem ou do SonarQube.
-export const CREDENCIAL_QUE_NUNCA_ENTRA_NO_AMBIENTE_ISOLADO = /^(GH_|AZURE_|SONAR_)/;
-
-/** As chaves de provedor do LLM de `env`, sem credencial de hospedagem nem do SonarQube: o que o agente leva ao Ambiente isolado. */
-export function chavesDeProvedorDoLlm(env: NodeJS.ProcessEnv): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (entrada): entrada is [string, string] =>
-        entrada[1] !== undefined &&
-        entrada[0].endsWith(SUFIXO_DE_CHAVE_DE_PROVEDOR_DO_LLM) &&
-        !CREDENCIAL_QUE_NUNCA_ENTRA_NO_AMBIENTE_ISOLADO.test(entrada[0]),
-    ),
-  );
-}
-
 export interface ComandoNoAmbiente {
   /** O programa; com `noShell`, a linha de comando inteira. */
   programa: string;

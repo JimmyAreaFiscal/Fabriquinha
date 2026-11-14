@@ -6,7 +6,7 @@ export const Hospedagem = z.enum(["github", "azure-devops"]);
 
 export type Hospedagem = z.infer<typeof Hospedagem>;
 
-export interface RepositorioDoProjeto {
+export interface ProjetoDoRepositorio {
   nome: string;
   raiz_git: string;
   branch_base: string;

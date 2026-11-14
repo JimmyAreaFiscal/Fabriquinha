@@ -11,21 +11,21 @@ import {
   decidirGate,
   despachoDasEtapas,
   ConducaoDePlanejar,
-  condutor,
   cicloDoDespacho,
   type DepsDespacho,
   interromperExecucaoDemanda,
-} from "../src/modulos/ciclo_de_vida/publico.ts";
+} from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 import { anotar } from "../src/shared/infra/registro.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarSessoesDoContexto } from "../src/modulos/sessoes/publico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
 import { comEvidencia } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { instalarPiFalso, type PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import { reservadoPeloDespacho } from "../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 export const pi = instalarPiFalso(base);
 
@@ -120,13 +120,12 @@ export async function planejarDemanda(
   piEPortaoEmUso.pi.roteirizar([passoDoPi]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
   const fim = new ConducaoDePlanejar({
-    banco: c.banco,
+    ...modulosDoCicloDeTeste(c.banco),
     relogio: relogioDoSistema,
-    condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(c.banco, Endereco.doTicket(id, 2)));
   await esperar(() => piEPortaoEmUso.pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
-  if (!passoDoPi.sai) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
+  if (!passoDoPi.sai) interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), { demanda_id: id, ticket_id: 2 });
   await fim;
   let ticket_id = 0;
   const tickets = rodadas.flatMap((r, i) =>
@@ -167,7 +166,13 @@ export async function demandaEmExecucao(
 ): Promise<string> {
   const id = await demandaAprovada(c);
   await planejarDemanda(c, id, rodadas, passoDoPiDoPlanejamento);
-  await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_planejamento",
+    Endereco.daDemanda(id),
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
   assert.equal(demanda(c, id).demanda.estado, "em_execucao");
   return id;
 }
@@ -227,7 +232,7 @@ export async function despacharComAgente(
 ): Promise<void> {
   fecharPortao();
   piEPortaoEmUso.pi.roteirizar([{ agente: piEPortaoEmUso.agenteMudo, uso: null }]);
-  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
   await agir();
@@ -260,7 +265,7 @@ export async function decidirComoRevisor(
     ]);
   }
   await decidirGate(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     "gate_revisao_rodada",
     Endereco.daRodada(id, rodada),
     decisao,
@@ -338,7 +343,7 @@ export async function revisaoIntegral(
         ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
       ]);
       await decidirGate(
-        c.banco,
+        modulosDoCicloDeTeste(c.banco),
         "gate_revisao_demanda",
         Endereco.daDemanda(id),
         { resultado: "aprovado" },
@@ -352,7 +357,7 @@ export async function revisaoIntegral(
         tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
       };
       await decidirGate(
-        c.banco,
+        modulosDoCicloDeTeste(c.banco),
         "gate_revisao_demanda",
         Endereco.daDemanda(id),
         { resultado: "reprovado", motivo: decisao.motivo, correcoes: plano },
@@ -365,6 +370,12 @@ export async function revisaoIntegral(
 
 /** Aprova o PR que o encerramento da rodada publicou, como o Auditor, e integra a rodada na demanda. */
 export async function aprovarRodada(c: Cenario, id: string, rodada: number): Promise<void> {
-  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, rodada), { resultado: "aprovado", nota: 4 }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, rodada),
+    { resultado: "aprovado", nota: 4 },
+    AUDITOR,
+  );
   assert.equal(rodadaDe(c, id, rodada)?.estado, "concluida");
 }

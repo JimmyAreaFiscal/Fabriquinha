@@ -1,6 +1,6 @@
 // A API do subdomínio Métricas de Execução: o Uso medido de cada execução e o declarado das sessões externas, o Uso
 // somado por modelo, o custo estimado pelo catálogo de preços e o custo como as telas o mostram.
-export { type CustoDoUso, textoDoCusto, textoDoCustoDe, Uso } from "./nucleo/uso.ts";
+export { type CustoDoUso, Uso } from "./nucleo/uso.ts";
 export {
   acumularUso,
   estimarCustoPeloCatalogo,
@@ -13,7 +13,6 @@ export { apagarUsoDasExecucoes, gravarUsoDasExecucoes, lerUsoDasExecucoes } from
 export {
   apagarUsoDeclaradoDasDemandas,
   gravarUsoDeclarado,
-  lerUsoDeclarado,
   lerUsoDeclaradoEmLote,
   type UsoDeclarado,
 } from "./armazenamento/uso_declarado.ts";

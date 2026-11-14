@@ -1,6 +1,11 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
+import type {
+  EstadoDaConfiguracao,
+  EstadoDoAmbiente,
+  ProjetoCadastrado,
+} from "../../../system/api/contrato/configuracao.ts";
 import {
   agendador,
   ambiente,
@@ -15,10 +20,10 @@ import {
   rascunhoDe,
   selecao,
 } from "./configuracao.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 // A hora da próxima busca sai no fuso do navegador; aqui, um fuso fixo.
 process.env.TZ = "America/Sao_Paulo";
@@ -325,6 +330,7 @@ const AMBIENTE: EstadoDoAmbiente = {
       alocado_para: null,
       criado_em: "2026-11-09T10:00:00.000Z",
       liberado_em: "2026-11-09T11:30:00.000Z",
+      medido: { cpus: 0, memoria_mb: 2.25 },
     },
     {
       id: "a-sujo",
@@ -343,11 +349,12 @@ const AMBIENTE: EstadoDoAmbiente = {
       alocado_para: "I-1",
       criado_em: "2026-11-09T12:00:00.000Z",
       liberado_em: "2026-11-09T11:00:00.000Z",
+      medido: { cpus: 1.375, memoria_mb: 1536.4 },
     },
   ],
 };
 
-test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para livre e sujo", () => {
+test("ambiente: tipo, limites e uma linha por container, com a CPU e a memória medidas; Eliminar só ativo para livre e sujo", () => {
   const html = ambiente(AMBIENTE, new Map());
   assert.match(html, /<h2>Ambiente<\/h2><form class="form" data-ambiente novalidate>/);
   assert.match(html, /<option value="host_local">Host local<\/option><option value="container" selected>Container</);
@@ -363,15 +370,19 @@ test("ambiente: tipo, limites e uma linha por container; Eliminar só ativo para
   assert.doesNotMatch(html, /data-so-no-variavel disabled/);
   assert.match(
     html,
-    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
+    /<thead><tr><th>Id<\/th><th>Imagem<\/th><th>Estado<\/th><th>Alocado para<\/th><th>Desde<\/th><th class="num">CPU<\/th><th class="num">Memória<\/th><th><\/th><\/tr><\/thead>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-sujo">.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td><button[^>]*>Eliminar</,
+    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td class="num">0,00 CPUs<\/td><td class="num">2 MB<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
+    /<tr data-ambiente="a-sujo">.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td class="num">—<\/td><td class="num">—<\/td><td><button[^>]*>Eliminar</,
+  );
+  assert.match(
+    html,
+    /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td class="num">1,38 CPUs<\/td><td class="num">1.536 MB<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
   );
   assert.equal(html.match(/ disabled>/g)?.length, 1);
 });

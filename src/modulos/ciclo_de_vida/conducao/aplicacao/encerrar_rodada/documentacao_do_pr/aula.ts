@@ -2,9 +2,10 @@
 // alterado pela demanda e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
 import type { AgregadoDemanda } from "../../../../processo/publico.ts";
 import { ErroDeRegra } from "../../../../../../shared/nucleo/erros.ts";
-import type { Ambiente } from "../../../../../ambiente/publico.ts";
-import { exigirGitNoAmbiente } from "../../../../../repositorio/publico.ts";
 import { daUltimaConcluida } from "../../../../evidencias/publico.ts";
+
+/** O git na worktree da rodada, no Ambiente do Espaço, que devolve a saída e lança na falha. */
+type LerGitDoEspaco = (...argumentos: string[]) => Promise<string>;
 
 export interface Trecho {
   arquivo: string;
@@ -63,9 +64,8 @@ const esc = (texto: string): string =>
 
 /** Lê cada trecho na `head` da última revisão e recusa o que não é código alterado pela demanda. */
 async function lerTrechos(
-  ambiente: Ambiente,
+  lerGitDoEspaco: LerGitDoEspaco,
   ag: AgregadoDemanda,
-  worktree: string,
   trechos: readonly Trecho[],
 ): Promise<TrechoLido[]> {
   const revisao = daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados");
@@ -86,18 +86,14 @@ async function lerTrechos(
     if (alterado.adicionadas === null) {
       throw new ErroDeRegra(`${trecho.arquivo} é binário`, "explique arquivos binários na mensagem do PR");
     }
-    const linhas = (await exigirGitNoAmbiente(ambiente, worktree, "show", `${head}:${trecho.arquivo}`))
-      .replace(/\n$/, "")
-      .split("\n");
+    const linhas = (await lerGitDoEspaco("show", `${head}:${trecho.arquivo}`)).replace(/\n$/, "").split("\n");
     if (trecho.fim > linhas.length) {
       throw new ErroDeRegra(
         `${local} passa do fim do arquivo`,
         `${trecho.arquivo} tem ${String(linhas.length)} linhas`,
       );
     }
-    const mudadas = linhasMudadas(
-      await exigirGitNoAmbiente(ambiente, worktree, "diff", "-U0", `${base}...${head}`, "--", trecho.arquivo),
-    );
+    const mudadas = linhasMudadas(await lerGitDoEspaco("diff", "-U0", `${base}...${head}`, "--", trecho.arquivo));
     const toca = [...mudadas].some((n) => n >= trecho.inicio && n <= trecho.fim);
     if (!toca) {
       throw new ErroDeRegra(
@@ -181,10 +177,9 @@ ${trechos.map((t, i) => secao(t, i)).join("\n")}
  * da aula, que vira o anexo da evidência.
  */
 export async function gerarAula(
-  ambiente: Ambiente,
+  lerGitDoEspaco: LerGitDoEspaco,
   ag: AgregadoDemanda,
-  worktree: string,
   trechos: readonly Trecho[],
 ): Promise<string> {
-  return html(ag, await lerTrechos(ambiente, ag, worktree, trechos));
+  return html(ag, await lerTrechos(lerGitDoEspaco, ag, trechos));
 }

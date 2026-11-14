@@ -94,7 +94,7 @@ interface AlteracoesDoCommit {
 }
 
 /** Os commits dos tickets das demandas, em lote, com as alterações de cada um; com `periodo`, os feitos em `[inicio, fim)`. */
-export const alteracoesDosCommitsEmLote = (
+const alteracoesDosCommitsEmLote = (
   banco: DatabaseSync,
   filtro: { demandas: readonly string[]; periodo?: { inicio?: string; fim?: string } },
 ): AlteracoesDoCommit[] =>
@@ -124,7 +124,7 @@ export const alteracoesDosCommitsEmLote = (
     }));
 
 /** Os commits dos tickets das demandas, em lote e sem os arquivos, na ordem em que foram gravados. */
-export const commitsDosTicketsEmLote = (
+const commitsDosTicketsEmLote = (
   banco: DatabaseSync,
   demandas: readonly string[],
 ): { sha: string; demanda_id: string; ticket_id: number; em: string }[] =>
@@ -142,7 +142,7 @@ export const commitsDosTicketsEmLote = (
     }));
 
 /** Os arquivos dos commits `shas`, em lote, na ordem em que foram gravados; o caminho anterior só vem na renomeação. */
-export const arquivosDosCommits = (
+const arquivosDosCommits = (
   banco: DatabaseSync,
   shas: readonly string[],
 ): { sha: string; caminho: string; caminhoAnterior: string | null }[] =>
@@ -157,6 +157,50 @@ export const arquivosDosCommits = (
       caminho: String(linha.caminho),
       caminhoAnterior: linha.caminho_anterior === null ? null : String(linha.caminho_anterior),
     }));
+
+/** As demandas das métricas do Repositório e o período `[inicio, fim)` dos commits; a ponta ausente não restringe. */
+export interface PedidoDasMetricasDoRepositorio {
+  demandas: readonly string[];
+  periodo: { inicio?: string; fim?: string };
+}
+
+/** As métricas `alteracoes_posteriores` e `bugs_nos_arquivos_revisados` e os arquivos que a conformidade compara. */
+export interface MetricasDoRepositorio {
+  /** Os commits de ticket feitos no período, com as linhas que adicionaram e as que uma pessoa alterou depois na base. */
+  alteracoes: AlteracoesDoCommit[];
+  /** Os commits de ticket das demandas, de qualquer período, com os arquivos de cada um, na ordem gravada. */
+  commits: { sha: string; demanda_id: string; ticket_id: number; em: string; arquivos: ArquivoDoCommitDaMetrica[] }[];
+}
+
+interface ArquivoDoCommitDaMetrica {
+  caminho: string;
+  caminhoAnterior: string | null;
+}
+
+/** As métricas do Repositório: cada fonte lida uma vez, em lote. */
+export function metricasDosCommits(
+  banco: DatabaseSync,
+  { demandas, periodo }: PedidoDasMetricasDoRepositorio,
+): MetricasDoRepositorio {
+  const commits = commitsDosTicketsEmLote(banco, demandas);
+  const arquivosPorCommit = Map.groupBy(
+    arquivosDosCommits(
+      banco,
+      commits.map((commit) => commit.sha),
+    ),
+    (arquivo) => arquivo.sha,
+  );
+  return {
+    alteracoes: alteracoesDosCommitsEmLote(banco, { demandas, periodo }),
+    commits: commits.map((commit) => ({
+      ...commit,
+      arquivos: (arquivosPorCommit.get(commit.sha) ?? []).map(({ caminho, caminhoAnterior }) => ({
+        caminho,
+        caminhoAnterior,
+      })),
+    })),
+  };
+}
 
 /** As linhas reescritas por ticket de origem, agrupadas pela demanda dele (origem → quantidade). */
 export type LinhasPorDemanda = Map<string, Map<number, number>>;

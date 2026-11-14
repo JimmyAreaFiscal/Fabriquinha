@@ -1,17 +1,23 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts, e
 // abre o chat do planejamento com o pi falso.
-import { Endereco, type AgregadoDemanda, carregarDemanda, gravarAnexos } from "../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  Endereco,
+  type AgregadoDemanda,
+  carregarDemanda,
+  gravarAnexos,
+} from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import type { Page } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/system/banco_da_fabriquinha.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
+import { Projeto } from "../src/modulos/demandas/publico.ts";
 import { guardarBytes } from "../src/shared/armazenamento/arquivos.ts";
 import { registrarCorrecoesSessao } from "../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comDemanda } from "../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { expect, type Fabriquinha } from "./apoio.ts";
+import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
 

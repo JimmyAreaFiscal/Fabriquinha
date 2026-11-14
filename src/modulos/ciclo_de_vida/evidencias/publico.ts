@@ -18,7 +18,6 @@ export {
   type Avaliacao,
   AvaliadorDeEvidencia,
   evidenciasPendentes,
-  exigirAutoria,
   type SubmissaoDeEvidencia,
 } from "./nucleo/avaliacao.ts";
 export { donoDe, EvidenciaDemanda, pendentesDeEnvio } from "./nucleo/evidencia_demanda.ts";

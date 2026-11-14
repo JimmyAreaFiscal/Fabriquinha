@@ -1,7 +1,7 @@
 // Configuração SDLC do projeto no DOM: lê a API, desenha com as funções puras de sdlc.ts, Adicionar e Remover sem
 // rede, Salvar com os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Parametros } from "../../compartilhado/caminhos.ts";
-import type { ConfiguracaoSdlcDoProjeto } from "../../../contrato/sdlc.ts";
+import type { ConfiguracaoSdlcDoProjeto } from "../../../system/api/contrato/sdlc.ts";
 import { api, ErroDaApi, mostrarErro } from "../../dom.ts";
 import {
   adicionar,

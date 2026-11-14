@@ -4,15 +4,13 @@ import { test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { ArquivoCommit, Commit } from "../nucleo/commits.ts";
 import {
-  alteracoesDosCommitsEmLote,
-  arquivosDosCommits,
   commitDoTicketDemanda,
-  commitsDosTicketsEmLote,
   gravarCommitDemanda,
   gravarCommitsPosterioresDoTicket,
   gravarCommitHumanoPosterior,
+  metricasDosCommits,
 } from "./commits_demanda.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (c: string) => c.repeat(40);
@@ -204,7 +202,8 @@ test("em lote: os commits das demandas com as linhas adicionadas e as que uma pe
   gravarCommitDemanda(b, "E", 1, { ...commit("b", [arq("z.ts", "A", { adicionadas: null })]), em: "2026-02-01" });
   gravarCommitHumanoPosterior(b, sha("c"), "Ana", em("D", [[1, 3]]));
   gravarCommitsPosterioresDoTicket(b, "D", 2, sha("d"), em("D", [[1, 7]])); // de ticket, não de pessoa: não conta
-  assert.deepEqual(alteracoesDosCommitsEmLote(b, { demandas: ["D", "E"] }), [
+  const { alteracoes, commits } = metricasDosCommits(b, { demandas: ["D", "E"], periodo: {} });
+  assert.deepEqual(alteracoes, [
     {
       sha: sha("a"),
       demanda_id: "D",
@@ -222,19 +221,29 @@ test("em lote: os commits das demandas com as linhas adicionadas e as que uma pe
       linhasAlteradasPorHumanos: 0,
     },
   ]);
-  const deFevereiro = alteracoesDosCommitsEmLote(b, {
-    demandas: ["D", "E"],
-    periodo: { inicio: "2026-02", fim: "2026-03" },
-  });
+  const deFevereiro = metricasDosCommits(b, { demandas: ["D", "E"], periodo: { inicio: "2026-02", fim: "2026-03" } });
   assert.deepEqual(
-    deFevereiro.map((c) => c.demanda_id),
+    deFevereiro.alteracoes.map((c) => c.demanda_id),
     ["E"],
   );
-  assert.deepEqual(commitsDosTicketsEmLote(b, ["E"]), [
-    { sha: sha("b"), demanda_id: "E", ticket_id: 1, em: "2026-02-01" },
-  ]);
-  assert.deepEqual(arquivosDosCommits(b, [sha("a")]), [
-    { sha: sha("a"), caminho: "x.ts", caminhoAnterior: null },
-    { sha: sha("a"), caminho: "y.ts", caminhoAnterior: "w.ts" },
+  assert.equal(deFevereiro.commits.length, 2, "os commits da conformidade valem para qualquer período");
+  assert.deepEqual(commits, [
+    {
+      sha: sha("a"),
+      demanda_id: "D",
+      ticket_id: 1,
+      em: "2026-01-02",
+      arquivos: [
+        { caminho: "x.ts", caminhoAnterior: null },
+        { caminho: "y.ts", caminhoAnterior: "w.ts" },
+      ],
+    },
+    {
+      sha: sha("b"),
+      demanda_id: "E",
+      ticket_id: 1,
+      em: "2026-02-01",
+      arquivos: [{ caminho: "z.ts", caminhoAnterior: null }],
+    },
   ]);
 });

@@ -4,17 +4,19 @@ import { test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { encerrarExecucao, iniciarExecucao, type Execucao, type Sessao } from "../nucleo/sessao.ts";
 import { registrarUso, type UsoDaExecucao } from "../../metricas_de_execucao/publico.ts";
-import { ticketsComPiAtivo } from "../../../../server/consultas/sessoes/historico_demanda.ts";
+import { ticketsComPiAtivo } from "../../../../server/system/api/sessoes/historico_demanda.ts";
 import { carregarSessoesDoContexto, comSessoesDoContexto } from "../aplicacao/sessoes_do_contexto.ts";
 import {
   gravarAmbienteDaExecucao,
   gravarTokenDaExecucao,
   execucoesAbertas,
-  execucaoVivaDoToken,
-  sessaoDeCadaTicketDasDemandas,
-  contextoDaSessao,
+  resumosDasSessoesEmLote,
 } from "./sessoes_e_execucoes.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+
+/** A execução aberta que tem o token, pela lista das sessões filtrada por ele. */
+const execucaoVivaDoToken = (b: DatabaseSync, token: string): string | undefined =>
+  resumosDasSessoesEmLote(b, { token })[0]?.execucoes.find((e) => e.fim == null)?.id;
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";
@@ -225,38 +227,19 @@ test("o Ambiente gravado no processo aberto volta em processosAbertos, para a re
   assert.equal(execucoesAbertas(b)[0]?.ambiente_id, "amb-9"); // o upsert do processo não o apaga
 });
 
-test("o ticket dono do trabalho; id desconhecido volta sem ticket", () => {
+test("a lista pelas sessões e pelas execuções traz a sessão dona; id desconhecido não traz nenhuma", () => {
   const b = banco();
-  gravar(b, [sessao("s1")], [], []);
+  gravar(b, [sessao("s1")], [execucao("e1")], []);
   gravar(b, [sessao("s2", 2)], [], [], noTicket2);
-  assert.deepEqual({ ...contextoDaSessao(b, "s2") }, noTicket2);
-  assert.equal(contextoDaSessao(b, "nao-existe"), undefined);
-});
-
-test("sessaoDeCadaTicketDasDemandas separa por demanda e devolve vazio para a que não tem sessão", () => {
-  const b = banco();
-  b.exec(`INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-2', 'p', 't', 'funcionalidade', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');
-    INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
-      VALUES ('I-2', 1, 'implementar', 'aberto', ${T})`);
-  const nova = b.prepare(
-    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, 1, 'autonomo', 'c')",
-  );
-  nova.run("s-1", "I-1");
-  nova.run("s-2", "I-2");
-  assert.deepEqual(
-    sessaoDeCadaTicketDasDemandas(b, ["I-2", "I-1", "I-9"]),
-    new Map([
-      ["I-2", new Map([[1, "s-2"]])],
-      ["I-1", new Map([[1, "s-1"]])],
-      ["I-9", new Map()],
-    ]),
-  );
+  assert.partialDeepStrictEqual(resumosDasSessoesEmLote(b, { sessoes: ["s2"] }), [{ id: "s2", ...noTicket2 }]);
+  assert.deepEqual(resumosDasSessoesEmLote(b, { sessoes: ["nao-existe"] }), []);
+  assert.partialDeepStrictEqual(resumosDasSessoesEmLote(b, { execucoes: ["e1"] }), [{ id: "s1", ...ref }]);
+  assert.deepEqual(resumosDasSessoesEmLote(b, { execucoes: ["nao-existe"] }), []);
 });
 
 test("o token resolve só o processo vivo dono dele; encerrado, de outro e desconhecido não resolvem", () => {
   const b = banco();
-  gravar(b, [sessao()], [execucao("e1"), execucao("e2")], []);
+  gravar(b, [sessao(), sessao("s2")], [execucao("e1"), execucao("e2", "s2")], []);
   gravarTokenDaExecucao(b, "e1", "token-1");
   gravarTokenDaExecucao(b, "e2", "token-2");
 

@@ -1,16 +1,85 @@
-// O Ambiente falso dos testes: registra cada comando recebido e o repassa ao host local, para o git, o shell e o pi
-// seguirem reais. `espiarProcessosForaDoAmbiente` conta os processos lançados sem passar por um Ambiente.
+// O apoio de teste do Ambiente: o Ambiente falso, que registra cada comando recebido e o repassa ao host local, para o
+// git, o shell e o pi seguirem reais; a gestão de Ambientes que só usa um Ambiente, ligada aos módulos que a pedem; e os
+// adapters e o SQL do inventário com que os testes de fora do módulo montam cenário. `espiarProcessosForaDoAmbiente`
+// conta os processos lançados sem passar por um Ambiente.
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { spawn } from "node:child_process";
 import { createRequire, syncBuiltinESMExports } from "node:module";
+import type { DatabaseSync } from "node:sqlite";
+import type { TestContext } from "node:test";
 import {
   type Ambiente,
   type ComandoNoAmbiente,
+  type GestaoDeAmbientes,
   type IdentificadorDoProcesso,
+  type MontagemDaGestaoDeAmbientes,
+  montarGestaoDeAmbientes,
   type ProcessoNoAmbiente,
   type SaidaDoComando,
-  AmbienteHostLocal,
 } from "../../src/modulos/ambiente/publico.ts";
+import { noLog } from "../../src/shared/infra/registro.ts";
+import { AmbienteHostLocal } from "../../src/modulos/ambiente/execucao/infra/host_local/ambiente_host_local.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
+import type { CicloDeVida, ModulosDoCiclo } from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
+import type { Relogio } from "../../src/shared/nucleo/relogio.ts";
+import { montarCicloDeVidaDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
+
+export { AmbienteHostLocal };
+export { AmbienteContainer } from "../../src/modulos/ambiente/execucao/infra/container/ambiente_container.ts";
+export {
+  inserirAmbienteAlocado,
+  liberarAmbiente,
+  listarAmbientes,
+} from "../../src/modulos/ambiente/sandboxes/armazenamento/ambientes.ts";
+
+/** A gestão que roda tudo em `ambiente`: aloca e devolve sempre ele, não tem conjunto e não limpa nem elimina nada. */
+export const gestaoQueSoUsa = (ambiente: Ambiente): GestaoDeAmbientes => ({
+  listar: () => Promise.resolve([]),
+  alocar: () => Promise.resolve(ambiente),
+  ambienteDo: () => ambiente,
+  limpar: () => Promise.resolve(),
+  deletar: () => Promise.resolve(),
+  parar: () => Promise.resolve(),
+});
+
+/** A gestão dos testes, sem montagem: o host local, como a do serviço no `host_local`. */
+const GESTAO_DOS_TESTES = gestaoQueSoUsa(new AmbienteHostLocal());
+
+/** A gestão que os módulos montados nos testes recebem, como a da composição. */
+let gestaoLigadaNosTestes = GESTAO_DOS_TESTES;
+
+/**
+ * Liga `gestao` aos módulos que pedem Ambiente (os de `modulosDoCicloDeTeste`), como a composição faz; sem ela, a
+ * gestão dos testes. O harness dos testes liga a dos testes antes de cada arquivo.
+ */
+export function ligarGestaoDeAmbientesNosModulos(gestao: GestaoDeAmbientes = GESTAO_DOS_TESTES): void {
+  gestaoLigadaNosTestes = gestao;
+}
+
+/** A gestão ligada agora: a que a composição daria às Sessões montadas na subida. */
+export const gestaoLigadaNosModulos = (): GestaoDeAmbientes => gestaoLigadaNosTestes;
+
+/**
+ * Os módulos que a condução do Ciclo de Vida recebe da composição, montados sobre `banco` com a gestão ligada agora; as
+ * Sessões falam com o motor do banco, o mesmo de toda montagem sobre ele.
+ */
+export function modulosDoCicloDeTeste(banco: DatabaseSync): ModulosDoCiclo {
+  const ambientes = gestaoLigadaNosTestes;
+  return {
+    banco,
+    ambientes,
+    repositorio: montarRepositorio({ banco, ambientes }),
+    sessoes: montarSessoesDeAgente({ banco, ambientes }),
+    emParada: () => false,
+  };
+}
+
+/** O Ciclo de Vida sobre `banco` com os módulos de {@link modulosDoCicloDeTeste} e o `relogio` do teste. */
+export function cicloDeVidaDeTeste(banco: DatabaseSync, relogio?: Relogio): CicloDeVida {
+  const { ambientes, repositorio, sessoes } = modulosDoCicloDeTeste(banco);
+  return montarCicloDeVidaDoBanco(banco, { ambientes, repositorio, sessoes, ...(relogio && { relogio }) });
+}
 
 export interface ComandoRegistrado {
   via: "executar" | "lancar";
@@ -78,4 +147,21 @@ export function espiarProcessosForaDoAmbiente(): { chamadas: ProcessoForaDoAmbie
       syncBuiltinESMExports();
     },
   };
+}
+
+/**
+ * Monta a gestão de Ambientes de verdade (com a conferência da subida, se a Configuração for `container`) e a liga aos
+ * módulos até o fim do teste, que a para e volta à gestão dos testes.
+ */
+export async function ligarGestaoDeAmbientesDoTeste(
+  t: TestContext,
+  montagem: Omit<MontagemDaGestaoDeAmbientes, "registrarErro">,
+): Promise<GestaoDeAmbientes> {
+  const gestao = await montarGestaoDeAmbientes({ ...montagem, registrarErro: noLog });
+  ligarGestaoDeAmbientesNosModulos(gestao);
+  t.after(async () => {
+    ligarGestaoDeAmbientesNosModulos();
+    await gestao.parar();
+  });
+  return gestao;
 }

@@ -1,7 +1,7 @@
 // Métricas (F7 §4.4, item 2): o mês em foco escolhido com um clique continua o mesmo ao trocar só o projeto, e volta
 // ao último mês quando o período novo não o contém mais; a seção de cada Etapa acompanha o mês em foco.
 import type { Locator } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { expect, SECOES_DE_ETAPA, test } from "../apoio.ts";
 
 test("trocar o projeto mantém o mês em foco; um período que não o contém leva o foco ao último mês", async ({

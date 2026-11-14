@@ -2,7 +2,11 @@
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
-import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
+import type {
+  EstadoDaConfiguracao,
+  EstadoDoAmbiente,
+  ProjetoCadastrado,
+} from "../../../system/api/contrato/configuracao.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../../dom.ts";
 import { modeloDoSeletor } from "../../apresentacao/render.ts";
 import {

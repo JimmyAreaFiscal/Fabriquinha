@@ -6,21 +6,17 @@
 import { Buffer } from "node:buffer";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ROTAS } from "../../src/server/api/servidor.ts";
-import {
-  inserirAmbienteAlocado,
-  liberarAmbiente,
-  listarAmbientes,
-  configuracaoDoAmbiente,
-} from "../../src/modulos/ambiente/publico.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { carregarDemanda, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { buscarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { exigirGit } from "../../src/modulos/repositorio/publico.ts";
+import { ROTAS } from "../../src/server/system/api/servidor.ts";
+import { configuracaoDoAmbiente } from "../../src/shared/armazenamento/configuracao_do_ambiente.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { carregarDemanda, configuracao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarDockerFalso } from "../../apoio-testes/falsos/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
+import { buscarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** Uma rota POST ou DELETE medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoMutacao {

@@ -10,7 +10,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import {
-  AUDITOR,
   type Ator,
   despachoDasEtapas,
   Endereco,
@@ -20,15 +19,20 @@ import {
   configuracao,
   type DepsDespacho,
   carregarDemanda,
-} from "../src/modulos/ciclo_de_vida/publico.ts";
+} from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { ErroDeRegra } from "../src/shared/nucleo/erros.ts";
 import * as gestao from "../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { gravarProjeto, Projeto } from "../src/modulos/demandas/publico.ts";
-import { gravarUsoDeclarado } from "../src/modulos/sessoes/publico.ts";
-import { registrarPedidoComProcesso } from "../src/server/fluxos/registro_do_pedido.ts";
-import { enviarAoDesenvolvimento } from "../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesPelasDependencias } from "../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { Projeto } from "../src/modulos/demandas/publico.ts";
+import { gravarUsoDeclarado } from "../apoio-testes/sessoes_de_teste.ts";
+import { registrarPedidoComProcesso } from "../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../src/server/system/api/demandas/cancelamento_em_cascata.ts";
+import { montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
+import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
+import { liberacaoDasDemandas } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaDeTeste } from "../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));
@@ -152,7 +156,7 @@ export async function esperar(condicao: () => boolean, descricao: string, limite
 
 /** Um ciclo do agendador, como o serviço o roda, e a espera das etapas que ele disparou. */
 export async function ciclo(c: Cenario, deps: DepsDespacho = despachoDasEtapas()): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco)));
 }
 
 // Evidências de uma IA externa que registra a demanda (F3): critérios e desenho com o html.
@@ -182,10 +186,10 @@ export function declararUso(c: Cenario, demanda_id: string, sessao: string, cust
 
 export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = c.projeto): string =>
   registrarPedidoComProcesso(
-    c.banco,
+    cicloDeVidaNoContexto(c.banco, CTX),
+    montarDemandasDoBanco(c.banco),
     { projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc", dependencias },
     AUTOR,
-    CTX,
   ).demanda.id;
 
 /** Submete as evidências obrigatórias, como a IA externa as enviaria. */
@@ -206,14 +210,14 @@ export function submeterObrigatorias(c: Cenario, id: string): void {
 export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.projeto): string {
   const id = registrarExterna(c, dependencias, projeto);
   submeterObrigatorias(c, id);
-  enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), id, AUTOR);
   return id;
 }
 
 /** Demanda aprovada pelo Auditor: em `planejar`, com o ticket `planejar` aberto. */
 export function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): Promise<string> {
   const id = demandaEnviada(c, dependencias, projeto);
-  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" });
   return Promise.resolve(id);
 }
 

@@ -1,11 +1,10 @@
 // Conformidade do PR da rodada com o plano aprovado original: Jaccard entre os arquivos planejados e os alterados
 // (comparacao-sdlc-implementacao.md §8).
-import { arquivosDosCommits, commitsDosTicketsEmLote } from "../../../../repositorio/publico.ts";
 import { encontrado } from "../../../../../shared/nucleo/erros.ts";
 import { planosDasDemandas } from "../../../planejamento/publico.ts";
 import { noPeriodo } from "../../nucleo/metrica.ts";
 import { MetricaPorEtapa } from "../calculo_de_metrica.ts";
-import { type EscopoDosFatos, ticketsCitados } from "../leitura_dos_fatos.ts";
+import { type EscopoDosFatos, lerCommitsDoEscopo, ticketsCitados } from "../leitura_dos_fatos.ts";
 
 interface ArquivoDaRodada {
   caminho: string;
@@ -59,7 +58,7 @@ interface RodadaComCommits {
   rodadaId: number;
   /** Os instantes dos commits dos tickets da rodada: o último diz se ela cai no recorte. */
   instantes: string[];
-  shas: Set<string>;
+  commits: ReturnType<typeof lerCommitsDoEscopo>;
 }
 
 const chaveDaRodada = (demandaId: string, rodadaId: number) => `${demandaId}\0${String(rodadaId).padStart(12, "0")}`;
@@ -82,16 +81,16 @@ export class MetricaDeConformidade extends MetricaPorEtapa<
 
   /** As rodadas cujo último commit de ticket cai no recorte: o escopo restringe os commits e o período, o último deles. */
   protected lerFatos(escopo: EscopoDosFatos): { rodadas: RodadaAComparar[] } {
-    const commits = commitsDosTicketsEmLote(escopo.banco, escopo.demandas);
+    const commits = lerCommitsDoEscopo(escopo);
     const ticketDe = ticketsCitados(escopo);
     const porRodada = new Map<string, RodadaComCommits>();
     for (const commit of commits) {
       const rodadaId = ticketDe(commit.demanda_id, commit.ticket_id).rodada_id;
       if (rodadaId === null) continue;
       const chave = chaveDaRodada(commit.demanda_id, rodadaId);
-      const rodada = porRodada.get(chave) ?? { demandaId: commit.demanda_id, rodadaId, instantes: [], shas: new Set() };
+      const rodada = porRodada.get(chave) ?? { demandaId: commit.demanda_id, rodadaId, instantes: [], commits: [] };
       rodada.instantes.push(commit.em);
-      rodada.shas.add(commit.sha);
+      rodada.commits.push(commit);
       porRodada.set(chave, rodada);
     }
     const rodadas = [...porRodada.keys()]
@@ -100,15 +99,6 @@ export class MetricaDeConformidade extends MetricaPorEtapa<
       .map((rodada) => ({ ...rodada, ultimoCommit: (rodada.instantes.toSorted().reverse() as [string])[0] }))
       .filter(({ ultimoCommit }) => noPeriodo(ultimoCommit, escopo.periodo));
     const planos = planosDasDemandas(escopo.banco, [...new Set(rodadas.map((rodada) => rodada.demandaId))]);
-    // Cada commit é de um ticket, e o ticket, de uma rodada: os arquivos se agrupam pela rodada do commit, na ordem lida.
-    const rodadaDoCommit = new Map(rodadas.flatMap((rodada) => [...rodada.shas].map((sha) => [sha, rodada] as const)));
-    const arquivosDaRodada = Map.groupBy(
-      arquivosDosCommits(
-        escopo.banco,
-        rodadas.flatMap((rodada) => [...rodada.shas]),
-      ),
-      (arquivo) => rodadaDoCommit.get(arquivo.sha),
-    );
     return {
       rodadas: rodadas.map((rodada) => ({
         demanda_id: rodada.demandaId,
@@ -117,7 +107,7 @@ export class MetricaDeConformidade extends MetricaPorEtapa<
         rodadaId: rodada.rodadaId,
         planejados: planos.get(rodada.demandaId)?.original.rodadas.find((r) => r.rodada_id === rodada.rodadaId)
           ?.arquivos_previstos,
-        arquivos: arquivosDaRodada.get(rodada) ?? [],
+        arquivos: rodada.commits.flatMap((commit) => commit.arquivos),
       })),
     };
   }

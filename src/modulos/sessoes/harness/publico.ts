@@ -10,4 +10,4 @@ export {
 } from "./nucleo/harness.ts";
 export { colunasDoModelo, type LinhaDeUso } from "./nucleo/uso.ts";
 export { HarnessPi } from "./infra/pi/harness_pi.ts";
-export { dirDoPiDoAuditor, PACOTE, skillDoTipo } from "./infra/pi/pi.ts";
+export { skillDoTipo } from "./infra/pi/pi.ts";

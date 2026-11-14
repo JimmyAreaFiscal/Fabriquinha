@@ -2,13 +2,11 @@
 // previstos e versões do Plano. Este é o único arquivo que fala SQL com elas; o agregado da demanda as carrega e grava
 // por aqui, no meio das tabelas dele (todas dependem só de `demanda`, e as do Processo dependem delas).
 import type { DatabaseSync } from "node:sqlite";
+import { type Ator, type ConfiguracaoAgente, type EtapaTicket } from "../../etapas/publico.ts";
 import {
-  type Ator,
-  type ConfiguracaoAgente,
-  type EtapaTicket,
   colunasDaConfiguracaoAgente,
   linhaComConfiguracaoAgente,
-} from "../../etapas/publico.ts";
+} from "../../../../shared/armazenamento/linhas/colunas_da_configuracao_agente.ts";
 import {
   agruparColunasDoCampo,
   apagarLinhasQueSumiram,
@@ -16,10 +14,10 @@ import {
   type LinhaDaTabela,
   semNulos,
   type TabelaDoAgregado,
-} from "../../../../shared/armazenamento/diferenca_do_agregado.ts";
+} from "../../../../shared/armazenamento/linhas/diferenca_do_agregado.ts";
 import { CorrecaoDoPlano, lerPlanoGravado, Plano } from "../nucleo/plano.ts";
 import { instrucaoPreparada } from "../../../../shared/armazenamento/banco.ts";
-import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas_do_agregado.ts";
+import type { LinhasDoAgregado } from "../../../../shared/armazenamento/linhas/linhas_do_agregado.ts";
 
 interface VinculoDaRodada {
   readonly demanda_id: string;

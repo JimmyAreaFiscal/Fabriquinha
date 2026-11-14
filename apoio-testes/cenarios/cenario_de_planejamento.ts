@@ -10,14 +10,11 @@ import {
   Endereco,
   ConducaoDePlanejar,
   decidirGate,
-  condutor,
   type AgregadoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { registrarDependencia, registrarProjeto } from "../../src/modulos/demandas/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
@@ -25,6 +22,9 @@ import { limitarTempoDoPi } from "../falsos/limite_do_pi.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
 import { reservadoPeloDespacho } from "../reserva_do_despacho.ts";
+import { registrarDependencia, registrarProjeto } from "../demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../sessoes_de_teste.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
@@ -171,7 +171,7 @@ export function cenarioDePlanejamento({
 export const agente = { tipo: "agente", trabalho_id: "1" } as const;
 const APROVACAO_SEM_NOTA = { resultado: "aprovado" };
 export const aprovarGateDoPlanejamento = (banco: DatabaseSync, entrada: unknown = APROVACAO_SEM_NOTA) =>
-  decidirGate(banco, "gate_planejamento", Endereco.daDemanda("I-1"), entrada, AUDITOR);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_planejamento", Endereco.daDemanda("I-1"), entrada, AUDITOR);
 export const reprovarGateDoPlanejamento = (banco: DatabaseSync, motivo: string) =>
   aprovarGateDoPlanejamento(banco, { resultado: "reprovado", motivo });
 export const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
@@ -180,7 +180,9 @@ export const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plan
 /** Conduz o `planejar` da demanda I-1 até o fim da execução, com a ociosidade do pi limitada a `minutos`. */
 export async function planejar(banco: DatabaseSync, minutos: number): Promise<void> {
   limitarTempoDoPi(banco, minutos);
-  await new ConducaoDePlanejar({ banco, relogio: relogioDoSistema, condutor, registro: anotar }).conduzir(
-    reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 1)),
-  );
+  await new ConducaoDePlanejar({
+    ...modulosDoCicloDeTeste(banco),
+    relogio: relogioDoSistema,
+    registro: anotar,
+  }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 1)));
 }

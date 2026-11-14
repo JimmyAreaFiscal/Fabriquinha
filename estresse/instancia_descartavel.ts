@@ -55,7 +55,7 @@ export async function subirAmbiente(): Promise<Ambiente> {
     process.execPath,
     [
       "--disable-warning=ExperimentalWarning",
-      join(import.meta.dirname, "../src/server/composicao/fabriquinha.ts"),
+      join(import.meta.dirname, "../src/server/system/fabriquinha.ts"),
       "servidor",
     ],
     {

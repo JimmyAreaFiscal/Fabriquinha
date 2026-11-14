@@ -1,9 +1,10 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
-import { type Execucao, type Sessao, Uso, type UsoDaExecucao, type UsoDeclarado } from "../../../../sessoes/publico.ts";
+import { Uso, type UsoPorContexto } from "../../../../sessoes/publico.ts";
 import { type AgregadoDemanda, prDaDemanda } from "../../../processo/publico.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../etapas/publico.ts";
-import { prDoEspaco, lista, neutro } from "../../../../repositorio/publico.ts";
+import { prDoEspaco } from "../../../../repositorio/publico.ts";
+import { lista, neutro } from "../encerrar_rodada/documentacao_do_pr/corpo_do_pr.ts";
 import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../../evidencias/publico.ts";
 import { produtividadeDaRodada } from "../../../metricas_de_qualidade/publico.ts";
 
@@ -14,19 +15,14 @@ function idEUrlDoPrDaRodada(ag: AgregadoDemanda, rodada: number): { id: string; 
   return pr ? { id: String(pr.numero), url: pr.url } : null;
 }
 
-export function montarArvorePRs(
-  ag: AgregadoDemanda,
-  sessoes: readonly Sessao[],
-  execucoes: readonly Execucao[],
-  usos: readonly UsoDaExecucao[],
-  usosDeclarados: readonly UsoDeclarado[],
-): ArvorePRsCriteriosCustos {
-  const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, ag.tickets);
-  // Ticket conduzido sem agente (sem sessão) não consumiu nada: custo zero conhecido, não incompleto.
+/** A árvore da demanda com o Uso dela (`metricas` de Sessões, sem período): o das execuções e o das sessões externas. */
+export function montarArvorePRs(ag: AgregadoDemanda, usoDaDemanda: UsoPorContexto): ArvorePRsCriteriosCustos {
+  const relatorio = produtividadeDaRodada(usoDaDemanda, ag.tickets);
+  // Ticket conduzido sem agente (sem execução) não consumiu nada: custo zero conhecido, não incompleto.
   const comSessao = new Set(
-    sessoes
-      .filter((s) => s.demanda_id === ag.demanda.id)
-      .map((s) => formatarTicketRef({ demanda_id: s.demanda_id, ticket_id: s.ticket_id })),
+    usoDaDemanda.execucoes
+      .filter((e) => e.demanda_id === ag.demanda.id)
+      .map((e) => formatarTicketRef({ demanda_id: e.demanda_id, ticket_id: e.ticket_id })),
   );
   const internos = {
     tickets: relatorio.tickets.map((t) => ({ ...t, custoIncompleto: t.custoIncompleto && comSessao.has(t.ticket) })),
@@ -42,11 +38,7 @@ export function montarArvorePRs(
         etapa: t.etapa,
         custo: { valor: t.custo, situacao: situacao(t.custoIncompleto) },
       }));
-  const externos = usosDeclarados.map(({ ferramenta, sessao, linhas }) => ({
-    ferramenta,
-    sessao,
-    uso: Uso.de(linhas, 1),
-  }));
+  const externos = usoDaDemanda.declarados.filter(({ demanda_id }) => demanda_id === ag.demanda.id);
   const custoExterno = (uso: Uso) => {
     const { conhecido, trabalhosSemCusto } = uso.custo();
     // Linha sem custo (null) é desconhecida, nunca zero.

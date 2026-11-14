@@ -4,22 +4,27 @@ import { test } from "node:test";
 import { Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../../../../server/system/banco_da_fabriquinha.ts";
 import { servir } from "../../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeDemanda } from "../../../../repositorio/publico.ts";
+import { caminhoDaWorktreeDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarDemanda } from "./conducao_de_revisar_demanda.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 3);
 
 const conducao = (banco: Banco) =>
-  new ConducaoDeRevisarDemanda({ banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar });
+  new ConducaoDeRevisarDemanda({
+    ...modulosDoCicloDeTeste(banco),
+    relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
+    registro: anotar,
+  });
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
@@ -52,7 +57,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
   // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
   const { porta } = await servir(abrirBancoDaFabriquinha(raizDo(banco)));
-  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
+  motorDoBanco(banco).urlDaApi = `http://127.0.0.1:${String(porta)}`;
   comDemanda(banco, "I-1", (ag) => ({
     ...ag,
     evidencias: [

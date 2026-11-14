@@ -11,17 +11,13 @@ import {
   marcaDoPRRodada,
   type AgregadoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import {
-  gravarCommitDemanda,
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../src/modulos/repositorio/publico.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../falsos/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../repositorio_de_teste.ts";
-import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
+import { AmbienteHostLocal } from "../falsos/ambiente_falso.ts";
+import { registrarProjeto } from "../demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 const em = "2026-01-01T00:00:00.000Z";

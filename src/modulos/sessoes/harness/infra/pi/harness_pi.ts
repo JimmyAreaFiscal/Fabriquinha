@@ -8,14 +8,16 @@ import { z } from "zod";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
-import { ambienteSemCredenciais, type Ambiente, chavesDeProvedorDoLlm } from "../../../../ambiente/publico.ts";
+import { ambienteSemCredenciais, chavesDeProvedorDoLlm } from "../../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../../ambiente/publico.ts";
 import type { Modelo, PrecoDoModelo } from "../../../modelos/publico.ts";
 import type { EventoDoAgente } from "../../nucleo/eventos.ts";
 import type { Harness, LancamentoDoTicket, ProcessoDoAgente, RespostaDaConsulta } from "../../nucleo/harness.ts";
 import type { LinhaDeUso } from "../../nucleo/uso.ts";
 import { type RegistroDoPi, traduzirEventoDoPi } from "./eventos_do_pi.ts";
 import { lerUsoDoPi } from "./leitor_de_uso_pi.ts";
-import { confianca, PACOTE } from "./pi.ts";
+import { PACOTE } from "../../../../../shared/infra/isolamento_do_ambiente.ts";
+import { confianca } from "./pi.ts";
 
 /** O modelo como o `get_available_models` do RPC do pi o descreve: o `cost` em dólares por milhão de tokens. */
 const ModeloDoCatalogoDoPi = z.object({
@@ -288,9 +290,9 @@ export class HarnessPi implements Harness {
     return resposta;
   }
 
-  /** Os pares da tabela de `pi --list-models [busca]`; a busca do pi é aproximada. */
-  private async modelosDoPi(...busca: string[]): Promise<Modelo[]> {
-    const lista = await executar(this.binarioPi(), ["--list-models", ...busca]);
+  /** Os pares da tabela de `pi --list-models`. */
+  private async modelosDoPi(): Promise<Modelo[]> {
+    const lista = await executar(this.binarioPi(), ["--list-models"]);
     if (lista.codigo !== 0) {
       throw new ErroDeRegra(
         `o pi falhou ao listar os modelos: ${lista.erro.trim()}`,
@@ -311,14 +313,6 @@ export class HarnessPi implements Harness {
   /** Todos os pares que o pi conhece (F4 §9, F7 §4.2). */
   listarModelos(): Promise<Modelo[]> {
     return this.modelosDoPi();
-  }
-
-  /** Recusa o par que `pi --list-models "<provedor>/<nome>"` não lista exatamente. */
-  async conferirModelo({ provedor, nome }: Modelo): Promise<void> {
-    const par = `${provedor}/${nome}`;
-    if (!(await this.modelosDoPi(par)).some((m) => m.provedor === provedor && m.nome === nome)) {
-      throw new ErroDeRegra(`o modelo ${par} não existe no pi`, "escolha um par listado por pi --list-models");
-    }
   }
 
   /**

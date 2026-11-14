@@ -1,7 +1,8 @@
 // As Etapas que a API serve, como as telas as leem: os rótulos, os estados, as colunas do andamento e as fases.
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { descreverEtapasDoSdlc } from "../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../system/api/configuracao/consulta_etapas.ts";
 import { EstadoDemanda, EstadoRodada } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   aparenciaDoEstado,
@@ -22,19 +23,19 @@ test("antes de a API servir as Etapas, ler uma delas é defeito do cliente", () 
 });
 
 test("com as Etapas da API: o rótulo, o título padrão, a fase, o papel e o Gate de cada uma", () => {
-  definirEtapasDoSdlc(descreverEtapasDoSdlc());
+  definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
   assert.equal(rotuloDaEtapa("entender_e_desenhar"), "Demanda");
   assert.equal(tituloPadraoDaEtapa("resolver_conflito"), "Resolver o conflito");
   assert.equal(etapaDoPapel("ajusta_o_pr_reprovado"), "ajustar_resultado");
   assert.equal(rotuloDoGate("gate_revisao_rodada"), "revisão da rodada");
-  definirEtapasDoSdlc({ ...descreverEtapasDoSdlc(), etapas: [] });
+  definirEtapasDoSdlc({ ...descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA), etapas: [] });
   assert.throws(() => etapaDoSdlc("planejar"), /a Etapa planejar não veio da API/);
   assert.throws(() => etapaDoPapel("planeja_a_demanda"), /nenhuma Etapa da API tem o papel planeja_a_demanda/);
   assert.throws(() => rotuloDoGate("gate_pr"), /nenhuma Etapa da API tem o Gate gate_pr/);
 });
 
 test("todo estado da demanda e da rodada tem rótulo e cor de pílula: o da Etapa, o do Gate e o do motor", () => {
-  definirEtapasDoSdlc(descreverEtapasDoSdlc());
+  definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
   assert.deepEqual(
     EstadoDemanda.options.map((estado) => aparenciaDoEstado(estado)),
     [
@@ -65,7 +66,7 @@ test("todo estado da demanda e da rodada tem rótulo e cor de pílula: o da Etap
 });
 
 test("as colunas do andamento: os estados da demanda e, no lugar da execução, os da rodada, com os rótulos das telas", () => {
-  definirEtapasDoSdlc(descreverEtapasDoSdlc());
+  definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
   assert.deepEqual(
     colunasDoAndamento().map(({ estado, de, gate, noInicio, noProjeto }) => [estado, de, gate, noInicio, noProjeto]),
     [
@@ -101,7 +102,7 @@ test("as colunas do andamento: os estados da demanda e, no lugar da execução, 
 });
 
 test("as Etapas na ordem do fluxo: a do SDLC, com as da rodada na execução, e depois as de fora dela", () => {
-  definirEtapasDoSdlc(descreverEtapasDoSdlc());
+  definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
   assert.deepEqual(etapasNaOrdemDoFluxo(), [
     "entender_e_desenhar",
     "planejar",

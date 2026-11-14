@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { git, gitComLimite } from "../../../../../shared/infra/processo.ts";
-import { ambienteSemCredenciais, type ComandoNoAmbiente } from "../ambiente.ts";
+import { ambienteSemCredenciais } from "../../../../../shared/infra/isolamento_do_ambiente.ts";
+import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteHostLocal } from "./ambiente_host_local.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-")));

@@ -1,6 +1,6 @@
 // Conferência do projeto antes de C19 (F5 §2): para no primeiro problema, com a mensagem do que fazer.
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import type { Hospedagem, RepositorioDoProjeto } from "../../git/publico.ts";
+import type { Hospedagem, ProjetoDoRepositorio } from "../../git/publico.ts";
 import { executar, git } from "../../../../shared/infra/processo.ts";
 
 // F5 §2.1. O `usuario@` opcional nas URLs HTTPS do Azure é o formato que o próprio botão Clone do Azure DevOps dá.
@@ -22,7 +22,7 @@ export const hospedagemDoRemoto = (url: string): Hospedagem | undefined =>
 export async function conferirProjeto({
   raiz_git: repo,
   branch_base,
-}: Pick<RepositorioDoProjeto, "raiz_git" | "branch_base">): Promise<{ hospedagem: Hospedagem }> {
+}: Pick<ProjetoDoRepositorio, "raiz_git" | "branch_base">): Promise<{ hospedagem: Hospedagem }> {
   const topo = await git(repo, "rev-parse", "--show-toplevel");
   if (topo.codigo !== 0) {
     throw new ErroDeRegra(`${repo} não é um repositório git`, "informe o caminho da raiz de um clone do projeto");

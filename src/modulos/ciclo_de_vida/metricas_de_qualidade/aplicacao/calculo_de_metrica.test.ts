@@ -5,7 +5,7 @@ import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import type { DefinicaoDaMetrica } from "../nucleo/metrica.ts";
 import { DEMANDA_DO_FATO, type FatoDatado, MetricaDoSdlc, MetricaPorEtapa } from "./calculo_de_metrica.ts";
 import { escopoDoRecorte } from "./leitura_dos_fatos.ts";
-import { MetricaDeUso } from "./metricas/metrica_de_uso.ts";
+import { MetricaDeExigenciasDeAlteracao } from "./metricas/metrica_de_exigencias_de_alteracao.ts";
 
 interface FatosDeTeste {
   fatos: FatoDatado[];
@@ -55,7 +55,7 @@ test("o tipo vem da definição, e o cálculo devolve só as Etapas que o catál
     [...metrica.calcular(origemDe(bancoDaDemanda()), {})],
     [["encerrar_rodada", "01,02,03|1 de encerrar_rodada"]],
   );
-  assert.equal(new MetricaDeUso().calcular(origemDe(bancoDaDemanda()), {}).size, 9);
+  assert.equal(new MetricaDeExigenciasDeAlteracao().calcular(origemDe(bancoDaDemanda()), {}).size, 2);
 });
 
 test("CA-17: demanda inexistente falha, sem totais zerados", () => {
@@ -63,7 +63,10 @@ test("CA-17: demanda inexistente falha, sem totais zerados", () => {
     () => new MetricaDeTeste().calcular(origemDe(bancoDaDemanda()), { demandaId: "I-9" }),
     ErroDeInexistente,
   );
-  assert.throws(() => new MetricaDeUso().calcular(origemDe(bancoDaDemanda()), { demandaId: "I-9" }), ErroDeInexistente);
+  assert.throws(
+    () => new MetricaDeExigenciasDeAlteracao().calcular(origemDe(bancoDaDemanda()), { demandaId: "I-9" }),
+    ErroDeInexistente,
+  );
   assert.throws(
     () => new MetricaDoSdlcDeTeste().calcular(origemDe(bancoDaDemanda()), { demandaId: "I-9" }),
     ErroDeInexistente,

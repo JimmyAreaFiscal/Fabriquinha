@@ -8,7 +8,8 @@ import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado/agregado
 import { arquivarDemanda } from "../nucleo/transicoes/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos/ciclos.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import { CustosRealizados, exigirAutoria, type Origens } from "../../evidencias/publico.ts";
+import { CustosRealizados, type Origens } from "../../evidencias/publico.ts";
+import { exigirAutoria } from "../../../../shared/nucleo/demanda/ator.ts";
 import type { Relogio } from "../../../../shared/nucleo/relogio.ts";
 import {
   type ContextoDemanda,
@@ -23,7 +24,7 @@ import {
   gravarDemandaNova,
   situacaoDasDemandas,
 } from "../armazenamento/agregado_da_demanda.ts";
-import { gravarUsoDeclarado } from "../../../sessoes/publico.ts";
+import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 import { submeterEvidencia as submeterEvidenciaAvaliada } from "./submissao_de_evidencia.ts";
 
 /** `arquivos` são caminhos: abrir cada um, com a defesa de origem, é de `guardarAnexos`. */
@@ -92,11 +93,10 @@ export const arquivarConcluidas = (
   banco: DatabaseSync,
   demandas: readonly string[],
   relogio: Relogio,
-): { arquivadas: number } => {
-  const concluidas = situacaoDasDemandas(banco, demandas).filter((d) => d.estado === "concluida");
-  for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: relogio.agora() });
-  return { arquivadas: concluidas.length };
-};
+): AgregadoDemanda[] =>
+  situacaoDasDemandas(banco, demandas)
+    .filter((d) => d.estado === "concluida")
+    .map(({ id }) => arquivar(banco, id, AUDITOR, { agora: relogio.agora() }));
 
 /** Só o Auditor reabre o ticket falho, com a instrução para a sessão que o retomar; devolve o ticket já aberto. */
 export const reabrir = (
@@ -165,7 +165,7 @@ export const declararUso = (banco: DatabaseSync, id: string, dados: unknown, aut
           chamadas: 0,
         })),
       };
-      const { demandaDona } = gravarUsoDeclarado(banco, uso);
+      const { demandaDona } = montarSessoesDeAgente({ banco }).declararUso(uso);
       if (demandaDona !== id) {
         avisos.push(
           `a sessão ${sessao} de ${ferramenta} já consta na demanda ${demandaDona} e não é contada de novo para ${id}`,

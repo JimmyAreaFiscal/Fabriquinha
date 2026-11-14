@@ -1,4 +1,4 @@
-import { type AgregadoDemanda, Endereco } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { type AgregadoDemanda, Endereco } from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 
 /** structuredClone perde o protótipo de Endereco; o snapshot precisa preservar as identidades do domínio. */
 export function clonarAgregadoDemanda(agregado: AgregadoDemanda): AgregadoDemanda {

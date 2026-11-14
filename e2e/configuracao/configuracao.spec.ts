@@ -4,8 +4,10 @@ import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { inserirAmbienteAlocado, liberarAmbiente } from "../../src/modulos/ambiente/publico.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { inserirAmbienteAlocado, liberarAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { salvarConfiguracaoDoAmbiente } from "../../src/shared/armazenamento/configuracao_do_ambiente.ts";
+import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { expect, fotografar, projeto, test } from "../apoio.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
@@ -284,6 +286,9 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     await expect(celulas.nth(2)).toHaveText(estado);
     await expect(celulas.nth(3)).toHaveText(alocadoPara);
     await expect(celulas.nth(4)).toHaveText(data);
+    // Com host_local, o docker não mede o uso.
+    await expect(celulas.nth(5)).toHaveText("—");
+    await expect(celulas.nth(6)).toHaveText("—");
   }
   await expect(linhaDoAlocado.getByRole("button", { name: "Eliminar" })).toBeDisabled();
   await expect(linhaDoLivre.getByRole("button", { name: "Eliminar" })).toBeEnabled();
@@ -305,6 +310,77 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
   await expect(linhaDoAlocado).toBeVisible();
   expect(dockerFalso.registro().filter(([comando]) => comando === "rm")).toEqual([["rm", "--force", livre.id]]);
   expect(dockerFalso.containers().map(({ id }) => id)).toEqual([alocado.id]);
+});
+
+test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker mede agora, numa chamada só, na largura larga e na do celular", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  const { dockerFalso } = fabriquinha;
+  const ocupado = dockerFalso.semearContainer({
+    imagem: "fabriquinha/loja:3f9a",
+    rotulos: { "fabriquinha.ambiente": "amb-ocupado" },
+    uso: { cpu: "37.50%", memoria: "300.4MiB / 2GiB" },
+  });
+  const ocioso = dockerFalso.semearContainer({
+    imagem: "fabriquinha/loja:3f9a",
+    rotulos: { "fabriquinha.ambiente": "amb-ocioso" },
+    uso: { cpu: "0.00%", memoria: "1.5GiB / 2GiB" },
+  });
+  const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
+  for (const [id, container_id, alocado_para] of [
+    ["amb-ocupado", ocupado.id, "I-12.R1"],
+    ["amb-ocioso", ocioso.id, "I-7"],
+  ] as const)
+    inserirAmbienteAlocado(banco, {
+      id,
+      container_id,
+      imagem: "fabriquinha/loja:3f9a",
+      alocado_para,
+      criado_em: "2026-11-09T12:00:00.000Z",
+    });
+  liberarAmbiente(banco, "amb-ocioso", "livre", "2026-11-09T13:00:00.000Z");
+  // A tela grava o tipo container; a gestão do serviço o lê na pergunta seguinte, sem reiniciar.
+  salvarConfiguracaoDoAmbiente(banco, ConfiguracaoDoAmbiente.parse({ tipo: "container" }));
+  banco.close();
+
+  await pagina.goto(`${fabriquinha.base}/config?ambiente`);
+  await expect(pagina.getByLabel("Tipo de Ambiente")).toHaveValue("container");
+  await expect(pagina.locator(".conjunto-ambiente thead th")).toHaveText([
+    "Id",
+    "Imagem",
+    "Estado",
+    "Alocado para",
+    "Desde",
+    "CPU",
+    "Memória",
+    "",
+  ]);
+  for (const [id, cpu, memoria] of [
+    ["amb-ocupado", "0,38 CPUs", "300 MB"],
+    ["amb-ocioso", "0,00 CPUs", "1.536 MB"],
+  ] as const) {
+    const celulas = pagina.locator(`tr[data-ambiente="${id}"] td`);
+    await expect(celulas.nth(5)).toHaveText(cpu);
+    await expect(celulas.nth(6)).toHaveText(memoria);
+  }
+  expect(dockerFalso.registro().filter(([comando]) => comando === "stats")).toEqual([
+    ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}", ocupado.id, ocioso.id],
+  ]);
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await fotografar(pagina, info, `configuracao-ambiente-medido-${String(largura)}`);
+  }
+  // No celular, a tabela rola de lado dentro do painel, como antes: rolada até o fim, a CPU e a memória aparecem.
+  const memoriaDoOcupado = pagina.locator('tr[data-ambiente="amb-ocupado"] td').nth(6);
+  await memoriaDoOcupado.scrollIntoViewIfNeeded();
+  await expect(memoriaDoOcupado).toBeInViewport();
+  // De volta ao topo da página, a tabela continua rolada de lado: a foto inteira não repete o menu fixo no meio.
+  await pagina.evaluate(() => {
+    scrollTo(0, 0);
+  });
+  await fotografar(pagina, info, "configuracao-ambiente-medido-375-rolada");
 });
 
 test("Ambiente: salva os limites; com host_local, o padrão, subir e abrir a Configuração não chama o docker (I-286, CA-1)", async ({

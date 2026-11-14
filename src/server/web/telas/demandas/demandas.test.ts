@@ -1,11 +1,12 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../../contrato/demanda.ts";
+import type { BoardDeDemandas, PaginaDaDemanda, PendenciaDoInicio } from "../../../system/api/contrato/demanda.ts";
 import { pagina, quadro } from "./demandas.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 type DemandaDoBoard = BoardDeDemandas["demandas"][number];
 

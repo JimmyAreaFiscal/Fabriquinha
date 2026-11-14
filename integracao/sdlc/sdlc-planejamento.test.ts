@@ -15,17 +15,20 @@ import {
   interromperExecucaoDemanda,
   cicloDoDespacho,
   executarAgora,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { gravarProjeto, Projeto, projetoExistente } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "../apoio.ts";
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const pi = instalarPiFalso(base);
 
 const decidirPlanejamento = (banco: DatabaseSync, id: string, entrada: object) =>
-  decidirGate(banco, "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -59,14 +62,15 @@ const plano = (id: string, titulo: string, rodadas = 1) => ({
 async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> {
   const antes = pi.prompts().length;
   const fins = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    liberacaoDasDemandas(c.banco),
   );
   assert.equal(fins.length, ids.length, "o ciclo deveria iniciar só o planejamento de cada demanda");
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
-  for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
+  for (const id of ids)
+    interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), { demanda_id: id, ticket_id: PLANEJAR });
   await Promise.all(fins);
   return ids.map((id) => carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
 }
@@ -94,7 +98,8 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   proporPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
   assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
   assert.equal(
-    cicloDoDespacho(c.banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(c.banco)).length,
+    cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, despachoDasEtapas(), liberacaoDasDemandas(c.banco))
+      .length,
     0,
   );
   semDesenvolvimento(c, id);
@@ -145,7 +150,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   // A preparação só falha na worktree da rodada 2, depois da demanda e da rodada 1.
   const quebra = join(c.raiz, "quebra");
   const { banco, projeto } = c;
-  const projetoDoCenario = projetoExistente(banco, projeto);
+  const projetoDoCenario = montarDemandasDoBanco(banco).projeto(projeto);
   gravarProjeto(
     banco,
     Projeto.parse({
@@ -182,7 +187,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   );
   // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
   assert.equal(
-    cicloDoDespacho(banco, c.config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)).length,
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), c.config, despachoDasEtapas(), liberacaoDasDemandas(banco)).length,
     0,
   );
   assert.equal(pi.prompts().length, chamadas);
@@ -252,11 +257,11 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   const tA = dono(a).tickets.find((x) => x.etapa === "implementar");
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await executarAgora(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 },
     c.config,
     despachoDasEtapas(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    liberacaoDasDemandas(c.banco),
   );
   assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.estado, "falhou");
   assert.deepEqual(demanda(c, b), antesB);

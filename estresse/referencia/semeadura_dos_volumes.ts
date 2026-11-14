@@ -16,12 +16,12 @@ import {
   type EstadoDemanda,
   type EstadoRodada,
   AgregadoDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { encontrado } from "../../src/shared/nucleo/erros.ts";
 import { escrever, raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { comSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
+import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { comSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 export interface VolumeSintetico {
   nome: string;

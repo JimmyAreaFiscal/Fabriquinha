@@ -1,8 +1,8 @@
-import type { DatabaseSync } from "node:sqlite";
 import { formatarRodadaRef, Endereco, CATALOGO_DE_ETAPAS, oAgenteDecideOGate } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { decidirGate } from "../gates.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 import {
   enderecoDoTicketDoAgente,
   escopoDoProcessoAberto,
@@ -36,11 +36,12 @@ const exigirOpcao = (valor: string | undefined, opcao: string, veredito: string)
  * `correcoes`, a da demanda com `plano`. Recusa o que não é veredito, ticket de revisão nem a opção certa antes de ler o JSON.
  */
 export async function decidirRevisao(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   processo: ProcessoDoAgente,
   pedido: PedidoDeRevisao,
   lerJson: LeitorDeJson,
 ) {
+  const { banco } = modulos;
   const agente = escopoDoProcessoAberto(banco, processo);
   const { veredito, motivo, correcoes, plano } = pedido;
   if (veredito !== "aprovar" && veredito !== "reprovar") {
@@ -74,9 +75,9 @@ export async function decidirRevisao(
   }
   reconferirExecucao(banco, agente); // a execução ainda está aberta? A leitura do JSON pode ter esperado o stdin.
   await (rodada === undefined
-    ? decidirGate(banco, "gate_revisao_demanda", Endereco.daDemanda(demanda_id), { resultado, ...extra }, agente.ator)
+    ? decidirGate(modulos, "gate_revisao_demanda", Endereco.daDemanda(demanda_id), { resultado, ...extra }, agente.ator)
     : decidirGate(
-        banco,
+        modulos,
         "gate_revisao_rodada",
         Endereco.daRodada(demanda_id, rodada),
         { resultado, ...extra },

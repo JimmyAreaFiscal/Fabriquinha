@@ -47,12 +47,12 @@ export class ConducaoDeAjustarResultado extends ConducaoInterativa {
 
   // O fim da execução não conclui a sessão: devolve as branches ao marco.
   protected override aoConcluir(endereco: Endereco): Promise<void> {
-    return restaurar(this.deps.banco, this.rodadaDe(this.ticketDe(endereco)));
+    return restaurar(this.deps, this.rodadaDe(this.ticketDe(endereco)));
   }
 
   // A execução que falha ou é interrompida também devolve as branches; o ticket segue aberto para o Auditor.
   protected override falhar(ticket: TicketDemanda): Promise<void> {
-    return restaurar(this.deps.banco, this.rodadaDe(ticket));
+    return restaurar(this.deps, this.rodadaDe(ticket));
   }
 
   private rodadaDe(ticket: TicketDemanda) {

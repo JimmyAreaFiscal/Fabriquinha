@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
+import { cadastrarProjetoLoja } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
+import { inserirAmbienteAlocado } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { noLog } from "../../../../shared/infra/registro.ts";
+import { montarAmbientesDoServico } from "../../ambientes_do_servico.ts";
+import { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../contrato/configuracao.ts";
+import {
+  consultarEstadoDaConfiguracao,
+  consultarEstadoDoAmbiente,
+  consultarProjetoCadastrado,
+  consultarProjetosCadastrados,
+} from "./consulta_configuracao.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../banco_da_fabriquinha.ts";
+import { gravarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+
+const PROXIMA = new Date("2026-10-12T14:35:00.000Z");
+
+test("a configuração só traz a próxima busca com o agendador ligado, e cumpre o contrato", () => {
+  const { banco } = abrirBancoTemporario();
+  const desligado = consultarEstadoDaConfiguracao({
+    ...montarCicloDeVidaDoBanco(banco),
+    proximaBusca: () => PROXIMA.toISOString(),
+  });
+  assert.equal(desligado.proximaBusca, null);
+  banco.exec("UPDATE configuracao SET agendador_ativo = 1");
+  const ligado = consultarEstadoDaConfiguracao({
+    ...montarCicloDeVidaDoBanco(banco),
+    proximaBusca: () => PROXIMA.toISOString(),
+  });
+  assert.equal(ligado.proximaBusca, "2026-10-12T14:35:00.000Z");
+  assert.deepEqual(EstadoDaConfiguracao.parse(ligado), ligado);
+});
+
+test("o ambiente traz os limites gravados e o conjunto de containers, e cumpre o contrato", async () => {
+  const { banco, raiz } = abrirBancoTemporario();
+  const { gestao } = await montarAmbientesDoServico({ banco, raiz, porta: 0, registrarErro: noLog });
+  inserirAmbienteAlocado(banco, {
+    id: "a1",
+    container_id: "c1",
+    imagem: "img",
+    criado_em: "2026-10-12T14:00:00.000Z",
+    alocado_para: "I-1",
+  });
+  const estado = await consultarEstadoDoAmbiente(banco, gestao);
+  assert.equal(estado.configuracao.tipo, "host_local");
+  assert.deepEqual(
+    estado.conjunto.map((a) => [a.id, a.estado, a.alocado_para]),
+    [["a1", "alocado", "I-1"]],
+  );
+  assert.deepEqual(EstadoDoAmbiente.parse(estado), estado);
+});
+
+test("os projetos trazem o modelo e o effort de cada etapa; o que não existe é ErroDeInexistente", () => {
+  const { banco } = abrirBancoTemporario();
+  assert.deepEqual(consultarProjetosCadastrados(montarDemandasDoBanco(banco)), []);
+  cadastrarProjetoLoja(banco);
+  gravarProjeto(banco, {
+    ...montarDemandasDoBanco(banco).projeto("loja"),
+    etapas: [{ etapa: "implementar", configuracao_agente: { effort: "low" } }],
+  });
+  const loja = consultarProjetoCadastrado(montarDemandasDoBanco(banco), "loja");
+  assert.deepEqual(loja.configuracoes, { implementar: { effort: "low" } });
+  assert.deepEqual(consultarProjetosCadastrados(montarDemandasDoBanco(banco)), [loja]);
+  assert.deepEqual(ProjetoCadastrado.parse(loja), loja);
+  assert.throws(() => consultarProjetoCadastrado(montarDemandasDoBanco(banco), "outro"), ErroDeInexistente);
+});

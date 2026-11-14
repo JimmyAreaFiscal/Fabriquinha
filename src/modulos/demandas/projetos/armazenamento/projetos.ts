@@ -4,9 +4,12 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
-import { ErroDeRegra, encontrado } from "../../../../shared/nucleo/erros.ts";
+import { encontrado } from "../../../../shared/nucleo/erros.ts";
 // O mapeador das colunas da configuração do agente é do Ciclo de Vida, dono da Configuração do Agente.
-import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "../../../ciclo_de_vida/publico.ts";
+import {
+  colunasDaConfiguracaoAgente,
+  linhaComConfiguracaoAgente,
+} from "../../../../shared/armazenamento/linhas/colunas_da_configuracao_agente.ts";
 import { Projeto } from "../nucleo/projeto.ts";
 
 type Linha = Record<string, unknown>;
@@ -72,14 +75,6 @@ export const projetoExistente = (
   nome: string,
   orientacao = "confira o nome do projeto",
 ): Projeto => encontrado(buscarProjeto(banco, nome), `o projeto ${nome} não existe`, orientacao);
-
-/** O projeto com a configuração SDLC (ao menos uma linguagem), ou a recusa com a orientação: a única leitura dos casos de uso. */
-export function carregarProjeto(banco: DatabaseSync, nome: string): Projeto {
-  const projeto = buscarProjeto(banco, nome);
-  if (projeto === undefined || projeto.verificacoes.linguagens.length === 0)
-    throw new ErroDeRegra(`o projeto ${nome} não tem configuração do SDLC`, "configure o projeto");
-  return projeto;
-}
 
 /** Todos os projetos, em ordem de nome. */
 export function listarProjetos(banco: DatabaseSync): Projeto[] {

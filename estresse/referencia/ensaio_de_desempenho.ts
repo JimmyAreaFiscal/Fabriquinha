@@ -3,6 +3,7 @@
 // leitura das telas, uma por vez: 1 chamada conta as execuções SQL, e as seguintes dão o p50 e o p95. Grava o relatório
 // em estresse/referencia/referencia.md, ou no arquivo pedido (`npm run estresse:referencia -- <arquivo>`), para comparar
 // com a referência sem sobrescrevê-la.
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -14,14 +15,14 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.
 import { somarMeses } from "../../src/shared/nucleo/periodo.ts";
 import { mesDoInstante, relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
-import { harnessDoServico } from "../../src/server/composicao/servico.ts";
-import { condutor } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { cronometrar } from "../grupos/http_leitura.ts";
 import { medir } from "../medir.ts";
 import { contarExecucoesSql } from "./contador_de_execucoes_sql.ts";
 import { type MedicaoDaRota, type MedicoesDoVolume, montarRelatorioDaReferencia } from "./relatorio_da_referencia.ts";
 import { type AlvosDasRotas, semearVolume, VOLUMES_SINTETICOS } from "./semeadura_dos_volumes.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 const CHAMADAS_POR_ROTA = 20;
 
@@ -53,13 +54,21 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const { port: porta } = servidor.address() as AddressInfo;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
   servidor.on(
     "request",
     servirWeb({
       banco,
       raiz,
       porta,
-      agendador: { proximaBusca: () => new Date() },
+      cicloDeVida: {
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio }),
+        proximaBusca: () => new Date().toISOString(),
+      },
+      ambientes,
+      demandas: montarDemandasDoBanco(banco),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),
@@ -71,6 +80,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
+    await ambientes.gestao.parar();
   };
   return { acesso: { base: new URL(linkDeEntrada).origin, cookie }, encerrar };
 }
@@ -104,8 +114,6 @@ async function medirVolume(volume: (typeof VOLUMES_SINTETICOS)[number]): Promise
   }
 }
 
-// O harness do serviço, como na subida dele: o chat acha a conversa da sessão pelo harness.
-condutor.montarHarness(harnessDoServico);
 const arquivoDoRelatorio = resolve(process.argv[2] ?? join(import.meta.dirname, "referencia.md"));
 const medicoesPorVolume: MedicoesDoVolume[] = [];
 for (const volume of VOLUMES_SINTETICOS) medicoesPorVolume.push(await medirVolume(volume));

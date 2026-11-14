@@ -18,24 +18,21 @@ import {
   type TicketDemanda,
 } from "../../../processo/publico.ts";
 import { encontrado, existe } from "../../../../../shared/nucleo/erros.ts";
-import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../repositorio/publico.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import type { DatabaseSync } from "node:sqlite";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import type { anotar } from "../../../../../shared/infra/registro.ts";
-import type { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "../execucao/execucao_demanda.ts";
 import { montarPromptDemanda } from "../prompt/prompt_demanda.ts";
 import type { SecaoDoPrompt } from "../prompt/secoes_do_prompt.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import { limitesDasSessoes } from "../limites_das_sessoes.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** O que a condução de uma Etapa recebe do despacho, a cada ticket que ele entrega. */
-export interface DepsDaConducao {
-  banco: DatabaseSync;
+export interface DepsDaConducao extends ModulosDoCiclo {
   relogio: Relogio;
-  condutor: CondutorDeTrabalhos;
   registro: typeof anotar;
   /** Limite de duração do agente, em minutos; sem ele vale o `timeoutMin` que a composição liga (limites_das_sessoes.ts). */
   limiteMin?: number;
@@ -101,7 +98,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
    * nada, se a preparação falhou e o ticket já foi falhado).
    */
   async iniciar(endereco: Endereco): Promise<ExecucaoIniciada | undefined> {
-    const { banco, condutor, registro } = this.deps;
+    const { banco, registro } = this.deps;
     const ticket = this.ticketDe(endereco);
     const preparacao = this.prepararEspaco(ticket);
     // Sem preparação a execução nasce já, na transação da reserva do Despacho: é ela que ocupa a vaga do limite global.
@@ -111,7 +108,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
       espaco = await preparacao;
     } catch (erro) {
       // Com o serviço parando, o erro é efeito da parada: o ticket é retomado em vez de esperar o Auditor.
-      const falha = condutor.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
+      const falha = this.deps.emParada() ? falhaPorServicoReiniciado : falhaDoErro(erro);
       registro(`${raizDo(banco)}/log`, `preparação falhou: ${falha.motivo}`);
       await this.falhar(ticket, falha);
       return undefined;
@@ -123,7 +120,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const { banco } = this.deps;
     // A conferência roda no fechamento do processo, ainda sob o condutor: a parada do serviço a espera e o chat recebe o
     // estado já final do ticket; o que ela lançar vai ao log do processo e falha o ticket.
-    return iniciarExecucaoDemanda(banco, ticket, {
+    return iniciarExecucaoDemanda(this.deps, ticket, {
       limiteMin: this.deps.limiteMin ?? limitesDasSessoes().timeoutMin(banco),
       modo: this.definicao.executor === "agente_interativo" ? "interativo" : "autonomo",
       ...this.retomadaDe(ticket),
@@ -149,7 +146,7 @@ export abstract class ConducaoAgentica extends ConducaoDeEtapa {
     const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
     const raiz = raizDo(banco);
     const espaco = espacoDoTicket(ag, ticket, projeto, raiz);
-    return cicloDoEspaco(espaco, projeto, { raiz, log: `${raiz}/log` }, ambienteDoEspaco(espaco)).criar();
+    return this.deps.repositorio.prepararEspaco(projeto, espaco, `${raiz}/log`);
   }
 
   /**

@@ -24,8 +24,7 @@ import {
   pendenciasDeLimpeza,
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
-} from "../../../../repositorio/publico.ts";
-import { registrarProjeto, lerPedido } from "../../../../demandas/publico.ts";
+} from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { gravarAgregadoPronto } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
@@ -36,11 +35,12 @@ import {
 } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarDemanda, type OpcoesDoEncerramentoDaDemanda } from "./conducao_de_encerrar_demanda.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { reservarTicketParaAFabriquinha } from "../../../despacho/publico.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { registrarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../../../../server/system/banco_da_fabriquinha.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -193,7 +193,7 @@ async function cenario({
 /** Conduz o `encerrar_demanda` aberto, como o agendador, e devolve a demanda no fim do que deu para fazer. */
 async function conduzir(banco: DatabaseSync, opcoes: OpcoesDoEncerramentoDaDemanda = {}) {
   await new ConducaoDeEncerrarDemanda(
-    { banco, relogio: relogioFixo("2026-01-01T00:00:00.000Z"), condutor, registro: anotar },
+    { ...modulosDoCicloDeTeste(banco), relogio: relogioFixo("2026-01-01T00:00:00.000Z"), registro: anotar },
     opcoes,
   ).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket(D, 8)));
   return carregarDemanda(banco, D);
@@ -205,7 +205,7 @@ test("com o fluxo da conclusão que a composição liga, o pedido fica concluíd
   execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
   const ag = await conduzir(c.banco);
   assert.equal(ag.demanda.estado, "concluida");
-  assert.equal(lerPedido(c.banco, D).situacao, "concluido");
+  assert.equal(montarDemandasDoBanco(c.banco).pedido(D).situacao, "concluido");
 });
 
 const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge");

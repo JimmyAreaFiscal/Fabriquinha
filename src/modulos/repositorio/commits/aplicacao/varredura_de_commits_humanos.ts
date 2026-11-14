@@ -8,7 +8,8 @@ import {
   gravarCommitsPosterioresDoTicket,
   type LinhasPorDemanda,
 } from "../armazenamento/commits_demanda.ts";
-import { type CommitHumano, cursorDaBase, gravarVarredura } from "../armazenamento/commits_humanos.ts";
+import { type CommitHumano, cursorDaBase, gravarVarredura, projetosAVarrer } from "../armazenamento/commits_humanos.ts";
+import type { Relogio } from "../../../../shared/nucleo/relogio.ts";
 import { noLog } from "../../../../shared/infra/registro.ts";
 import {
   buscarBaseRemota,
@@ -16,7 +17,7 @@ import {
   cursorSaiuDaHistoria,
   linhasReescritasPorCommitDeOrigem,
 } from "../infra/commits_humanos.ts";
-import { naFilaDoProjeto, type RepositorioDoProjeto } from "../../git/publico.ts";
+import { naFilaDoProjeto, type ProjetoDoRepositorio } from "../../git/publico.ts";
 
 /**
  * As linhas por commit de origem viram linhas por ticket das demandas, agrupadas pela demanda de origem; commit fora da
@@ -41,7 +42,7 @@ function dosTicketsDemanda(banco: DatabaseSync, porCommit: Map<string, number>):
  */
 export async function registrarCommitsHumanosDoTicket(
   banco: DatabaseSync,
-  projeto: Pick<RepositorioDoProjeto, "nome" | "raiz_git">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git">,
   demandaId: string,
   ticketId: number,
   sha: string,
@@ -63,7 +64,7 @@ export async function registrarCommitsHumanosDoTicket(
  */
 export async function varrerCommitsHumanos(
   banco: DatabaseSync,
-  projeto: Pick<RepositorioDoProjeto, "nome" | "raiz_git" | "branch_base">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "branch_base">,
 ): Promise<void> {
   const { nome, raiz_git, branch_base } = projeto;
   await naFilaDoProjeto(raizDo(banco), nome, async () => {
@@ -85,4 +86,25 @@ export async function varrerCommitsHumanos(
     }
     gravarVarredura(banco, nome, atual, humanos);
   });
+}
+
+/**
+ * F4 §4, passo 1: varre, um por vez, cada projeto sem varredura há 24 horas; a falha de um vai a `registrarErro` e não
+ * impede os outros. O projeto é relido na hora da sua varredura: o removido no meio da fila sai dela, e o
+ * reconfigurado vale como está agora.
+ */
+export async function varrerBasesVencidas(
+  banco: DatabaseSync,
+  projetos: () => readonly Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "branch_base">[],
+  relogio: Relogio,
+  registrarErro: (erro: unknown) => void,
+): Promise<void> {
+  for (const nome of projetosAVarrer(
+    banco,
+    projetos().map((projeto) => projeto.nome),
+    relogio,
+  )) {
+    const projeto = projetos().find((cadastrado) => cadastrado.nome === nome);
+    if (projeto) await varrerCommitsHumanos(banco, projeto).catch(registrarErro);
+  }
 }

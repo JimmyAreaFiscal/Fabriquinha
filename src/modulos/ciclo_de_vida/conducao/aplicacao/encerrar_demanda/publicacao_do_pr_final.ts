@@ -1,45 +1,38 @@
 // Publicação do PR final da demanda no `encerrar_demanda`; os passos do encerramento estão em
 // `conducao_de_encerrar_demanda.ts`.
-import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, prDaDemanda } from "../../../processo/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { commitDoTicketDemanda, publicarPRDe, exigirGit } from "../../../../repositorio/publico.ts";
+import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
+import { espacoDaDemanda } from "../../../../repositorio/publico.ts";
 import { corpoDoPRFinal, marcaDoPRFinal, tituloDoPRFinal } from "./encerramento_demanda.ts";
 import type { ProjetoConduzido } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** Publica o PR da branch da demanda para a base, reaproveitando o do progresso ou o marcado; só commits de ticket sobem. */
 export function publicarPRFinal(
-  banco: DatabaseSync,
+  { banco, repositorio }: Pick<ModulosDoCiclo, "banco" | "repositorio">,
   ag: AgregadoDemanda,
-  projeto: Pick<ProjetoConduzido, "nome" | "raiz_git" | "hospedagem">,
-  base: string,
-  raiz: string,
+  projeto: ProjetoConduzido,
+  log: string,
 ) {
   const { demanda } = ag;
   const prFinal = prDaDemanda(ag);
-  const registrados = new Set(ag.tickets.map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha));
-  const conferirCommits = async (head: string) => {
-    // Os commits da base já estão no remoto; a ponta dele vem fresca para a comparação.
-    await exigirGit(projeto.raiz_git, "fetch", "origin", base);
-    const novos = await exigirGit(projeto.raiz_git, "rev-list", "--no-merges", `refs/remotes/origin/${base}..${head}`);
-    const orfao = novos.split("\n").find((sha) => sha !== "" && !registrados.has(sha));
-    if (orfao === undefined) return;
-    throw new ErroDeRegra(
-      `a branch ${demanda.branch} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket da ${demanda.id} registrou: ` +
-        "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
-      `desfaça-o na worktree da demanda e reabra o ticket`,
-    );
-  };
-  return publicarPRDe(
-    raiz,
+  return repositorio.publicarPR(
     projeto,
-    { branch: demanda.branch, base, publicarBase: false },
+    espacoDaDemanda(projeto, demanda.id, raizDo(banco)),
     {
       titulo: tituloDoPRFinal(ag),
       corpo: corpoDoPRFinal(ag),
       conhecidos: prFinal ? [String(prFinal.numero)] : [],
       marca: marcaDoPRFinal(demanda.id),
+      tickets: ag.tickets.map((t) => t.ticket_id),
+      recusarCommitOrfao: (orfao) =>
+        new ErroDeRegra(
+          `a branch ${demanda.branch} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket da ${demanda.id} registrou: ` +
+            "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
+          `desfaça-o na worktree da demanda e reabra o ticket`,
+        ),
     },
-    conferirCommits,
+    log,
   );
 }

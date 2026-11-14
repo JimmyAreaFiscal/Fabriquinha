@@ -20,7 +20,8 @@ import {
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada, garantirWorktreeDemanda } from "./worktree-demanda.ts";
 import { podarWorktreesNoCore } from "./worktree.ts";
-import { AmbienteHostLocal, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

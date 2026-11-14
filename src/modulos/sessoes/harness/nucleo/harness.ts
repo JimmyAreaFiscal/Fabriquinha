@@ -67,8 +67,6 @@ export interface Harness {
   perguntar(prompt: string, modelo: Modelo | undefined, limiteMs: number): Promise<RespostaDaConsulta | undefined>;
   /** Todos os pares provedor/modelo que o harness conhece (F4 §9). */
   listarModelos(): Promise<Modelo[]>;
-  /** Recusa (ErroDeRegra) o par que o harness não conhece. */
-  conferirModelo(modelo: Modelo): Promise<void>;
   /**
    * O preço de cada modelo que o harness conhece e sabe o preço, com a origem: a fonte do catálogo de preços com que o
    * custo não informado é estimado. Recusa (ErroDeRegra) se o harness não responde.

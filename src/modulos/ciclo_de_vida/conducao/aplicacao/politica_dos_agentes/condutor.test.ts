@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import type { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -14,38 +14,40 @@ import { abrirBancoTemporario } from "../../../../../../apoio-testes/banco/banco
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
-  inserirAmbienteAlocado,
   AmbienteContainer,
-  GeradorDeAmbientes,
-  ConjuntoDeAmbientes,
-  montarConjuntoDoServico,
-} from "../../../../ambiente/publico.ts";
+  AmbienteHostLocal,
+  gestaoQueSoUsa,
+  gestaoLigadaNosModulos,
+} from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { type Relogio, relogioDoSistema, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
+import { type Relogio, relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 import { falhaPorServicoReiniciado, falhaQueExigeOAuditor, type EtapaTicket } from "../../../etapas/publico.ts";
-import {
-  dirDoPiDoAuditor,
-  type Harness,
-  HarnessPi,
-  type LancamentoDoTicket,
-  type MensagemDoAgente,
-  PACOTE,
-} from "../../../../sessoes/publico.ts";
+import { type Harness, type LancamentoDoTicket, montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
+import type { MensagemDoAgente } from "../../../../sessoes/harness/publico.ts";
 import {
   atividadeDo,
-  condutor,
-  CondutorDeTrabalhos,
+  HarnessPi,
+  MotorDasSessoes,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type PedidoDeProcesso,
-} from "./condutor.ts";
-import { recuperacaoDaSubida } from "../../../../../server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
+} from "../../../../../../apoio-testes/sessoes_de_teste.ts";
+import { falhaDaTentativaDaExecucao } from "./condutor.ts";
+import { recuperarAposReinicio } from "../../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
+
+/** O motor das Sessões, com o pi rodando no host local, e a política do ticket sobre o fim de cada execução. */
+const condutor = new MotorDasSessoes();
+condutor.montarAmbientes(gestaoQueSoUsa(new AmbienteHostLocal()));
+const iniciarProcessoDoTicket = async (pedido: PedidoDeProcesso, relogio?: Relogio) => {
+  const falha = await condutor.lancarExecucao(pedido, relogio);
+  return falha && falhaDaTentativaDaExecucao(falha);
+};
 
 /** Eventos da perguntar, incluindo as opções e descrições que a triagem recebe. */
 function eventosDaPergunta(
@@ -161,7 +163,7 @@ function rodar(
       .map((entrada) => `${String(entrada.comando?.value)}\n`)
       .join("");
   let grupoDoPi = 0;
-  const fim = condutor.iniciar(
+  const fim = iniciarProcessoDoTicket(
     {
       execucao: { id: sessao, sessao, modo },
       // Sem banco: o agente sem token.
@@ -302,10 +304,11 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
 function triagemComSaida(etapa: EtapaTicket, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
   const piDaTriagem: typeof executar = () =>
     Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
-  return (p) => {
-    condutor.montarHarness(new HarnessPi(piDaTriagem));
-    return triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p);
-  };
+  const sessoesDaTriagem = montarSessoesDeAgente({
+    banco: new DatabaseSync(":memory:"),
+    harness: new HarnessPi(piDaTriagem),
+  });
+  return (p) => triarPergunta(sessoesDaTriagem, undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p);
 }
 const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede o Sonar"}';
 
@@ -569,7 +572,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)})`);
 
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
 
     assert.deepEqual(await daTicket.morto, [null, "SIGKILL"]);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
@@ -582,7 +585,7 @@ test("recuperarNaSubida mata o grupo órfão do ticket e fecha o que dependia de
 test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", async () => {
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
     banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
       INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
@@ -590,7 +593,7 @@ test("recuperarNaSubida ignora o processo que nunca chegou a lançar o pi", asyn
         VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
       INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
     assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
   } finally {
     fechar();
@@ -615,39 +618,16 @@ function ticketComProcessoAberto(banco: DatabaseSync, ambienteId: string, grupoP
     .run(EM, grupoProcesso, ambienteId);
 }
 
-const execsNoContainer = (docker: ReturnType<typeof instalarDockerFalso>, container: string) =>
-  docker.registro().filter(([comando, alvo]) => comando === "exec" && alvo === container);
-
-test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker exec no container) e fecha o ticket como serviço reiniciado", async () => {
+test("recuperarNaSubida não sinaliza o pi que rodou num container, que a montagem da gestão de Ambientes já limpou, e fecha o ticket como serviço reiniciado", async () => {
   const dir = mkdtempSync(join(base, "recuperacao-"));
   const docker = instalarDockerFalso(join(dir, "docker"));
-  const { id: container_id } = docker.semearContainer({});
   const { banco, fechar } = abrirBancoTemporario();
   try {
-    inserirAmbienteAlocado(banco, {
-      id: "amb-1",
-      container_id,
-      imagem: "alpine",
-      criado_em: EM,
-      alocado_para: "I-1",
-    });
     ticketComProcessoAberto(banco, "amb-1", 4321);
-    montarConjuntoDoServico(
-      () =>
-        new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
-          raiz: dir,
-          porta_da_api: 3000,
-          home_do_usuario: dir,
-          pacote_do_harness: PACOTE,
-          dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-        }),
-    );
 
-    await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+    await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
 
-    await ate(() => execsNoContainer(docker, container_id).length > 0, "o sinal por docker exec");
-    const [, , , , roteiro] = execsNoContainer(docker, container_id)[0] ?? [];
-    assert.match(String(roteiro), /^kill -KILL .*\/pids\/4321 /);
+    assert.deepEqual(docker.registro(), []);
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
     assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM tentativa").get(), {
       resultado_tipo: "falha_infraestrutura",
@@ -655,37 +635,8 @@ test("recuperarNaSubida sinaliza o pi pelo Ambiente gravado no processo (docker 
       motivo: "serviço reiniciado",
     });
   } finally {
-    montarConjuntoDoServico(() => undefined);
     fechar();
   }
-});
-
-test("recuperarNaSubida de processo de um container que o conjunto não conhece, ou sem conjunto, não sinaliza ninguém e ainda fecha o ticket", async () => {
-  const dir = mkdtempSync(join(base, "recuperacao-"));
-  const docker = instalarDockerFalso(join(dir, "docker"));
-  for (const conjuntoMontado of [true, false]) {
-    const { banco, fechar } = abrirBancoTemporario();
-    try {
-      ticketComProcessoAberto(banco, "amb-sumido", 4321);
-      if (conjuntoMontado)
-        montarConjuntoDoServico(
-          () =>
-            new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
-              raiz: dir,
-              porta_da_api: 3000,
-              home_do_usuario: dir,
-              pacote_do_harness: PACOTE,
-              dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-            }),
-        );
-      await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
-      assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
-    } finally {
-      montarConjuntoDoServico(() => undefined);
-      fechar();
-    }
-  }
-  assert.deepEqual(docker.registro(), []);
 });
 
 test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessão em curso", async () => {
@@ -695,9 +646,10 @@ test("o lançamento que o harness recusa rejeita o iniciar e não deixa a sessã
       throw recusa;
     },
   } as unknown as Harness;
-  const condutorQueRecusa = new CondutorDeTrabalhos(harnessQueRecusa);
+  const condutorQueRecusa = new MotorDasSessoes(harnessQueRecusa);
+  condutorQueRecusa.montarAmbientes(gestaoQueSoUsa(new AmbienteHostLocal()));
   await assert.rejects(
-    condutorQueRecusa.iniciar({
+    condutorQueRecusa.lancarExecucao({
       execucao: { id: "s-recusada", sessao: "s-recusada", modo: "consulta" },
       lancamento: lancamentoDeTeste(base, "s-recusada"),
       cwd: base,
@@ -716,12 +668,11 @@ test("consultar repassa a resposta e o Uso da consulta, e o undefined do pi que 
     (codigo: number): typeof executar =>
     () =>
       Promise.resolve({ codigo, saida: "resposta", erro: "", limiteEstourado: false });
-  assert.deepEqual(await new CondutorDeTrabalhos(new HarnessPi(pi(0))).consultar("pergunta", undefined, 1000), {
+  assert.deepEqual(await new MotorDasSessoes(new HarnessPi(pi(0))).consultar("pergunta", undefined, 1000), {
     saida: "resposta",
     uso: [],
   });
-  assert.equal(await new CondutorDeTrabalhos(new HarnessPi(pi(1))).consultar("pergunta", undefined, 1000), undefined);
-  assert.throws(() => new CondutorDeTrabalhos().harness, /o condutor não tem harness/);
+  assert.equal(await new MotorDasSessoes(new HarnessPi(pi(1))).consultar("pergunta", undefined, 1000), undefined);
 });
 
 /** Um pi falso em `[ao vivo]` (que não termina sozinho) lançado pelo AmbienteContainer, com o condutor acompanhando-o. */
@@ -741,7 +692,7 @@ async function lancarPiNoContainer() {
   let grupoDoPi = 0;
   let ambienteDoPiGravado = "";
   const fim = condutor.acompanhar(id, () =>
-    condutor.iniciar({
+    iniciarProcessoDoTicket({
       execucao: { id, sessao: id, modo: "autonomo" },
       lancamento: lancamentoDeTeste(dir, id),
       cwd: dir,

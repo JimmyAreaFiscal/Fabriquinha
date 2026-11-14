@@ -3,8 +3,8 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, Endereco, decidirGate } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { AUDITOR, Endereco, decidirGate } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   abrirPortao,
   agente,
@@ -21,6 +21,7 @@ import {
 } from "../apoio-execucao.ts";
 import { base, ciclo, criarCenario, demanda, git } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 
 const gh = ghFalso(base);
 
@@ -35,7 +36,13 @@ test("CA-SDLC-13: integração que falha não conclui a rodada, não grava a apr
 
   gh.mergeFalha();
   await assert.rejects(
-    decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 5 }, AUDITOR),
+    decidirGate(
+      modulosDoCicloDeTeste(c.banco),
+      "gate_pr",
+      Endereco.daRodada(id, 1),
+      { resultado: "aprovado", nota: 5 },
+      AUDITOR,
+    ),
     /merge rejeitado pela hospedagem/,
   );
 
@@ -66,7 +73,13 @@ test("D04: a rodada dependente nasce da ponta da demanda quando começa, já com
   await ciclo(c, despacho());
   await revisar(c, id, { resultado: "aprovado" });
   await encerrar(c, id);
-  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 5 }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "aprovado", nota: 5 },
+    AUDITOR,
+  );
   assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   const pontaComR1 = git(c.repo, "rev-parse", `refs/heads/${demanda(c, id).demanda.branch}`);
 

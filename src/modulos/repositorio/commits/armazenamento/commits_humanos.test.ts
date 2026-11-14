@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { cursorDaBase, gravarVarredura, projetosAVarrer } from "./commits_humanos.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em ordem de nome", () => {
   const banco = new DatabaseSync(":memory:");

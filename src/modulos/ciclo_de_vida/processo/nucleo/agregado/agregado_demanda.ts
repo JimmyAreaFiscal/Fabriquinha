@@ -11,10 +11,12 @@ import {
 } from "../../../etapas/publico.ts";
 import { CICLO_DA_DEMANDA, EstadoDemanda, EstadoRodada, EstadoTicket } from "../ciclos/ciclos.ts";
 import { ProgressoEncerramento } from "../progresso_do_encerramento.ts";
-import { branchDemanda, branchRodada, DemandaId, PullRequest, prDoEscopo } from "../../../../repositorio/publico.ts";
+import { branchDemanda, branchRodada, PullRequest, prDoEscopo } from "../../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../../shared/nucleo/demanda/demanda_id.ts";
 import { Decisao } from "../gate.ts";
 import { donoDe, EvidenciaDemanda } from "../../../evidencias/publico.ts";
-import { GrafoDeDependencias, OrigemDaVersao } from "../../../planejamento/publico.ts";
+import { OrigemDaVersao } from "../../../planejamento/publico.ts";
+import { GrafoDeDependencias } from "../../../../../shared/nucleo/demanda/grafo_de_dependencias.ts";
 import { Id, Instante, Markdown, Slug, Titulo } from "../../../../../shared/nucleo/primitivos.ts";
 import { Tentativa } from "../tentativa.ts";
 

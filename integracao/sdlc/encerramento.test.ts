@@ -12,7 +12,7 @@ import {
   marcaDoPRFinal,
   reabrirTicket,
   retomarFalhasDeInfraestrutura,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioFixo } from "../../src/shared/nucleo/relogio.ts";
 import {
   registrarFalhaEncerramento,
@@ -23,7 +23,7 @@ import {
   integrarPR,
   caminhoDaWorktreeDemanda,
   caminhoDaWorktreeRodada,
-} from "../../src/modulos/repositorio/publico.ts";
+} from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   agente,
   agora,

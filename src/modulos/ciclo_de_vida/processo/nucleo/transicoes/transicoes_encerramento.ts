@@ -9,7 +9,8 @@ import {
   FABRIQUINHA,
   falhaQueExigeOAuditor,
 } from "../../../etapas/publico.ts";
-import { branchDemanda, DemandaId } from "../../../../repositorio/publico.ts";
+import { branchDemanda } from "../../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../../shared/nucleo/demanda/demanda_id.ts";
 import {
   AgregadoDemanda,
   type ResumoDaDemanda,

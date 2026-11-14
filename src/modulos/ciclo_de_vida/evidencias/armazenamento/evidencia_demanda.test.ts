@@ -15,8 +15,9 @@ import {
   lerAnexo,
   primeiraEvidenciaDasDemandas,
 } from "./evidencia_demanda.ts";
-import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
+import { removerProjetoComOQueDependeDele } from "../../../../server/system/api/configuracao/remocao_do_projeto.ts";
 import { comEvidencia } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -134,7 +135,7 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
     INSERT INTO processo_demanda (demanda_id, estado, estado_alterado_em, branch) SELECT id, estado, estado_alterado_em, branch FROM demanda WHERE estado IS NOT NULL AND id NOT IN (SELECT demanda_id FROM processo_demanda);
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
     INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
-  await removerProjetoComOQueDependeDele(b, "q");
+  await removerProjetoComOQueDependeDele(b, montarCicloDeVidaDoBanco(b), montarDemandasDoBanco(b), "q");
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
 });
 

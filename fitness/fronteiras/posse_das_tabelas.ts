@@ -4,7 +4,8 @@
 export const DONO_DE_CADA_TABELA: Record<string, string> = {
   // Ambiente
   ambiente: "ambiente/sandboxes",
-  configuracao_ambiente: "ambiente/configuracao",
+  // A Configuração do Ambiente é de quem monta a gestão de Ambientes (o servidor), que não tem tabela: fica no shared.
+  configuracao_ambiente: "shared",
 
   // Sessões de IA
   trabalho_agentico: "sessoes/execucao",
@@ -20,7 +21,6 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   arquivo_commit_demanda: "repositorio/commits",
   commit_humano_posterior: "repositorio/commits",
   varredura_base: "repositorio/commits",
-  pull_request: "repositorio/hospedagem",
 
   // Ciclo de Vida
   // A linha única da configuração do serviço; as colunas `ambiente_*` ficaram sem uso na migração 54, que deu à
@@ -36,6 +36,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   caminho_ticket: "ciclo_de_vida/planejamento",
   criterio_citado_rodada: "ciclo_de_vida/planejamento",
   processo_demanda: "ciclo_de_vida/processo",
+  pull_request: "ciclo_de_vida/processo",
   decisao_ticket: "ciclo_de_vida/processo",
   tentativa: "ciclo_de_vida/processo",
   iteracao_demanda: "ciclo_de_vida/processo",
@@ -56,7 +57,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   configuracao_etapa_projeto: "demandas/projetos",
   demanda: "demandas/pedidos",
   demanda_historico: "demandas/pedidos",
-  dependencia_demanda: "demandas/dependencias",
+  dependencia_demanda: "demandas/pedidos",
   // Históricas da Avaliação, que saiu no ticket 02: o achado ainda é a origem da demanda encaminhada dele.
   avaliacao: "demandas/pedidos",
   avaliacao_demanda: "demandas/pedidos",

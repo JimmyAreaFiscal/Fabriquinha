@@ -5,12 +5,12 @@ import type { DatabaseSync } from "node:sqlite";
 import type { z } from "zod";
 import { type Ator, formatarTicketRef, type TicketRef } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
-import { contextoDaExecucao } from "../../../../sessoes/publico.ts";
+import { montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
 
 /** Recusa o agente cujo trabalho não é uma execução do `ticket`; os demais atores passam (o núcleo confere o tipo). */
 export function exigirTrabalhoDoTicket(banco: DatabaseSync, ator: Ator, ticket: z.infer<typeof TicketRef>): void {
   if (ator.tipo !== "agente") return;
-  const dono = contextoDaExecucao(banco, ator.trabalho_id);
+  const [dono] = montarSessoesDeAgente({ banco }).listar({ execucoes: [ator.trabalho_id] });
   if (dono?.demanda_id === ticket.demanda_id && dono.ticket_id === ticket.ticket_id) return;
   throw new ErroDeRegra(
     `o trabalho ${ator.trabalho_id} não é uma execução do ticket ${formatarTicketRef(ticket)}`,

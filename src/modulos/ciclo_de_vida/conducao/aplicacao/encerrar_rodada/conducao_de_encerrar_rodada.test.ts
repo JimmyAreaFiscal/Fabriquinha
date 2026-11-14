@@ -12,22 +12,21 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenario_de_encerramento_rodada.ts";
 import { Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
-import { carregarSessoesDoContexto } from "../../../../sessoes/publico.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeEncerrarRodada } from "./conducao_de_encerrar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const ENCERRAR = Endereco.doTicket(DEMANDA, 8);
 
 const conduzir = (banco: Banco) =>
   new ConducaoDeEncerrarRodada({
-    banco,
+    ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
-    condutor,
     registro: anotar,
   }).conduzir(reservadoPeloDespacho(banco, ENCERRAR));
 

@@ -1,7 +1,7 @@
 // Aba Heatmap da página do projeto (F7 §4.4) no DOM: lê o heatmap, desenha a raiz com as funções puras de heatmap.ts e
 // desenha o conteúdo de cada pasta ou arquivo na primeira abertura dele. Não se atualiza sozinha: cada abertura relê o
 // git. Os testes de ponta a ponta (e2e/) a exercitam.
-import type { Heatmap } from "../../../contrato/projeto.ts";
+import type { Heatmap } from "../../../system/api/contrato/projeto.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, ErroDaApi, irPara } from "../../dom.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";

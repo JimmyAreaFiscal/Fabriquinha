@@ -8,14 +8,20 @@ import type { AddressInfo } from "node:net";
 import { once } from "node:events";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { AmbienteFalso, espiarProcessosForaDoAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
-import { montarAmbienteDoServico } from "../../src/modulos/ambiente/publico.ts";
-import { despachoDasEtapas } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { gravarProjeto, Projeto, projetoExistente } from "../../src/modulos/demandas/publico.ts";
+import {
+  AmbienteFalso,
+  espiarProcessosForaDoAmbiente,
+  gestaoQueSoUsa,
+  ligarGestaoDeAmbientesNosModulos,
+} from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { despachoDasEtapas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { abrirPortao, agente, demandaEmExecucao, encerrar, pi, rodadaDe, revisar } from "../apoio-execucao.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import { base, ciclo, criarCenario, demanda } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
+import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 
 // O `gh` falso, e com ele o `bin` do PATH onde também fica o sonar-scanner falso.
 ghFalso(base);
@@ -55,14 +61,15 @@ const despachoComVerificacoesReais = despachoDasEtapas({
 
 test("CA-4: git da worktree, Preparação, Verificações e pi de cada ticket da rodada passam pelo Ambiente", async (t) => {
   const ambiente = new AmbienteFalso();
-  montarAmbienteDoServico(ambiente);
+  ligarGestaoDeAmbientesNosModulos(gestaoQueSoUsa(ambiente));
   const espiao = espiarProcessosForaDoAmbiente();
   t.after(() => {
     espiao.parar();
+    ligarGestaoDeAmbientesNosModulos();
   });
 
   const c = criarCenario(t);
-  const projetoDoCenario = projetoExistente(c.banco, c.projeto);
+  const projetoDoCenario = montarDemandasDoBanco(c.banco).projeto(c.projeto);
   gravarProjeto(
     c.banco,
     Projeto.parse({

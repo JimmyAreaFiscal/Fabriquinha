@@ -14,7 +14,6 @@ import {
 import type { Recorte } from "../../nucleo/metrica.ts";
 import type { EtapaTicket } from "../../../etapas/publico.ts";
 import { MetricaDeNotaHumana } from "./metrica_de_nota_humana.ts";
-import { MetricaDeUso } from "./metrica_de_uso.ts";
 
 const daEtapa = <Valor>(valores: Map<EtapaTicket, Valor>, etapa: EtapaTicket): Valor => {
   const valor = valores.get(etapa);
@@ -70,16 +69,10 @@ test("por demanda: só quem teve execução no período, com o estado atual e a 
   assert.deepEqual(notaDoRecorte(b, { ...doMes("2026-02"), projeto: "site" }), { soma: 0, quantidade: 0, media: null });
 });
 
-test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovado sem nota conta sem entrar na média", () => {
+test("PR aprovado sem nota conta sem entrar na média", () => {
   const b = bancoDoPeriodo();
-  b.prepare(
-    "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x9', 's3', ?, NULL, 0)",
-  ).run(em("2026-04"));
   gravarDecisaoEm(b, ["I-1", 2, 3], ["gate_pr", "aprovado", null], em("2026-04"));
   gravarDecisaoEm(b, ["I-1", 2, 4], ["gate_pr", "aprovado", null], em("2026-02"));
-  const uso = daEtapa(new MetricaDeUso().calcular(origemDe(b), doMes("2026-04")), "implementar");
-  assert.equal(uso.execucoes, 1);
-  assert.deepEqual(uso.custo, { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
   assert.deepEqual(notaDoRecorte(b, doMes("2026-04")), { soma: 0, quantidade: 0, media: null });
   assert.deepEqual(notaDoRecorte(b, doMes("2026-02")), { soma: 9, quantidade: 2, media: 4.5 }); // a aprovada sem nota não entra na média
 });

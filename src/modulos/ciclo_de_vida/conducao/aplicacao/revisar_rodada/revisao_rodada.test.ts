@@ -7,11 +7,13 @@ import { AUDITOR, FABRIQUINHA, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { reabrirTicket, motivoDaFalhaDoTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../../../processo/nucleo/transicoes/transicoes_rodada.ts";
-import { carregarProjeto, gravarProjeto } from "../../../../demandas/publico.ts";
 import { caminhoArquivo } from "../../../../../shared/armazenamento/arquivos.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { caminhoDaWorktreeDemanda, garantirWorktreeRodada } from "../../../../repositorio/publico.ts";
+import {
+  caminhoDaWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
@@ -21,7 +23,8 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { decidirGate } from "../gates.ts";
 import { prepararRevisaoRodada } from "./revisao_rodada.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { buscarProjeto, gravarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -45,7 +48,7 @@ test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e 
   const { c, banco } = await cenarioRevisao();
   banco.exec("INSERT INTO caminho_ticket VALUES ('I-1', 1, '**/*.ts'), ('I-1', 1, 'nunca/*.ts')");
   const { ponta, head } = await rodadaComAlteracoes(c);
-  await prepararRevisaoRodada(banco, REF_RODADA);
+  await prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA);
   const [e] = evidencia(banco, "arquivos_alterados");
   const dados = e?.dados as { base: string; head: string; arquivos: { caminho: string; status: string }[] };
   assert.equal(dados.base, ponta);
@@ -64,7 +67,7 @@ test("CA-3: arquivo modificado aparece como M", async () => {
   const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   writeFileSync(join(rodada, "base.txt"), "base\nmais\n");
   rodarGit(rodada, "commit", "-qam", "m");
-  await prepararRevisaoRodada(banco, REF_RODADA);
+  await prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA);
   const dados = evidencia(banco, "arquivos_alterados")[0]?.dados as { arquivos: object[] };
   assert.deepEqual(dados.arquivos, [
     { caminho: "base.txt", status: "M", adicionadas: 1, removidas: 0, previsto: null },
@@ -73,7 +76,8 @@ test("CA-3: arquivo modificado aparece como M", async () => {
 
 test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; regravar substitui", async () => {
   const { banco } = await cenarioRevisao();
-  const projeto = carregarProjeto(banco, "loja");
+  const projeto = buscarProjeto(banco, "loja");
+  assert.ok(projeto);
   gravarProjeto(banco, {
     ...projeto,
     verificacoes: {
@@ -84,8 +88,8 @@ test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; reg
       ],
     },
   });
-  await prepararRevisaoRodada(banco, REF_RODADA);
-  await prepararRevisaoRodada(banco, REF_RODADA);
+  await prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA);
+  await prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA);
   const evidencias = evidencia(banco, "matriz_fitness");
   assert.equal(evidencias.length, 1);
   const linhas = (evidencias[0]?.dados as { linhas: { nome: string; codigoSaida: number }[] }).linhas;
@@ -108,12 +112,16 @@ test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; reg
 
 test("fitness que falha: erro e nenhuma das duas evidências fica gravada", async () => {
   const { banco } = await cenarioRevisao();
-  const projeto = carregarProjeto(banco, "loja");
+  const projeto = buscarProjeto(banco, "loja");
+  assert.ok(projeto);
   gravarProjeto(banco, {
     ...projeto,
     verificacoes: { ...projeto.verificacoes, fitness: [{ nome: "ruim", comando: "exit 1", descricao: "d" }] },
   });
-  await assert.rejects(prepararRevisaoRodada(banco, REF_RODADA), /matriz_fitness.*todas_fitness_passam/);
+  await assert.rejects(
+    prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA),
+    /matriz_fitness.*todas_fitness_passam/,
+  );
   assert.equal(evidencia(banco, "arquivos_alterados").length, 0);
   assert.equal(evidencia(banco, "matriz_fitness").length, 0);
 });
@@ -122,9 +130,12 @@ test("recusa ticket inexistente, global e projeto sem configuração", async () 
   const { banco } = await cenarioRevisao({ integral: true });
   const sem = await cenarioRevisao();
   sem.banco.exec("DELETE FROM linguagem_projeto");
-  await assert.rejects(prepararRevisaoRodada(sem.banco, REF_RODADA), /não tem configuração/);
-  await assert.rejects(prepararRevisaoRodada(banco, { demanda_id: "I-1", ticket_id: 99 }), /I-1.T99 não existe/);
-  await assert.rejects(prepararRevisaoRodada(banco, REF_GLOBAL), /I-1.T3 não é de uma rodada/);
+  await assert.rejects(prepararRevisaoRodada(modulosDoCicloDeTeste(sem.banco), REF_RODADA), /não tem configuração/);
+  await assert.rejects(
+    prepararRevisaoRodada(modulosDoCicloDeTeste(banco), { demanda_id: "I-1", ticket_id: 99 }),
+    /I-1.T99 não existe/,
+  );
+  await assert.rejects(prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_GLOBAL), /I-1.T3 não é de uma rodada/);
 });
 
 test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
@@ -133,7 +144,7 @@ test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
   const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   rodarGit(rodada, "mv", "base.txt", "nome.txt");
   rodarGit(rodada, "commit", "-qam", "r");
-  await prepararRevisaoRodada(banco, REF_RODADA);
+  await prepararRevisaoRodada(modulosDoCicloDeTeste(banco), REF_RODADA);
   const dados = evidencia(banco, "arquivos_alterados")[0]?.dados as { arquivos: object[]; previstosNaoTocados: [] };
   assert.deepEqual(dados.arquivos, [
     { caminho: "nome.txt", status: "R", adicionadas: 0, removidas: 0, previsto: "base.txt" },
@@ -161,7 +172,7 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
   );
 }
 const decidir = (banco: Parameters<typeof carregarDemanda>[0], entrada: object, ator = revisorDaRodada(banco)) =>
-  decidirGate(banco, "gate_revisao_rodada", Endereco.daRodada("I-1", 1), entrada, ator);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_revisao_rodada", Endereco.daRodada("I-1", 1), entrada, ator);
 const estadoDaPrimeiraRodada = (banco: Parameters<typeof carregarDemanda>[0]) =>
   carregarDemanda(banco, "I-1").rodadas[0]?.estado;
 

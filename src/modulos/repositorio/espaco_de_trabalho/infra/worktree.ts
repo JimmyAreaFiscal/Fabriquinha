@@ -4,15 +4,17 @@ import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../../../shared/nucleo/erros.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
-import { git, LIMITE_COMANDO_MS } from "../../../../shared/infra/processo.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
+import { git } from "../../../../shared/infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../ambiente/publico.ts";
 import {
   envCompletoDoServico,
   exigirGitNoAmbiente,
   naFilaDaPasta,
   naFilaDoProjeto,
   pastaDasWorktreesDoProjeto,
-  type RepositorioDoProjeto,
+  type ProjetoDoRepositorio,
 } from "../../git/publico.ts";
 
 /**
@@ -39,7 +41,7 @@ export async function podarWorktreesNoCore(raiz_git: string): ReturnType<typeof 
 export async function preparar(
   ambiente: Ambiente,
   caminho: string,
-  preparacao: RepositorioDoProjeto["verificacoes"]["preparacao"],
+  preparacao: ProjetoDoRepositorio["verificacoes"]["preparacao"],
   log: string,
 ): Promise<void> {
   for (const comando of preparacao) {
@@ -93,7 +95,7 @@ export async function descartarAlteracoes(ambiente: Ambiente, worktree: string, 
  */
 export function removerWorktrees(
   raiz: string,
-  projeto: Pick<RepositorioDoProjeto, "nome" | "raiz_git">,
+  projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git">,
 ): Promise<string[]> {
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
     const avisos: string[] = [];

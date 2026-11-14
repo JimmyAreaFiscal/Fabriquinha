@@ -11,6 +11,10 @@ export type FalhaDaExecucao =
   | { tipo: "servico_reiniciado" }
   /** Quem acompanha a sessão mandou abortar. */
   | { tipo: "abortada"; motivo: string }
+  /** Quem pediu a sessão a interrompeu (`interromper`), ainda na preparação ou com o pi no ar. */
+  | { tipo: "interrompida" }
+  /** A preparação de quem pediu lançou `erro`: o pi nem subiu; o que o erro significa é de quem pediu. */
+  | { tipo: "preparacao_falhou"; erro: unknown }
   /** O agente parou com erro, recusou um comando ou saiu sozinho. */
   | { tipo: "falha_do_agente"; motivo: string };
 

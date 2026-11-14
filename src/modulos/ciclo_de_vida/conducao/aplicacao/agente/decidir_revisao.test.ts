@@ -17,6 +17,7 @@ import {
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
 import { decidirRevisao } from "./decidir_revisao.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -88,7 +89,12 @@ const decisoes = (banco: DatabaseSync) => carregarDemanda(banco, "I-206").deciso
 test("aprovar a revisão de rodada registra a decisão do agente na rodada", async () => {
   const { banco, processo } = cenario("em_execucao", "revisar_rodada", "revisar_rodada");
   evidenciar(banco, EVIDENCIAS_RODADA);
-  const resposta = await decidirRevisao(banco, processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson);
+  const resposta = await decidirRevisao(
+    modulosDoCicloDeTeste(banco),
+    processo,
+    { ticket: "I-206.T9", veredito: "aprovar" },
+    lerJson,
+  );
   assert.deepEqual(resposta, { ticket: "I-206.T9", rodada: "I-206.R2", resultado: "aprovado" });
   assert.deepEqual(estadoDa(banco), { demanda: "em_execucao", rodada: "encerrar_rodada", ticket: "concluido" });
   assert.deepEqual(
@@ -99,7 +105,12 @@ test("aprovar a revisão de rodada registra a decisão do agente na rodada", asy
 
 test("aprovar sem as evidências lista as ausentes e a rodada segue em revisão", async () => {
   const { banco, processo } = cenario("em_execucao", "revisar_rodada", "revisar_rodada");
-  const aprovar = decidirRevisao(banco, processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson);
+  const aprovar = decidirRevisao(
+    modulosDoCicloDeTeste(banco),
+    processo,
+    { ticket: "I-206.T9", veredito: "aprovar" },
+    lerJson,
+  );
   await assert.rejects(aprovar, (erro: Error) =>
     EVIDENCIAS_RODADA.every(([tipo]) => erro.message.includes(`${tipo} ausente`)),
   );
@@ -110,11 +121,11 @@ test("aprovar sem as evidências lista as ausentes e a rodada segue em revisão"
 test("a revisão integral exige as três evidências e, com elas, vai a encerramento", async () => {
   const { banco, processo } = cenario("revisar_demanda", "concluida", "revisar_demanda", false);
   const pedido = { ticket: "I-206.T9", veredito: "aprovar" };
-  await assert.rejects(decidirRevisao(banco, processo, pedido, lerJson), (erro: Error) =>
+  await assert.rejects(decidirRevisao(modulosDoCicloDeTeste(banco), processo, pedido, lerJson), (erro: Error) =>
     EVIDENCIAS_INTEGRAL.every(([tipo]) => erro.message.includes(`${tipo} ausente`)),
   );
   evidenciar(banco, EVIDENCIAS_INTEGRAL);
-  assert.deepEqual(await decidirRevisao(banco, processo, pedido, lerJson), {
+  assert.deepEqual(await decidirRevisao(modulosDoCicloDeTeste(banco), processo, pedido, lerJson), {
     ticket: "I-206.T9",
     resultado: "aprovado",
   });
@@ -126,7 +137,7 @@ test("reprovar a revisão de rodada completa as correções com demanda, rodada 
   const lidos: unknown[][] = [];
   const correcoes = JSON.stringify([{ titulo: "a", descricao: "b" }]);
   const resposta = await decidirRevisao(
-    banco,
+    modulosDoCicloDeTeste(banco),
     processo,
     { ticket: "I-206.T9", veredito: "reprovar", motivo: "falta", correcoes },
     (valor, opcao) => {
@@ -150,7 +161,7 @@ test("reprovar a revisão integral registra a decisão com o motivo e lê o plan
     tickets: [{ demanda_id: "I-206", ticket_id: 1, rodada_id: 1, titulo: "t", descricao: "d" }],
   };
   const resposta = await decidirRevisao(
-    banco,
+    modulosDoCicloDeTeste(banco),
     processo,
     { ticket: "I-206.T9", veredito: "reprovar", motivo: "falta", plano: JSON.stringify(plano) },
     lerJson,
@@ -166,7 +177,7 @@ test("reprovar a revisão integral registra a decisão com o motivo e lê o plan
 test("veredito fora de aprovar|reprovar, opção que falta ou sobra e ticket alheio não gravam nada", async () => {
   const { banco, processo } = cenario("em_execucao", "revisar_rodada", "revisar_rodada");
   const decidir = (veredito: string, extra: object = {}, ticket = "I-206.T9") =>
-    decidirRevisao(banco, processo, { ticket, veredito, ...extra }, lerJson);
+    decidirRevisao(modulosDoCicloDeTeste(banco), processo, { ticket, veredito, ...extra }, lerJson);
   await assert.rejects(decidir("talvez"), { message: 'veredito "talvez" inválido (use aprovar ou reprovar)' });
   await assert.rejects(decidir("reprovar"), { message: "reprovar exige --motivo (passe --motivo)" });
   await assert.rejects(decidir("reprovar", { motivo: "m" }), {
@@ -186,9 +197,12 @@ test("veredito fora de aprovar|reprovar, opção que falta ou sobra e ticket alh
 
 test("o ticket que não é de revisão não decide", async () => {
   const { banco, processo } = cenario("em_execucao", "implementar", "implementar");
-  await assert.rejects(decidirRevisao(banco, processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson), {
-    message: "o ticket I-206.T9 é de implementar, não de revisão (só ticket de revisão decide)",
-  });
+  await assert.rejects(
+    decidirRevisao(modulosDoCicloDeTeste(banco), processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson),
+    {
+      message: "o ticket I-206.T9 é de implementar, não de revisão (só ticket de revisão decide)",
+    },
+  );
 });
 
 test("execução terminada, inclusive durante a leitura do JSON, não grava", async () => {
@@ -196,14 +210,14 @@ test("execução terminada, inclusive durante a leitura do JSON, não grava", as
   const encerrar = () => banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = ?").run(em, processo.id);
   const pedido = { ticket: "I-206.T9", veredito: "reprovar", motivo: "m", correcoes: "[]" };
   await assert.rejects(
-    decidirRevisao(banco, processo, pedido, (valor) => {
+    decidirRevisao(modulosDoCicloDeTeste(banco), processo, pedido, (valor) => {
       encerrar();
       return lerJson(valor);
     }),
     /já terminou/,
   );
   await assert.rejects(
-    decidirRevisao(banco, processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson),
+    decidirRevisao(modulosDoCicloDeTeste(banco), processo, { ticket: "I-206.T9", veredito: "aprovar" }, lerJson),
     /já terminou/,
   );
   assert.deepEqual(decisoes(banco), []);

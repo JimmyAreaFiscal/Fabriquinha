@@ -1,6 +1,10 @@
-// A fachada do domínio Demandas (MELHORIAS §12), `GestaoDeDemandas`: a única entrada usada por fora do domínio. Cadastra,
-// configura e consulta projetos; registra, edita, envia e consulta pedidos, registra o cancelamento e a conclusão deles e
-// mantém as dependências entre eles. As migrações do domínio saem daqui para a composição registrá-las em `abrir`.
-export * from "./projetos/publico.ts";
-export * from "./pedidos/publico.ts";
-export * from "./dependencias/publico.ts";
+// A fachada do domínio Demandas (MELHORIAS §12): a montagem da GestaoDeDemandas, a única entrada usada por fora do
+// domínio, e os tipos da entrada e da saída dela. O Projeto e a configuração SDLC vão com os schemas que os validam.
+export { ComandosDePreparacao, type FormularioDoProjeto, Projeto, ProjetoConfigurado } from "./projetos/publico.ts";
+export {
+  type FiltroDePedidos,
+  type GestaoDeDemandas,
+  montarGestaoDeDemandas,
+  type NovoPedido,
+  type Pedido,
+} from "./pedidos/publico.ts";

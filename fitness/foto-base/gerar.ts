@@ -16,23 +16,33 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { type AgregadoDemanda, type TicketDemanda, EtapaTicket } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import {
+  type AgregadoDemanda,
+  type TicketDemanda,
+  EtapaTicket,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import {
+  gravarTokenDaExecucao,
   comSessoesDoContexto,
   criarSessao,
-  gravarTokenDaExecucao,
   iniciarExecucao,
-} from "../../src/modulos/sessoes/publico.ts";
+} from "../../apoio-testes/sessoes_de_teste.ts";
 import { promptDaEtapa } from "../../apoio-testes/prompt_da_etapa.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import {
+  abrirBancoDaFabriquinha,
+  montarCicloDeVidaDoBanco,
+  montarDemandasDoBanco,
+} from "../../src/server/system/banco_da_fabriquinha.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
-import { publicarPRDe } from "../../src/modulos/repositorio/publico.ts";
+import { publicarPRDe } from "../../apoio-testes/repositorio_de_teste.ts";
 // O harness do serviço, que a composição montaria: os prompts listam as skills que ele tem.
 import "../../apoio-testes/harness_do_teste.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");
@@ -254,13 +264,21 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
   servidor.on(
     "request",
     servirWeb({
       banco,
       raiz: raizDo(banco),
       porta,
-      agendador: { proximaBusca: () => new Date() },
+      cicloDeVida: {
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio }),
+        proximaBusca: () => new Date().toISOString(),
+      },
+      ambientes,
+      demandas: montarDemandasDoBanco(banco),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),
@@ -269,6 +287,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     raiz,
     banco,
     servidor,
+    ambientes,
     env: { FABRIQUINHA_API: `127.0.0.1:${String(porta)}`, FABRIQUINHA_TOKEN: "token-exec-7" },
   };
 }
@@ -303,7 +322,8 @@ const saidasDoCli = [
   await rodarCli(completo.env, ["demanda", "ver", "I-206"]),
 ];
 gravarFoto("cli/aula-e-demanda", saidasDoCli.join("\n"));
-for (const { servidor } of [completo, semRevisao]) {
+for (const { servidor, ambientes } of [completo, semRevisao]) {
+  await ambientes.gestao.parar();
   servidor.closeAllConnections();
   servidor.close();
 }

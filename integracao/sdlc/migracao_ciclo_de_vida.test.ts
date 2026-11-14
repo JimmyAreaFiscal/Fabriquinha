@@ -12,11 +12,11 @@ import {
   type EstadoDemanda,
   carregarDemanda,
   configuracao,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { integrarPR } from "../../src/modulos/repositorio/publico.ts";
+import { integrarPR } from "../../apoio-testes/repositorio_de_teste.ts";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import {
   agregadoNoEstado,
@@ -66,8 +66,11 @@ import {
   submeterObrigatorias,
 } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 const UMA_RODADA_DE_UM_TICKET = [{ tickets: 1 }];
@@ -86,7 +89,7 @@ async function rodadaNaSessaoDeAjustes(c: Cenario): Promise<string> {
   pi.roteirizar([{ agente: agenteMudo }]);
   const chamadasAntes = pisAteAgora();
   await decidirGate(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     "gate_pr",
     Endereco.daRodada(id, 1),
     { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -123,16 +126,24 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
         return;
       case "entender_e_desenhar":
         submeterObrigatorias(c, id);
-        enviarAoDesenvolvimento(c.banco, id, AUTOR, CTX);
+        enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), id, AUTOR);
         break;
       case "gate_demanda":
-        decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+        decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, {
+          resultado: "aprovado",
+        });
         break;
       case "planejar":
         await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);
         break;
       case "gate_planejamento":
-        await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+        await decidirGate(
+          modulosDoCicloDeTeste(c.banco),
+          "gate_planejamento",
+          Endereco.daDemanda(id),
+          { resultado: "aprovado" },
+          AUDITOR,
+        );
         break;
       case "em_execucao": {
         const rodada = rodadas.find((r) => r.estado !== "concluida");
@@ -176,7 +187,7 @@ async function conduzirRodada(c: Cenario, id: string, rodada: number, estado: st
       comDemanda(c.banco, id, (ag) =>
         registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
       );
-      await concluirSessaoAjustes(c.banco, ref, AUDITOR); // aguarda o fim da conversa
+      await concluirSessaoAjustes(modulosDoCicloDeTeste(c.banco), ref, AUDITOR); // aguarda o fim da conversa
       break;
     }
     default:

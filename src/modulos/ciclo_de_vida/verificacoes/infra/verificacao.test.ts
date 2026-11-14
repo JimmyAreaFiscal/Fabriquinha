@@ -5,6 +5,10 @@ import { CATALOGO_DE_ETAPAS, EtapaTicket, type TipoVerificacao } from "../../eta
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
 import { LIMITE } from "../../evidencias/publico.ts";
 import { montarVerificacoesDaEtapa, ULTIMOS_BYTES_DO_LOG } from "./verificacao.ts";
+import { DatabaseSync } from "node:sqlite";
+import { montarRepositorio } from "../../../repositorio/publico.ts";
+
+const REPOSITORIO = montarRepositorio({ banco: new DatabaseSync(":memory:") });
 
 const COM_CODIGO: TipoVerificacao[] = ["testes", "fitness", "sonar", "hooks_do_commit"];
 
@@ -27,7 +31,7 @@ for (const etapa of EtapaTicket.options) {
 }
 
 test("montarVerificacoesDaEtapa monta pelo catálogo, só o que a etapa exige, e recusa a que ela não exige", () => {
-  const conferencia = new ConferenciaDoPR({ raiz_git: "/x", hospedagem: "github" }, "1", "/log");
+  const conferencia = new ConferenciaDoPR(REPOSITORIO, { raiz_git: "/x", hospedagem: "github" }, "1", "/log");
 
   assert.equal(
     montarVerificacoesDaEtapa("encerrar_rodada", { conferencia_do_pr: () => conferencia }).conferencia_do_pr,

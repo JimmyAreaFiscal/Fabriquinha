@@ -70,3 +70,22 @@ export function criarRepositorioDeTeste(comandosDePreparacao: string[] = [], bra
     },
   };
 }
+
+// O apoio de teste do Repositório: as worktrees, os commits e os PRs como o cenário os monta, sem passar pela
+// interface `RepositorioDoProjeto` (que aloca o Ambiente e varre a base), e o git do clone que lança na falha.
+export {
+  gravarCommitDemanda,
+  commitDoTicketDemanda,
+} from "../src/modulos/repositorio/commits/armazenamento/commits_demanda.ts";
+export { cursorDaBase } from "../src/modulos/repositorio/commits/armazenamento/commits_humanos.ts";
+export { pendenciasDeLimpeza } from "../src/modulos/repositorio/espaco_de_trabalho/infra/limpeza_demanda.ts";
+export {
+  caminhoDaWorktreeDemanda,
+  caminhoDaWorktreeRodada,
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../src/modulos/repositorio/espaco_de_trabalho/infra/worktree-demanda.ts";
+export { exigirGit, exigirGitNoAmbiente } from "../src/modulos/repositorio/git/infra/comandos_git.ts";
+export { integrarPR, publicarPRDe } from "../src/modulos/repositorio/hospedagem/infra/pr.ts";
+export { ocupanteDoAmbiente } from "../src/modulos/repositorio/espaco_de_trabalho/aplicacao/ambiente_do_espaco.ts";
+export { espacoDaRodada } from "../src/modulos/repositorio/espaco_de_trabalho/nucleo/espaco_de_trabalho.ts";

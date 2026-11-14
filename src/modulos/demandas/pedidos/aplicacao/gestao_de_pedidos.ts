@@ -3,7 +3,7 @@
 // grava junto (o processo), e o rodam dentro dela: o erro de qualquer lado desfaz os dois.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Ator } from "../../../ciclo_de_vida/publico.ts";
+import type { Ator } from "../../../../shared/nucleo/demanda/ator.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { projetoExistente } from "../../projetos/publico.ts";

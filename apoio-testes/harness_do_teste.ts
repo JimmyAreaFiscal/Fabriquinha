@@ -1,13 +1,12 @@
-// O harness dos testes: em produção a composição monta o harness no condutor do serviço; os testes usam os casos de uso
-// sem a composição, e o `npm test` e o `npm run integracao` carregam este módulo antes de cada arquivo (`--import`). É o
-// pi (o falso, quando o teste aponta `FABRIQUINHA_PI` para ele); quem precisa de outro monta o seu. Carrega também a
+// O harness dos testes: em produção a composição monta a gestão de Ambientes; os testes usam os casos de uso sem a
+// composição, e o `npm test` e o `npm run integracao` carregam este módulo antes de cada arquivo (`--import`). O harness
+// das Sessões é o pi (o falso, quando o teste aponta `FABRIQUINHA_PI` para ele); quem precisa de outro monta o seu. Carrega também a
 // abertura do banco da composição, que liga ao Ciclo de Vida a leitura de Demandas, para o teste que abre o banco sozinho.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
-import "../src/server/composicao/banco_da_fabriquinha.ts";
+import "../src/server/system/banco_da_fabriquinha.ts";
+import { ligarGestaoDeAmbientesNosModulos } from "./falsos/ambiente_falso.ts";
 
 // Nenhum teste lê o `~/.pi/agent` do Auditor: copiado para o container falso, ele mudava no meio da cópia pelo pi de
 // verdade (`tar: file changed as we read it`), levava as credenciais do Auditor e exigia o login dele na máquina. Os
@@ -25,4 +24,5 @@ if (process.env.PI_CODING_AGENT_DIR === undefined) {
 // catálogo de preços. Quem precisa de outro roteiro instala o seu (`instalarPiFalso`).
 process.env.FABRIQUINHA_PI ??= join(import.meta.dirname, "falsos", "pi_falso.ts");
 
-condutor.montarHarness(new HarnessPi());
+// Sem a composição, o trabalho roda no host local; quem precisa de outro Ambiente liga a sua gestão.
+ligarGestaoDeAmbientesNosModulos();

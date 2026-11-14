@@ -15,7 +15,8 @@ import {
   formatarTicketRef,
   type ResultadoDaTentativa,
 } from "../../../etapas/publico.ts";
-import { branchDemanda, DemandaId } from "../../../../repositorio/publico.ts";
+import { branchDemanda } from "../../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../../shared/nucleo/demanda/demanda_id.ts";
 import {
   CICLO_DA_DEMANDA,
   CICLO_DO_TICKET,
@@ -25,7 +26,8 @@ import {
   PRIMEIRA_ETAPA_DA_RODADA,
 } from "../ciclos/ciclos.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
-import { exigirAutoria, pendentesDeEnvio } from "../../../evidencias/publico.ts";
+import { pendentesDeEnvio } from "../../../evidencias/publico.ts";
+import { exigirAutoria } from "../../../../../shared/nucleo/demanda/ator.ts";
 import {
   criarTicket,
   lerPlanoGravado,

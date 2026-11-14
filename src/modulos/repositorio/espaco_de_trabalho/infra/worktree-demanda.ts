@@ -14,16 +14,18 @@ import {
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { Slug } from "../../../../shared/nucleo/primitivos.ts";
-import { type Ambiente, PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../ambiente/publico.ts";
+import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { type Ambiente } from "../../../ambiente/publico.ts";
 import {
   exigirGit,
   exigirGitNoAmbiente,
   gitNoAmbiente,
   naFilaDoProjeto,
-  type RepositorioDoProjeto,
+  type ProjetoDoRepositorio,
 } from "../../git/publico.ts";
 import { podarWorktreesNoCore, preparar } from "./worktree.ts";
-import { branchDemanda, branchRodada, DemandaId, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
+import { branchDemanda, branchRodada, RodadaDoEspaco } from "../nucleo/nome_do_espaco.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 
 function recusar(motivo: string): never {
   throw new ErroDeRegra(
@@ -169,7 +171,7 @@ async function adicionarWorktree(
   symlinkSync(relative(dirname(entrada), entradaNaPastaDaFabriquinha), entrada);
 }
 
-type ProjetoWorktree = Pick<RepositorioDoProjeto, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
+type ProjetoWorktree = Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
 
 /**
  * Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. Devolve a pasta e se buscou

@@ -2,7 +2,6 @@
 // efeitos fora do agregado é a comum (`decisao_dos_gates/gate_com_efeitos.ts`) ou a da pasta da Etapa. O Gate
 // da demanda cancela em cascata pedidos e processos: quem o decide é o fluxo do servidor, com a regra daqui.
 // Acrescentar um Gate é declará-lo na definição da Etapa e pôr uma linha aqui.
-import type { DatabaseSync } from "node:sqlite";
 import type { NomeGate, Ator, Endereco } from "../../etapas/publico.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { type GateComEfeitos, gateDeRevisao, type ResultadoDoGate } from "./decisao_dos_gates/gate_com_efeitos.ts";
@@ -11,6 +10,7 @@ import { GATE_DO_PLANEJAMENTO } from "./planejar/decisao_do_gate.ts";
 import { GATE_DO_PR } from "./encerrar_rodada/gate_do_pr/decisao_do_gate.ts";
 import { GateDaRevisaoDaRodada } from "./revisar_rodada/gate.ts";
 import { GateDaRevisaoDaDemanda } from "./revisar_demanda/gate.ts";
+import type { ModulosDoCiclo } from "./modulos_do_ciclo.ts";
 
 /** A regra do Gate da demanda; a decisão, com o cancelamento em cascata, é do fluxo `decidirGateDaDemanda` do servidor. */
 export const GATE_DA_DEMANDA = new GateDaDemanda();
@@ -31,12 +31,12 @@ export const GATES: Record<GateDecididoPeloMotor, GateComEfeitos> = {
  * os efeitos fora do agregado, por um caminho só. A recusa não grava nada; o gate segue aberto para nova tentativa.
  */
 export async function decidirGate(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   nome: GateDecididoPeloMotor,
   endereco: Endereco,
   entrada: unknown,
   ator: Ator,
   relogio: Relogio = relogioDoSistema,
 ): Promise<ResultadoDoGate> {
-  return await GATES[nome].decidir(banco, endereco, entrada, ator, relogio);
+  return await GATES[nome].decidir(modulos, endereco, entrada, ator, relogio);
 }

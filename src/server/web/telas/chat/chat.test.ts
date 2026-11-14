@@ -1,3 +1,4 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
@@ -26,10 +27,10 @@ import {
   respostaDoDialogo,
   valorDoSelect,
 } from "./chat.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 const T0 = "2026-10-11T10:00:00.000Z";
 

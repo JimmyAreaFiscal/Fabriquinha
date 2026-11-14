@@ -9,13 +9,7 @@ import {
 } from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
 import { ErroDeRegra, mensagem } from "../../../../../shared/nucleo/erros.ts";
-import {
-  ambienteDoEspaco,
-  cicloDoEspaco,
-  type EspacoDeTrabalho,
-  espacoDoTicket,
-  varrerCommitsHumanos,
-} from "../../../../repositorio/publico.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { GateDoPlanejamento } from "./gate.ts";
 import type { GateComEfeitos } from "../decisao_dos_gates/gate_com_efeitos.ts";
 import { lerPlanoGravado } from "../../../planejamento/publico.ts";
@@ -24,6 +18,7 @@ import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../conducao_de_etapa/pi_vivo.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 const gate = new GateDoPlanejamento();
 
@@ -55,7 +50,7 @@ function reprovarGateDoPlanejamento(
  * existe é reaproveitado.
  */
 async function aprovarGateDoPlanejamento(
-  banco: DatabaseSync,
+  { banco, repositorio }: ModulosDoCiclo,
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
@@ -70,9 +65,7 @@ async function aprovarGateDoPlanejamento(
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
-    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco));
-    const { buscouBase } = await ciclo.criar();
-    if (buscouBase) await varrerCommitsHumanos(banco, projeto).catch(ciclo.anotarFalhaDaVarredura);
+    await repositorio.prepararEspaco(projeto, espaco, log);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
@@ -102,12 +95,12 @@ async function aprovarGateDoPlanejamento(
 /** O Gate do planejamento: a aprovação prepara as worktrees antes de gravar; a reprovação fala com o pi vivo. */
 export const GATE_DO_PLANEJAMENTO: GateComEfeitos = {
   regra: gate,
-  async decidir(banco, endereco, entrada, ator, relogio) {
+  async decidir(modulos, endereco, entrada, ator, relogio) {
     const e = gate.validarEntrada(entrada, ator);
     const demanda =
       e.resultado === "aprovado"
-        ? await aprovarGateDoPlanejamento(banco, endereco, e, ator, relogio)
-        : reprovarGateDoPlanejamento(banco, endereco, e, ator, e.motivo, relogio);
+        ? await aprovarGateDoPlanejamento(modulos, endereco, e, ator, relogio)
+        : reprovarGateDoPlanejamento(modulos.banco, endereco, e, ator, e.motivo, relogio);
     return { demanda, canceladas: [] };
   },
 };

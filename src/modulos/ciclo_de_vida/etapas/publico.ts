@@ -13,7 +13,6 @@ export {
   ORDEM_DO_SDLC,
 } from "./nucleo/catalogo.ts";
 export { ConfiguracaoAgente, resolverConfiguracaoAgente } from "./nucleo/configuracao_agente.ts";
-export { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./nucleo/colunas_da_configuracao_agente.ts";
 export {
   type DefinicaoDaEtapa,
   evidenciaExigida,
@@ -39,7 +38,6 @@ export { DEFINICAO_DO_ENCERRAR_RODADA } from "./nucleo/encerrar_rodada/definicao
 export {
   DEFINICAO_DO_ENTENDER_E_DESENHAR,
   OBRIGATORIAS_DEMANDA,
-  type TipoDaDemanda,
   TIPOS_DA_DEMANDA,
 } from "./nucleo/entender_e_desenhar/definicao.ts";
 export { DEFINICAO_DO_IMPLEMENTAR } from "./nucleo/implementar/definicao.ts";
@@ -47,7 +45,7 @@ export { DEFINICAO_DO_PLANEJAR } from "./nucleo/planejar/definicao.ts";
 export { DEFINICAO_DO_RESOLVER_CONFLITO } from "./nucleo/resolver_conflito/definicao.ts";
 export { DEFINICAO_DO_REVISAR_DEMANDA } from "./nucleo/revisar_demanda/definicao.ts";
 export { DEFINICAO_DO_REVISAR_RODADA } from "./nucleo/revisar_rodada/definicao.ts";
-export { AUDITOR, Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./nucleo/vocabulario/ator.ts";
+export { AUDITOR, Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "../../../shared/nucleo/demanda/ator.ts";
 export { Endereco } from "./nucleo/vocabulario/endereco.ts";
 export {
   CaminhoPrevisto,

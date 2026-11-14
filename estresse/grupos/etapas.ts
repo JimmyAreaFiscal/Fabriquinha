@@ -5,6 +5,15 @@
 // abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
 import {
+  cicloDeVidaDeTeste,
+  ligarGestaoDeAmbientesNosModulos,
+  modulosDoCicloDeTeste,
+} from "../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  cicloDeVidaNoContexto,
+  liberacaoDasDemandas,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
+import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
@@ -27,27 +36,26 @@ import {
   despachoDasEtapas,
   decidirGate,
   concluirSessaoAjustes,
-  condutor,
   cicloDoDespacho,
   configuracao,
   interromperExecucaoDemanda,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
 import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import { decidirGateDaDemanda } from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
-import { integrarPR, exigirGit } from "../../src/modulos/repositorio/publico.ts";
+import { integrarPR, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
+import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { carregarSessoesDoContexto, motorDoBanco } from "../../apoio-testes/sessoes_de_teste.ts";
+import { registrarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
 export const EXECUCOES = 5;
@@ -134,8 +142,9 @@ function prepararProcesso(amb: Ambiente): void {
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
   piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
-  // As etapas rodam neste processo, sem a composição do serviço: o condutor recebe o harness do pi como ela o monta.
-  condutor.montarHarness(new HarnessPi());
+  // As etapas rodam neste processo, sem a composição do serviço: o Repositório e as Sessões recebem a gestão de
+  // Ambientes do host local (o harness das Sessões já é o do pi).
+  ligarGestaoDeAmbientesNosModulos();
   pastaDosCenarios = join(raiz, "cenarios");
   mkdirSync(pastaDosCenarios);
 }
@@ -188,10 +197,10 @@ const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: 
 function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
   const id = registrarPedidoComProcesso(
-    c.banco,
+    cicloDeVidaNoContexto(c.banco, ctx),
+    montarDemandasDoBanco(c.banco),
     { projeto: c.projeto, titulo: "Titulo", tipo: "funcionalidade", descricao: "Desc" },
     AUTOR,
-    ctx,
   ).demanda.id;
   const pasta = realpathSync(c.dir);
   const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
@@ -206,15 +215,15 @@ function demandaAprovada(c: Cenario): Promise<string> {
     );
   submeter("criterios_aceite", criterios);
   submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
-  enviarAoDesenvolvimento(c.banco, id, AUTOR, ctx);
-  decidirGateDaDemanda(c.banco, id, { resultado: "aprovado" }, AUDITOR);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, ctx), montarDemandasDoBanco(c.banco), id, AUTOR);
+  decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), id, { resultado: "aprovado" });
   return Promise.resolve(id);
 }
 
 /** O planejamento em curso (`fim`) até a aprovação do plano de uma rodada com um ticket: a demanda vai a `execucao`. */
 async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes: number): Promise<void> {
   await esperar(() => chamadas(c) > antes, "o pi receber o prompt do planejamento");
-  interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
+  interromperExecucaoDemanda(modulosDoCicloDeTeste(c.banco), { demanda_id: id, ticket_id: 2 });
   await fim;
   const plano = {
     demanda_id: id,
@@ -223,7 +232,13 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
   };
   comDemanda(c.banco, id, (ag) => comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, agora()));
-  await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_planejamento",
+    Endereco.daDemanda(id),
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
 }
 
 const verificacoes = (): RegistroDaVerificacao[] =>
@@ -237,14 +252,14 @@ const deps = despachoDasEtapas({
 
 /** Um ciclo do agendador e a espera das etapas que ele disparou. */
 async function ciclo(c: Cenario): Promise<void> {
-  await Promise.all(cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco)));
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
 async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
-  const fins = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
   await agir();
@@ -279,7 +294,7 @@ const revisarRodada = (c: Cenario, id: string) =>
     const { ticket_id } = ticket(c, id, "revisar_rodada");
     comoAgente(c, id, ticket_id, [["explicacao_fitness", { explicacoes: [] }], comprovacao]);
     await decidirGate(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       "gate_revisao_rodada",
       Endereco.daRodada(id, 1),
       { resultado: "aprovado" },
@@ -304,7 +319,13 @@ const encerrarRodada = (c: Cenario, id: string) =>
   });
 
 const aprovarRodada = (c: Cenario, id: string) =>
-  decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
+  decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "aprovado", nota: 4 },
+    AUDITOR,
+  );
 
 const revisarDemanda = (c: Cenario, id: string) =>
   cicloComAgente(c, async () => {
@@ -315,7 +336,7 @@ const revisarDemanda = (c: Cenario, id: string) =>
       ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
     ]);
     await decidirGate(
-      c.banco,
+      modulosDoCicloDeTeste(c.banco),
       "gate_revisao_demanda",
       Endereco.daDemanda(id),
       { resultado: "aprovado" },
@@ -335,7 +356,7 @@ async function emExecucao(c: Cenario): Promise<string> {
 }
 // O despacho do planejamento sem o agendador, que mediria o ciclo inteiro.
 const despacharPlanejamento = (c: Cenario, id: string) => {
-  const [fim] = cicloDoDespacho(c.banco, c.config, deps, predecessorasPendentesPelasDependencias(c.banco));
+  const [fim] = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), c.config, deps, liberacaoDasDemandas(c.banco));
   if (!fim) throw new Error(`o planejamento de ${id} não foi despachado`);
   return { fim };
 };
@@ -451,7 +472,7 @@ const ETAPAS: Record<string, Preparar> = {
       executar: async () => {
         const antes = chamadas(c);
         await decidirGate(
-          c.banco,
+          modulosDoCicloDeTeste(c.banco),
           "gate_pr",
           Endereco.daRodada(id, 1),
           { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -460,7 +481,9 @@ const ETAPAS: Record<string, Preparar> = {
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
           const sessao = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
-          return chamadas(c) > antes && sessao !== undefined && condutor.situacao(sessao.id)?.ocupado === false;
+          return (
+            chamadas(c) > antes && sessao !== undefined && motorDoBanco(c.banco).situacao(sessao.id)?.ocupado === false
+          );
         }, "a primeira resposta do pi");
         respondeu = true;
       },
@@ -479,7 +502,7 @@ const ETAPAS: Record<string, Preparar> = {
         comDemanda(c.banco, id, (ag) =>
           registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
         );
-        await concluirSessaoAjustes(c.banco, ref, AUDITOR);
+        await concluirSessaoAjustes(modulosDoCicloDeTeste(c.banco), ref, AUDITOR);
       },
     };
   },

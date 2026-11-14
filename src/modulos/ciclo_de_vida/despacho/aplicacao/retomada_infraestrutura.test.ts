@@ -17,9 +17,9 @@ import {
   type ResultadoDaTentativa,
 } from "../../etapas/publico.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
-import { registrarProjeto } from "../../../demandas/publico.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import type { Modelo } from "../../../sessoes/publico.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 
 const falhouEm = "2026-01-01T00:00:00.000Z";
 const minutosDepois = (minutos: number) => relogioFixo(new Date(Date.parse(falhouEm) + minutos * 60_000).toISOString());

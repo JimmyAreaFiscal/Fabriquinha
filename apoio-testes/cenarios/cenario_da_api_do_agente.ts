@@ -1,6 +1,7 @@
 // O cenário dos testes de /api/agente/*: banco real com a I-206, que tem um ticket de cada etapa que o agente usa, e a
 // I-207, de outra demanda. Cada ticket tem a execução aberta, com o token `token-<ticket>`; a pasta do que o agente anexa
 // (worktree da rodada e saída) existe na raiz temporária.
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { once } from "node:events";
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
@@ -10,9 +11,9 @@ import { Readable } from "node:stream";
 import { after } from "node:test";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
-import { gravarTokenDaExecucao } from "../../src/modulos/sessoes/publico.ts";
-import type { RotaDoAgente } from "../../src/server/api/agente/rotas.ts";
-import { servirWeb } from "../../src/server/api/servidor.ts";
+import { gravarTokenDaExecucao } from "../sessoes_de_teste.ts";
+import { montarAmbientesDoServico } from "../../src/server/system/ambientes_do_servico.ts";
+import { servirWeb } from "../../src/server/system/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { fabricaDeBancosTemporarios } from "../banco/banco_temporario.ts";
 import {
@@ -24,6 +25,7 @@ import {
   montarRodada,
   montarTicket,
 } from "./cenarios_de_demanda.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
 
 // Os testes do cliente do agente (que não importa o armazenamento) dão o token ao processo por aqui.
 export { gravarTokenDaExecucao };
@@ -102,29 +104,38 @@ export function contagemDasTabelas(banco: DatabaseSync): Record<string, number> 
 
 /**
  * O servidor web de verdade sobre `banco`, numa porta livre, e o `pedir` a `/api/agente/*` com o `token` no
- * `Authorization` (sem ele, sem o cabeçalho). `rotas` troca as rotas do agente, para os testes porem espiões nos casos de uso.
+ * `Authorization` (sem ele, sem o cabeçalho).
  */
-export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgente[]) {
+export async function servirApiDoAgente(banco: DatabaseSync) {
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
+  const ambientes = await montarAmbientesDoServico({ banco, raiz: raizDo(banco), porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
+  const cicloDeVida = montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio });
   servidor.on(
     "request",
     servirWeb({
       banco,
       raiz: raizDo(banco),
       porta,
-      agendador: { proximaBusca: () => new Date() },
+      cicloDeVida: {
+        ...cicloDeVida,
+        proximaBusca: () => new Date().toISOString(),
+      },
+      ambientes,
+      demandas: montarDemandasDoBanco(banco),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
-      rotasDoAgente: rotas,
     }),
   );
   fechamentos.push(async () => {
     servidor.closeAllConnections();
     servidor.close();
     await once(servidor, "close");
+    await ambientes.gestao.parar();
   });
   return async function pedir(
     metodo: "GET" | "POST",

@@ -21,7 +21,7 @@ import {
   gravarAgregadoPronto,
   comEvidencia,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const ticket = (ticket_id: number, rodada_id?: number) => ({

@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { type DependenciaDemanda, dependenciaNovaValidada, relacoesNoGrafo } from "./dependencia.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+
+const aresta = (demanda_id: string, depende_demanda_id: string): DependenciaDemanda => ({
+  demanda_id,
+  depende_demanda_id,
+});
+const rascunho = (id: string) => ({ id, enviada: false });
+
+test("CA-1: devolve a aresta nova", () => {
+  assert.deepEqual(dependenciaNovaValidada([], rascunho("I-2"), "I-1"), aresta("I-2", "I-1"));
+});
+
+test("CA-2: recusa pedido enviado citando o id", () => {
+  assert.throws(() => dependenciaNovaValidada([], { id: "I-2", enviada: true }, "I-1"), /I-2.*já foi enviada/);
+});
+
+test("CA-3: recusa autorreferência", () => {
+  assert.throws(() => dependenciaNovaValidada([], rascunho("I-1"), "I-1"), ErroDeRegra);
+});
+
+test("recusa dependência repetida", () => {
+  assert.throws(() => dependenciaNovaValidada([aresta("I-2", "I-1")], rascunho("I-2"), "I-1"), /já depende/);
+});
+
+test("CA-4: recusa ciclo direto apontando o caminho", () => {
+  assert.throws(() => dependenciaNovaValidada([aresta("I-2", "I-1")], rascunho("I-1"), "I-2"), /ciclo/);
+});
+
+test("CA-5: recusa ciclo indireto", () => {
+  const existentes = [aresta("I-2", "I-1"), aresta("I-3", "I-2")];
+  assert.throws(() => dependenciaNovaValidada(existentes, rascunho("I-1"), "I-3"), /ciclo/);
+});
+
+test("CA-6: aceita diamante sem ciclo", () => {
+  const existentes = [aresta("I-2", "I-1"), aresta("I-3", "I-1"), aresta("I-4", "I-2")];
+  assert.deepEqual(dependenciaNovaValidada(existentes, rascunho("I-4"), "I-3"), aresta("I-4", "I-3"));
+});
+
+test("CA-11: dependentes diretos e indiretos que não terminaram, sem repetir e sem os de situação desconhecida", () => {
+  const arestas = [
+    aresta("I-2", "I-1"),
+    aresta("I-3", "I-2"),
+    aresta("I-4", "I-1"),
+    aresta("I-3", "I-1"),
+    aresta("I-8", "I-2"),
+    aresta("I-9", "I-4"),
+  ];
+  const situacoes = new Map([
+    ["I-2", "enviado"],
+    ["I-3", "rascunho"],
+    ["I-4", "concluido"],
+    ["I-9", "cancelado"],
+  ] as const);
+  assert.deepEqual(relacoesNoGrafo(arestas, situacoes)("I-1").dependentesPendentes, ["I-2", "I-3"]);
+});
+
+test("CA-9 e CA-10: de cada pedido, as predecessoras diretas que não concluíram, na ordem das arestas", () => {
+  const arestas = [
+    aresta("I-5", "I-4"),
+    aresta("I-5", "I-1"),
+    aresta("I-5", "I-2"),
+    aresta("I-5", "I-3"),
+    aresta("I-6", "I-1"),
+    aresta("I-7", "I-5"),
+  ];
+  const situacoes = new Map([
+    ["I-1", "concluido"],
+    ["I-2", "rascunho"],
+    ["I-3", "cancelado"],
+    ["I-4", "enviado"],
+    ["I-5", "enviado"],
+  ] as const);
+  const relacoesDe = relacoesNoGrafo(arestas, situacoes);
+  assert.deepEqual(
+    ["I-5", "I-6", "I-7", "I-8"].map((id) => [id, relacoesDe(id).predecessoras, relacoesDe(id).predecessorasPendentes]),
+    [
+      ["I-5", ["I-4", "I-1", "I-2", "I-3"], ["I-4", "I-2", "I-3"]],
+      ["I-6", ["I-1"], []],
+      ["I-7", ["I-5"], ["I-5"]],
+      ["I-8", [], []],
+    ],
+  );
+  assert.deepEqual(relacoesDe("I-5").dependentesPendentes, [], "o dependente de situação desconhecida não conta");
+});

@@ -1,5 +1,5 @@
 // O lado do processo no cancelamento em cascata (D08): a demanda que termina `cancelada` leva junto os processos das
-// dependentes. Quais são as dependentes é de Demandas; o fluxo do servidor (`server/fluxos/cancelamento_em_cascata.ts`)
+// dependentes. Quais são as dependentes é de Demandas; o fluxo do servidor (`server/system/api/demandas/cancelamento_em_cascata.ts`)
 // lê as dependentes, chama estas funções e registra o cancelamento dos pedidos na mesma unidade de trabalho.
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../nucleo/agregado/agregado_demanda.ts";

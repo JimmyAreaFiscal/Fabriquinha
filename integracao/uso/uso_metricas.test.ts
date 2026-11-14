@@ -5,21 +5,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  retomarSessao,
-  registrarUso,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-} from "../../src/modulos/sessoes/publico.ts";
-import {
-  metricasDosMeses,
   produtividadeDaRodada,
-  usoDaDemanda,
   type EtapaTicket,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { metricasDasEtapas } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/registro_das_metricas.ts";
-import type { MetricaDeUso } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/metricas/metrica_de_uso.ts";
-import type { ValorDe } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/calculo_de_metrica.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import {
+  metricasDasEtapas,
+  metricasDosMeses,
+  usoDaDemanda,
+} from "../../src/server/system/api/metricas/metricas_do_periodo.ts";
+import { usoPorEtapa } from "../../src/server/system/api/metricas/metrica_de_uso.ts";
 import { mesDoInstante } from "../../src/shared/nucleo/relogio.ts";
 import {
   abrirPortao,
@@ -35,6 +30,13 @@ import {
 } from "../apoio-execucao.ts";
 import { ciclo, criarCenario, declararUso, demanda, gravarLimiteParalelismo } from "../apoio.ts";
 import { origemDe } from "../../apoio-testes/banco/banco_de_metricas.ts";
+import {
+  retomarSessao,
+  registrarUso,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../apoio-testes/sessoes_de_teste.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 
 interface Ref {
   demanda_id: string;
@@ -104,9 +106,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   );
   assert.equal(depois.usos.length, 3);
   const { total } = produtividadeDaRodada(
-    depois.sessoes,
-    depois.execucoes,
-    depois.usos,
+    montarSessoesDeAgente({ banco: c.banco }).metricas({ demandas: [id], periodo: {} }),
     carregarDemanda(c.banco, id).tickets.filter((t) => t.ticket_id === ref.ticket_id),
   );
   assert.deepEqual([total.tokensEntrada, total.custo, total.custoIncompleto], [60, 3, true]);
@@ -182,10 +182,11 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   usar(c.banco, refVizinha, "e-vizinha", [["a", 999, 1_000_000]]);
 
   const antes = demanda(c, id);
-  const usoDaEtapa = (etapa: EtapaTicket) =>
-    metricasDasEtapas(origemDe(c.banco), { demandaId: id })
-      .get(etapa)
-      ?.find((m) => m.definicao.tipo === "uso")?.valor as ValorDe<MetricaDeUso>;
+  const usoDaEtapa = (etapa: EtapaTicket) => {
+    const valor = usoPorEtapa(origemDe(c.banco), { demandaId: id }).get(etapa);
+    assert.ok(valor);
+    return valor;
+  };
   const total = usoDaDemanda(origemDe(c.banco), id);
 
   assert.deepEqual(usoDaEtapa("implementar").custo, {

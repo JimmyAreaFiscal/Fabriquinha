@@ -12,21 +12,21 @@ import {
   rodarGit,
 } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
+import { montarGestaoDeAmbientes } from "../../../ambiente/publico.ts";
 import {
   listarAmbientes,
-  GeradorDeAmbientes,
-  ConjuntoDeAmbientes,
   AmbienteHostLocal,
   AmbienteContainer,
-  validarESalvarConfiguracaoDoAmbiente,
-} from "../../../ambiente/publico.ts";
-import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
+  gestaoQueSoUsa,
+} from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
+import { noLog } from "../../../../shared/infra/registro.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../espaco_de_trabalho/publico.ts";
 import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../../../sessoes/publico.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));
 const hospedagem = hospedagemFalsa(temporario);
@@ -50,9 +50,16 @@ function cenario(comandosDePreparacao: string[] = []) {
     c,
     espacoDemanda,
     espacoRodada,
-    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro, ambiente),
-    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro, ambiente),
-    daRodadaComPr: () => new CicloDoEspacoDaRodada({ ...espacoRodada, pr: prAberto }, c.projeto, registro, ambiente),
+    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)),
+    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)),
+    daRodadaComPr: () =>
+      new CicloDoEspacoDaRodada(
+        { ...espacoRodada, pr: prAberto },
+        c.projeto,
+        registro,
+        ambiente,
+        gestaoQueSoUsa(ambiente),
+      ),
   };
 }
 
@@ -122,7 +129,13 @@ test("integrar da rodada integra o PR pela hospedagem e avança a demanda local 
 test("o ciclo da rodada recusa o Espaço sem PR e o que não é de rodada", async () => {
   const { c, espacoDemanda, daRodada } = cenario();
   await assert.rejects(daRodada().integrar(), /não tem PR publicado/);
-  const semRodada = new CicloDoEspacoDaRodada(espacoDemanda, c.projeto, { raiz: c.raiz, log: c.log }, ambiente);
+  const semRodada = new CicloDoEspacoDaRodada(
+    espacoDemanda,
+    c.projeto,
+    { raiz: c.raiz, log: c.log },
+    ambiente,
+    gestaoQueSoUsa(ambiente),
+  );
   await assert.rejects(semRodada.criar(), ErroDeRegra);
   await assert.rejects(semRodada.atualizarComBase(), ErroDeRegra);
 });
@@ -136,8 +149,14 @@ test("o ciclo da demanda não atualiza com a base nem integra: o PR final é do 
 test("cicloDoEspaco escolhe o ciclo pelo dono do Espaço", () => {
   const { c, espacoDemanda, espacoRodada } = cenario();
   const registro = { raiz: c.raiz, log: c.log };
-  assert.ok(cicloDoEspaco(espacoDemanda, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaDemanda);
-  assert.ok(cicloDoEspaco(espacoRodada, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaRodada);
+  assert.ok(
+    cicloDoEspaco(espacoDemanda, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)) instanceof
+      CicloDoEspacoDaDemanda,
+  );
+  assert.ok(
+    cicloDoEspaco(espacoRodada, c.projeto, registro, ambiente, gestaoQueSoUsa(ambiente)) instanceof
+      CicloDoEspacoDaRodada,
+  );
 });
 
 test("limpar remove a worktree e as branches do Espaço, local e remota, e nada além dele", async () => {
@@ -173,23 +192,29 @@ test("o ciclo expõe o Ambiente com que foi criado", () => {
   assert.equal(daRodada().ambiente, ambiente);
 });
 
-function cenarioComContainer() {
+async function cenarioComContainer() {
   const { c, espacoDemanda, espacoRodada } = cenario();
   const docker = instalarDockerFalso(join(temporario, `docker-${String(Math.random())}`));
   const banco = new DatabaseSync(":memory:");
   migrarBancoDaFabriquinha(banco);
-  validarESalvarConfiguracaoDoAmbiente(banco, {
-    tipo: "container",
-    memoria_maxima_mb: 512,
-    cpus: 1,
-    ociosidade_para_eliminar_min: 30,
-  });
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, {
-    raiz: c.raiz,
-    porta_da_api: 4999,
-    home_do_usuario: c.raiz,
-    pacote_do_harness: PACOTE,
-    dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+  const montar = (tipo: string) =>
+    montarGestaoDeAmbientes({
+      banco,
+      configuracao: () =>
+        ConfiguracaoDoAmbiente.parse({ tipo, memoria_maxima_mb: 512, cpus: 1, ociosidade_para_eliminar_min: 30 }),
+      servico: {
+        raiz: c.raiz,
+        porta_da_api: 4999,
+        home_do_usuario: c.raiz,
+        pacote_do_harness: PACOTE,
+        dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+      },
+      registrarErro: noLog,
+    });
+  const [emContainer, noHostLocal] = [await montar("container"), await montar("host_local")];
+  after(async () => {
+    await emContainer.parar();
+    await noHostLocal.parar();
   });
   const registro = { raiz: c.raiz, log: c.log };
   const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };
@@ -198,14 +223,15 @@ function cenarioComContainer() {
     docker,
     banco,
     cicloDaDemanda: (projetoDoCiclo: typeof c.projeto & { imagem_do_ambiente?: string } = projeto) =>
-      new CicloDoEspacoDaDemanda(espacoDemanda, projetoDoCiclo, registro, ambiente, conjunto),
-    cicloDaDemandaNoHostLocal: () => new CicloDoEspacoDaDemanda(espacoDemanda, projeto, registro, ambiente, undefined),
-    cicloDaRodada: () => new CicloDoEspacoDaRodada(espacoRodada, projeto, registro, ambiente, conjunto),
+      new CicloDoEspacoDaDemanda(espacoDemanda, projetoDoCiclo, registro, ambiente, emContainer),
+    cicloDaDemandaNoHostLocal: () =>
+      new CicloDoEspacoDaDemanda(espacoDemanda, projeto, registro, ambiente, noHostLocal),
+    cicloDaRodada: () => new CicloDoEspacoDaRodada(espacoRodada, projeto, registro, ambiente, emContainer),
   };
 }
 
 test("com container e imagem, criar aloca o container ao Espaço e limpar o devolve livre", async () => {
-  const { banco, docker, cicloDaDemanda } = cenarioComContainer();
+  const { banco, docker, cicloDaDemanda } = await cenarioComContainer();
   await cicloDaDemanda().criar();
   const [alocado] = listarAmbientes(banco);
   assert.equal(alocado?.estado, "alocado");
@@ -223,7 +249,7 @@ test("com container e imagem, criar aloca o container ao Espaço e limpar o devo
 });
 
 test("criar leva o .env do clone do Projeto para o container alocado", async () => {
-  const { c, docker, cicloDaDemanda } = cenarioComContainer();
+  const { c, docker, cicloDaDemanda } = await cenarioComContainer();
   writeFileSync(join(c.projeto.raiz_git, ".env"), "DATABASE_URL=postgres://localhost/loja\n");
   const ciclo = cicloDaDemanda();
   await ciclo.criar();
@@ -233,7 +259,7 @@ test("criar leva o .env do clone do Projeto para o container alocado", async () 
 });
 
 test("com container, criar da rodada também aloca", async () => {
-  const { banco, cicloDaDemanda, cicloDaRodada } = cenarioComContainer();
+  const { banco, cicloDaDemanda, cicloDaRodada } = await cenarioComContainer();
   await cicloDaDemanda().criar();
   await cicloDaRodada().criar();
   assert.deepEqual(
@@ -245,7 +271,7 @@ test("com container, criar da rodada também aloca", async () => {
 });
 
 test("limpar com pendência não devolve o container ao conjunto", async () => {
-  const { banco, cicloDaDemanda } = cenarioComContainer();
+  const { banco, cicloDaDemanda } = await cenarioComContainer();
   await cicloDaDemanda().criar();
   const resultado = await cicloDaDemanda().limpar(["desconhecido:x"]);
   assert.deepEqual(resultado.pendentes, ["desconhecido:x"]);
@@ -253,12 +279,13 @@ test("limpar com pendência não devolve o container ao conjunto", async () => {
 });
 
 test("sem conjunto (host local) ou sem imagem no Projeto o docker nunca é chamado", async () => {
-  const { c, docker, banco, cicloDaDemanda, cicloDaDemandaNoHostLocal } = cenarioComContainer();
+  const { c, docker, banco, cicloDaDemanda, cicloDaDemandaNoHostLocal } = await cenarioComContainer();
+  const chamadasDaSubida = docker.registro().length; // a conferência do conjunto na montagem
   await cicloDaDemanda(c.projeto).criar();
   await cicloDaDemanda(c.projeto).limpar();
   const hostLocal = cicloDaDemandaNoHostLocal();
   await hostLocal.criar();
   await hostLocal.limpar();
-  assert.deepEqual(docker.registro(), []);
+  assert.deepEqual(docker.registro().slice(chamadasDaSubida), []);
   assert.deepEqual(listarAmbientes(banco), []);
 });

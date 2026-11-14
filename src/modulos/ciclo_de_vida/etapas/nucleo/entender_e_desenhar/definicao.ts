@@ -12,7 +12,6 @@ const OPCIONAIS_DEMANDA = [
 ] as const;
 /** Os tipos que a própria demanda recebe, as obrigatórias primeiro. */
 export const TIPOS_DA_DEMANDA = [...OBRIGATORIAS_DEMANDA, ...OPCIONAIS_DEMANDA] as const;
-export type TipoDaDemanda = (typeof TIPOS_DA_DEMANDA)[number];
 
 export const DEFINICAO_DO_ENTENDER_E_DESENHAR = {
   nome: "entender_e_desenhar",

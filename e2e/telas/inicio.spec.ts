@@ -3,7 +3,7 @@
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { fotografar, projeto, expect, test } from "../apoio.ts";
 import {
   semearDemandaConcluida,

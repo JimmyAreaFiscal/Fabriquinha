@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { LinhaDeUso } from "../../harness/publico.ts";
-import { textoDoCusto, Uso } from "./uso.ts";
+import { Uso } from "./uso.ts";
 
 const linhaDeUso = (modelo: string, custo: number | null, tokens = 10): LinhaDeUso => ({
   modelo,
@@ -63,13 +63,6 @@ test("Uso.vazio não tem linhas nem Trabalhos sem custo", () => {
   assert.deepEqual(Uso.vazio().custo(), { conhecido: 0, trabalhosSemCusto: 0, trabalhosComCustoEstimado: 0 });
 });
 
-test("textoDoCusto mostra o custo conhecido e, com Trabalho sem custo, o piso com '≥' e a contagem", () => {
-  const conhecido = Uso.de([linhaDeUso("a/m", 4.2)], 1);
-  assert.equal(textoDoCusto(conhecido), "US$ 4,20");
-  assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 2))), "≥ US$ 4,20 (2 sessões sem custo)");
-  assert.equal(textoDoCusto(conhecido.somar(Uso.de([linhaDeUso("b/m", null)], 1))), "≥ US$ 4,20 (1 sessão sem custo)");
-});
-
 const linhaComCustoEstimado = (modelo: string, custo: number): LinhaDeUso => ({
   ...linhaDeUso(modelo, custo),
   custo_estimado: true,
@@ -90,19 +83,6 @@ test("Uso.de conta como estimado o Trabalho com alguma linha de custo estimado, 
   assert.equal("custo_estimado" in (informado.porModelo()[0] ?? {}), false, "o custo informado não ganha a marca");
 });
 
-test("textoDoCusto avisa o custo estimado, sozinho ou ao lado das sessões sem custo", () => {
-  const estimado = Uso.de([linhaComCustoEstimado("a/m", 4.2)], 1);
-  assert.equal(textoDoCusto(estimado), "US$ 4,20 (estimado em 1 sessão)");
-  assert.equal(
-    textoDoCusto(estimado.somar(Uso.de([linhaComCustoEstimado("b/m", 1)], 1))),
-    "US$ 5,20 (estimado em 2 sessões)",
-  );
-  assert.equal(
-    textoDoCusto(estimado.somar(Uso.de([linhaDeUso("b/m", null)], 2))),
-    "≥ US$ 4,20 (2 sessões sem custo; estimado em 1 sessão)",
-  );
-});
-
 test("a sessão declarada em duas demandas, somada, conta os tokens uma vez", () => {
   // O armazenamento entrega a sessão repetida só na demanda dona; a outra recebe Uso.vazio().
   const usoDaDemandaDona = Uso.de([linhaDeUso("a/m", 1.5, 10)], 1);
@@ -112,5 +92,4 @@ test("a sessão declarada em duas demandas, somada, conta os tokens uma vez", ()
     soma.porModelo().map(({ tokens_entrada, custo }) => ({ tokens_entrada, custo })),
     [{ tokens_entrada: 10, custo: 1.5 }],
   );
-  assert.equal(textoDoCusto(soma), "US$ 1,50");
 });

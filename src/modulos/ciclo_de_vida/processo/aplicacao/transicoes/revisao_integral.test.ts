@@ -1,4 +1,5 @@
 // Revisão integral com git real temporário e pi falso (CA-9 a CA-17).
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Ator, Endereco } from "../../../etapas/publico.ts";
@@ -48,7 +49,7 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
   );
 }
 const decidir = (banco: Banco, entrada: object, ator: Ator = revisorIntegral(banco)) =>
-  decidirGate(banco, "gate_revisao_demanda", Endereco.daDemanda("I-1"), entrada, ator);
+  decidirGate(modulosDoCicloDeTeste(banco), "gate_revisao_demanda", Endereco.daDemanda("I-1"), entrada, ator);
 const aprovar = (banco: Banco) => decidir(banco, { resultado: "aprovado" });
 
 test("CA-9: rodada pendente recusa citando-a e a demanda continua em execucao", async () => {

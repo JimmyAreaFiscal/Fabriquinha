@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Heatmap } from "../../../contrato/projeto.ts";
+import type { Heatmap } from "../../../system/api/contrato/projeto.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";
 import { caminhoDoHeatmap, calor, conteudo, cor, erroDoHeatmap, linhas, paginaDoHeatmap } from "./heatmap.ts";
 

@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, pedidosRecebidosEmLote, type TicketDemanda } from "../../../processo/publico.ts";
 import { type Ator, Endereco, formatarTicketRef } from "../../../etapas/publico.ts";
 import { encontrado, ErroDeEscopo, ErroDeRegra, existe } from "../../../../../shared/nucleo/erros.ts";
-import { escopoDaExecucao, type Execucao, execucaoVivaDoToken } from "../../../../sessoes/publico.ts";
+import { type Execucao, montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
 import { exigirTrabalhoDoTicket } from "../politica_dos_agentes/trabalho_do_ticket.ts";
 
 /** A identidade do processo que age: o `id` basta, e o `Execucao` inteiro também serve. */
@@ -27,9 +27,9 @@ export type LeitorDeJson = (valor: string, opcao?: string) => Promise<unknown>;
  * O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo.
  */
 function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
-  const linha = escopoDaExecucao(banco, execucao);
+  const [linha] = montarSessoesDeAgente({ banco }).listar({ execucoes: [execucao] });
   if (!linha) return undefined;
-  if (linha.fim !== null) {
+  if (linha.execucoes.some((e) => e.id === execucao && e.fim != null)) {
     throw new ErroDeEscopo(`a execução ${execucao} já terminou`, "peça ao Auditor uma nova execução");
   }
   const pedido = encontrado(
@@ -39,7 +39,7 @@ function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDo
   );
   return {
     ator: { tipo: "agente", trabalho_id: execucao },
-    sessao: linha.sessao,
+    sessao: linha.id,
     demanda_id: linha.demanda_id,
     ticket_id: linha.ticket_id,
     projeto: pedido.projeto,
@@ -48,8 +48,9 @@ function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDo
 
 /** O escopo do agente do processo vivo que tem `token`; `undefined` se o token é desconhecido ou o processo já terminou. */
 export function resolverEscopoDoToken(banco: DatabaseSync, token: string): EscopoDoAgente | undefined {
-  const execucao = execucaoVivaDoToken(banco, token);
-  return execucao === undefined ? undefined : resolverEscopoDoAgente(banco, execucao);
+  const [sessao] = montarSessoesDeAgente({ banco }).listar({ token });
+  const execucao = sessao?.execucoes.find((e) => e.fim == null);
+  return execucao === undefined ? undefined : resolverEscopoDoAgente(banco, execucao.id);
 }
 
 /** O escopo do agente do `processo`, que existe e segue aberto. */

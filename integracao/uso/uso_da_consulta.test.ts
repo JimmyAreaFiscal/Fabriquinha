@@ -3,8 +3,9 @@
 // numa raiz temporária, o pi e o `gh` falsos; o pi falso da consulta grava no `--session-dir` o uso que o pi real gravaria.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cicloDoDespacho, produtividadeDaRodada } from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { carregarSessoesDoContexto, gravarCatalogoDePrecos, HarnessPi } from "../../src/modulos/sessoes/publico.ts";
+import { cicloDoDespacho, produtividadeDaRodada } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { gravarCatalogoDePrecos, HarnessPi, carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   abrirPortao,
@@ -24,7 +25,8 @@ import {
 } from "../apoio-execucao.ts";
 import { base, ciclo, criarCenario, demanda, esperar } from "../apoio.ts";
 import { ghFalso } from "../falsos.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const gh = ghFalso(base);
 
@@ -98,10 +100,10 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
     { chamadaUnica: { saida: "Resumo da demanda.", uso: usoDaConsulta } },
   ]);
   const fins = cicloDoDespacho(
-    c.banco,
+    modulosDoCicloDeTeste(c.banco),
     c.config,
     despachoComEsperaCurta(),
-    predecessorasPendentesPelasDependencias(c.banco),
+    liberacaoDasDemandas(c.banco),
   );
   await esperar(() => pisAteAgora() === fins.length, "o pi do encerramento receber o prompt");
   comoAgente(c, id, encerramento.ticket_id, [
@@ -111,9 +113,10 @@ test("CA-4: o Uso da consulta do resumo do PR conta para a Rodada", async (t) =>
   abrirPortao();
   await Promise.all(fins);
 
-  const { sessoes, execucoes, usos } = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: null });
+  const { usos } = carregarSessoesDoContexto(c.banco, { demanda_id: id, ticket_id: null });
   const daRodada = demanda(c, id).tickets.filter((x) => x.rodada_id === 1);
-  const { total } = produtividadeDaRodada(sessoes, execucoes, usos, daRodada);
+  const usoDaDemanda = montarSessoesDeAgente({ banco: c.banco }).metricas({ demandas: [id], periodo: {} });
+  const { total } = produtividadeDaRodada(usoDaDemanda, daRodada);
   assert.equal(total.tokensEntrada, 7000);
   assert.equal(total.tokensSaida, 300);
   assert.equal(total.custo, 0.5);

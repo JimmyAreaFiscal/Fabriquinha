@@ -11,8 +11,8 @@ import {
   montarRodada,
   montarTicket,
 } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
-import { registrarProjeto } from "../../../demandas/publico.ts";
 import { carregarDemanda } from "../../processo/publico.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -64,7 +64,7 @@ test("duas reservas simultâneas do mesmo ticket: só uma vence, e a outra o enc
   const dados = {
     raiz,
     largada,
-    banco: moduloDe("../../../../server/composicao/banco_da_fabriquinha.ts"),
+    banco: moduloDe("../../../../server/system/banco_da_fabriquinha.ts"),
     despacho: moduloDe("../publico.ts"),
     relogio: moduloDe("../../../../shared/nucleo/relogio.ts"),
   };

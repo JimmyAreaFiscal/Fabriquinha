@@ -12,19 +12,12 @@ import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_te
 import { instalarPiFalso } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { type AgregadoDemanda, carregarDemanda, type Tentativa } from "../../processo/publico.ts";
-import {
-  criarSessao,
-  iniciarExecucao,
-  PACOTE,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
-} from "../../../sessoes/publico.ts";
-import { registrarProjeto, registrarDependencia } from "../../../demandas/publico.ts";
+import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
 import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda } from "../../../repositorio/publico.ts";
+import { garantirWorktreeDemanda } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { conferirPromptComFoto } from "../../conducao/aplicacao/prompt/fotos_retorno/conferir_foto.ts";
 import {
   ConducaoDeImplementar,
@@ -35,15 +28,21 @@ import {
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import {
   AmbienteHostLocal,
-  ConjuntoDeAmbientes,
-  GeradorDeAmbientes,
   inserirAmbienteAlocado,
-  montarConjuntoDoServico,
-  validarESalvarConfiguracaoDoAmbiente,
-} from "../../../ambiente/publico.ts";
-import { relogioDoSistema, relogioFixo } from "../../../../shared/nucleo/relogio.ts";
+  ligarGestaoDeAmbientesDoTeste,
+  modulosDoCicloDeTeste,
+} from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { registrarProjeto, registrarDependencia } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import {
+  criarSessao,
+  iniciarExecucao,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../../../../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -221,7 +220,7 @@ const silenciar = (t: TestContext) => t.mock.method(console, "error", () => unde
 test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
 });
 
@@ -232,7 +231,7 @@ test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte
     tickets: [{ ...implementar(1), estado: "falhou", resultado: falhaPorServicoReiniciado }],
   });
   const log = t.mock.method(console, "error", () => undefined);
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
   assert.match(String(log.mock.calls[0]?.arguments[1]), /retomados depois de falha de ambiente: I-2\.T1/);
 });
@@ -240,7 +239,7 @@ test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte
 test("CA-2: com o limite global de 2, só dois de três tickets de demandas diferentes entram", async () => {
   const { banco, config } = await cenario(2);
   for (const n of [2, 3, 5]) demanda(banco, n, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual(
     [2, 3, 5].map((n) => estadoDoTicket(banco, n, 1)),
     ["em_execucao", "em_execucao", "aberto"],
@@ -250,14 +249,14 @@ test("CA-2: com o limite global de 2, só dois de três tickets de demandas dife
 test("CA-3: com o limite 1, a demanda de menor número leva a vaga", async () => {
   const { banco, config } = await cenario(1);
   for (const n of [5, 3]) demanda(banco, n, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 3, 1), estadoDoTicket(banco, 5, 1)], ["em_execucao", "aberto"]);
 });
 
 test("ultimasRecusas guarda as recusas do último ciclo: o pronto que passou do limite, com o motivo", async () => {
   const { banco, config } = await cenario(1);
   for (const n of [5, 3]) demanda(banco, n, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual(
     [...ultimasRecusas()].map(([item, motivo]) => [item.toString(), motivo]),
     [["I-5.T1", { tipo: "limite_de_paralelismo", em_uso: 0, limite: 1 }]],
@@ -267,14 +266,14 @@ test("ultimasRecusas guarda as recusas do último ciclo: o pronto que passou do 
 test("CA-4: com o limite 1, a rodada 1 leva a vaga antes da rodada 2", async () => {
   const { banco, config } = await cenario(1);
   demanda(banco, 3, { rodadas: ["implementar", "implementar"], tickets: [implementar(2), implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 3, 2), estadoDoTicket(banco, 3, 1)], ["em_execucao", "aberto"]);
 });
 
 test("CA-5: com o limite 1, o ticket de menor número da rodada leva a vaga", async () => {
   const { banco, config } = await cenario(1);
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1, 4), implementar(1, 2)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 3, 2), estadoDoTicket(banco, 3, 4)], ["em_execucao", "aberto"]);
 });
 
@@ -285,16 +284,16 @@ test("CA-6 e CA-16: o planejar com predecessora pendente não é despachado nem 
   banco.exec("UPDATE demanda SET enviada = 0 WHERE id = 'I-6'"); // a dependência só se registra antes do envio
   registrarDependencia(banco, "I-6", "I-4");
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-6'");
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
   const antes = carregarDemanda(banco, "I-6");
   assert.deepEqual(
     executarAgora(
-      banco,
+      modulosDoCicloDeTeste(banco),
       { demanda_id: "I-6", ticket_id: 1 },
       config,
       deps,
-      predecessorasPendentesPelasDependencias(banco),
+      liberacaoDasDemandas(banco),
     ),
     {
       tipo: "dependencia_pendente",
@@ -316,7 +315,7 @@ test("demandasParaDespacho lê planejamento, execução, revisão e encerramento
   banco.exec("INSERT INTO dependencia_demanda VALUES ('I-6', 'I-4')");
   banco.exec("INSERT INTO dependencia_demanda VALUES ('I-7', 'I-8')");
   banco.exec("INSERT INTO dependencia_demanda VALUES ('I-8', 'I-9')");
-  const lidas = demandasParaDespacho(banco, predecessorasPendentesPelasDependencias(banco)).map((d) => [
+  const lidas = demandasParaDespacho(banco, liberacaoDasDemandas(banco)).map((d) => [
     d.agregado.demanda.id,
     d.predecessoras_pendentes,
   ]);
@@ -337,7 +336,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   const { c, banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   await Promise.all(
-    cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["falhou", 0]);
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
@@ -346,15 +345,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
   const { c, banco, config } = await cenario(3);
   banco.prepare("UPDATE projeto SET imagem_do_ambiente = 'alpine' WHERE nome = 'loja'").run();
-  validarESalvarConfiguracaoDoAmbiente(banco, { tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
   instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
-  inserirAmbienteAlocado(banco, {
-    id: "amb-ocupado",
-    container_id: "c-ocupado",
-    imagem: "alpine",
-    alocado_para: "I-9",
-    criado_em: em,
-  });
   const servico = {
     raiz: c.raiz,
     porta_da_api: 4999,
@@ -362,15 +353,19 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
     pacote_do_harness: PACOTE,
     dir_do_harness_do_auditor: c.raiz,
   };
-  const conjunto = new ConjuntoDeAmbientes(banco, new GeradorDeAmbientes(), relogioDoSistema, servico);
-  montarConjuntoDoServico(() => conjunto);
-  t.after(() => {
-    montarConjuntoDoServico(() => undefined);
+  const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
+  inserirAmbienteAlocado(banco, {
+    id: "amb-ocupado",
+    container_id: "c-ocupado",
+    imagem: "alpine",
+    alocado_para: "I-9",
+    criado_em: em,
   });
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
 
   await Promise.all(
-    cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
 
   const ag = carregarDemanda(banco, "I-2");
@@ -389,7 +384,7 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 3, { rodadas: ["concluida"], tickets: [{ etapa: "implementar", rodada: 1, estado: "concluido" }] });
-  const fins = cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco));
   const ag = carregarDemanda(banco, "I-3");
   assert.equal(ag.demanda.estado, "revisar_demanda");
   assert.deepEqual(
@@ -403,7 +398,7 @@ test("a revisão integral reprovada pelo domínio vai ao log e a demanda segue e
   const log = silenciar(t);
   const { banco, config } = await cenario(3);
   demanda(banco, 3, { rodadas: ["concluida"], tickets: [{ etapa: "implementar", rodada: 1, estado: "falhou" }] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.equal(carregarDemanda(banco, "I-3").demanda.estado, "em_execucao");
   assert.equal(log.mock.callCount(), 1);
 });
@@ -411,7 +406,7 @@ test("a revisão integral reprovada pelo domínio vai ao log e a demanda segue e
 test("o planejar sem predecessoras pendentes é reservado e iniciado pelo ciclo", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 6, { estado: "planejar", tickets: [{ etapa: "planejar" }] });
-  const fins = cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco));
   assert.deepEqual([estadoDoTicket(banco, 6, 1), aberta(banco, 6, 1)], ["em_execucao", 1]);
   await Promise.all(fins);
 });
@@ -419,7 +414,7 @@ test("o planejar sem predecessoras pendentes é reservado e iniciado pelo ciclo"
 test("o revisar_rodada despachado reserva o ticket e a falha de preparação o leva a falhou", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 4, { rodadas: ["revisar_rodada"], tickets: [{ etapa: "revisar_rodada", rodada: 1 }] });
-  const fins = cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco));
   assert.equal(estadoDoTicket(banco, 4, 1), "em_execucao");
   await Promise.all(fins);
   assert.equal(estadoDoTicket(banco, 4, 1), "falhou");
@@ -429,9 +424,9 @@ test("CA-15 e CA-17: executar agora cria uma só execução; a segunda tentativa
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   const ref = { demanda_id: "I-2", ticket_id: 1 };
-  const fim = executarAgora(banco, ref, config, deps, predecessorasPendentesPelasDependencias(banco));
+  const fim = executarAgora(modulosDoCicloDeTeste(banco), ref, config, deps, liberacaoDasDemandas(banco));
   assert.throws(
-    () => executarAgora(banco, ref, config, deps, predecessorasPendentesPelasDependencias(banco)),
+    () => executarAgora(modulosDoCicloDeTeste(banco), ref, config, deps, liberacaoDasDemandas(banco)),
     /está em_execucao/,
   );
   await fim;
@@ -444,7 +439,7 @@ test("executar agora recusa demanda fora dos estados lidos, ticket inexistente e
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 4, { estado: "concluida", tickets: [{ etapa: "encerrar_demanda" }] });
   const agora = (demanda_id: string, ticket_id: number) =>
-    executarAgora(banco, { demanda_id, ticket_id }, config, deps, predecessorasPendentesPelasDependencias(banco));
+    executarAgora(modulosDoCicloDeTeste(banco), { demanda_id, ticket_id }, config, deps, liberacaoDasDemandas(banco));
   assert.throws(() => agora("I-4", 1), /não está em planejamento, execução, revisão da demanda nem encerramento/);
   assert.throws(() => agora("I-2", 9), /não existe/);
   await agora("I-2", 1);
@@ -457,11 +452,11 @@ test("executar agora não perde a vaga livre para outro pronto de menor número:
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
   await executarAgora(
-    banco,
+    modulosDoCicloDeTeste(banco),
     { demanda_id: "I-3", ticket_id: 1 },
     config,
     deps,
-    predecessorasPendentesPelasDependencias(banco),
+    liberacaoDasDemandas(banco),
   );
   assert.deepEqual([estadoDoTicket(banco, 2, 1), estadoDoTicket(banco, 3, 1)], ["aberto", "em_execucao"]);
 });
@@ -473,10 +468,10 @@ test("CA-2 (4): o ticket retomado por falha de infraestrutura só é despachado 
     rodadas: ["implementar"],
     tickets: [{ ...implementar(1), estado: "falhou", resultado: falhaPorServicoReiniciado }],
   });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["aberto", 0]); // retomado, mas sem vaga
   banco.prepare("UPDATE configuracao SET limite_paralelismo = 2").run();
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 1]);
 });
 
@@ -489,7 +484,7 @@ test("falha síncrona ao iniciar desfaz a reserva e vai ao log; fim rejeitado ta
     if (endereco.demanda_id === "I-2") throw new Error("sem sessão");
     return conduzirFalso(b, endereco).then(() => Promise.reject(new Error("pi caiu")));
   });
-  await Promise.all(cicloDoDespacho(banco, config, quebrado, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, quebrado, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["aberto", 0]);
   assert.equal(estadoDoTicket(banco, 3, 1), "em_execucao");
   assert.equal(log.mock.callCount(), 2);
@@ -501,10 +496,10 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em)
     VALUES ('I-1', 1, 1, 'gate_planejamento', 'reprovado', 'refaça o plano', 'auditor', '${em}')`);
-  const fins = cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco));
   assert.deepEqual([execucoes(banco, 1, 1), estadoDoTicket(banco, 2, 1)], [1, "aberto"]);
   await Promise.all(fins);
-  assert.equal(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)).length, 1); // já retomado: só o implementar entra
+  assert.equal(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)).length, 1); // já retomado: só o implementar entra
 });
 
 test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado", async () => {
@@ -517,7 +512,7 @@ test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado"
     `INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`,
   );
   for (let i = 0; i < 2; i++)
-    assert.equal(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)).length, 0);
+    assert.equal(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)).length, 0);
   assert.equal(execucoes(banco, 1, 1), 1);
 });
 
@@ -527,7 +522,7 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   demanda(banco, 2, { rodadas: ["encerrar_rodada"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   await Promise.all(
-    cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
 
@@ -536,10 +531,10 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   piFalso.roteirizar([{}]);
   await Promise.all(
     cicloDoDespacho(
-      outro.banco,
+      modulosDoCicloDeTeste(outro.banco),
       outro.config,
       despachoDasEtapas(),
-      predecessorasPendentesPelasDependencias(outro.banco),
+      liberacaoDasDemandas(outro.banco),
     ),
   );
   assert.equal(estadoDoTicket(outro.banco, 2, 1), "falhou"); // conclusão reprovada: não fica preso em execução
@@ -550,7 +545,7 @@ const encerrar = (estado = "aberto"): TicketSpec => ({ etapa: "encerrar_demanda"
 test("CA-1 e CA-12: o ciclo reserva o encerrar_demanda sem abrir agente; a falha do encerramento falha o ticket", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
-  const fins = cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
   await Promise.all(fins);
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
@@ -563,7 +558,7 @@ test("a recusa do encerramento que não falhou o ticket não o deixa preso em ex
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
   banco.exec("DELETE FROM linguagem_projeto;"); // sem a configuração do SDLC
   await Promise.all(
-    cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
   assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
 });
@@ -574,11 +569,11 @@ test("CA-3 e CA-4: executar agora no encerrar_demanda reserva sem agente; com o 
   demanda(banco, 3, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar()] });
   const agora = (n: number) =>
     executarAgora(
-      banco,
+      modulosDoCicloDeTeste(banco),
       { demanda_id: `I-${String(n)}`, ticket_id: 1 },
       config,
       despachoDasEtapas(),
-      predecessorasPendentesPelasDependencias(banco),
+      liberacaoDasDemandas(banco),
     );
   const fim = agora(2);
   assert.deepEqual([estadoDoTicket(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
@@ -591,7 +586,7 @@ test("CA-5: o encerrar_demanda em execução ocupa a vaga do limite 1", async ()
   const { banco, config } = await cenario(1);
   demanda(banco, 2, { estado: "encerrar_demanda", rodadas: ["concluida"], tickets: [encerrar("em_execucao")] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.equal(estadoDoTicket(banco, 3, 1), "aberto");
 });
 
@@ -602,7 +597,7 @@ test("CA-7 e CA-10: o resolver_conflito aberto é reservado com execução abert
     rodadas: ["concluida"],
     tickets: [{ etapa: "resolver_conflito" }, encerrar()],
   });
-  await Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco)));
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
 
   demanda(banco, 3, {
@@ -610,7 +605,7 @@ test("CA-7 e CA-10: o resolver_conflito aberto é reservado com execução abert
     rodadas: ["concluida"],
     tickets: [{ etapa: "resolver_conflito", estado: "concluido" }, encerrar()],
   });
-  const fins = cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco));
   assert.deepEqual([estadoDoTicket(banco, 3, 2), execucoes(banco, 3, 2)], ["em_execucao", 0]);
   await Promise.all(fins);
 });
@@ -625,7 +620,7 @@ for (const [caso, ticket] of [
     demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), ...ticket }] });
     piFalso.roteirizar([{}]);
     await Promise.all(
-      cicloDoDespacho(banco, config, despachoDasEtapas(), predecessorasPendentesPelasDependencias(banco)),
+      cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
     );
     conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, `despacho_${caso}`);
   });
@@ -637,7 +632,7 @@ test("o despacho repassa o timeoutMin recebido às conduções", async () => {
   const limites: (number | undefined)[] = [];
   await Promise.all(
     cicloDoDespacho(
-      banco,
+      modulosDoCicloDeTeste(banco),
       { ...config, timeoutMin: 0.5 },
       despachoDasEtapas({
         conducoesSubstitutas: (d) => ({
@@ -649,7 +644,7 @@ test("o despacho repassa o timeoutMin recebido às conduções", async () => {
           })(d),
         }),
       }),
-      predecessorasPendentesPelasDependencias(banco),
+      liberacaoDasDemandas(banco),
     ),
   );
   assert.deepEqual(limites, [0.5]);

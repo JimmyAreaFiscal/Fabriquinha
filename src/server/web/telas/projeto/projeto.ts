@@ -2,8 +2,8 @@
 // filtros, e uma linha por demanda com a linha do tempo dos estados, as rodadas da execução e a gaveta de tickets. O DOM
 // e a rede ficam em projeto-montar.ts.
 import type { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
-import type { MetricasDoMes } from "../../../contrato/metricas.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../../contrato/projeto.ts";
+import type { MetricasDoMes } from "../../../system/api/contrato/metricas.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../../system/api/contrato/projeto.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,

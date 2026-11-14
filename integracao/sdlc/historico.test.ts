@@ -1,19 +1,18 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25: cancelamento e arquivamento com dependentes e execução
 // em andamento (D08) e a demanda encaminhada de um achado da Avaliação, que saiu (D12, ticket 02). Banco sempre numa raiz
 // temporária; git real, pi falso.
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, cicloDoDespacho, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { AUDITOR, cicloDoDespacho, configuracao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import {
   bloqueiosDaDemanda,
   predecessorasDasDemandas,
   predecessorasDe,
-} from "../../src/server/consultas/demandas/predecessoras.ts";
-import { consultarDemanda } from "../../src/server/consultas/demandas/demanda.ts";
+} from "../../src/server/system/api/demandas/leituras/predecessoras.ts";
+import { consultarDemanda } from "../../src/server/system/api/demandas/leituras/demanda.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import * as gestao from "../../src/modulos/ciclo_de_vida/processo/aplicacao/gestao_do_processo.ts";
-import { origemDoPedido } from "../../src/modulos/demandas/publico.ts";
-import { carregarSessoesDoContexto } from "../../src/modulos/sessoes/publico.ts";
 import {
   abrirPortao,
   agente,
@@ -34,10 +33,18 @@ import {
   ORIGENS_DOS_ANEXOS,
   registrarExterna,
 } from "../apoio.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
-import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
-import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
+import { enviarAoDesenvolvimento } from "../../src/server/system/cli/demanda_externa/envio_ao_desenvolvimento.ts";
+import {
+  cancelarDemandaEmCascata,
+  decidirGateDaDemanda,
+} from "../../src/server/system/api/demandas/cancelamento_em_cascata.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
+import { cicloDeVidaDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
@@ -58,7 +65,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
-  const fins = cicloDoDespacho(c.banco, config, despacho(), predecessorasPendentesPelasDependencias(c.banco));
+  const fins = cicloDoDespacho(modulosDoCicloDeTeste(c.banco), config, despacho(), liberacaoDasDemandas(c.banco));
   assert.equal(fins.length, 2);
   await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);
@@ -66,7 +73,11 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   const antes = demanda(c, a);
   const execucoesAntes = carregarSessoesDoContexto(c.banco, refA).execucoes.length;
 
-  const { canceladas } = cancelarDemandaEmCascata(c.banco, a, AUDITOR, CTX);
+  const { canceladas } = cancelarDemandaEmCascata(
+    cicloDeVidaNoContexto(c.banco, CTX),
+    montarDemandasDoBanco(c.banco),
+    a,
+  );
   assert.deepEqual([...canceladas].sort(), [a, aberta].sort());
   assert.equal(demanda(c, a).demanda.estado, "cancelada");
   assert.equal(demanda(c, aberta).demanda.estado, "cancelada");
@@ -89,22 +100,40 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.deepEqual(depois.rodadas, antes.rodadas);
   assert.equal(carregarSessoesDoContexto(c.banco, refA).sessoes.length > 0, true);
   // A terminada não se cancela de novo.
-  assert.throws(() => cancelarDemandaEmCascata(c.banco, terminada, AUDITOR, CTX), /já terminou/);
+  assert.throws(
+    () => cancelarDemandaEmCascata(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), terminada),
+    /já terminou/,
+  );
 
   // Arquivar só vale para concluída, e a arquivada satisfaz a dependência de quem a esperava (D08).
   assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só no estado concluida/);
   assert.deepEqual(
-    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(c.banco, [dependeDaFeita]), dependeDaFeita)),
+    bloqueiosDaDemanda(
+      CATALOGO_DO_CICLO_DE_VIDA,
+      predecessorasDe(
+        predecessorasDasDemandas(montarCicloDeVidaDoBanco(c.banco), montarDemandasDoBanco(c.banco), [dependeDaFeita]),
+        dependeDaFeita,
+      ),
+    ),
     [],
   );
   gestao.arquivar(c.banco, feita, AUDITOR, CTX);
   assert.equal(demanda(c, feita).demanda.estado, "arquivada");
   assert.deepEqual(
-    bloqueiosDaDemanda(predecessorasDe(predecessorasDasDemandas(c.banco, [dependeDaFeita]), dependeDaFeita)),
+    bloqueiosDaDemanda(
+      CATALOGO_DO_CICLO_DE_VIDA,
+      predecessorasDe(
+        predecessorasDasDemandas(montarCicloDeVidaDoBanco(c.banco), montarDemandasDoBanco(c.banco), [dependeDaFeita]),
+        dependeDaFeita,
+      ),
+    ),
     [],
   );
   assert.equal(demanda(c, dependeDaFeita).demanda.estado, "entender_e_desenhar");
-  assert.throws(() => cancelarDemandaEmCascata(c.banco, feita, AUDITOR, CTX), /já terminou/);
+  assert.throws(
+    () => cancelarDemandaEmCascata(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), feita),
+    /já terminou/,
+  );
 });
 
 test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retirada da Avaliação abre com a origem e segue o SDLC", async (t) => {
@@ -124,7 +153,8 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
     )
     .run(avaliacao, "Achado 1", "desc 1", "ev 1");
   const { demanda: nova } = registrarPedidoComProcesso(
-    c.banco,
+    cicloDeVidaNoContexto(c.banco, CTX),
+    montarDemandasDoBanco(c.banco),
     {
       projeto: c.projeto,
       titulo: "Achado 1",
@@ -132,16 +162,21 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
       descricao: `desc 1\n\nEvidência: ev 1\n\nOrigem: avaliação ${avaliacao}, achado 1.`,
     },
     autor,
-    CTX,
   );
   c.banco.prepare("UPDATE achado_avaliacao SET demanda_id = ? WHERE avaliacao_id = ?").run(nova.id, avaliacao);
 
   // A página da demanda abre com a origem legível, e a demanda de onde o achado veio segue como estava.
-  const pagina = consultarDemanda(c.banco, nova.id, relogioDoSistema);
+  const pagina = consultarDemanda(
+    c.banco,
+    montarCicloDeVidaDoBanco(c.banco),
+    montarDemandasDoBanco(c.banco),
+    nova.id,
+    relogioDoSistema,
+  );
   assert.deepEqual(pagina.origem, { avaliacao, achado: 1, titulo: "Achado 1" });
   assert.deepEqual(pagina.demanda.estado, "entender_e_desenhar");
   assert.deepEqual(demanda(c, nova.id).demanda.criada_por, autor);
-  assert.equal(origemDoPedido(c.banco, nova.id)?.achado_id, 1);
+  assert.equal(montarDemandasDoBanco(c.banco).pedido(nova.id).origem?.achado_id, 1);
   assert.equal(demanda(c, origem).demanda.estado, "em_execucao");
 
   // A demanda segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
@@ -159,8 +194,8 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
     [anexoHtml()],
   );
-  enviarAoDesenvolvimento(c.banco, nova.id, autor, CTX);
+  enviarAoDesenvolvimento(cicloDeVidaNoContexto(c.banco, CTX), montarDemandasDoBanco(c.banco), nova.id, autor);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
-  decidirGateDaDemanda(c.banco, nova.id, { resultado: "aprovado" }, AUDITOR);
+  decidirGateDaDemanda(cicloDeVidaDeTeste(c.banco), montarDemandasDoBanco(c.banco), nova.id, { resultado: "aprovado" });
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 });

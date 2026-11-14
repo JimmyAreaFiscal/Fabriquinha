@@ -11,7 +11,7 @@ import {
   exigirAtor,
   NomeGate,
 } from "../../etapas/publico.ts";
-import { DemandaId } from "../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { Id, Instante, Motivo } from "../../../../shared/nucleo/primitivos.ts";
 

@@ -10,11 +10,9 @@ const PASTAS_DO_AMBIENTE_QUE_FALAM_COM_O_HOST = [
 export const REGRAS_DO_AMBIENTE: RegrasDoDominio = {
   dependeDe: [],
   subdominios: {
-    configuracao: [],
     redes: [],
-    sandboxes: ["configuracao", "redes"],
+    sandboxes: ["redes"],
     execucao: ["sandboxes"],
-    monitoramento: ["sandboxes"],
   },
   processoDoHost: {
     pastasLiberadas: PASTAS_DO_AMBIENTE_QUE_FALAM_COM_O_HOST,

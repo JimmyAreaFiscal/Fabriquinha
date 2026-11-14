@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { Id } from "../../../../../shared/nucleo/primitivos.ts";
-import { DemandaId } from "../../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../../shared/nucleo/demanda/demanda_id.ts";
 
 export const CriterioId = z.string().regex(/^CA-[1-9][0-9]*$/, "use o formato CA-n");
 

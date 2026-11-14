@@ -1,4 +1,5 @@
 // Encerramento da rodada com banco real, git real, pi falso e hospedagem falsa (CA-2 a CA-12 da I-227).
+import type { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,13 +15,14 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenario_de_encerramento_rodada.ts";
 import { commitarArquivo, rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../../shared/nucleo/erros.ts";
-import { cursorDaBase, caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";
+import { cursorDaBase, caminhoDaWorktreeRodada } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anexosDaDemanda, schemaDoTipo } from "../../../evidencias/publico.ts";
 import { conferirEncerramentoRodada } from "./encerramento_rodada.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
-const conferir = (banco: Parameters<typeof conferirEncerramentoRodada>[0], ref: typeof REF) =>
-  conferirEncerramentoRodada(banco, relogioFixo("2026-01-01T00:00:00.000Z"), ref);
+const conferir = (banco: DatabaseSync, ref: typeof REF) =>
+  conferirEncerramentoRodada(modulosDoCicloDeTeste(banco), relogioFixo("2026-01-01T00:00:00.000Z"), ref);
 
 test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda, nunca para a base, e a rodada fica no gate", async () => {
   const { c, banco, ag, ticket, evidencia, noRemoto, rodada } = await cenario();

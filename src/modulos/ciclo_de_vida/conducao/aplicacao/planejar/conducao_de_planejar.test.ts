@@ -20,9 +20,9 @@ import {
 } from "../../../../../../apoio-testes/cenarios/cenario_de_planejamento.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
-import { condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDePlanejar } from "./conducao_de_planejar.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria a sessão", async () => {
   for (const predecessora of ["concluida", "arquivada"]) {
@@ -209,9 +209,8 @@ test("o pi que falha não falha o ticket: a execução falha e o ticket segue em
 test("ConducaoDePlanejar instanciada com as dependências recusa o ticket concluído sem criar sessão", async () => {
   const { banco, sessoes } = cenarioDePlanejamento({ estadoDoTicket: "concluido" });
   const conducao = new ConducaoDePlanejar({
-    banco,
+    ...modulosDoCicloDeTeste(banco),
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
-    condutor,
     registro: anotar,
   });
   await assert.rejects(conducao.conduzir(Endereco.doTicket("I-1", 1)), /está concluido e não pode ser iniciado/);

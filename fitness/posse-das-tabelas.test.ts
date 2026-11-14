@@ -6,10 +6,10 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test, type TestContext } from "node:test";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/system/banco_da_fabriquinha.ts";
 import { ARQUITETURA_DE_SRC } from "./fronteiras/arquitetura.ts";
 import { REGRAS_DO_AMBIENTE } from "./fronteiras/dominios/ambiente.ts";
-import { PASTA_DAS_CONSULTAS } from "./fronteiras/dominios/server.ts";
+import { PASTA_DO_SYSTEM } from "./fronteiras/dominios/server.ts";
 import { MIGRACOES_DOS_DOMINIOS, PASTA_DO_HISTORICO_DO_ESQUEMA } from "./fronteiras/dominios/shared.ts";
 import {
   acharDonosNaoDeclarados,
@@ -77,9 +77,9 @@ test("toda migração de domínio fora da posse existe", () => {
   );
 });
 
-test("as consultas das telas não tocam tabela nenhuma: leem pelas fachadas (MELHORIAS §6)", () => {
+test("o system (rotas, leituras das telas, comandos e montagem) não toca tabela nenhuma: lê pelas fachadas (MELHORIAS §6)", () => {
   const toques = acharToquesForaDoDono(SRC, DONO_DE_CADA_TABELA, FORA_DA_POSSE);
-  assert.deepEqual(toques.filter(({ arquivo }) => arquivo.startsWith(PASTA_DAS_CONSULTAS)).map(descreverToque), []);
+  assert.deepEqual(toques.filter(({ arquivo }) => arquivo.startsWith(PASTA_DO_SYSTEM)).map(descreverToque), []);
 });
 
 test("nenhum SQL de src/ toca tabela fora do armazenamento do dono", () => {
@@ -137,12 +137,18 @@ test("a fitness da posse acusa o dono que não é `shared` nem subdomínio decla
         b: "ambiente/sandboxes",
         c: "ambiente/inexistente",
         d: "ambiente",
-        e: "server/api",
+        e: "server/system/api",
         f: "outro/x",
         g: "ambiente/sandboxes/armazenamento",
       },
       COM_AMBIENTE_SINTETICO,
     ),
-    ["c: ambiente/inexistente", "d: ambiente", "e: server/api", "f: outro/x", "g: ambiente/sandboxes/armazenamento"],
+    [
+      "c: ambiente/inexistente",
+      "d: ambiente",
+      "e: server/system/api",
+      "f: outro/x",
+      "g: ambiente/sandboxes/armazenamento",
+    ],
   );
 });

@@ -28,7 +28,7 @@ export type UsoDaExecucao = z.infer<typeof UsoDaExecucao>;
 const mesmaChave = (a: UsoDaExecucao, b: UsoDaExecucao): boolean =>
   a.execucao_id === b.execucao_id && a.modelo_provedor === b.modelo_provedor && a.modelo_nome === b.modelo_nome;
 
-/** Registrar de novo a mesma chave substitui o uso, não soma. */
+/** Registrar de novo a mesma chave substitui o uso, não soma. @testes os testes montam o Uso gravado com ele */
 export const registrarUso = (usos: readonly UsoDaExecucao[], uso: UsoDaExecucao): UsoDaExecucao[] => {
   const novo = UsoDaExecucao.parse(uso);
   return [...usos.filter((u) => !mesmaChave(u, novo)), novo];

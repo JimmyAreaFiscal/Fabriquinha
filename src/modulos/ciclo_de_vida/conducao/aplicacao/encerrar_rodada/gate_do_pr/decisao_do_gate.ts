@@ -1,7 +1,6 @@
 // Efeitos do gate do PR da rodada fora do agregado (comparacao-sdlc-implementacao.md §§4 e 6): integrar o PR na
 // hospedagem, avançar a demanda local e abrir a sessão de ajustes do PR reprovado. A hospedagem é a fonte da verdade,
 // então repetir a aprovação é seguro.
-import type { DatabaseSync } from "node:sqlite";
 import {
   type AgregadoDemanda,
   aprovarPRIntegradoDaRodada,
@@ -11,7 +10,7 @@ import {
 } from "../../../../processo/publico.ts";
 import { type Ator, exigirAtor, formatarRodadaRef, Endereco } from "../../../../etapas/publico.ts";
 import { ErroDeRegra, existe } from "../../../../../../shared/nucleo/erros.ts";
-import { espacoDoTicket, ambienteDoEspaco, cicloDoEspaco } from "../../../../../repositorio/publico.ts";
+import { espacoDoTicket } from "../../../../../repositorio/publico.ts";
 import { GateDoPR } from "../gate.ts";
 import type { GateComEfeitos } from "../../decisao_dos_gates/gate_com_efeitos.ts";
 import type { Relogio } from "../../../../../../shared/nucleo/relogio.ts";
@@ -20,8 +19,8 @@ import { raizDo } from "../../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../../shared/infra/registro.ts";
 import { ConducaoDeAjustarResultado } from "../../ajustar_resultado/conducao_de_ajustar_resultado.ts";
 import { guardarMarcoDaSessao, sessaoDaRodada } from "../../ajustar_resultado/sessao_ajustes.ts";
-import { condutor } from "../../politica_dos_agentes/condutor.ts";
 import { projetosCadastrados } from "../../projetos_cadastrados.ts";
+import type { ModulosDoCiclo } from "../../modulos_do_ciclo.ts";
 
 const gate = new GateDoPR();
 
@@ -39,7 +38,7 @@ const referenciaDaRodada = (endereco: Endereco) => ({
  * confirmação não grava nada: o gate segue aberto para nova tentativa.
  */
 async function aprovarPR(
-  banco: DatabaseSync,
+  { banco, repositorio }: ModulosDoCiclo,
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
@@ -78,7 +77,7 @@ async function aprovarPR(
     "o encerramento publica o PR",
   );
   const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
-  await cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco)).integrar();
+  await repositorio.integrarPR(projeto, espaco, log);
 
   return aprovarPRIntegradoDaRodada(banco, gate, endereco, entrada, ator, relogio, {
     rodada_id: ref.rodada_id,
@@ -93,18 +92,19 @@ async function aprovarPR(
  * (motivo vazio, ator, estado) lança antes de gravar o marco ou mudar o banco.
  */
 async function reprovarPR(
-  banco: DatabaseSync,
+  modulos: ModulosDoCiclo,
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
   relogio: Relogio,
 ): Promise<{ demanda: AgregadoDemanda; sessao: string }> {
+  const { banco } = modulos;
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
   gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() });
-  await guardarMarcoDaSessao(banco, ref, ag);
+  await guardarMarcoDaSessao(modulos, ref, ag);
   const demanda = decidirGateNaDemanda(banco, gate, endereco, entrada, ator, relogio);
-  const conducao = new ConducaoDeAjustarResultado({ banco, relogio, condutor, registro: anotar });
+  const conducao = new ConducaoDeAjustarResultado({ ...modulos, relogio, registro: anotar });
   const sessao = sessaoDaRodada(demanda, ref);
   const execucao = existe(
     await conducao.iniciar(Endereco.doTicket(ref.demanda_id, sessao.ticket_id)),
@@ -117,10 +117,10 @@ async function reprovarPR(
 /** O Gate do PR da rodada: a aprovação integra o PR na hospedagem; a reprovação abre a sessão de ajustes. */
 export const GATE_DO_PR: GateComEfeitos = {
   regra: gate,
-  async decidir(banco, endereco, entrada, ator, relogio) {
+  async decidir(modulos, endereco, entrada, ator, relogio) {
     const e = gate.validarEntrada(entrada, ator);
     if (e.resultado === "aprovado")
-      return { demanda: await aprovarPR(banco, endereco, e, ator, relogio), canceladas: [] };
-    return { ...(await reprovarPR(banco, endereco, e, ator, relogio)), canceladas: [] };
+      return { demanda: await aprovarPR(modulos, endereco, e, ator, relogio), canceladas: [] };
+    return { ...(await reprovarPR(modulos, endereco, e, ator, relogio)), canceladas: [] };
   },
 };

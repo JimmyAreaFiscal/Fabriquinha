@@ -9,8 +9,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { type AgregadoDemanda, carregarDemanda } from "../../processo/publico.ts";
-import { gravarCommitDemanda, garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../repositorio/publico.ts";
-import { registrarProjeto } from "../../../demandas/publico.ts";
+import {
+  gravarCommitDemanda,
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { cicloDoDespacho, configuracao } from "../publico.ts";
 import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
@@ -19,8 +22,9 @@ import { verificacaoDeTeste } from "../../../../../apoio-testes/verificacoes_de_
 import { criarRepositorioDeTeste, commitarArquivo } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../verificacoes/publico.ts";
 import { type DepsDespacho, despachoDasEtapas } from "../../conducao/publico.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
-import { predecessorasPendentesPelasDependencias } from "../../../../server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { registrarProjeto } from "../../../../../apoio-testes/demandas_de_teste.ts";
+import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -128,7 +132,7 @@ async function cenario() {
   return {
     banco,
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
-    ciclo: () => Promise.all(cicloDoDespacho(banco, config, deps, predecessorasPendentesPelasDependencias(banco))),
+    ciclo: () => Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco))),
     ag: () => carregarDemanda(banco, D),
     /** O humano aprova e integra o PR final na plataforma. */
     integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),

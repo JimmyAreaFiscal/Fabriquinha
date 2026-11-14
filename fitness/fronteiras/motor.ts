@@ -341,22 +341,26 @@ export function acharViolacoes(src: string, arquitetura: Arquitetura): Achado[] 
 
 const descreverDependencia = ({ de, para }: { de: string; para: string }): string => `${de} → ${para}`;
 
-// O nó de cada arquivo no grafo entre domínios: o shared inteiro e, no resto, as duas primeiras pastas
-// (`modulos/<domínio>`, `server/<parte>`).
-const dominioDoArquivoNosCiclos = (caminhoRelativoASrc: string): string =>
-  caminhoRelativoASrc.split("/")[0] === DOMINIO_SHARED
-    ? DOMINIO_SHARED
-    : caminhoRelativoASrc.split("/").slice(0, 2).join("/");
+// O nó de cada arquivo no grafo entre domínios: o shared inteiro, cada módulo da matriz do servidor
+// (`server/<módulo>`: a web, o contrato, a API, o CLI, a montagem…) e, no resto, as duas primeiras pastas
+// (`modulos/<domínio>`).
+function dominioDoArquivoNosCiclos(caminhoRelativoASrc: string, arquitetura: Arquitetura): string {
+  const [grupo, ...resto] = caminhoRelativoASrc.split("/");
+  if (grupo === DOMINIO_SHARED) return DOMINIO_SHARED;
+  if (grupo === DOMINIO_DO_SERVIDOR)
+    return `${DOMINIO_DO_SERVIDOR}/${arquitetura.moduloDoArquivoDoServidor(resto.join("/"))}`;
+  return caminhoRelativoASrc.split("/").slice(0, 2).join("/");
+}
 
 // Uma aresta por par de domínios, com o primeiro arquivo que a cria. De valor ou de tipo, tanto faz.
-function acharDependenciasEntreDominios(src: string): Aresta[] {
+function acharDependenciasEntreDominios(src: string, arquitetura: Arquitetura): Aresta[] {
   const dependencias = new Map<string, Aresta>();
   for (const arquivo of listarArquivosDeProducao(src)) {
     const caminho = join(src, arquivo);
-    const de = dominioDoArquivoNosCiclos(arquivo);
+    const de = dominioDoArquivoNosCiclos(arquivo, arquitetura);
     for (const { fileName: alvo } of ts.preProcessFile(readFileSync(caminho, "utf8"), true, true).importedFiles) {
       if (!alvo.startsWith(".")) continue;
-      const para = dominioDoArquivoNosCiclos(relative(src, resolve(dirname(caminho), alvo)));
+      const para = dominioDoArquivoNosCiclos(relative(src, resolve(dirname(caminho), alvo)), arquitetura);
       const descricao = descreverDependencia({ de, para });
       if (para !== de && !dependencias.has(descricao))
         dependencias.set(descricao, { de, para, arquivo, achado: { arquivo, import: alvo } });
@@ -366,8 +370,8 @@ function acharDependenciasEntreDominios(src: string): Aresta[] {
 }
 
 /** Os ciclos de import entre os domínios de src/, de valor ou de tipo. */
-export const acharCiclosEntreDominios = (src: string): string[] =>
-  acharCiclosEntreModulos(acharDependenciasEntreDominios(src)).map(({ import: ciclo }) => ciclo);
+export const acharCiclosEntreDominios = (src: string, arquitetura: Arquitetura): string[] =>
+  acharCiclosEntreModulos(acharDependenciasEntreDominios(src, arquitetura)).map(({ import: ciclo }) => ciclo);
 
 /** Os ciclos das dependências declaradas: entre os domínios (`dependeDe`) e entre os subdomínios de cada domínio. */
 export function acharCiclosDeclarados(arquitetura: Arquitetura): string[] {

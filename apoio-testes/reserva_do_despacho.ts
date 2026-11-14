@@ -5,8 +5,8 @@ import {
   reservarTicketParaAFabriquinha,
   type Endereco,
   carregarDemanda,
-} from "../src/modulos/ciclo_de_vida/publico.ts";
-import { predecessorasPendentesDosPedidos } from "../src/modulos/demandas/publico.ts";
+} from "./ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
 import { relogioDoSistema } from "../src/shared/nucleo/relogio.ts";
 
 /**
@@ -17,7 +17,7 @@ export function reservadoPeloDespacho(banco: DatabaseSync, endereco: Endereco): 
   const { demanda_id } = endereco;
   const ticket = carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === endereco.ticket_id);
   if (ticket?.estado === "aberto") {
-    const liberada = predecessorasPendentesDosPedidos(banco, [demanda_id]).get(demanda_id)?.length === 0;
+    const liberada = montarDemandasDoBanco(banco).pedido(demanda_id).predecessorasPendentes.length === 0;
     reservarTicketParaAFabriquinha(banco, ticket, relogioDoSistema, liberada);
   }
   return endereco;

@@ -1,86 +1,38 @@
-// A fachada `SessoesDeAgente` de Sessões de IA (MELHORIAS §9): a única entrada de fora do domínio. Lança, retoma e encerra
-// sessões e as execuções delas; transmite mensagens e eventos; recupera conversas e resumos; informa uso e modelos. A
-// política (prompt, modelo, capacidades, se retoma, a resposta automática a uma pergunta) chega pronta de quem pede; o
+// A fachada de Sessões de IA (MELHORIAS §9): a montagem e a interface `SessoesDeAgente`, com os tipos de entrada e saída
+// dela. A política (prompt, modelo, capacidades, a resposta automática a uma pergunta) chega pronta de quem pede; o
 // contexto (demanda, ticket) chega como identificador opaco. Sessão, execução e chamada ao modelo têm identificações
 // distintas: `IdDaSessao`, `IdDaExecucao`, e a chamada só existe somada no Uso da execução.
 export {
-  colunasDoModelo,
-  dirDoPiDoAuditor,
-  type EventoDoAgente,
-  type Harness,
-  HarnessPi,
-  type LancamentoDoTicket,
-  type LinhaDeUso,
-  type MensagemDoAgente,
-  ModoTrabalho,
-  PACOTE,
-  type PedidoDeExtensao,
-  type ProcessoDoAgente,
-  type RespostaDaConsulta,
-  skillDoTipo,
-} from "./harness/publico.ts";
-export {
-  ConfiguracaoDoModelo,
-  Effort,
-  gravarCatalogoDePrecos,
-  MIGRACOES_DE_SESSOES,
-  Modelo,
-} from "./modelos/publico.ts";
-export {
-  acumularUso,
-  type CustoDoUso,
-  gravarUsoDeclarado,
-  lerUsoDeclarado,
-  lerUsoDasExecucoes,
-  lerUsoDeclaradoEmLote,
-  linhaDeUsoDaExecucao,
-  registrarUso,
-  textoDoCusto,
-  textoDoCustoDe,
-  Uso,
-  UsoDaExecucao,
-  type UsoDeclarado,
-} from "./metricas_de_execucao/publico.ts";
-export { emMarkdown, type Mensagem, texto } from "./historico/publico.ts";
-export {
-  atividadeDo,
-  type Dialogo,
-  type EventoDaSessao,
-  type PerguntaDoAgente,
-  PREFIXO_DA_RESPOSTA_AUTOMATICA,
-  type RespostaAPergunta,
-  type RespostaAutomatica,
-  type Situacao,
-} from "./chat/publico.ts";
-export {
-  apagarSessoesDasDemandas,
-  carregarSessoesDoContexto,
-  comSessoesDoContexto,
   type ContextoDaSessao,
-  contextoDaExecucao,
-  contextoDaSessao,
-  escopoDaExecucao,
-  criarSessao,
-  encerrarExecucao,
-  encerrarExecucaoComUso,
-  encerrarExecucaoOrfa,
+  type ConversaDaSessao,
   Execucao,
-  execucaoVivaDoToken,
-  execucoesAbertas,
-  execucoesEmLote,
+  type ExecucaoAberta,
+  type ExecucaoLancada,
   type FalhaDaExecucao,
-  gravarAmbienteDaExecucao,
-  gravarTokenDaExecucao,
+  type FiltroDeSessoes,
   type IdDaExecucao,
   type IdDaSessao,
-  iniciarExecucao,
-  type PedidoDeProcesso,
-  registrarUsoDaConsulta,
-  resumoDaSessao,
-  type ResumoDaSessao,
-  resumosDasSessoesEmLote,
-  retomarSessao,
+  type MontagemDasSessoesDeAgente,
+  montarSessoesDeAgente,
+  type PedidoDasMetricasDeUso,
+  type PedidoDeSessao,
+  type PreparoDoLancamento,
+  type RespostaAoDialogo,
+  type ResumoDaSessaoComSituacao as ResumoDaSessao,
   Sessao,
-  sessaoDeCadaTicketDasDemandas,
-  SessoesDeAgente,
+  type SessoesDeAgente,
+  type SubidaDasSessoes,
+  type UsoPorContexto,
 } from "./execucao/publico.ts";
+export { type Harness, type LancamentoDoTicket, type LinhaDeUso, ModoTrabalho } from "./harness/publico.ts";
+export { ConfiguracaoDoModelo, Effort, Modelo } from "./modelos/publico.ts";
+export { type CustoDoUso, Uso, type UsoDeclarado } from "./metricas_de_execucao/publico.ts";
+export type { Mensagem } from "./historico/publico.ts";
+export type {
+  Dialogo,
+  EventoDaSessao,
+  PerguntaDoAgente,
+  RespostaAPergunta,
+  RespostaAutomatica,
+  Situacao,
+} from "./chat/publico.ts";

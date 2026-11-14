@@ -2,7 +2,7 @@
 import type { RegrasDoDominio } from "../motor.ts";
 
 /** As sessões de agente: o único que lança o pi e consulta o modelo. */
-export const ARQUIVO_DO_CONDUTOR = "modulos/sessoes/execucao/aplicacao/sessoes_de_agente.ts";
+export const ARQUIVO_DO_CONDUTOR = "modulos/sessoes/execucao/aplicacao/motor_das_sessoes.ts";
 /** O adapter pi, que implementa `.lancar(` e `.perguntar(`. */
 export const ARQUIVO_DO_HARNESS = "modulos/sessoes/harness/infra/pi/harness_pi.ts";
 

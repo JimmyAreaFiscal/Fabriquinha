@@ -11,7 +11,7 @@ import {
   reservarAmbienteParaEliminar,
   listarAmbientes,
 } from "./ambientes.ts";
-import { migrarBancoDaFabriquinha } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const T1 = "2026-01-01T00:00:00.000Z";
 const T2 = "2026-01-02T00:00:00.000Z";

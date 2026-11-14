@@ -43,13 +43,6 @@ const usoDeclaradoDaLinha = (linha: Record<string, unknown>): UsoDeclarado => ({
   linhas: JSON.parse(String(linha.linhas)) as LinhaDeUso[],
 });
 
-/** O Uso declarado das sessões cujo dono é o contexto, na ordem em que foram gravadas. */
-export const lerUsoDeclarado = (banco: DatabaseSync, demandaId: string): UsoDeclarado[] =>
-  banco
-    .prepare("SELECT ferramenta, sessao, demanda_id, linhas FROM uso_declarado WHERE demanda_id = ? ORDER BY rowid")
-    .all(demandaId)
-    .map(usoDeclaradoDaLinha);
-
 /** O Uso declarado das sessões cujo dono é um dos contextos, em lote, na ordem em que foram gravadas. */
 export const lerUsoDeclaradoEmLote = (banco: DatabaseSync, demandaIds: readonly string[]): UsoDeclarado[] =>
   instrucaoPreparada(

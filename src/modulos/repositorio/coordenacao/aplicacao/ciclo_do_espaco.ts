@@ -2,7 +2,7 @@
 // Git, o Espaço de Trabalho e a Hospedagem, que não têm regra de SDLC, com o Ambiente onde o Espaço roda. Integrar o PR
 // da rodada é operação daqui; o PR final, só o humano integra.
 import { ErroDeRegra, existe, mensagem } from "../../../../shared/nucleo/erros.ts";
-import { type Ambiente, type ConjuntoDeAmbientes, conjuntoDoServico } from "../../../ambiente/publico.ts";
+import type { Ambiente, GestaoDeAmbientes } from "../../../ambiente/publico.ts";
 import {
   atualizarWorktreeRodada,
   espacoDaDemanda,
@@ -15,12 +15,12 @@ import {
   pendenciasDoEspaco,
   type ResultadoAtualizacao,
 } from "../../espaco_de_trabalho/publico.ts";
-import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto, type RepositorioDoProjeto } from "../../git/publico.ts";
+import { exigirGit, exigirGitNoAmbiente, naFilaDoProjeto, type ProjetoDoRepositorio } from "../../git/publico.ts";
 import { integrarPR } from "../../hospedagem/publico.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 
 /** O Projeto como o ciclo o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
-type ProjetoDoCiclo = RepositorioDoProjeto & { imagem_do_ambiente?: string };
+type ProjetoDoCiclo = ProjetoDoRepositorio & { imagem_do_ambiente?: string };
 
 /** Onde o ciclo grava: a raiz da Fabriquinha (worktrees e fila git) e o log da operação. */
 interface RegistroDoCiclo {
@@ -32,32 +32,30 @@ abstract class CicloDoEspaco {
   protected readonly espaco: EspacoDeTrabalho;
   protected readonly projeto: ProjetoDoCiclo;
   protected readonly registro: RegistroDoCiclo;
-  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. Depois de alocar, é o do conjunto. */
+  /** Onde roda tudo o que é do Espaço; quem trabalha nele (commit, verificações, pi) usa este. Depois de alocar, é o alocado. */
   ambiente: Ambiente;
-  /** O conjunto de Ambientes; `undefined` quando o Espaço roda no Ambiente do serviço. */
-  readonly #conjunto: ConjuntoDeAmbientes | undefined;
+  readonly #ambientes: GestaoDeAmbientes;
 
   constructor(
     espaco: EspacoDeTrabalho,
     projeto: ProjetoDoCiclo,
     registro: RegistroDoCiclo,
     ambiente: Ambiente,
-    conjunto: ConjuntoDeAmbientes | undefined = conjuntoDoServico(),
+    ambientes: GestaoDeAmbientes,
   ) {
     this.espaco = espaco;
     this.projeto = projeto;
     this.registro = registro;
     this.ambiente = ambiente;
-    this.#conjunto = conjunto;
+    this.#ambientes = ambientes;
   }
 
-  /** Dá ao Espaço um Ambiente do conjunto e passa a rodar nele; sem conjunto ou sem imagem do Ambiente, o Espaço fica no do serviço. */
-  protected async alocarAmbienteDoConjuntoSeHouver(): Promise<void> {
-    if (this.#conjunto && this.projeto.imagem_do_ambiente !== undefined)
-      this.ambiente = await this.#conjunto.alocar(
-        ocupanteDoAmbiente(this.espaco, this.registro.raiz, this.projeto.nome),
-        this.projeto,
-      );
+  /** Aloca ao Espaço o Ambiente em que ele roda: o container do conjunto ou, no host local ou sem imagem do Ambiente, o do serviço. */
+  protected async alocarAmbiente(): Promise<void> {
+    this.ambiente = await this.#ambientes.alocar(
+      ocupanteDoAmbiente(this.espaco, this.registro.raiz, this.projeto.nome),
+      this.projeto,
+    );
   }
 
   /**
@@ -88,7 +86,8 @@ abstract class CicloDoEspaco {
       pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
     );
     // O Ambiente só volta ao conjunto quando o Espaço acabou de verdade; com pendência, a repetição do limpar o libera.
-    if (resultado.pendentes.length === 0) await this.#conjunto?.liberar({ dono: ocupanteDoDono(this.espaco.dono) });
+    if (resultado.pendentes.length === 0)
+      await this.#ambientes.limpar(this.#ambientes.ambienteDo(ocupanteDoDono(this.espaco.dono)).id);
     return resultado;
   }
 }
@@ -101,7 +100,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
   }
 
   async criar() {
-    await this.alocarAmbienteDoConjuntoSeHouver();
+    await this.alocarAmbiente();
     const pasta = await garantirWorktreeRodada(
       this.ambiente,
       this.registro.raiz,
@@ -134,7 +133,7 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
 /** PR final, integrado pelo humano na plataforma: a Fabriquinha só cria e limpa. @testes o teste a instancia direto; a produção a cria por `cicloDoEspaco` */
 export class CicloDoEspacoDaDemanda extends CicloDoEspaco {
   async criar() {
-    await this.alocarAmbienteDoConjuntoSeHouver();
+    await this.alocarAmbiente();
     const { caminho, buscouBase } = await garantirWorktreeDemandaDizendoSeBuscouBase(
       this.ambiente,
       this.registro.raiz,
@@ -170,8 +169,9 @@ export function cicloDoEspaco(
   projeto: ProjetoDoCiclo,
   registro: RegistroDoCiclo,
   ambiente: Ambiente,
+  ambientes: GestaoDeAmbientes,
 ): CicloDoEspaco {
   return espaco.dono.rodada_id === undefined
-    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente)
-    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente);
+    ? new CicloDoEspacoDaDemanda(espaco, projeto, registro, ambiente, ambientes)
+    : new CicloDoEspacoDaRodada(espaco, projeto, registro, ambiente, ambientes);
 }

@@ -1,12 +1,13 @@
 // Condução do implementar com pi falso, banco real e git real; só as verificações são injetadas (concluir, reprovar e
 // falhar: CA-1 a CA-16 do fechamento do ticket, agora feito pela condução).
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Despacho, situacaoDeUmaDemanda } from "../../../despacho/publico.ts";
-import { commitDoTicketDemanda } from "../../../../repositorio/publico.ts";
-import { AmbienteHostLocal } from "../../../../ambiente/publico.ts";
+import { commitDoTicketDemanda } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
+import { espacoDoTicket } from "../../../../repositorio/publico.ts";
 import {
   type CenarioDeImplementacao,
   cenarioDeImplementacao,
@@ -21,17 +22,12 @@ import {
   verif,
 } from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { CondutorDeTrabalhos } from "../politica_dos_agentes/condutor.ts";
 import { commitarTicketDemanda } from "./commit_do_ticket.ts";
 import { ConducaoDeImplementar, type OpcoesDaImplementacao } from "./conducao_de_implementar.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
 
-const conduzir = (
-  c: CenarioDeImplementacao,
-  n: number,
-  opcoes: OpcoesDaImplementacao,
-  condutor?: CondutorDeTrabalhos,
-) => new ConducaoDeImplementar(c.deps(condutor), opcoes).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(n)));
+const conduzir = (c: CenarioDeImplementacao, n: number, opcoes: OpcoesDaImplementacao, emParada?: () => boolean) =>
+  new ConducaoDeImplementar(c.deps(emParada), opcoes).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(n)));
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenarioDeImplementacao();
@@ -200,10 +196,9 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
 test("CA-16: commit sem as evidências devolve o ticket citando o que falta", async () => {
   const c = await cenarioDeImplementacao();
   writeFileSync(join(c.worktree, "novo.txt"), "x\ny\n");
-  await commitarTicketDemanda(c.banco, ref(1), {
+  await commitarTicketDemanda(modulosDoCicloDeTeste(c.banco).repositorio, ref(1), {
     projeto: c.c.projeto,
-    ambiente: new AmbienteHostLocal(),
-    worktree: c.worktree,
+    espaco: espacoDoTicket(c.ag(), { rodada_id: 1 }, c.c.projeto, c.c.raiz),
     tipo: "feat",
     titulo: "Cachear",
     etapa: "implementar",
@@ -293,12 +288,7 @@ test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit
     const c = await cenarioDeImplementacao();
     if (hookCorpo) hook(c, hookCorpo);
     let consultas = 0;
-    class CondutorQueParaNaConsulta extends CondutorDeTrabalhos {
-      override emParada(): boolean {
-        return ++consultas === chamada;
-      }
-    }
-    await conduzir(c, 1, coletor(todas(true)), new CondutorQueParaNaConsulta());
+    await conduzir(c, 1, coletor(todas(true)), () => ++consultas === chamada);
     const t = c.status(1);
     assert.deepEqual([t?.estado, c.reprovacoes(1), c.motivo(1)], ["falhou", 0, "serviço reiniciado"]);
     if (chamada === 1) assert.deepEqual(c.evidencias(1), []);

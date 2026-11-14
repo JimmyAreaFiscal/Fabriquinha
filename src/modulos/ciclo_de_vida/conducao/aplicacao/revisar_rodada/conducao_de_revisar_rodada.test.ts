@@ -5,26 +5,35 @@ import { test } from "node:test";
 import { AUDITOR, Endereco } from "../../../etapas/publico.ts";
 import { motivoDaFalhaDoTicket, reabrirTicket, carregarDemanda } from "../../../processo/publico.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../../../../server/system/banco_da_fabriquinha.ts";
 import { servir } from "../../../../../../apoio-testes/servidor_web_de_teste.ts";
 import { comDemanda } from "../../../processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeRodada } from "../../../../repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { anotar } from "../../../../../shared/infra/registro.ts";
 import { cenarioRevisao } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { conferirPromptComFoto } from "../prompt/fotos_retorno/conferir_foto.ts";
 import { relogioFixo } from "../../../../../shared/nucleo/relogio.ts";
 
 const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
-import { CondutorDeTrabalhos, condutor } from "../politica_dos_agentes/condutor.ts";
 import { ConducaoDeRevisarRodada } from "./conducao_de_revisar_rodada.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const REVISOR = Endereco.doTicket("I-1", 2);
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
 
-const conducao = (banco: Banco, condutorDeTeste: CondutorDeTrabalhos = condutor) =>
-  new ConducaoDeRevisarRodada({ banco, relogio: RELOGIO, condutor: condutorDeTeste, registro: anotar });
+/** A condução com os módulos do teste; `emParada` diz se o serviço está parando. */
+const conducao = (banco: Banco, emParada: () => boolean = () => false) => {
+  const modulos = modulosDoCicloDeTeste(banco);
+  return new ConducaoDeRevisarRodada({
+    ...modulos,
+    emParada,
+    relogio: RELOGIO,
+    registro: anotar,
+  });
+};
 
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
@@ -52,7 +61,7 @@ test("o revisor que decide deixa o ticket concluído, sem falha", async () => {
   const { banco, piFalso } = await cenarioRevisao();
   // O pi falso decide pelo cliente empacotado, que fala com a API sobre o mesmo banco.
   const { porta } = await servir(abrirBancoDaFabriquinha(raizDo(banco)));
-  condutor.urlDaApi = `http://127.0.0.1:${String(porta)}`;
+  motorDoBanco(banco).urlDaApi = `http://127.0.0.1:${String(porta)}`;
   piFalso.roteirizar([
     {
       cli: [
@@ -97,9 +106,7 @@ test("preparação que lança falha o ticket sem rodar o pi e vai ao log", async
 test("preparação interrompida pela parada do serviço falha como serviço reiniciado", async () => {
   const { banco } = await cenarioRevisao();
   banco.exec("DELETE FROM linguagem_projeto");
-  const emParada = new CondutorDeTrabalhos();
-  emParada.marcarParada();
-  await conducao(banco, emParada).conduzir(reservadoPeloDespacho(banco, REVISOR));
+  await conducao(banco, () => true).conduzir(reservadoPeloDespacho(banco, REVISOR));
   assert.equal(estado(banco).motivo, "serviço reiniciado");
 });
 

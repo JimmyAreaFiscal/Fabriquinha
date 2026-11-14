@@ -4,17 +4,24 @@ import { writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import { test } from "node:test";
-import { carregarSessoesDoContexto, comSessoesDoContexto, HarnessPi } from "../../../../sessoes/publico.ts";
+import {
+  HarnessPi,
+  carregarSessoesDoContexto,
+  comSessoesDoContexto,
+} from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { condutor } from "./condutor.ts";
-import { migrarBancoDaFabriquinha } from "../../../../../server/composicao/banco_da_fabriquinha.ts";
+import { migrarBancoDaFabriquinha } from "../../../../../server/system/banco_da_fabriquinha.ts";
+import { montarSessoesDeAgente } from "../../../../sessoes/publico.ts";
 
-/** A triagem com o pi da consulta trocado por `rodar`, no harness do condutor do serviço. */
-const triarCom = (rodar: typeof executar, ...argumentos: Parameters<typeof triarPergunta>) => {
-  condutor.montarHarness(new HarnessPi(rodar));
-  return triarPergunta(...argumentos);
-};
+type ArgumentosDaTriagem = Parameters<typeof triarPergunta> extends [unknown, ...infer Resto] ? Resto : never;
+
+/** A triagem com o pi da consulta trocado por `rodar`, nas Sessões de `banco` (sem ele, um banco em memória). */
+const triarCom = (rodar: typeof executar, ...argumentos: ArgumentosDaTriagem) =>
+  triarNoBanco(new DatabaseSync(":memory:"), rodar, ...argumentos);
+
+const triarNoBanco = (banco: DatabaseSync, rodar: typeof executar, ...argumentos: ArgumentosDaTriagem) =>
+  triarPergunta(montarSessoesDeAgente({ banco, harness: new HarnessPi(rodar) }), ...argumentos);
 
 const contexto = { ticket: "I-7.T3", etapa: "implementar" as const, demanda: "Cadastro" };
 const comOpcoes = { pergunta: "Corrijo a issue S6328?", detalhes: "no a.ts:7", opcoes: ["Sim", "Não"] };
@@ -180,13 +187,11 @@ test("o Uso da consulta é somado à execução do ticket que perguntou, e a con
       writeFileSync(join(String(args[args.indexOf("--session-dir") + 1]), "s.jsonl"), `${JSON.stringify(entrada)}\n`);
       return Promise.resolve({ codigo, saida: decisao, erro: "", limiteEstourado: false });
     };
-  const execucaoQuePerguntou = { banco, ticket, execucao: "e1" };
-
-  assert.equal(await triarCom(pi(1), undefined, contexto, comOpcoes, execucaoQuePerguntou), undefined);
+  assert.equal(await triarNoBanco(banco, pi(1), undefined, contexto, comOpcoes, "e1"), undefined);
   assert.deepEqual(carregarSessoesDoContexto(banco, ticket).usos, []);
 
-  await triarCom(pi(0), undefined, contexto, comOpcoes, execucaoQuePerguntou);
-  await triarCom(pi(0), undefined, contexto, comOpcoes, execucaoQuePerguntou);
+  await triarNoBanco(banco, pi(0), undefined, contexto, comOpcoes, "e1");
+  await triarNoBanco(banco, pi(0), undefined, contexto, comOpcoes, "e1");
   assert.deepEqual(carregarSessoesDoContexto(banco, ticket).usos, [
     {
       execucao_id: "e1",

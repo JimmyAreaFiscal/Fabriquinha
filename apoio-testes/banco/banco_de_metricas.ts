@@ -1,10 +1,15 @@
 // Banco em memória, migrado, com duas lojas de demandas e dois meses de execuções, decisões e commits, para os testes das Métricas.
 import { DatabaseSync } from "node:sqlite";
 import type { Recorte } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/nucleo/metrica.ts";
-import type { OrigemDosFatos } from "../../src/modulos/ciclo_de_vida/metricas_de_qualidade/aplicacao/leitura_dos_fatos.ts";
-import { lerPedidosDasMetricas } from "../../src/server/consultas/demandas/pedidos_das_metricas.ts";
+import type { OrigemDasMetricas } from "../../src/server/system/api/metricas/metrica_de_uso.ts";
+import { lerPedidosDasMetricas } from "../../src/server/system/api/demandas/leituras/pedidos_das_metricas.ts";
 import { intervalo } from "../../src/shared/nucleo/periodo.ts";
-import { migrarBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarRepositorio } from "../../src/modulos/repositorio/publico.ts";
+import {
+  migrarBancoDaFabriquinha,
+  montarCicloDeVidaDoBanco,
+  montarDemandasDoBanco,
+} from "../../src/server/system/banco_da_fabriquinha.ts";
 
 /** O dia 15 do mês ao meio-dia, no fuso do serviço, como o banco grava: em UTC. */
 export const em = (mes: string) => new Date(`${mes}-15T12:00:00`).toISOString();
@@ -16,8 +21,16 @@ export const doMes = (mes: string): Recorte => {
   return { inicio, fim };
 };
 
-/** De onde as Métricas leem neste banco: ele e os pedidos de todas as demandas, lidos agora. */
-export const origemDe = (banco: DatabaseSync): OrigemDosFatos => ({ banco, pedidos: lerPedidosDasMetricas(banco) });
+/** De onde as Métricas leem neste banco: ele, o Repositório dele e os pedidos de todas as demandas, lidos agora. */
+export const origemDe = (banco: DatabaseSync): OrigemDasMetricas => {
+  const cicloDeVida = montarCicloDeVidaDoBanco(banco);
+  return {
+    banco,
+    cicloDeVida,
+    repositorio: montarRepositorio({ banco }),
+    pedidos: lerPedidosDasMetricas(banco, cicloDeVida, montarDemandasDoBanco(banco)),
+  };
+};
 
 export function bancoMigrado(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");

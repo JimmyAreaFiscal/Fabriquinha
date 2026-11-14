@@ -3,7 +3,7 @@
 // filtros lembrados e o Arquivar concluídas; o heatmap e a Configuração SDLC abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "../demandas-apoio.ts";
 import { PENDENCIAS_ESPERADAS, semearPendencias } from "../pendencias-apoio.ts";
 import { expect, fotografar, projeto, test } from "../apoio.ts";

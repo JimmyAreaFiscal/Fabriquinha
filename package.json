@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "fabriquinha": "src/server/composicao/fabriquinha.ts"
+    "fabriquinha": "src/server/system/fabriquinha.ts"
   },
   "engines": {
     "node": ">=22.20"
@@ -29,7 +29,7 @@
     "typescript-eslint": "^8.71.1"
   },
   "scripts": {
-    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/server/composicao/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
+    "empacotar-cli-agente": "node --disable-warning=ExperimentalWarning -e \"import('./src/server/system/pacote_do_agente.ts').then((m) => m.garantirPacoteDoAgente())\"",
     "types": "tsc",
     "lint": "eslint --max-warnings=0 .",
     "format:check": "prettier --check .",

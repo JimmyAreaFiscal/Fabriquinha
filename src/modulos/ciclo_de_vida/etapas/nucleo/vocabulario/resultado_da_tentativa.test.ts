@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "./ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../../../../../shared/nucleo/demanda/ator.ts";
 import { ErroDeReprovacao, ErroDeRegra, ErroExterno } from "../../../../../shared/nucleo/erros.ts";
 import {
   falhaDoErro,

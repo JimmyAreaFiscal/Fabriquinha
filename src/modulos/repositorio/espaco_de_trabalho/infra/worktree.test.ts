@@ -18,7 +18,7 @@ import { after, test } from "node:test";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
 import { descartarAlteracoes, preparar, removerWorktrees } from "./worktree.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

@@ -16,9 +16,11 @@ import {
   TicketIdentidade,
   TicketRef,
 } from "../../etapas/publico.ts";
-import { branchRodada, DemandaId } from "../../../repositorio/publico.ts";
+import { branchRodada } from "../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../shared/nucleo/demanda/demanda_id.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
-import { GrafoDeDependencias, proximoIdDeRodada, proximoIdDeTicket } from "./item_de_trabalho.ts";
+import { proximoIdDeRodada, proximoIdDeTicket } from "./item_de_trabalho.ts";
+import { GrafoDeDependencias } from "../../../../shared/nucleo/demanda/grafo_de_dependencias.ts";
 import { Id, type Instante, Markdown, Titulo } from "../../../../shared/nucleo/primitivos.ts";
 
 const ArquivosPrevistos = CaminhoPrevisto.array().default([]);

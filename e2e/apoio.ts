@@ -2,6 +2,7 @@
 // mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/falsos/pi_falso.ts), e recebe o
 // navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`. O docker falso
 // (apoio-testes/falsos/docker_falso.ts) vai à frente no PATH, e o registro dele diz se o serviço chamou o docker.
+import { ligarGestaoDeAmbientesNosModulos, gestaoLigadaNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -11,11 +12,9 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco/banco_temporario.ts";
 import { type DockerFalso, instalarDockerFalso } from "../apoio-testes/falsos/docker_falso.ts";
 import type { PassoPi } from "../apoio-testes/falsos/pi_falso.ts";
-import { condutor } from "../src/modulos/ciclo_de_vida/publico.ts";
-import { recuperacaoDaSubida } from "../src/server/fluxos/ciclo_do_servico/recuperacao_apos_reinicio.ts";
-import { HarnessPi } from "../src/modulos/sessoes/publico.ts";
-import { abrirBancoDaFabriquinha } from "../src/server/composicao/banco_da_fabriquinha.ts";
-import { registrarProjeto } from "../src/modulos/demandas/publico.ts";
+import { abrirBancoDaFabriquinha } from "../src/server/system/banco_da_fabriquinha.ts";
+import { registrarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { recuperarAposReinicio } from "../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -49,9 +48,9 @@ async function parar(servico: ChildProcess): Promise<void> {
  * ainda escreve na raiz enquanto ela é apagada.
  */
 async function matarPi(raiz: string): Promise<void> {
-  condutor.montarHarness(new HarnessPi());
+  ligarGestaoDeAmbientesNosModulos();
   const banco = abrirBancoDaFabriquinha(raiz);
-  await condutor.recuperarNaSubida(banco, recuperacaoDaSubida);
+  await recuperarAposReinicio(banco, { ambientes: gestaoLigadaNosModulos() });
   banco.close();
 }
 
@@ -91,7 +90,7 @@ export const test = base.extend<{
         process.execPath,
         [
           "--disable-warning=ExperimentalWarning",
-          join(import.meta.dirname, "../src/server/composicao/fabriquinha.ts"),
+          join(import.meta.dirname, "../src/server/system/fabriquinha.ts"),
           "servidor",
         ],
         {

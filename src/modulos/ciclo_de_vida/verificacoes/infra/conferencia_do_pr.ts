@@ -3,29 +3,32 @@
 import { ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { falhaDoErro } from "../../etapas/publico.ts";
 import type { ResultadoDaVerificacao } from "../nucleo/verificacao.ts";
-import {
-  type OpcoesVerificacao,
-  type ProblemasDoPR,
-  type RepositorioDoProjeto,
-  verificarPR,
+import type {
+  OpcoesVerificacao,
+  ProblemasDoPR,
+  ProjetoDoRepositorio,
+  RepositorioDoProjeto,
 } from "../../../repositorio/publico.ts";
 import { Verificacao } from "./verificacao.ts";
 
-/** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `verificarPR`. */
+/** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `situacaoDoPR` com a espera. */
 export class ConferenciaDoPR extends Verificacao {
   readonly tipo = "conferencia_do_pr";
-  readonly #projeto: Pick<RepositorioDoProjeto, "raiz_git" | "hospedagem">;
+  readonly #repositorio: Pick<RepositorioDoProjeto, "situacaoDoPR">;
+  readonly #projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">;
   readonly #idDoPR: string;
   readonly #log: string;
   readonly #opcoes: OpcoesVerificacao | undefined;
 
   constructor(
-    projeto: Pick<RepositorioDoProjeto, "raiz_git" | "hospedagem">,
+    repositorio: Pick<RepositorioDoProjeto, "situacaoDoPR">,
+    projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "hospedagem">,
     idDoPR: string,
     log: string,
     opcoes?: OpcoesVerificacao,
   ) {
     super();
+    this.#repositorio = repositorio;
     this.#projeto = projeto;
     this.#idDoPR = idDoPR;
     this.#log = log;
@@ -34,7 +37,7 @@ export class ConferenciaDoPR extends Verificacao {
 
   /** Os problemas com o detalhe que o chamador transforma em correções; a hospedagem que não decide lança ErroExterno. */
   conferir(): Promise<ProblemasDoPR> {
-    return verificarPR(this.#projeto, this.#idDoPR, this.#log, this.#opcoes);
+    return this.#repositorio.situacaoDoPR(this.#projeto, this.#idDoPR, { log: this.#log, opcoes: this.#opcoes });
   }
 
   /** Só o erro externo da hospedagem vira resultado; qualquer outro propaga. */

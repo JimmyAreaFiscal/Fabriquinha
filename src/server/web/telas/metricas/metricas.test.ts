@@ -1,7 +1,8 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { TipoMetrica, EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
-import type { MetricasDasDemandas, MetricasDoMes } from "../../../contrato/metricas.ts";
+import type { MetricasDasDemandas, MetricasDoMes } from "../../../system/api/contrato/metricas.ts";
 import {
   cardsDoMes,
   contarMeses,
@@ -22,10 +23,10 @@ import {
   tabelaDaEvolucao,
   variacao,
 } from "./metricas.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 /** O texto visível do HTML, sem tags e com os espaços juntados. */
 const texto = (html: string) =>

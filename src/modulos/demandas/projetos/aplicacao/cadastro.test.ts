@@ -12,7 +12,8 @@ import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../../../../shared/
 import { caminhoArquivo } from "../../../../shared/armazenamento/arquivos.ts";
 import { raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { cursorDaBase } from "../../../repositorio/publico.ts";
+import { cursorDaBase } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { montarRepositorio } from "../../../repositorio/publico.ts";
 import { buscarProjeto, listarProjetos } from "../armazenamento/projetos.ts";
 import {
   cadastrarProjetoDoFormulario,
@@ -21,11 +22,20 @@ import {
   gravarConfiguracaoSdlc,
   registrarProjeto,
 } from "./cadastro.ts";
-import { HarnessPi, type Modelo } from "../../../sessoes/publico.ts";
-import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
+import { removerProjetoComOQueDependeDele } from "../../../../server/system/api/configuracao/remocao_do_projeto.ts";
+import {
+  conferirModeloNaLista,
+  montarCicloDeVidaDoBanco,
+  montarDemandasDoBanco,
+} from "../../../../server/system/banco_da_fabriquinha.ts";
+import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 
-/** O pi falso do teste responde a conferência, como o harness do serviço. */
-const conferirModeloNoPi = (modelo: Modelo): Promise<void> => new HarnessPi().conferirModelo(modelo);
+/** As conferências do formulário: o modelo pelos modelos de Sessões (o pi falso) e o repositório, montados sobre o `banco`. */
+const conferenciasDo = (banco: DatabaseSync) => ({
+  conferirModeloNoHarness: (modelo: { provedor: string; nome: string }) =>
+    conferirModeloNaLista(montarSessoesDeAgente({ banco }).modelos(), modelo),
+  repositorio: montarRepositorio({ banco }),
+});
 
 /** A pasta da execução simulada `id`, da Simulação que saiu (ticket 02). */
 const pastaDaExecucaoSimulada = (raiz: string, id: number): string => join(raiz, "simulacoes", String(id));
@@ -334,7 +344,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
       INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
-      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 0);
       INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
       INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
       INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
@@ -386,7 +396,12 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
   // A demanda do outro projeto que depende de uma do removido perde a dependência.
   banco.prepare("INSERT INTO dependencia_demanda VALUES (?, ?)").run(`I-${String(outro[0])}`, `I-${String(demo[0])}`);
 
-  const { projeto: removido, avisos } = await removerProjetoComOQueDependeDele(banco, "demo");
+  const { projeto: removido, avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "demo",
+  );
 
   assert.equal(removido.nome, "demo");
   assert.equal(removido.raiz_git, "/repos/demo");
@@ -419,7 +434,7 @@ test("removerProjeto não apaga o arquivo que um anexo de outro projeto ainda us
     INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('outro', 'Seu João', 'd');
     INSERT INTO usuario_simulado_anexo SELECT id, 'igual.pdf', '${"f".repeat(64)}', 1 FROM usuario_simulado WHERE projeto = 'outro';
   `);
-  await removerProjetoComOQueDependeDele(banco, "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
   assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), true);
   banco.close();
 });
@@ -436,7 +451,13 @@ test("removerProjeto recusa projeto inexistente, sem mudar nada", async () => {
   popular(banco, "outro", "e".repeat(64));
   const antes = contagens(banco);
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, "fantasma"),
+    () =>
+      removerProjetoComOQueDependeDele(
+        banco,
+        montarCicloDeVidaDoBanco(banco),
+        montarDemandasDoBanco(banco),
+        "fantasma",
+      ),
     ErroDeInexistente,
     "o projeto fantasma não existe (confira o nome do projeto)",
   );
@@ -451,17 +472,21 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
 
   banco.prepare("UPDATE processo_do_trabalho SET fim = NULL WHERE id = ?").run(execucaoDe(primeira, true));
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, "demo"),
+    () =>
+      removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo"),
     ErroDeRegra,
     `o projeto demo tem execução em andamento no I-${String(primeira)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
   );
   assert.deepEqual(contagens(banco), antes);
   assert.equal(existsSync(pastaDe(raizDo(banco), execucaoDe(primeira, true))), true);
 
-  banco.prepare("UPDATE processo_do_trabalho SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
+  banco
+    .prepare("UPDATE processo_do_trabalho SET fim = '2026-01-01T00:00:00.000Z' WHERE id = ?")
+    .run(execucaoDe(primeira, true));
   banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, "demo"),
+    () =>
+      removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo"),
     ErroDeRegra,
     `o projeto demo tem execução em andamento no I-${String(segunda)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
   );
@@ -475,7 +500,7 @@ test("removerProjeto apaga o projeto com execução simulada histórica que fico
   const [id] = simuladas(banco, "demo");
   banco.prepare("UPDATE execucao_simulada SET status = 'na_fila', erro = NULL").run();
 
-  await removerProjetoComOQueDependeDele(banco, "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
 
   assert.equal(buscarProjeto(banco, "demo"), undefined);
   assert.deepEqual(simuladas(banco, "demo"), []);
@@ -486,7 +511,12 @@ test("removerProjeto apaga o projeto com execução simulada histórica que fico
 test("removerProjeto sem demandas nem sessões no disco só apaga o projeto", async () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, "fabriquinha");
+  const { avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "fabriquinha",
+  );
   assert.deepEqual(semAvisoDoGit(avisos), []);
   assert.deepEqual(listarProjetos(banco), []);
   banco.close();
@@ -497,7 +527,12 @@ test("removerProjeto apaga as worktrees do projeto e avisa quando o prune do rep
   registrarProjeto(banco, exemplo);
   const pasta = join(raizDo(banco), "worktrees", "fabriquinha", "I-1");
   mkdirSync(pasta, { recursive: true });
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, "fabriquinha");
+  const { avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "fabriquinha",
+  );
   assert.equal(existsSync(join(raizDo(banco), "worktrees", "fabriquinha")), false);
   assert.equal(avisos.length, 1);
   assert.match(avisos[0] ?? "", /^git -C \/repos\/fabriquinha worktree prune falhou/);
@@ -510,7 +545,12 @@ test("removerProjeto: falha ao apagar no disco vira aviso e não desfaz o banco"
   popular(banco, "demo", "f".repeat(64));
   chmodSync(join(raiz, "execucoes"), 0o500); // sem escrita: não dá para apagar E-n dentro dela
   try {
-    const { avisos } = await removerProjetoComOQueDependeDele(banco, "demo");
+    const { avisos } = await removerProjetoComOQueDependeDele(
+      banco,
+      montarCicloDeVidaDoBanco(banco),
+      montarDemandasDoBanco(banco),
+      "demo",
+    );
     assert.equal(semAvisoDoGit(avisos).length, 4);
     for (const aviso of semAvisoDoGit(avisos)) assert.match(aviso, /^não foi possível apagar .*E-[\w-]+: /);
   } finally {
@@ -593,7 +633,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
     INSERT INTO uso_declarado VALUES ('pi', '${d}x', '${d}', '[]');
     INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
-    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 0);
     INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_escrita, custo) VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
@@ -616,7 +656,7 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
     INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
     INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');
   `);
-  await removerProjetoComOQueDependeDele(banco, "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
   banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
   assert.deepEqual(contagensDemanda(banco), antes);
   assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);
@@ -697,15 +737,15 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
       hospedagem: "azure-devops",
       configuracoes,
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   assert.equal(salvo.hospedagem, "github");
   assert.equal(salvo.chave_sonarqube, "loja");
-  assert.deepEqual(salvo.configuracoes, {
-    planejar: configuracoes.planejar,
-    implementar: configuracoes.implementar,
-    revisar_rodada: configuracoes.revisar_rodada,
-  });
+  assert.deepEqual(salvo.etapas, [
+    { etapa: "planejar", configuracao_agente: configuracoes.planejar },
+    { etapa: "implementar", configuracao_agente: configuracoes.implementar },
+    { etapa: "revisar_rodada", configuracao_agente: configuracoes.revisar_rodada },
+  ]);
   assert.deepEqual(
     linhasDasEtapas(banco).map((linha) => linha.etapa),
     ["implementar", "planejar", "revisar_rodada"],
@@ -713,7 +753,7 @@ test("cadastrarProjetoDoFormulario confere, deduz a hospedagem do remoto, grava 
   );
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
   await assert.rejects(
-    cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo), conferirModeloNoPi),
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(repo), conferenciasDo(banco)),
     /já existe o projeto loja/,
   );
   banco.close();
@@ -729,7 +769,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
       ...formularioDeLoja(repo),
       configuracoes: { planejar: { modelo: opus } },
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   const cursor = cursorDaBase(banco, "loja");
   git(repo, "commit", "-q", "--allow-empty", "-m", "outro");
@@ -746,7 +786,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
           implementar: { modelo: { provedor: "inexistente", nome: "xyz" } },
         },
       },
-      conferirModeloNoPi,
+      conferenciasDo(banco),
     ),
     (erro: unknown) =>
       erro instanceof ZodError &&
@@ -769,7 +809,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
       preparacao: ["npm ci"],
       configuracoes: { planejar: { modelo: opus, effort: "low" } },
     },
-    conferirModeloNoPi,
+    conferenciasDo(banco),
   );
   assert.deepEqual(editado.verificacoes.preparacao, ["npm ci"]);
   assert.deepEqual(linhasDasEtapas(banco), [
@@ -779,7 +819,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
     editarProjetoDoFormulario(
       banco,
       { ...formularioDeLoja(repo), configuracoes: { planejar: { modelo: qwen } } },
-      conferirModeloNoPi,
+      conferenciasDo(banco),
     ),
     ZodError,
   );
@@ -791,7 +831,7 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
   const banco = novoBanco();
   const pasta = mkdtempSync(join(base, "nao-git-"));
   await assert.rejects(
-    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta), conferirModeloNoPi),
+    cadastrarProjetoDoFormulario(banco, formularioDeLoja(pasta), conferenciasDo(banco)),
     (erro: unknown) =>
       erro instanceof ErroExterno &&
       erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,

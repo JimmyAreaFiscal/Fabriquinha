@@ -1,8 +1,8 @@
 // Página do projeto (F7 §4.4) no DOM: escolhe o projeto, lê as demandas com os filtros e o mês corrente dele, desenha
 // com as funções puras de projeto.ts, abre e fecha as gavetas e arquiva as concluídas. O app.ts a redesenha a cada 5 s.
 // Os testes de ponta a ponta (e2e/) a exercitam.
-import type { MetricasDoMes } from "../../../contrato/metricas.ts";
-import type { ListaDoProjeto } from "../../../contrato/projeto.ts";
+import type { MetricasDoMes } from "../../../system/api/contrato/metricas.ts";
+import type { ListaDoProjeto } from "../../../system/api/contrato/projeto.ts";
 import { agoraNoNavegador } from "../../compartilhado/agora_no_navegador.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
 import { api, elemento, irPara, mostrarErro } from "../../dom.ts";

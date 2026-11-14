@@ -6,6 +6,10 @@ import { after, beforeEach, test } from "node:test";
 import { hospedagemFalsa } from "../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import type { Hospedagem, OpcoesVerificacao } from "../../../repositorio/publico.ts";
 import { ConferenciaDoPR } from "./conferencia_do_pr.ts";
+import { DatabaseSync } from "node:sqlite";
+import { montarRepositorio } from "../../../repositorio/publico.ts";
+
+const REPOSITORIO = montarRepositorio({ banco: new DatabaseSync(":memory:") });
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-conferencia-pr-")));
 after(() => {
@@ -25,7 +29,7 @@ const log = join(base, "log");
 /** Confere um PR aberto na hospedagem falsa. */
 function conferencia(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.abrirPr>[0]>, opcoes = RAPIDO) {
   hospedagem.abrirPr({ head: "fabriquinha/I-1", base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
-  return new ConferenciaDoPR({ raiz_git: base, hospedagem: tipo }, "1", log, opcoes);
+  return new ConferenciaDoPR(REPOSITORIO, { raiz_git: base, hospedagem: tipo }, "1", log, opcoes);
 }
 
 for (const tipo of ["github", "azure-devops"] as const) {
@@ -62,7 +66,12 @@ for (const tipo of ["github", "azure-devops"] as const) {
 }
 
 test("o erro que não é da hospedagem propaga", async () => {
-  const verificacao = new ConferenciaDoPR({ raiz_git: join(base, "inexistente"), hospedagem: "github" }, "1", log);
+  const verificacao = new ConferenciaDoPR(
+    REPOSITORIO,
+    { raiz_git: join(base, "inexistente"), hospedagem: "github" },
+    "1",
+    log,
+  );
 
   await assert.rejects(verificacao.executar(), /ENOENT/);
 });

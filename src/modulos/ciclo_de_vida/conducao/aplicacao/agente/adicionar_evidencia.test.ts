@@ -19,6 +19,7 @@ import {
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { createHash } from "node:crypto";
 import { adicionarEvidenciaComAnexosEnviados } from "./adicionar_evidencia.ts";
+import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -103,7 +104,7 @@ function cenario() {
   const lerJson = (valor: string) => Promise.resolve(JSON.parse(valor) as unknown);
   const adicionar = (ticket_id: number, tipo: string, dados: unknown, ...caminhos: string[]) =>
     adicionarEvidenciaComAnexosEnviados(
-      banco,
+      modulosDoCicloDeTeste(banco),
       processo(ticket_id),
       {
         ticket: `I-206.T${String(ticket_id)}`,
@@ -189,7 +190,7 @@ test("ticket alheio, T-5 e rodada não gravam nada e mostram a forma certa", asy
   const dados = JSON.stringify(ESTRESSE);
   const adicionar = (ticket: string) =>
     adicionarEvidenciaComAnexosEnviados(
-      banco,
+      modulosDoCicloDeTeste(banco),
       processo(5),
       { ticket, tipo: "testes_estresse", dados, anexos: [] },
       lerJson,
@@ -214,7 +215,7 @@ test("ticket já concluído, execução terminada e execução inexistente não 
   });
   await assert.rejects(
     adicionarEvidenciaComAnexosEnviados(
-      banco,
+      modulosDoCicloDeTeste(banco),
       { id: "exec-x" },
       { ticket: "I-206.T5", tipo: "plano", dados: "{}", anexos: [] },
       () => Promise.resolve({}),
@@ -236,14 +237,14 @@ test("tipo que o agente não submete, ou de outra etapa, é recusado", async () 
 test("sem dados, ou com dados que o leitor não lê, a evidência é recusada antes de gravar", async () => {
   const { banco, processo } = cenario();
   const sem = adicionarEvidenciaComAnexosEnviados(
-    banco,
+    modulosDoCicloDeTeste(banco),
     processo(5),
     { ticket: "I-206.T5", tipo: "testes_estresse", dados: undefined, anexos: [] },
     () => Promise.resolve({}),
   );
   await assert.rejects(sem, { message: "falta --dados (passe --dados <arquivo.json|->)" });
   const ruim = adicionarEvidenciaComAnexosEnviados(
-    banco,
+    modulosDoCicloDeTeste(banco),
     processo(5),
     { ticket: "I-206.T5", tipo: "testes_estresse", dados: "{", anexos: [] },
     (valor) => Promise.reject(new SyntaxError(`${valor} não é um JSON válido`)),

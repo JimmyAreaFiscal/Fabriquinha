@@ -15,12 +15,11 @@ import {
   concluirSessaoAjustes,
   MOTIVO_APROVACAO_AUTOMATICA_PR,
   cicloDoDespacho,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../src/modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
-import { predecessorasPendentesPelasDependencias } from "../../src/server/fluxos/ciclo_do_servico/despacho_do_trabalho.ts";
-import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
+import { type RespostaAutomatica } from "../../src/modulos/sessoes/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { caminhoDaWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
+import { caminhoDaWorktreeRodada } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   agente,
   agora,
@@ -40,6 +39,9 @@ import {
 import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git } from "../apoio.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { ghFalso } from "../falsos.ts";
+import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
+import { PREFIXO_DA_RESPOSTA_AUTOMATICA } from "../../apoio-testes/sessoes_de_teste.ts";
 
 const gh = ghFalso(base);
 
@@ -332,7 +334,13 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   await encerrar(c, id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   assert.equal(gh.prs().length, 1);
-  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
+  await decidirGate(
+    modulosDoCicloDeTeste(c.banco),
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "aprovado", nota: 4 },
+    AUDITOR,
+  );
   assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   assert.equal(demanda(c, id).decisoes.find((d) => d.ticket_id === atual(c, id, "encerrar_rodada").ticket_id)?.nota, 4);
 
@@ -360,7 +368,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   pi.roteirizar([{ agente: intruso }]);
   const chamadasAntes = pisAteAgora();
   await decidirGate(
-    humana.banco,
+    modulosDoCicloDeTeste(humana.banco),
     "gate_pr",
     Endereco.daRodada(idHumana, 1),
     { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
@@ -377,7 +385,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(
-    cicloDoDespacho(humana.banco, humana.config, despacho(), predecessorasPendentesPelasDependencias(humana.banco))
+    cicloDoDespacho(modulosDoCicloDeTeste(humana.banco), humana.config, despacho(), liberacaoDasDemandas(humana.banco))
       .length,
     0,
   );
@@ -392,7 +400,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
       { agora: agora() },
     ),
   );
-  await concluirSessaoAjustes(humana.banco, ref, AUDITOR); // aguarda o fim da conversa
+  await concluirSessaoAjustes(modulosDoCicloDeTeste(humana.banco), ref, AUDITOR); // aguarda o fim da conversa
   assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "implementar");
   assert.equal(atual(humana, idHumana, "implementar").estado, "aberto");
   assert.equal(ponta(branchRodada), rodadaAntes);

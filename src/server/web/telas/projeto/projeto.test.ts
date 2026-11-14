@@ -1,7 +1,8 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetricasDoMes } from "../../../contrato/metricas.ts";
-import type { DemandaDoProjeto, ListaDoProjeto } from "../../../contrato/projeto.ts";
+import type { MetricasDoMes } from "../../../system/api/contrato/metricas.ts";
+import type { DemandaDoProjeto, ListaDoProjeto } from "../../../system/api/contrato/projeto.ts";
 import type { ProjetoListado } from "../configuracao/configuracao.ts";
 import {
   abas,
@@ -15,10 +16,10 @@ import {
   situacaoNaDemanda,
   situacaoNaRodada,
 } from "./projeto.ts";
-import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
+import { descreverEtapasDoSdlc } from "../../../system/api/configuracao/consulta_etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 const projeto = (nome: string): ProjetoListado => ({
   nome,

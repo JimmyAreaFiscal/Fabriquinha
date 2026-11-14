@@ -6,23 +6,21 @@ import {
   type AgregadoDemanda,
   Endereco,
   type RegistroDaVerificacao,
-  condutor as condutorDoServico,
-  type CondutorDeTrabalhos,
   motivoDaFalhaDoTicket,
   type DepsDaConducao,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
+} from "../ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { anotar } from "../../src/shared/infra/registro.ts";
-import { registrarProjeto } from "../../src/modulos/demandas/publico.ts";
 import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamento/agregado_da_demanda.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/modulos/repositorio/publico.ts";
-import { AmbienteHostLocal } from "../../src/modulos/ambiente/publico.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio_de_teste.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../falsos/ambiente_falso.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../repositorio_de_teste.ts";
 import { verificacaoDeTeste } from "../verificacoes_de_teste.ts";
+import { registrarProjeto } from "../demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 const em = "2026-01-01T00:00:00.000Z";
@@ -181,13 +179,16 @@ export async function cenarioDeImplementacao({
         resultado: { tipo: "reprovacao" as const, motivo: "corrija" },
       })),
     }));
-  /** As dependências da condução; `condutor` troca o do serviço (a parada do serviço, por exemplo). */
-  const deps = (condutor: CondutorDeTrabalhos = condutorDoServico): DepsDaConducao => ({
-    banco,
-    relogio: relogioDoSistema,
-    condutor,
-    registro: anotar,
-  });
+  /** As dependências da condução; `emParada` diz se o serviço está parando. */
+  const deps = (emParada: () => boolean = () => false): DepsDaConducao => {
+    const modulos = modulosDoCicloDeTeste(banco);
+    return {
+      ...modulos,
+      emParada,
+      relogio: relogioDoSistema,
+      registro: anotar,
+    };
+  };
   return {
     c,
     banco,

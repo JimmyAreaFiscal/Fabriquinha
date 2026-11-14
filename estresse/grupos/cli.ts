@@ -7,21 +7,25 @@ import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/cli/demanda_externa.ts";
-import { COMANDOS_DO_AGENTE } from "../../src/server/cli-agente/comandos.ts";
-import { type AgregadoDemanda, submeterEvidenciaDaEntradaExterna } from "../../src/modulos/ciclo_de_vida/publico.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "../../src/server/system/cli/demanda_externa/demanda_externa.ts";
+import { COMANDOS_DO_AGENTE } from "../../src/server/system/cli/agente/comandos.ts";
 import {
+  type AgregadoDemanda,
+  submeterEvidenciaDaEntradaExterna,
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import {
+  gravarTokenDaExecucao,
   criarSessao,
   iniciarExecucao,
   comSessoesDoContexto,
-  gravarTokenDaExecucao,
-} from "../../src/modulos/sessoes/publico.ts";
-import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
+} from "../../apoio-testes/sessoes_de_teste.ts";
+import { registrarPedidoComProcesso } from "../../src/server/system/cli/demanda_externa/registro_do_pedido.ts";
 import { escrever, novoId } from "../../src/shared/armazenamento/banco.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { criarDemandaNova } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
+import { cicloDeVidaNoContexto } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoCli {
@@ -39,7 +43,7 @@ const BUSY = /SQLITE_BUSY|database is locked/i;
 
 const CLI_EXTERNO = [
   "--disable-warning=ExperimentalWarning",
-  join(import.meta.dirname, "../../src/server/composicao/fabriquinha.ts"),
+  join(import.meta.dirname, "../../src/server/system/fabriquinha.ts"),
 ];
 const CLI_DO_AGENTE = [join(import.meta.dirname, "../../pacote-pi/bin/fabriquinha")];
 
@@ -200,7 +204,14 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
       const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
-      rascunhos.push(registrarPedidoComProcesso(banco, entrada, autor, { agora: em }).demanda.id);
+      rascunhos.push(
+        registrarPedidoComProcesso(
+          cicloDeVidaNoContexto(banco, { agora: em }),
+          montarDemandasDoBanco(banco),
+          entrada,
+          autor,
+        ).demanda.id,
+      );
     }
     // `enviar` exige as duas evidências de quem registra; o rascunho de cada chamada nasce com elas.
     for (const id of rascunhos.slice(2 * CHAMADAS)) {

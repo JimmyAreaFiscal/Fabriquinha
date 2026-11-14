@@ -6,7 +6,7 @@ import { branchDemanda, branchRodada } from "../nucleo/nome_do_espaco.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "./limpeza_demanda.ts";
 import { criarRepositorioDeTeste, rodarGit as git } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeRodada, garantirWorktreeDemanda, garantirWorktreeRodada } from "./worktree-demanda.ts";
-import { AmbienteHostLocal } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 

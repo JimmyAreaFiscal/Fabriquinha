@@ -7,11 +7,12 @@ import {
   type AgregadoDemanda,
   motivoDaFalhaDoTicket,
   carregarDemanda,
-} from "../../src/modulos/ciclo_de_vida/publico.ts";
-import { abrirBancoDaFabriquinha } from "../../src/server/composicao/banco_da_fabriquinha.ts";
-import { gravarProjeto, Projeto } from "../../src/modulos/demandas/publico.ts";
+} from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
+import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
+import { Projeto } from "../../src/modulos/demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "../apoio.ts";
+import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
 const SEM_DECISAO = "a revisão terminou sem registrar a decisão";

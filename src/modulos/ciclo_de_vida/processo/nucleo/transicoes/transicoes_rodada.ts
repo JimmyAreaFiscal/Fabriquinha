@@ -9,7 +9,7 @@ import {
   exigirAtor,
   FABRIQUINHA,
 } from "../../../etapas/publico.ts";
-import { DemandaId } from "../../../../repositorio/publico.ts";
+import { DemandaId } from "../../../../../shared/nucleo/demanda/demanda_id.ts";
 import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "../agregado/agregado_demanda.ts";
 import {
   CICLO_DA_DEMANDA,

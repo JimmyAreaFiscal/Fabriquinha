@@ -2,12 +2,12 @@
 // `gate.ts` da Etapa dona dele; aqui ficam a forma comum e os efeitos que não são de Etapa nenhuma (conferir as evidências
 // da revisão). O Gate da demanda, que cancela em cascata, é decidido pelo fluxo do servidor, junto dos pedidos. Os efeitos de cada Etapa (integrar o PR, falar com o pi) ficam na pasta dela, e
 // `etapas/gates.ts` junta um Gate por nome.
-import type { DatabaseSync } from "node:sqlite";
 import { type AgregadoDemanda, decidirGateNaDemanda, type Gate } from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
 import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
 import { exigirTrabalhoDoTicket } from "../politica_dos_agentes/trabalho_do_ticket.ts";
+import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 /** A demanda decidida; `canceladas` fica vazia (só o gate da demanda cancela, D08) e `sessao` é a de ajustes do PR reprovado. */
 export interface ResultadoDoGate {
@@ -20,7 +20,7 @@ export interface ResultadoDoGate {
 export interface GateComEfeitos {
   readonly regra: Gate;
   decidir(
-    banco: DatabaseSync,
+    modulos: ModulosDoCiclo,
     endereco: Endereco,
     entrada: unknown,
     ator: Ator,
@@ -31,7 +31,7 @@ export interface GateComEfeitos {
 /** A aprovação só passa com as evidências em ordem; a recusa desfaz tudo. O agente só decide o gate do próprio ticket. */
 export const gateDeRevisao = (regra: Gate): GateComEfeitos => ({
   regra,
-  decidir(banco, endereco, entrada, ator, relogio) {
+  decidir({ banco }, endereco, entrada, ator, relogio) {
     const { resultado } = regra.validarEntrada(entrada, ator);
     const demanda = decidirGateNaDemanda(banco, regra, endereco, entrada, ator, relogio, {
       antes: (_ag, ticket) => {

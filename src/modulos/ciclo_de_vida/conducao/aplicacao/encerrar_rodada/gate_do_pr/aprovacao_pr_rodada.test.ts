@@ -10,7 +10,6 @@ import { abrirBancoTemporario } from "../../../../../../../apoio-testes/banco/ba
 import { type AgregadoDemanda, MOTIVO_APROVACAO_AUTOMATICA_PR, carregarDemanda } from "../../../../processo/publico.ts";
 import { AUDITOR, type Ator, Endereco } from "../../../../etapas/publico.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../../../../../../shared/nucleo/erros.ts";
-import { registrarProjeto } from "../../../../../demandas/publico.ts";
 import { gravarAgregadoPronto } from "../../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../../../../apoio-testes/falsos/hospedagem_falsa.ts";
 import {
@@ -18,10 +17,14 @@ import {
   commitarArquivo,
   rodarGit,
 } from "../../../../../../../apoio-testes/repositorio_de_teste.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../../../../repositorio/publico.ts";
+import {
+  garantirWorktreeDemanda,
+  garantirWorktreeRodada,
+} from "../../../../../../../apoio-testes/repositorio_de_teste.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { decidirGate } from "../../gates.ts";
-import { AmbienteHostLocal } from "../../../../../ambiente/publico.ts";
+import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { registrarProjeto } from "../../../../../../../apoio-testes/demandas_de_teste.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -44,7 +47,7 @@ const REF = { demanda_id: DEMANDA, rodada_id: 2 };
 const aprovarPRRodada = async (banco: DatabaseSync, ref: typeof REF, nota: number | undefined, ator: Ator) =>
   (
     await decidirGate(
-      banco,
+      modulosDoCicloDeTeste(banco),
       "gate_pr",
       Endereco.daRodada(ref.demanda_id, ref.rodada_id),
       { resultado: "aprovado", ...(nota !== undefined && { nota }) },
@@ -247,7 +250,13 @@ test("rodada inexistente ou sem PR publicado é reprovada", async () => {
 test("o endereço da demanda ou a rodada sem ticket encerrar_rodada não aprovam o PR", async () => {
   const { banco, estado } = await cenario();
   await assert.rejects(
-    decidirGate(banco, "gate_pr", Endereco.daDemanda(DEMANDA), { resultado: "aprovado", nota: 4 }, AUDITOR),
+    decidirGate(
+      modulosDoCicloDeTeste(banco),
+      "gate_pr",
+      Endereco.daDemanda(DEMANDA),
+      { resultado: "aprovado", nota: 4 },
+      AUDITOR,
+    ),
     /não é de uma rodada/,
   );
   banco.prepare("DELETE FROM evidencia_demanda").run();
@@ -277,7 +286,7 @@ const LIGADA = { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "outro, loja" };
 test("aprovação automática ligada para o projeto: integra o PR que chegou ao gate e conclui a rodada sem nota", async () => {
   const { c, banco, ag, estado, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
 
-  await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
+  await aprovarPRRodadaSeAutomatico(modulosDoCicloDeTeste(banco), ag(), REF, LIGADA);
 
   rodarGit(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
   assert.equal(demandaLocal(), demandaRemota());
@@ -291,9 +300,9 @@ test("aprovação automática ligada para o projeto: integra o PR que chegou ao 
 test("sem a opção, com outro projeto nela ou fora do gate, a aprovação automática não faz nada", async () => {
   const { banco, ag, estado } = await cenario();
   for (const env of [{}, { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "lojas,outro" }]) {
-    await aprovarPRRodadaSeAutomatico(banco, ag(), REF, env);
+    await aprovarPRRodadaSeAutomatico(modulosDoCicloDeTeste(banco), ag(), REF, env);
   }
-  await aprovarPRRodadaSeAutomatico(banco, { ...ag(), rodadas: [] }, REF, LIGADA);
+  await aprovarPRRodadaSeAutomatico(modulosDoCicloDeTeste(banco), { ...ag(), rodadas: [] }, REF, LIGADA);
 
   assert.equal(estado(), "gate_pr");
   assert.deepEqual(hospedagem.chamadas(), []);
@@ -303,7 +312,7 @@ test("a hospedagem recusa a integração automática: o gate fica aberto para o 
   const { banco, ag, estado } = await cenario();
   hospedagem.fecharPr(1);
 
-  await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
+  await aprovarPRRodadaSeAutomatico(modulosDoCicloDeTeste(banco), ag(), REF, LIGADA);
 
   assert.equal(estado(), "gate_pr");
   assert.deepEqual(ag().decisoes, []);
