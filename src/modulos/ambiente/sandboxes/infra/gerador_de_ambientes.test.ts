@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
@@ -185,6 +185,55 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
   assert.ok(!existsSync(join(raiz, "ambientes", criado.id, "pi")), "o pi não é montado");
 });
 
+test("criar copia só a configuração do pi, do .claude e do .codex: sessões, históricos, logs e o resto ficam no host", async () => {
+  const dirDoPi = join(base, "pi-com-sessoes");
+  const home = join(base, "home-com-sessoes");
+  const vivos = {
+    [dirDoPi]: ["sessions/s.jsonl", "run-history.jsonl", "qualquer.txt"],
+    [join(home, ".claude")]: [
+      "projects/p/t.jsonl",
+      "history.jsonl",
+      "file-history/f",
+      "daemon.log",
+      "shell-snapshots/s.sh",
+    ],
+    [join(home, ".codex")]: [
+      "sessions/s.jsonl",
+      "history.jsonl",
+      "logs_2.sqlite",
+      "logs_2.sqlite-wal",
+      "shell_snapshots/s",
+    ],
+  };
+  for (const [pasta, arquivos] of Object.entries(vivos))
+    for (const arquivo of arquivos) {
+      mkdirSync(dirname(join(pasta, arquivo)), { recursive: true });
+      writeFileSync(join(pasta, arquivo), "vivo");
+    }
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(home, ".claude", ".credentials.json"), "{}");
+  mkdirSync(join(home, ".claude", "skills", "s"), { recursive: true });
+  writeFileSync(join(home, ".claude", "skills", "s", "SKILL.md"), "skill");
+  writeFileSync(join(home, ".codex", "config.toml"), "modelo");
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: home,
+  });
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  const destinos = {
+    [dirDoPi]: join(".pi", "agent"),
+    [join(home, ".claude")]: ".claude",
+    [join(home, ".codex")]: ".codex",
+  };
+  for (const [pasta, arquivos] of Object.entries(vivos))
+    for (const arquivo of arquivos)
+      assert.ok(!existsSync(join(homeDoContainer, destinos[pasta] ?? "", arquivo)), `${pasta}/${arquivo} foi copiado`);
+  assert.ok(existsSync(join(homeDoContainer, ".pi", "agent", "auth.json")));
+  assert.ok(existsSync(join(homeDoContainer, ".claude", ".credentials.json")));
+  assert.ok(existsSync(join(homeDoContainer, ".claude", "skills", "s", "SKILL.md")));
+  assert.ok(existsSync(join(homeDoContainer, ".codex", "config.toml")));
+});
+
 test("criar copia o pi do Auditor, o .claude e o .codex para o home do container (por tar, sem docker cp e sem montagem)", async () => {
   const dirDoPi = join(base, "pi-do-auditor");
   const home = join(base, "home-do-usuario");
@@ -215,10 +264,13 @@ test("criar copia o pi do Auditor, o .claude e o .codex para o home do container
       chamada.some((argumento) => argumento === dirDoPi || argumento.startsWith(`${dirDoPi}:`)),
     ),
   );
-  // Sem .claude nem .codex no home do usuário, só o pi vai.
+  // Sem .claude nem .codex no home do usuário, ou com um .claude sem nada da configuração, só o pi vai.
+  const homeSemConfiguracao = join(base, "home-sem-configuracao");
+  mkdirSync(join(homeSemConfiguracao, ".claude"), { recursive: true });
+  writeFileSync(join(homeSemConfiguracao, ".claude", "history.jsonl"), "vivo");
   const outro = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
     dir_do_pi: dirDoPi,
-    home_do_usuario: join(base, "home-vazio"),
+    home_do_usuario: homeSemConfiguracao,
   });
   assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
 });
@@ -232,7 +284,11 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
   mkdirSync(join(home, ".claude"), { recursive: true });
   writeFileSync(join(dirDoPi, "auth.json"), "{}");
   writeFileSync(join(dirDoPi, "settings.json"), `{"github":"${token}","tema":"escuro"}`);
-  writeFileSync(join(home, ".claude", "arquivo com espaço.md"), `token ${tokenFinoDoGithub} e ${token}\noutra linha`);
+  mkdirSync(join(home, ".claude", "skills"));
+  writeFileSync(
+    join(home, ".claude", "skills", "arquivo com espaço.md"),
+    `token ${tokenFinoDoGithub} e ${token}\noutra linha`,
+  );
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
     dir_do_pi: dirDoPi,
     home_do_usuario: home,
@@ -243,7 +299,7 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
     '{"github":"[token-do-github-removido]","tema":"escuro"}',
   );
   assert.equal(
-    readFileSync(join(homeDoContainer, ".claude", "arquivo com espaço.md"), "utf8"),
+    readFileSync(join(homeDoContainer, ".claude", "skills", "arquivo com espaço.md"), "utf8"),
     "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
   );
   assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
