@@ -25,13 +25,17 @@ import {
   comCampoInvalidoComoErroDeRegra,
   type ContextoDemanda,
   criarProcessoDoPedido,
+  declararUso,
+  type EntradaEvidencia,
   falharTicketEmExecucao,
   levarAoGateDaDemanda,
   ligarLeituraDosPedidosRecebidos,
   type PedidoRecebido,
   reabrir,
+  submeterEvidenciaDaEntradaExterna,
   type TicketDemanda,
 } from "../../processo/publico.ts";
+import type { Origens } from "../../evidencias/publico.ts";
 import {
   abortarDemanda,
   concluirSessaoAjustes,
@@ -47,6 +51,7 @@ import {
   type ProjetoConduzido,
   recuperacaoDosTicketsNaSubida,
   type RefRodada,
+  resolverEscopoDoToken,
   responderDialogoDemanda,
 } from "../../conducao/publico.ts";
 import {
@@ -58,6 +63,7 @@ import {
   validarESalvarConfiguracao,
 } from "../../despacho/publico.ts";
 import { ligarAgendadorDoDespacho } from "./agendador_do_despacho.ts";
+import { type CicloDeVidaDoAgente, cicloDeVidaDoAgente } from "./ciclo_de_vida_do_agente.ts";
 
 /** O que o Ciclo de Vida lê de Demandas como dado (o Ciclo de Vida não importa Demandas), sobre um banco. */
 export interface DemandasDoCicloDeVida {
@@ -161,6 +167,17 @@ export interface CicloDeVida {
   cancelar(demanda: string, dependentes: readonly string[]): CascataDoCancelamento;
   /** O Auditor arquiva as demandas; `soAsConcluidas` pula as que não concluíram (o "arquivar concluídas" do projeto). */
   arquivar(demandas: readonly string[], opcoes?: { soAsConcluidas?: boolean }): AgregadoDemanda[];
+  /** A ferramenta externa submete a Evidência da demanda; os anexos só valem de dentro das `origens`. */
+  submeterEvidenciaExterna(
+    demanda: string,
+    entrada: EntradaEvidencia,
+    autor: Ator,
+    origens: Origens,
+  ): { demanda: AgregadoDemanda; avisos: string[] };
+  /** O Uso declarado das sessões da ferramenta externa (D10), até a demanda terminar. */
+  declararUso(demanda: string, dados: unknown, autor: Ator): { avisos: string[] };
+  /** Os casos de uso do agente no escopo do `token`; `undefined` se o token não é de uma execução viva. */
+  doAgente(token: string): CicloDeVidaDoAgente | undefined;
   /** Desliga o agendador; as conduções que falham daqui em diante falham como "serviço reiniciado". */
   parar(): Promise<void>;
 }
@@ -295,6 +312,13 @@ function cicloDeVidaMontado(
     arquivar(demandas, { soAsConcluidas = false } = {}) {
       if (soAsConcluidas) return arquivarConcluidas(banco, demandas, relogio);
       return demandas.map((id) => arquivar(banco, id, AUDITOR, contexto()));
+    },
+    submeterEvidenciaExterna: (demanda, entrada, autor, origens) =>
+      submeterEvidenciaDaEntradaExterna(banco, demanda, entrada, autor, origens),
+    declararUso: (demanda, dados, autor) => declararUso(banco, demanda, dados, autor),
+    doAgente(token) {
+      const escopo = resolverEscopoDoToken(banco, token);
+      return escopo === undefined ? undefined : cicloDeVidaDoAgente(modulos, escopo, relogio);
     },
     parar() {
       emParada = true;

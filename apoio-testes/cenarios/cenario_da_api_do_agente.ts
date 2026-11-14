@@ -12,7 +12,6 @@ import { after } from "node:test";
 import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { gravarTokenDaExecucao } from "../sessoes_de_teste.ts";
-import type { RotaDoAgente } from "../../src/server/api/agente/rotas.ts";
 import { montarAmbientesDoServico } from "../../src/server/composicao/ambientes_do_servico.ts";
 import { servirWeb } from "../../src/server/api/servidor.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
@@ -105,14 +104,16 @@ export function contagemDasTabelas(banco: DatabaseSync): Record<string, number> 
 
 /**
  * O servidor web de verdade sobre `banco`, numa porta livre, e o `pedir` a `/api/agente/*` com o `token` no
- * `Authorization` (sem ele, sem o cabeçalho). `rotas` troca as rotas do agente, para os testes porem espiões nos casos de uso.
+ * `Authorization` (sem ele, sem o cabeçalho).
  */
-export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgente[]) {
+export async function servirApiDoAgente(banco: DatabaseSync) {
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
   const ambientes = await montarAmbientesDoServico({ banco, raiz: raizDo(banco), porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
+  const cicloDeVida = montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio });
   servidor.on(
     "request",
     servirWeb({
@@ -120,15 +121,14 @@ export async function servirApiDoAgente(banco: DatabaseSync, rotas?: RotaDoAgent
       raiz: raizDo(banco),
       porta,
       cicloDeVida: {
-        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao }),
+        ...cicloDeVida,
         proximaBusca: () => new Date().toISOString(),
       },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
-      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
-      rotasDoAgente: rotas,
     }),
   );
   fechamentos.push(async () => {

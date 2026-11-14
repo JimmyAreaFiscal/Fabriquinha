@@ -11,7 +11,6 @@ import { build } from "esbuild";
 import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { RepositorioDoProjeto } from "../../modulos/repositorio/publico.ts";
-import { montarSessoesDeAgente } from "../../modulos/sessoes/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 import { casar } from "../web/compartilhado/caminhos.ts";
 import { autenticarAgente } from "./agente/autenticacao.ts";
@@ -160,8 +159,6 @@ interface Web {
   relogio: Relogio;
   /** O log do serviço para o erro 500 (a composição entrega o `noLog` com o relógio dela). */
   registrarErro: (erro: unknown) => void;
-  /** As rotas do agente; os testes trocam os casos de uso por espiões. */
-  rotasDoAgente?: RotaDoAgente[];
 }
 
 /**
@@ -178,7 +175,6 @@ export function servirWeb({
   repositorio,
   relogio,
   registrarErro,
-  rotasDoAgente: rotasDaApiDoAgente = ROTAS_DO_AGENTE,
 }: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
@@ -245,34 +241,14 @@ export function servirWeb({
 
   /** `/api/agente/*`: o token vem antes do corpo, para quem não o tem não fazer o serviço ler o pedido. */
   async function apiDoAgente(pedido: IncomingMessage, url: URL, resposta: ServerResponse): Promise<void> {
-    const agente = autenticarAgente(banco, pedido.headers);
-    for (const rota of rotasDaApiDoAgente) {
+    const agente = autenticarAgente(cicloDeVida, pedido.headers);
+    for (const rota of ROTAS_DO_AGENTE) {
       const params = rota.metodo === pedido.method ? casar(rota.caminho, url.pathname) : undefined;
       if (!params) continue;
       let corpo: unknown;
       if (rota.corpoEmFluxo) corpo = pedido;
       else if (rota.metodo === "POST") corpo = await lerCorpo(pedido, LIMITE_DO_JSON_DO_AGENTE);
-      json(
-        resposta,
-        200,
-        await rota.tratar({
-          banco,
-          modulos: {
-            banco,
-            ambientes: ambientes.gestao,
-            repositorio,
-            sessoes: montarSessoesDeAgente({ banco }),
-            // ponytail: os casos de uso do agente não conduzem Etapa; o 6c-2 os passa ao Ciclo de Vida do serviço.
-            /* node:coverage ignore next */
-            emParada: () => false,
-          },
-          relogio,
-          agente,
-          params,
-          query: url.searchParams,
-          corpo,
-        }),
-      );
+      json(resposta, 200, await rota.tratar({ agente, params, query: url.searchParams, corpo }));
       return;
     }
     throw new ErroHttp(404, `${String(pedido.method)} ${url.pathname} não existe`);

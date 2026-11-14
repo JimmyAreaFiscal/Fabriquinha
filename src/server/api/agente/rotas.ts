@@ -1,24 +1,8 @@
 // As rotas de /api/agente/*: uma por comando do agente (`projeto ver`, `demanda ver`, `ticket ver`, `ticket criar`,
 // `revisao decidir`, `evidencia schema`; o `evidencia add` é de evidencia.ts). Cada rota confere que o endereço pedido é do ticket do token
 // antes de chamar o caso de uso de `aplicacao/agente`, que confere de novo; nenhuma regra mora aqui.
-import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
-import {
-  adicionarEvidenciaComAnexosEnviados,
-  criarTicketCorretivo,
-  decidirRevisao,
-  Endereco,
-  type EscopoDoAgente,
-  exigirDemandaPropria,
-  exigirTicketProprio,
-  type ProcessoDoAgente,
-  tipoDoAgente,
-  verDemanda,
-  verProjeto,
-  verTicket,
-} from "../../../modulos/ciclo_de_vida/publico.ts";
-import { ErroDeEscopo } from "../../../shared/nucleo/erros.ts";
-import type { Relogio } from "../../../shared/nucleo/relogio.ts";
+import type { z } from "zod";
+import type { CicloDeVidaDoAgente } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { Parametros } from "../../web/compartilhado/caminhos.ts";
 import {
   type ErroDaApiDoAgente,
@@ -35,13 +19,9 @@ import { demandaParaCli } from "../../contrato/agente/demanda_para_cli.ts";
 
 export const PREFIXO_DA_API_DO_AGENTE = "/api/agente/";
 
-/** O que a rota recebe: o agente que o token autenticou e o pedido já separado em caminho, query e corpo JSON. */
+/** O que a rota recebe: o Ciclo de Vida do agente que o token autenticou e o pedido já separado em caminho, query e corpo JSON. */
 interface PedidoDoAgente {
-  banco: DatabaseSync;
-  /** Os módulos que os casos de uso do agente recebem, como o serviço os montou. */
-  modulos: Parameters<CasosDeUsoDoAgente["adicionarEvidencia"]>[0];
-  relogio: Relogio;
-  agente: EscopoDoAgente;
+  agente: CicloDeVidaDoAgente;
   params: Parametros;
   query: URLSearchParams;
   corpo: unknown;
@@ -57,19 +37,6 @@ export interface RotaDoAgente {
   tratar(pedido: PedidoDoAgente): unknown;
 }
 
-/** Os casos de uso que as rotas chamam; os testes trocam por espiões para provar que o pedido recusado nem chega a eles. */
-export const CASOS_DE_USO_DO_AGENTE = {
-  verProjeto,
-  verDemanda,
-  verTicket,
-  criarTicketCorretivo,
-  decidirRevisao,
-  adicionarEvidencia: adicionarEvidenciaComAnexosEnviados,
-};
-export type CasosDeUsoDoAgente = typeof CASOS_DE_USO_DO_AGENTE;
-
-export const processoDoAgente = (agente: EscopoDoAgente): ProcessoDoAgente => ({ id: agente.ator.trabalho_id });
-
 /** O corpo do erro de qualquer rota: o texto do CLI do agente, numa linha só, e o código de saída 1. */
 export const erroDaApiDoAgente = (mensagem: string): ErroDaApiDoAgente => ({
   mensagem: mensagem
@@ -83,43 +50,26 @@ export const erroDaApiDoAgente = (mensagem: string): ErroDaApiDoAgente => ({
 /** O texto da opção que o caso de uso espera: o valor já veio no corpo, então só a presença conta e o leitor devolve o valor. */
 export const PRESENTE = "(no corpo)";
 
-/** `GET` sem endereço: o `ticket` da query, se vier, tem de ser o do token. */
-function exigirTicketDaQueryProprio(agente: EscopoDoAgente, query: URLSearchParams): void {
+/** O `ticket` da query, se veio. */
+const ticketDaQuery = (query: URLSearchParams): { ticket?: string } => {
   const ticket = query.get("ticket");
-  if (ticket !== null) exigirTicketProprio(agente, ticket);
-}
+  return ticket === null ? {} : { ticket };
+};
 
-/** A rodada de outra demanda é recusada aqui; o endereço malformado segue para o caso de uso, que mostra a forma certa. */
-function exigirRodadaDaPropriaDemanda(agente: EscopoDoAgente, rodada: string): void {
-  let demanda;
-  try {
-    demanda = Endereco.ler(rodada).demanda_id;
-  } catch {
-    return;
-  }
-  if (demanda !== agente.demanda_id) {
-    throw new ErroDeEscopo(`${rodada} é de outra demanda`, `use uma rodada de ${agente.demanda_id}`);
-  }
-}
-
-export function rotasDoAgente(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_AGENTE): RotaDoAgente[] {
+export function rotasDoAgente(): RotaDoAgente[] {
   return [
     {
       metodo: "GET",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}projeto`,
       resposta: RespostaProjetoVer,
-      tratar: ({ banco, agente, query }) => {
-        exigirTicketDaQueryProprio(agente, query);
-        return casos.verProjeto(banco, processoDoAgente(agente));
-      },
+      tratar: ({ agente, query }) => agente.andamento({ de: "projeto", ...ticketDaQuery(query) }),
     },
     {
       metodo: "GET",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}demandas/:demanda`,
       resposta: RespostaDemandaVer,
-      tratar: ({ banco, agente, params }) => {
-        exigirDemandaPropria(agente, String(params.demanda));
-        const visao = casos.verDemanda(banco, processoDoAgente(agente), String(params.demanda));
+      tratar: ({ agente, params }) => {
+        const visao = agente.andamento({ de: "demanda", demanda: String(params.demanda) });
         return { ...visao, demanda: demandaParaCli(visao.demanda) };
       },
     },
@@ -127,38 +77,26 @@ export function rotasDoAgente(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_AGENTE
       metodo: "GET",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}tickets/:ticket`,
       resposta: RespostaTicketVer,
-      tratar: ({ banco, agente, params }) => {
-        exigirTicketProprio(agente, String(params.ticket));
-        return casos.verTicket(banco, processoDoAgente(agente), String(params.ticket));
-      },
+      tratar: ({ agente, params }) => agente.andamento({ de: "ticket", ticket: String(params.ticket) }),
     },
     {
       metodo: "POST",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}tickets`,
       resposta: RespostaTicketCriar,
-      tratar: ({ banco, relogio, agente, corpo }) => {
-        const pedido = PedidoTicketCriar.parse(corpo);
-        exigirRodadaDaPropriaDemanda(agente, pedido.rodada);
-        return casos.criarTicketCorretivo(
-          banco,
-          processoDoAgente(agente),
-          { rodada: pedido.rodada, titulo: pedido.titulo },
-          relogio,
-        );
+      tratar: ({ agente, corpo }) => {
+        const { rodada, titulo } = PedidoTicketCriar.parse(corpo);
+        return agente.criarTicketCorretivo({ rodada, titulo });
       },
     },
     {
       metodo: "POST",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}revisoes`,
       resposta: RespostaRevisaoDecidir,
-      tratar: ({ modulos, agente, corpo }) => {
+      tratar: ({ agente, corpo }) => {
         const pedido = PedidoRevisaoDecidir.parse(corpo);
-        exigirTicketProprio(agente, pedido.ticket, true);
         const { correcoes, plano } = pedido;
         const jsonPorOpcao: Record<string, unknown> = { "--correcoes": correcoes, "--plano": plano };
-        return casos.decidirRevisao(
-          modulos,
-          processoDoAgente(agente),
+        return agente.decidirRevisao(
           {
             ...pedido,
             correcoes: correcoes === undefined ? undefined : PRESENTE,
@@ -172,11 +110,7 @@ export function rotasDoAgente(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_AGENTE
       metodo: "GET",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}evidencias/:tipo/schema`,
       resposta: RespostaEvidenciaSchema,
-      tratar: ({ agente, params, query }) => {
-        exigirTicketDaQueryProprio(agente, query);
-        const { dados, arquivos } = tipoDoAgente(String(params.tipo)).schema;
-        return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
-      },
+      tratar: ({ agente, params, query }) => agente.schemaDaEvidencia(String(params.tipo), ticketDaQuery(query).ticket),
     },
   ];
 }

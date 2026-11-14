@@ -16,7 +16,7 @@ import {
   ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA,
   ARQUIVO_QUE_SUBMETE_EVIDENCIA,
   ARQUIVOS_QUE_CITAM_NOME_DE_ETAPA,
-  PASTA_DOS_CASOS_DE_USO_DO_AGENTE,
+  PASTA_DA_INTERFACE_DO_CICLO_DE_VIDA,
   PASTAS_QUE_CITAM_NOME_DE_ETAPA,
 } from "./fronteiras/dominios/ciclo_de_vida.ts";
 import { PASTA_DA_API_DO_AGENTE, PASTA_DA_COMPOSICAO } from "./fronteiras/dominios/server.ts";
@@ -45,9 +45,9 @@ test("src respeita a matriz de dependências e as regras dos domínios, não tem
   assert.deepEqual(acharViolacoes(SRC, ARQUITETURA_DE_SRC).map(descrever), []);
 });
 
-// A API do agente chega aos casos de uso pela fachada do Ciclo de Vida, que exporta a aplicação inteira: pela declaração
-// de cada nome que ela importa, da aplicação dos domínios só os casos de uso do agente.
-test("api/agente só alcança, da aplicação dos domínios, os casos de uso do agente", () => {
+// A API do agente chega aos casos de uso pela interface do Ciclo de Vida do agente: pela declaração de cada nome que ela
+// importa, da aplicação dos domínios só a interface do Ciclo de Vida.
+test("api/agente só alcança, da aplicação dos domínios, a interface do Ciclo de Vida", () => {
   const daApiDoAgente = listarArquivosDeProducao(SRC)
     .filter((arquivo) => arquivo.startsWith(PASTA_DA_API_DO_AGENTE))
     .map((arquivo) => join(SRC, arquivo));
@@ -70,16 +70,16 @@ test("api/agente só alcança, da aplicação dos domínios, os casos de uso do 
       const nomeados = ts.isImportDeclaration(declaracao) ? declaracao.importClause?.namedBindings : undefined;
       return nomeados && ts.isNamedImports(nomeados) ? nomeados.elements.map((elemento) => elemento.name) : [];
     });
-  // A resolução acha os casos de uso do agente: sem ela, a regra passaria sem olhar nada.
+  // A resolução acha a interface do Ciclo de Vida: sem ela, a regra passaria sem olhar nada.
   assert.ok(
     daApiDoAgente.some((caminho) =>
-      nomesImportados(caminho).some((nome) => declaracaoDoNome(nome)?.startsWith(PASTA_DOS_CASOS_DE_USO_DO_AGENTE)),
+      nomesImportados(caminho).some((nome) => declaracaoDoNome(nome)?.startsWith(PASTA_DA_INTERFACE_DO_CICLO_DE_VIDA)),
     ),
   );
   const deAplicacaoFora = daApiDoAgente.flatMap((caminho) =>
     nomesImportados(caminho).flatMap((nome) => {
       const arquivo = declaracaoDoNome(nome);
-      return arquivo && moduloDe(arquivo) === "aplicacao" && !arquivo.startsWith(PASTA_DOS_CASOS_DE_USO_DO_AGENTE)
+      return arquivo && moduloDe(arquivo) === "aplicacao" && !arquivo.startsWith(PASTA_DA_INTERFACE_DO_CICLO_DE_VIDA)
         ? [`${relative(SRC, caminho)} importa ${nome.text}, de ${arquivo}`]
         : [];
     }),

@@ -6,3 +6,4 @@ export {
   type MontagemDoCicloDeVida,
   montarCicloDeVida,
 } from "./aplicacao/ciclo_de_vida.ts";
+export type { CicloDeVidaDoAgente } from "./aplicacao/ciclo_de_vida_do_agente.ts";

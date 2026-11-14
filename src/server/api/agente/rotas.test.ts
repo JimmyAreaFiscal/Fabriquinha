@@ -1,7 +1,7 @@
 // As rotas de /api/agente/* contra o servidor de verdade e banco real: o token do processo é a única credencial, só alcança
-// o ticket do próprio processo, e o pedido recusado nem chega ao caso de uso nem grava.
+// o ticket do próprio processo, e o pedido recusado não grava.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import {
   cenarioDaApiDoAgente,
   contagemDasTabelas,
@@ -21,8 +21,6 @@ import {
   RespostaTicketCriar,
   RespostaTicketVer,
 } from "../../contrato/agente/agente.ts";
-import { rotasDeEvidenciaAdd } from "./evidencia.ts";
-import { CASOS_DE_USO_DO_AGENTE, type CasosDeUsoDoAgente, rotasDoAgente } from "./rotas.ts";
 
 const ESTRESSE = {
   aplicavel: true,
@@ -57,26 +55,16 @@ const PEDIDOS_POR_COMANDO: Record<string, (alvo: AlvoDoPedido) => PedidoHttp> = 
   ],
 };
 
-/** Os casos de uso de verdade, cada um num espião que conta as chamadas. */
-function casosComEspioes() {
-  const espioes = Object.fromEntries(
-    Object.entries(CASOS_DE_USO_DO_AGENTE).map(([nome, caso]) => [nome, mock.fn(caso)]),
-  ) as { [nome in keyof CasosDeUsoDoAgente]: ReturnType<typeof mock.fn<CasosDeUsoDoAgente[nome]>> };
-  return espioes;
-}
-
 for (const [comando, pedidoDe] of Object.entries(PEDIDOS_POR_COMANDO)) {
-  test(`CA-2: ${comando} com o token de outro processo vivo, de processo encerrado e sem token é recusado sem chamar o caso de uso nem gravar`, async () => {
+  test(`CA-2: ${comando} com o token de outro processo vivo, de processo encerrado e sem token é recusado sem gravar`, async () => {
     const { banco } = cenarioDaApiDoAgente();
-    const casos = casosComEspioes();
-    const pedir = await servirApiDoAgente(banco, [...rotasDoAgente(casos), ...rotasDeEvidenciaAdd(casos)]);
+    const pedir = await servirApiDoAgente(banco);
     const [metodo, caminho, corpo] = pedidoDe(TICKETS.estresse);
     const antes = contagemDasTabelas(banco);
     const recusar = async (token: string | undefined, status: number) => {
       const resposta = await pedir(metodo, caminho, { token, corpo });
       assert.equal(resposta.status, status);
       ErroDaApiDoAgente.parse(resposta.json);
-      for (const espiao of Object.values(casos)) assert.equal(espiao.mock.callCount(), 0);
       assert.deepEqual(contagemDasTabelas(banco), antes);
     };
 

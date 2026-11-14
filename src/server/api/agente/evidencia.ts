@@ -3,7 +3,6 @@
 // que o arquivo é da worktree ou da saída do ticket, e que o do host tem o mesmo SHA-256, é o caso de uso
 // (`adicionarEvidenciaComAnexosEnviados`).
 import { createHash } from "node:crypto";
-import { exigirTicketProprio, LIMITE } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import {
   ParametrosDoAnexoEnviado,
@@ -11,16 +10,7 @@ import {
   RespostaAnexoEnviado,
   RespostaEvidenciaAdd,
 } from "../../contrato/agente/agente.ts";
-import {
-  CASOS_DE_USO_DO_AGENTE,
-  type CasosDeUsoDoAgente,
-  PRESENTE,
-  processoDoAgente,
-  PREFIXO_DA_API_DO_AGENTE,
-  type RotaDoAgente,
-} from "./rotas.ts";
-
-const MAIOR_ANEXO = Math.max(...Object.values(LIMITE));
+import { PRESENTE, PREFIXO_DA_API_DO_AGENTE, type RotaDoAgente } from "./rotas.ts";
 
 /** O SHA-256 dos blocos do fluxo, sem guardá-los. Passando de `limite`, lê até o fim sem somar, para a resposta chegar ao cliente. */
 async function sha256DoFluxo(fluxo: AsyncIterable<Buffer>, limite: number): Promise<{ sha256: string; bytes: number }> {
@@ -35,7 +25,7 @@ async function sha256DoFluxo(fluxo: AsyncIterable<Buffer>, limite: number): Prom
 
 const chaveDoAnexo = ({ caminho, sha256 }: RespostaAnexoEnviado): string => `${sha256}:${caminho}`;
 
-export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_AGENTE): RotaDoAgente[] {
+export function rotasDeEvidenciaAdd(): RotaDoAgente[] {
   // Os anexos já enviados, por processo: o caminho e o SHA-256 conferidos que a evidência ainda não citou.
   // ponytail: na memória do serviço; reiniciar o serviço pede o reenvio, e o que o agente não cita fica até o reinício.
   const conferidos = new Map<string, Set<string>>();
@@ -50,10 +40,11 @@ export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_
           caminho: query.get("caminho"),
           sha256: query.get("sha256"),
         });
-        const { sha256, bytes } = await sha256DoFluxo(corpo as AsyncIterable<Buffer>, MAIOR_ANEXO);
-        if (bytes > MAIOR_ANEXO) {
+        const maiorAnexo = agente.maiorAnexoEmBytes;
+        const { sha256, bytes } = await sha256DoFluxo(corpo as AsyncIterable<Buffer>, maiorAnexo);
+        if (bytes > maiorAnexo) {
           throw new ErroDeRegra(
-            `${anexo.caminho} passa de ${String(MAIOR_ANEXO / 1024 / 1024)} MiB`,
+            `${anexo.caminho} passa de ${String(maiorAnexo / 1024 / 1024)} MiB`,
             "reduza o arquivo",
           );
         }
@@ -63,7 +54,7 @@ export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_
             "envie o arquivo de novo",
           );
         }
-        const trabalho = agente.ator.trabalho_id;
+        const trabalho = agente.escopo.ator.trabalho_id;
         conferidos.set(trabalho, (conferidos.get(trabalho) ?? new Set<string>()).add(chaveDoAnexo(anexo)));
         return anexo;
       },
@@ -72,23 +63,22 @@ export function rotasDeEvidenciaAdd(casos: CasosDeUsoDoAgente = CASOS_DE_USO_DO_
       metodo: "POST",
       caminho: `${PREFIXO_DA_API_DO_AGENTE}evidencias`,
       resposta: RespostaEvidenciaAdd,
-      tratar: async ({ modulos, agente, corpo }) => {
+      tratar: async ({ agente, corpo }) => {
         const { ticket, tipo, dados, anexos } = PedidoEvidenciaAdd.parse(corpo);
-        exigirTicketProprio(agente, ticket, true);
-        const doProcesso = conferidos.get(agente.ator.trabalho_id) ?? new Set<string>();
-        for (const anexo of anexos) {
-          if (!doProcesso.has(chaveDoAnexo(anexo))) {
-            throw new ErroDeRegra(
-              `${anexo.caminho} não foi enviado com esse SHA-256`,
-              "envie o arquivo antes da evidência",
-            );
-          }
-        }
-        const resposta = await casos.adicionarEvidencia(
-          modulos,
-          processoDoAgente(agente),
+        const doProcesso = conferidos.get(agente.escopo.ator.trabalho_id) ?? new Set<string>();
+        const resposta = await agente.submeterEvidencia(
           { ticket, tipo, dados: dados === undefined ? undefined : PRESENTE, anexos },
           () => Promise.resolve(dados),
+          () => {
+            for (const anexo of anexos) {
+              if (!doProcesso.has(chaveDoAnexo(anexo))) {
+                throw new ErroDeRegra(
+                  `${anexo.caminho} não foi enviado com esse SHA-256`,
+                  "envie o arquivo antes da evidência",
+                );
+              }
+            }
+          },
         );
         for (const anexo of anexos) doProcesso.delete(chaveDoAnexo(anexo));
         return resposta;

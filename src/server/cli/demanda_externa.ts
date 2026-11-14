@@ -9,9 +9,7 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import {
   type Ator,
-  declararUso,
   Endereco,
-  submeterEvidenciaDaEntradaExterna,
   type TipoDaDemanda,
   TIPOS_DA_DEMANDA,
   visaoDaDemanda,
@@ -163,8 +161,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         copie: `a pasta do comando (${pasta})`,
       };
       const arquivos = (opcoes.arquivo ?? []) as string[];
-      return deps.comBanco((banco, gestaoDeDemandas) => {
-        const { avisos } = submeterEvidenciaDaEntradaExterna(banco, id, { tipo, dados, arquivos }, autor, origens);
+      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+        const { avisos } = cicloDeVida.submeterEvidenciaExterna(id, { tipo, dados, arquivos }, autor, origens);
         return { ...visao(banco, gestaoDeDemandas, id), avisos };
       });
     },
@@ -180,8 +178,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const arquivo = entrada.opcoes.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
       const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
-      return deps.comBanco((banco, gestaoDeDemandas) => {
-        const { avisos } = declararUso(banco, id, dados, autor);
+      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+        const { avisos } = cicloDeVida.declararUso(id, dados, autor);
         return { ...visao(banco, gestaoDeDemandas, id), avisos };
       });
     },

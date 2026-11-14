@@ -261,6 +261,7 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   await once(servidor, "listening");
   const porta = (servidor.address() as { port: number }).port;
   const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
   servidor.on(
     "request",
     servirWeb({
@@ -268,12 +269,12 @@ async function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       raiz: raizDo(banco),
       porta,
       cicloDeVida: {
-        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao }),
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio }),
         proximaBusca: () => new Date().toISOString(),
       },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
-      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

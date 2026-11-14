@@ -55,6 +55,7 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
   await once(servidor, "listening");
   const { port: porta } = servidor.address() as AddressInfo;
   const ambientes = await montarAmbientesDoServico({ banco, raiz, porta, registrarErro: noLog });
+  const repositorio = montarRepositorio({ banco: banco, ambientes: ambientes.gestao });
   servidor.on(
     "request",
     servirWeb({
@@ -62,12 +63,12 @@ async function servirNumaPortaLivre(banco: DatabaseSync, raiz: string) {
       raiz,
       porta,
       cicloDeVida: {
-        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao }),
+        ...montarCicloDeVidaDoBanco(banco, { ambientes: ambientes.gestao, repositorio }),
         proximaBusca: () => new Date().toISOString(),
       },
       ambientes,
       demandas: montarDemandasDoBanco(banco),
-      repositorio: montarRepositorio({ banco: banco, ambientes: ambientes.gestao }),
+      repositorio,
       relogio: relogioDoSistema,
       registrarErro: noLog,
     }),

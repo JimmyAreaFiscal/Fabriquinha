@@ -22,8 +22,8 @@ export const ENTRADAS_DO_ARMAZENAMENTO_DE_EVIDENCIA = [
   "ciclo_de_vida/evidencias/publico.ts",
   "ciclo_de_vida/publico.ts",
 ];
-/** Os casos de uso do agente, os únicos que a API do agente alcança. */
-export const PASTA_DOS_CASOS_DE_USO_DO_AGENTE = "modulos/ciclo_de_vida/conducao/aplicacao/agente/";
+/** A interface do Ciclo de Vida (`CicloDeVida` e `CicloDeVidaDoAgente`), a única aplicação que a API do agente alcança. */
+export const PASTA_DA_INTERFACE_DO_CICLO_DE_VIDA = "modulos/ciclo_de_vida/coordenacao/aplicacao/";
 
 export const REGRAS_DO_CICLO_DE_VIDA: RegrasDoDominio = {
   dependeDe: ["sessoes", "repositorio", "ambiente"],
