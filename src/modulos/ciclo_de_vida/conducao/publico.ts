@@ -22,7 +22,6 @@ export {
   execucaoDaSessao,
   pendenciaDaSessao,
   type PendenciaDoChat,
-  pendenciaDoChat,
   type SessaoDoTicket,
   trabalhoVivoDaSessao,
 } from "./aplicacao/chat_do_auditor/sessao_do_ticket.ts";

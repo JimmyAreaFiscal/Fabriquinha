@@ -4,18 +4,17 @@ import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Instante } from "../../../shared/nucleo/primitivos.ts";
 import {
-  type ResumoDaDemanda,
-  CICLO_DA_DEMANDA,
-  configuracao,
+  type CicloDeVida,
   Endereco,
-  formatarRodadaRef,
-  pendenciasDaDemanda,
+  type Pendencia,
+  type ResumoDaDemanda,
   type TrabalhoVivo,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { montarSessoesDeAgente, type Situacao } from "../../../modulos/sessoes/publico.ts";
 import type { PendenciaDoInicio } from "../../contrato/demanda.ts";
 import { type SessaoDeDemanda, sessoesDasDemandas } from "../sessoes/historico_demanda.ts";
-import { bloqueiosDaDemanda, type Predecessora, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
+import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
 export type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
@@ -36,7 +35,7 @@ export function situacoesDoBanco(banco: DatabaseSync): SituacaoDaSessao {
   };
 }
 
-/** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
+/** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que as Pendências pedem. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): TrabalhoVivo {
   const pergunta = situacaoDa(s.sessao)?.dialogos[0]?.title;
@@ -51,33 +50,25 @@ export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaS
 const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
   s.estado === "aguardando_humano" && s.pendencia?.tipo === "dialogo_do_agente";
 
-/** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
-function pendenciasDoInicio(
+/** A Pendência da demanda `ag` com o que o Início precisa para desenhá-la e levá-la ao chat ou à página da demanda. */
+function pendenciaDoInicio(
   ag: ResumoDaDemanda,
-  predecessoras: readonly Predecessora[],
-  vivos: readonly TrabalhoVivo[],
+  p: Pendencia,
   sessaoDoTicket: ReadonlyMap<string, string>,
-  agendadorLigado: boolean,
-  agora: Instante,
-): PendenciaDoInicio[] {
+): PendenciaDoInicio {
   const { id: demanda, projeto, titulo } = ag.demanda;
-  const predecessorasSatisfeitas = bloqueiosDaDemanda(predecessoras).length === 0;
-  return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, { agora, predecessorasSatisfeitas }).map(
-    (p) => {
-      const item = p.item.toString();
-      const rodada_id = p.item.rodada_id ?? ag.tickets.find((t) => t.ticket_id === p.item.ticket_id)?.rodada_id;
-      const sessao = p.tipo === "dialogo_do_agente" ? sessaoDoTicket.get(item) : undefined;
-      return {
-        ...p,
-        item,
-        demanda,
-        ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id }) }),
-        projeto,
-        titulo,
-        ...(sessao !== undefined && { sessao }),
-      };
-    },
-  );
+  const item = p.item.toString();
+  const rodada_id = p.item.rodada_id ?? ag.tickets.find((t) => t.ticket_id === p.item.ticket_id)?.rodada_id;
+  const sessao = p.tipo === "dialogo_do_agente" ? sessaoDoTicket.get(item) : undefined;
+  return {
+    ...p,
+    item,
+    demanda,
+    ...(rodada_id !== undefined && { rodada: Endereco.daRodada(demanda, rodada_id).toString() }),
+    projeto,
+    titulo,
+    ...(sessao !== undefined && { sessao }),
+  };
 }
 
 /**
@@ -85,7 +76,7 @@ function pendenciasDoInicio(
  * conversas vivas.
  */
 export function pendenciasDasDemandas(
-  banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   demandas: readonly ResumoDaDemanda[],
   sessoes: readonly SessaoDeDemanda[],
@@ -95,21 +86,24 @@ export function pendenciasDasDemandas(
   const sessoesParadas = sessoes.filter(esperaOAuditor);
   const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
   const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
-  const agendadorLigado = configuracao(banco).agendadorAtivo;
   const predecessoras = predecessorasDasDemandas(
-    banco,
+    cicloDeVida,
     gestaoDeDemandas,
     demandas.map((ag) => ag.demanda.id),
   );
-  return demandas
-    .flatMap((ag) =>
-      pendenciasDoInicio(
-        ag,
-        predecessorasDe(predecessoras, ag.demanda.id),
-        vivos,
+  const catalogo = cicloDeVida.etapas();
+  const resumoDaDemanda = new Map(demandas.map((ag) => [ag.demanda.id, ag]));
+  return cicloDeVida
+    .pendencias(demandas, {
+      vivos,
+      agora,
+      predecessorasSatisfeitas: (id) => bloqueiosDaDemanda(catalogo, predecessorasDe(predecessoras, id)).length === 0,
+    })
+    .map((p) =>
+      pendenciaDoInicio(
+        encontrado(resumoDaDemanda.get(p.item.demanda_id), `a demanda ${p.item.demanda_id} não foi lida`, "recarregue"),
+        p,
         sessaoDoTicket,
-        agendadorLigado,
-        agora,
       ),
     )
     .toSorted((a, b) => a.desde.localeCompare(b.desde));
@@ -121,12 +115,13 @@ export function pendenciasDasDemandas(
  */
 export function pendenciasDeUmaDemanda(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   ag: ResumoDaDemanda,
   situacaoDa: SituacaoDaSessao,
   agora: Instante,
 ): PendenciaDoInicio[] {
-  if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
-  const sessoes = sessoesDasDemandas(banco, [ag], { escopo: "ativas" });
-  return pendenciasDasDemandas(banco, gestaoDeDemandas, [ag], sessoes, situacaoDa, agora);
+  if (cicloDeVida.etapas().demanda.ehTerminal(ag.demanda.estado)) return [];
+  const sessoes = sessoesDasDemandas(banco, cicloDeVida, [ag], { escopo: "ativas" });
+  return pendenciasDasDemandas(cicloDeVida, gestaoDeDemandas, [ag], sessoes, situacaoDa, agora);
 }

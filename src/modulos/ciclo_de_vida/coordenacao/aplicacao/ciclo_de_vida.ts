@@ -64,6 +64,8 @@ import {
 } from "../../despacho/publico.ts";
 import { ligarAgendadorDoDespacho } from "./agendador_do_despacho.ts";
 import { type CicloDeVidaDoAgente, cicloDeVidaDoAgente } from "./ciclo_de_vida_do_agente.ts";
+import { type LeiturasDoCicloDeVida, leiturasDoCicloDeVida } from "./leituras_do_ciclo_de_vida.ts";
+import { esquecimentoDasDemandas } from "./esquecimento_das_demandas.ts";
 
 /** O que o Ciclo de Vida lê de Demandas como dado (o Ciclo de Vida não importa Demandas), sobre um banco. */
 export interface DemandasDoCicloDeVida {
@@ -138,7 +140,7 @@ interface ResultadoDaDecisao {
   sessao?: string;
 }
 
-export interface CicloDeVida {
+export interface CicloDeVida extends LeiturasDoCicloDeVida {
   /** A configuração do serviço (F4 §3): o agendador, o paralelismo e os limites das sessões. */
   configuracao(): Configuracao;
   /** Valida e grava a configuração do serviço; o agendador a lê na batida seguinte. */
@@ -176,6 +178,12 @@ export interface CicloDeVida {
   ): { demanda: AgregadoDemanda; avisos: string[] };
   /** O Uso declarado das sessões da ferramenta externa (D10), até a demanda terminar. */
   declararUso(demanda: string, dados: unknown, autor: Ator): { avisos: string[] };
+  /**
+   * A remoção do projeto `projeto`: recusa já se um ticket das `demandas` está em execução ou tem execução de sessão
+   * aberta; devolve a remoção do desenvolvimento delas (com os anexos que ficaram sem Evidência), que quem chama roda
+   * depois de os outros módulos esquecerem as demandas, na ordem das chaves estrangeiras.
+   */
+  esquecer(projeto: string, demandas: readonly string[]): () => string[];
   /** Os casos de uso do agente no escopo do `token`; `undefined` se o token não é de uma execução viva. */
   doAgente(token: string): CicloDeVidaDoAgente | undefined;
   /** Desliga o agendador; as conduções que falham daqui em diante falham como "serviço reiniciado". */
@@ -283,6 +291,8 @@ function cicloDeVidaMontado(
     );
   }
   return {
+    ...leiturasDoCicloDeVida(banco),
+    esquecer: (projeto, demandas) => esquecimentoDasDemandas(banco, modulos.sessoes, projeto, demandas),
     configuracao: () => configuracao(banco),
     configurar: (entrada) => validarESalvarConfiguracao(banco, entrada),
     proximaBusca: () => agendador.proximaBusca(),

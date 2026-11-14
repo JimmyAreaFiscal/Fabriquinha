@@ -3,16 +3,14 @@
 // chama a fachada de Demandas, um fluxo do servidor ou a do Ciclo de Vida; decidir, cancelar e arquivar são do Auditor
 // e não existem aqui.
 import { readFileSync, realpathSync } from "node:fs";
-import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
 import {
   type Ator,
+  type CatalogoDoCicloDeVida,
+  type CicloDeVida,
   Endereco,
-  type TipoDaDemanda,
-  TIPOS_DA_DEMANDA,
-  visaoDaDemanda,
 } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { registrarPedidoComProcesso } from "../fluxos/registro_do_pedido.ts";
@@ -56,8 +54,8 @@ const ler = (arquivo: string, stdin: NodeJS.ReadableStream): Promise<string> =>
   arquivo === "-" ? text(stdin) : Promise.resolve(readFileSync(arquivo, "utf8"));
 
 /** A demanda com as dependências, as evidências e os anexos (nome e SHA-256) de cada uma. */
-function visao(banco: DatabaseSync, gestaoDeDemandas: GestaoDeDemandas, id: string) {
-  const { agregado, evidencias } = visaoDaDemanda(banco, id);
+function visao(cicloDeVida: CicloDeVida, gestaoDeDemandas: GestaoDeDemandas, id: string) {
+  const { agregado, evidencias } = cicloDeVida.andamento(id);
   return {
     ...demandaParaCli(agregado.demanda),
     dependencias: gestaoDeDemandas.pedido(id).predecessoras,
@@ -69,10 +67,10 @@ function visao(banco: DatabaseSync, gestaoDeDemandas: GestaoDeDemandas, id: stri
   };
 }
 
-function tipoDe(texto: string): TipoDaDemanda {
-  const tipo = TIPOS_DA_DEMANDA.find((t) => t === texto);
+function tipoDe({ tiposDaEvidenciaDaDemanda }: CatalogoDoCicloDeVida, texto: string) {
+  const tipo = tiposDaEvidenciaDaDemanda.find((t) => t === texto);
   if (tipo === undefined) {
-    throw new ErroDeUso(`${texto} não é evidência da demanda; os tipos são: ${TIPOS_DA_DEMANDA.join(", ")}`);
+    throw new ErroDeUso(`${texto} não é evidência da demanda; os tipos são: ${tiposDaEvidenciaDaDemanda.join(", ")}`);
   }
   return tipo;
 }
@@ -105,9 +103,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         descricao: await ler(opcoes.descricao as string, deps.stdin),
         dependencias: ((opcoes.dep ?? []) as string[]).map(idDe),
       };
-      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) =>
+      return deps.comBanco((_banco, gestaoDeDemandas, cicloDeVida) =>
         visao(
-          banco,
+          cicloDeVida,
           gestaoDeDemandas,
           registrarPedidoComProcesso(cicloDeVida, gestaoDeDemandas, dados, autor).demanda.id,
         ),
@@ -131,9 +129,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
         tipo: opcoes.tipo,
         descricao: arquivo === undefined ? undefined : await ler(arquivo, deps.stdin),
       };
-      return deps.comBanco((banco, gestaoDeDemandas) => {
+      return deps.comBanco((_banco, gestaoDeDemandas, cicloDeVida) => {
         gestaoDeDemandas.editar(id, dados, autor);
-        return visao(banco, gestaoDeDemandas, id);
+        return visao(cicloDeVida, gestaoDeDemandas, id);
       });
     },
   },
@@ -144,26 +142,27 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     argumentos: {
       options: { ...IDENTIDADE, dados: { type: "string" }, arquivo: { type: "string", multiple: true } },
     },
-    async executar(entrada, deps) {
+    executar(entrada, deps) {
       const { posicionais, opcoes } = entrada;
-      const id = idDe(String(posicionais[0]));
-      const tipo = tipoDe(String(posicionais[1]));
-      const autor = autorDe(entrada, deps);
-      const arquivo = opcoes.dados as string | undefined;
-      if (arquivo === undefined) throw new ErroDeUso("falta --dados");
-      const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
-      // A pasta do comando é a única origem dos anexos.
-      const pasta = realpathSync(process.cwd());
-      const origens = {
-        worktree: pasta,
-        saida: pasta,
-        fora: "da pasta do comando",
-        copie: `a pasta do comando (${pasta})`,
-      };
-      const arquivos = (opcoes.arquivo ?? []) as string[];
-      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+      // O tipo vem do catálogo do Ciclo de Vida, que só existe com o banco aberto; as recusas seguem na mesma ordem.
+      return deps.comBanco(async (_banco, gestaoDeDemandas, cicloDeVida) => {
+        const id = idDe(String(posicionais[0]));
+        const tipo = tipoDe(cicloDeVida.etapas(), String(posicionais[1]));
+        const autor = autorDe(entrada, deps);
+        const arquivo = opcoes.dados as string | undefined;
+        if (arquivo === undefined) throw new ErroDeUso("falta --dados");
+        const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
+        // A pasta do comando é a única origem dos anexos.
+        const pasta = realpathSync(process.cwd());
+        const origens = {
+          worktree: pasta,
+          saida: pasta,
+          fora: "da pasta do comando",
+          copie: `a pasta do comando (${pasta})`,
+        };
+        const arquivos = (opcoes.arquivo ?? []) as string[];
         const { avisos } = cicloDeVida.submeterEvidenciaExterna(id, { tipo, dados, arquivos }, autor, origens);
-        return { ...visao(banco, gestaoDeDemandas, id), avisos };
+        return { ...visao(cicloDeVida, gestaoDeDemandas, id), avisos };
       });
     },
   },
@@ -178,9 +177,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
       const arquivo = entrada.opcoes.dados as string | undefined;
       if (arquivo === undefined) throw new ErroDeUso("falta --dados");
       const dados = await lerJsonDoArquivo(arquivo, deps.stdin);
-      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+      return deps.comBanco((_banco, gestaoDeDemandas, cicloDeVida) => {
         const { avisos } = cicloDeVida.declararUso(id, dados, autor);
-        return { ...visao(banco, gestaoDeDemandas, id), avisos };
+        return { ...visao(cicloDeVida, gestaoDeDemandas, id), avisos };
       });
     },
   },
@@ -192,9 +191,9 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     executar(entrada, deps) {
       const id = idDe(String(entrada.posicionais[0]));
       const autor = autorDe(entrada, deps);
-      return deps.comBanco((banco, gestaoDeDemandas, cicloDeVida) => {
+      return deps.comBanco((_banco, gestaoDeDemandas, cicloDeVida) => {
         enviarAoDesenvolvimento(cicloDeVida, gestaoDeDemandas, id, autor);
-        return visao(banco, gestaoDeDemandas, id);
+        return visao(cicloDeVida, gestaoDeDemandas, id);
       });
     },
   },
@@ -204,13 +203,19 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly Comando[] = [
     opcoesDeUso: USO_IDENTIDADE,
     argumentos: { options: IDENTIDADE },
     executar: ({ posicionais }, deps) =>
-      deps.comBanco((banco, gestaoDeDemandas) => visao(banco, gestaoDeDemandas, idDe(String(posicionais[0])))),
+      deps.comBanco((_banco, gestaoDeDemandas, cicloDeVida) =>
+        visao(cicloDeVida, gestaoDeDemandas, idDe(String(posicionais[0]))),
+      ),
   },
   {
     nome: "demanda schema",
     posicionais: ["<tipo>"],
     opcoesDeUso: USO_IDENTIDADE,
     argumentos: { options: IDENTIDADE },
-    executar: ({ posicionais }) => Promise.resolve(schemaJsonDoTipo(tipoDe(String(posicionais[0])))),
+    // O catálogo do Ciclo de Vida só existe com o banco aberto.
+    executar: ({ posicionais }, deps) =>
+      deps.comBanco((_banco, _gestaoDeDemandas, cicloDeVida) =>
+        schemaJsonDoTipo(cicloDeVida.etapas(), tipoDe(cicloDeVida.etapas(), String(posicionais[0]))),
+      ),
   },
 ];

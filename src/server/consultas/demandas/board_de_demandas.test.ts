@@ -9,7 +9,7 @@ import {
 import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { consultarBoardDeDemandas } from "./board_de_demandas.ts";
-import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 
 const relogio = relogioFixo("2026-01-01T00:00:00.000Z");
 const semSessaoViva = () => undefined;
@@ -23,7 +23,13 @@ test("o board bloqueia a demanda só pelas predecessoras que não satisfazem a D
   const dependeDe = banco.prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-3', ?)");
   dependeDe.run("I-1");
   dependeDe.run("I-2");
-  const board = consultarBoardDeDemandas(banco, montarDemandasDoBanco(banco), relogio, semSessaoViva);
+  const board = consultarBoardDeDemandas(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    relogio,
+    semSessaoViva,
+  );
   assert.deepEqual(
     board.demandas.map((d) => [d.id, d.bloqueios]),
     [

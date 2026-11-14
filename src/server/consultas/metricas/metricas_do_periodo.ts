@@ -6,12 +6,8 @@ import { intervalo } from "../../../shared/nucleo/periodo.ts";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { type CustoDoUso, type LinhaDeUso, Uso } from "../../../modulos/sessoes/publico.ts";
 import {
-  CATALOGO_DE_ETAPAS,
-  DEMANDA_DO_FATO,
   EtapaTicket,
-  metricasDoCicloDeVida,
   type MetricasDoProcesso,
-  type OrigemDosFatos,
   type ParteDoFato,
   Periodo,
   type Recorte,
@@ -20,10 +16,12 @@ import {
   type ValoresPorParte,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
+  type DeclaracaoDasEtapas,
   DEFINICAO_DO_USO,
   type ExecucaoDoUso,
   type FatosDeUso,
   lerFatosDeUso,
+  type OrigemDasMetricas,
   somarUsos,
   textoDoCusto,
   usoDaEtapa,
@@ -231,7 +229,7 @@ const porNivel = (execs: ExecucaoNoPeriodo[], nivel: Nivel, uso: ReadonlyMap<str
 };
 
 /** O Uso da demanda inteira: o que o cabeçalho dela mostra. Só a Métrica de Uso é calculada. */
-export function usoDaDemanda(origem: OrigemDosFatos, demandaId: string): Soma & { modelos: LinhaDeUso[] } {
+export function usoDaDemanda(origem: OrigemDasMetricas, demandaId: string): Soma & { modelos: LinhaDeUso[] } {
   const usos = [...usoPorEtapa(origem, { demandaId }).values()];
   return { ...somarUso(usos), modelos: somarModelos(usos) };
 }
@@ -246,6 +244,7 @@ const mesesEntre = (de: string, ate: string): number => {
  * cada parte: as do processo vêm do Ciclo de Vida, e a de Uso e as do Repositório, dos fatos já lidos.
  */
 function metricasDasEtapasPorParte(
+  porEtapaNoCatalogo: DeclaracaoDasEtapas,
   processo: MetricasDoProcesso,
   fatosDeUso: FatosDeUso,
   commits: readonly CommitDaEtapa[],
@@ -262,20 +261,20 @@ function metricasDasEtapasPorParte(
     const formulas: Partial<
       Record<TipoMetrica, { definicao: ValorDaMetrica["definicao"]; valor: (etapa: EtapaTicket) => unknown }>
     > = {
-      uso: { definicao: DEFINICAO_DO_USO, valor: usoDaEtapa(usoDaParte) },
+      uso: { definicao: DEFINICAO_DO_USO, valor: usoDaEtapa(usoDaParte, porEtapaNoCatalogo) },
       alteracoes_posteriores: {
         definicao: DEFINICAO_DAS_ALTERACOES_POSTERIORES,
         valor: alteracoesPosterioresDaEtapa(commitsDaParte),
       },
       bugs_nos_arquivos_revisados: {
         definicao: DEFINICAO_DOS_BUGS_NOS_ARQUIVOS_REVISADOS,
-        valor: bugsNosArquivosRevisadosDaEtapa(commitsDaParte),
+        valor: bugsNosArquivosRevisadosDaEtapa(commitsDaParte, porEtapaNoCatalogo),
       },
     };
     return new Map(
       EtapaTicket.options.map((etapa) => [
         etapa,
-        CATALOGO_DE_ETAPAS[etapa].metricas.map((tipo): ValorDaMetrica => {
+        porEtapaNoCatalogo[etapa].metricas.map((tipo): ValorDaMetrica => {
           const formula = formulas[tipo];
           if (formula) return { definicao: formula.definicao, valor: formula.valor(etapa) };
           return encontrado(
@@ -295,15 +294,19 @@ function metricasDasEtapasPorParte(
 
 /** Todas as Etapas com os valores das Métricas que o catálogo declara para cada uma, no recorte. */
 /** @testes os testes pedem um recorte só; a produção junta as Etapas por mês */
-export function metricasDasEtapas(origem: OrigemDosFatos, recorte: Recorte): Map<EtapaTicket, ValorDaMetrica[]> {
-  const processo = metricasDoCicloDeVida(origem, recorte);
+export function metricasDasEtapas(origem: OrigemDasMetricas, recorte: Recorte): Map<EtapaTicket, ValorDaMetrica[]> {
+  const processo = origem.cicloDeVida.metricas(origem, recorte);
   return metricasDasEtapasPorParte(
+    origem.cicloDeVida.etapas().porEtapa,
     processo,
     lerFatosDeUso(origem.banco, processo),
     lerCommitsDoPeriodo(origem.banco, processo),
     DEMANDA_DO_FATO,
   ).doRecorte();
 }
+
+/** A parte de cada fato é a demanda dele. */
+const DEMANDA_DO_FATO: ParteDoFato = (fato) => fato.demanda_id;
 
 /** Os fatos de cada parte, com as mesmas listas e na mesma ordem em que foram lidos. */
 function repartir<Fatos extends { readonly [Lista in keyof Fatos]: readonly { demanda_id: string; em: string }[] }>(
@@ -318,10 +321,14 @@ function repartir<Fatos extends { readonly [Lista in keyof Fatos]: readonly { de
 }
 
 /** As Métricas de cada Etapa e as do SDLC de cada mês de `de` a `ate`, de um projeto ou de todos. */
-export function metricasDosMeses(origem: OrigemDosFatos, filtro: Periodo): MetricasDoMes[] {
+export function metricasDosMeses(origem: OrigemDasMetricas, filtro: Periodo): MetricasDoMes[] {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const meses = Array.from({ length: mesesEntre(de, ate) }, (_, i) => intervalo(de, i));
-  const processo = metricasDoCicloDeVida(origem, { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto });
+  const processo = origem.cicloDeVida.metricas(origem, {
+    inicio: intervalo(de).inicio,
+    fim: intervalo(ate).fim,
+    projeto,
+  });
   // Os fatos vêm do período do recorte, que os meses cobrem sem buraco.
   const mesDoInstante = (instante: string) =>
     encontrado(
@@ -335,6 +342,7 @@ export function metricasDosMeses(origem: OrigemDosFatos, filtro: Periodo): Metri
   const uso = new Map(fatosDeUso.usos.map((daExecucao) => [daExecucao.execucao, daExecucao.uso]));
   const declarado = Map.groupBy(fatosDeUso.declarados, mesDoFato);
   const etapasPorMes = metricasDasEtapasPorParte(
+    origem.cicloDeVida.etapas().porEtapa,
     processo,
     fatosDeUso,
     lerCommitsDoPeriodo(origem.banco, processo),
@@ -372,10 +380,18 @@ const valoresDoTipo = <Valor>(porEtapa: Map<EtapaTicket, ValorDaMetrica[]>, tipo
  * cada uma: o Uso somado, as Reprovações do Gate da demanda com as exigências de alteração (os demais Gates e as
  * Tentativas), a conformidade com o plano e a média da nota humana.
  */
-function metricasDaTabelaPorDemanda(processo: MetricasDoProcesso, fatosDeUso: FatosDeUso) {
+function metricasDaTabelaPorDemanda(
+  porEtapaNoCatalogo: DeclaracaoDasEtapas,
+  processo: MetricasDoProcesso,
+  fatosDeUso: FatosDeUso,
+) {
   const usoDaDemanda = repartir(fatosDeUso, DEMANDA_DO_FATO);
   const usoDasEtapas = (fatos: FatosDeUso) => [
-    ...valoresDasEtapasQueDeclaram(DEFINICAO_DO_USO.tipo, usoDaEtapa(fatos)).values(),
+    ...valoresDasEtapasQueDeclaram(
+      porEtapaNoCatalogo,
+      DEFINICAO_DO_USO.tipo,
+      usoDaEtapa(fatos, porEtapaNoCatalogo),
+    ).values(),
   ];
   const doProcesso = processo.porEtapa(DEMANDA_DO_FATO);
   const conformidadeDe = (porEtapa: Map<EtapaTicket, ValorDaMetrica[]>) =>
@@ -407,9 +423,13 @@ function metricasDaTabelaPorDemanda(processo: MetricasDoProcesso, fatosDeUso: Fa
 }
 
 /** Uma linha por demanda com execução iniciada ou Uso declarado no período; `estado` é a atual e o resto só conta o período. */
-export function metricasDasDemandasDoPeriodo(origem: OrigemDosFatos, filtro: Periodo): MetricasPorDemanda {
+export function metricasDasDemandasDoPeriodo(origem: OrigemDasMetricas, filtro: Periodo): MetricasPorDemanda {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
-  const processo = metricasDoCicloDeVida(origem, { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto });
+  const processo = origem.cicloDeVida.metricas(origem, {
+    inicio: intervalo(de).inicio,
+    fim: intervalo(ate).fim,
+    projeto,
+  });
   const pedidos = new Map(processo.pedidos.map((pedido) => [pedido.id, pedido]));
   const fatosDeUso = lerFatosDeUso(origem.banco, processo);
   // A demanda só com Uso declarado no período também é linha, com 0 execuções: a soma das linhas é o rodapé.
@@ -417,7 +437,7 @@ export function metricasDasDemandasDoPeriodo(origem: OrigemDosFatos, filtro: Per
     ...fatosDeUso.declarados.map((declarado) => declarado.demanda_id),
     ...fatosDeUso.execucoes.map((execucao) => execucao.demanda_id),
   ]);
-  const tabela = metricasDaTabelaPorDemanda(processo, fatosDeUso);
+  const tabela = metricasDaTabelaPorDemanda(origem.cicloDeVida.etapas().porEtapa, processo, fatosDeUso);
   const demandas = [...comFatoNoPeriodo]
     .map((id) => {
       const {

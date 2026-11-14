@@ -23,7 +23,11 @@ import {
   registrarProjeto,
 } from "./cadastro.ts";
 import { removerProjetoComOQueDependeDele } from "../../../../server/fluxos/projeto/remocao_do_projeto.ts";
-import { conferirModeloNaLista, montarDemandasDoBanco } from "../../../../server/composicao/banco_da_fabriquinha.ts";
+import {
+  conferirModeloNaLista,
+  montarCicloDeVidaDoBanco,
+  montarDemandasDoBanco,
+} from "../../../../server/composicao/banco_da_fabriquinha.ts";
 import { montarSessoesDeAgente } from "../../../sessoes/publico.ts";
 
 /** As conferências do formulário: o modelo pelos modelos de Sessões (o pi falso) e o repositório, montados sobre o `banco`. */
@@ -394,6 +398,7 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
 
   const { projeto: removido, avisos } = await removerProjetoComOQueDependeDele(
     banco,
+    montarCicloDeVidaDoBanco(banco),
     montarDemandasDoBanco(banco),
     "demo",
   );
@@ -429,7 +434,7 @@ test("removerProjeto não apaga o arquivo que um anexo de outro projeto ainda us
     INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('outro', 'Seu João', 'd');
     INSERT INTO usuario_simulado_anexo SELECT id, 'igual.pdf', '${"f".repeat(64)}', 1 FROM usuario_simulado WHERE projeto = 'outro';
   `);
-  await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
   assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), true);
   banco.close();
 });
@@ -446,7 +451,13 @@ test("removerProjeto recusa projeto inexistente, sem mudar nada", async () => {
   popular(banco, "outro", "e".repeat(64));
   const antes = contagens(banco);
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "fantasma"),
+    () =>
+      removerProjetoComOQueDependeDele(
+        banco,
+        montarCicloDeVidaDoBanco(banco),
+        montarDemandasDoBanco(banco),
+        "fantasma",
+      ),
     ErroDeInexistente,
     "o projeto fantasma não existe (confira o nome do projeto)",
   );
@@ -461,7 +472,8 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
 
   banco.prepare("UPDATE processo_do_trabalho SET fim = NULL WHERE id = ?").run(execucaoDe(primeira, true));
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo"),
+    () =>
+      removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo"),
     ErroDeRegra,
     `o projeto demo tem execução em andamento no I-${String(primeira)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
   );
@@ -473,7 +485,8 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
     .run(execucaoDe(primeira, true));
   banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
   await recusaAsync(
-    () => removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo"),
+    () =>
+      removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo"),
     ErroDeRegra,
     `o projeto demo tem execução em andamento no I-${String(segunda)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
   );
@@ -487,7 +500,7 @@ test("removerProjeto apaga o projeto com execução simulada histórica que fico
   const [id] = simuladas(banco, "demo");
   banco.prepare("UPDATE execucao_simulada SET status = 'na_fila', erro = NULL").run();
 
-  await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
 
   assert.equal(buscarProjeto(banco, "demo"), undefined);
   assert.deepEqual(simuladas(banco, "demo"), []);
@@ -498,7 +511,12 @@ test("removerProjeto apaga o projeto com execução simulada histórica que fico
 test("removerProjeto sem demandas nem sessões no disco só apaga o projeto", async () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "fabriquinha");
+  const { avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "fabriquinha",
+  );
   assert.deepEqual(semAvisoDoGit(avisos), []);
   assert.deepEqual(listarProjetos(banco), []);
   banco.close();
@@ -509,7 +527,12 @@ test("removerProjeto apaga as worktrees do projeto e avisa quando o prune do rep
   registrarProjeto(banco, exemplo);
   const pasta = join(raizDo(banco), "worktrees", "fabriquinha", "I-1");
   mkdirSync(pasta, { recursive: true });
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "fabriquinha");
+  const { avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "fabriquinha",
+  );
   assert.equal(existsSync(join(raizDo(banco), "worktrees", "fabriquinha")), false);
   assert.equal(avisos.length, 1);
   assert.match(avisos[0] ?? "", /^git -C \/repos\/fabriquinha worktree prune falhou/);
@@ -522,7 +545,12 @@ test("removerProjeto: falha ao apagar no disco vira aviso e não desfaz o banco"
   popular(banco, "demo", "f".repeat(64));
   chmodSync(join(raiz, "execucoes"), 0o500); // sem escrita: não dá para apagar E-n dentro dela
   try {
-    const { avisos } = await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo");
+    const { avisos } = await removerProjetoComOQueDependeDele(
+      banco,
+      montarCicloDeVidaDoBanco(banco),
+      montarDemandasDoBanco(banco),
+      "demo",
+    );
     assert.equal(semAvisoDoGit(avisos).length, 4);
     for (const aviso of semAvisoDoGit(avisos)) assert.match(aviso, /^não foi possível apagar .*E-[\w-]+: /);
   } finally {
@@ -628,7 +656,7 @@ test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave es
     INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
     INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');
   `);
-  await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "demo");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "demo");
   banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
   assert.deepEqual(contagensDemanda(banco), antes);
   assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);

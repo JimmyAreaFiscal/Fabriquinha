@@ -59,3 +59,19 @@ test("a subida mata os processos da instância anterior pelas Sessões e devolve
   assert.deepEqual(sessoes.listar(), []);
   banco.close();
 });
+
+test("os estados vêm na ordem pedida, sem as demandas que não têm processo", () => {
+  const { banco } = abrirBancoTemporario();
+  cadastrarProjetoLoja(banco);
+  gravarAgregadoPronto(banco, agregadoNoEstado("I-1", "planejar"));
+  gravarAgregadoPronto(banco, agregadoNoEstado("I-2", "gate_planejamento"));
+  const estados = montarCicloDeVidaDoBanco(banco).estados(["I-2", "I-9", "I-1"]);
+  assert.deepEqual(
+    [...estados].map(([id, { estado }]) => [id, estado]),
+    [
+      ["I-2", "gate_planejamento"],
+      ["I-1", "planejar"],
+    ],
+  );
+  banco.close();
+});

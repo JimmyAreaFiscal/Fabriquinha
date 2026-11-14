@@ -1,6 +1,7 @@
 // CA-2 da I-270: o motivo da falha mora na última Tentativa do ticket. Banco novo aberto por `abrir` numa raiz temporária,
 // um ticket com duas Tentativas encerradas (motivos A e depois B): o esquema não tem mais os contadores nem o `erro`, e
 // o CLI do agente e a página da demanda mostram o motivo B.
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
@@ -27,7 +28,7 @@ import { pagina } from "../../src/server/web/telas/demandas/demandas.ts";
 import { descreverEtapasDoSdlc } from "../../src/server/consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../src/server/web/apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 const ticket = Endereco.doTicket("I-206", 3);
 const falhaDeInfraestrutura = (numero: number, motivo: string): Tentativa => ({

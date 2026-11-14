@@ -6,7 +6,7 @@ import { somarMeses } from "../../../shared/nucleo/periodo.ts";
 import { mesDoInstante, type Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import type { FiltroDeMetricas } from "../../contrato/metricas.ts";
-import { Periodo } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { type CicloDeVida, Periodo } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { metricasDasDemandasDoPeriodo, metricasDosMeses } from "./metricas_do_periodo.ts";
 import { lerPedidosDasMetricas } from "../demandas/pedidos_das_metricas.ts";
 
@@ -21,13 +21,19 @@ function periodoDoFiltro({ projeto, ate, de }: FiltroDeMetricas, relogio: Relogi
 /** As Métricas de cada Etapa e os fatos de cada mês do período do `filtro`. */
 export const consultarMetricasDosMeses = (
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   filtro: FiltroDeMetricas,
   relogio: Relogio,
 ) =>
   lerEmSnapshot(banco, () =>
     metricasDosMeses(
-      { banco, repositorio: montarRepositorio({ banco }), pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      {
+        banco,
+        cicloDeVida,
+        repositorio: montarRepositorio({ banco }),
+        pedidos: lerPedidosDasMetricas(banco, cicloDeVida, gestaoDeDemandas),
+      },
       periodoDoFiltro(filtro, relogio),
     ),
   );
@@ -35,13 +41,19 @@ export const consultarMetricasDosMeses = (
 /** Uma linha por demanda com execução no período do `filtro`, mais o rodapé. */
 export const consultarMetricasDasDemandas = (
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   filtro: FiltroDeMetricas,
   relogio: Relogio,
 ) =>
   lerEmSnapshot(banco, () =>
     metricasDasDemandasDoPeriodo(
-      { banco, repositorio: montarRepositorio({ banco }), pedidos: lerPedidosDasMetricas(banco, gestaoDeDemandas) },
+      {
+        banco,
+        cicloDeVida,
+        repositorio: montarRepositorio({ banco }),
+        pedidos: lerPedidosDasMetricas(banco, cicloDeVida, gestaoDeDemandas),
+      },
       periodoDoFiltro(filtro, relogio),
     ),
   );

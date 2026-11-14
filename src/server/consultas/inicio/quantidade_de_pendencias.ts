@@ -4,7 +4,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
-import { listarResumosDasDemandas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import type { QuantidadeDePendencias } from "../../contrato/inicio.ts";
 import { sessoesDasDemandas } from "../sessoes/historico_demanda.ts";
@@ -13,15 +13,17 @@ import { pendenciasDasDemandas, situacoesDoBanco, type SituacaoDaSessao } from "
 /** Quanto aguarda o Auditor, lido num snapshot só, no instante do `relogio`. */
 export function consultarQuantidadeDePendencias(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): QuantidadeDePendencias {
   return lerEmSnapshot(banco, () => {
-    const demandas = listarResumosDasDemandas(banco, { soNaoTerminadas: true });
-    const sessoes = sessoesDasDemandas(banco, demandas, { escopo: "ativas" });
+    const demandas = cicloDeVida.andamentos({ soNaoTerminadas: true });
+    const sessoes = sessoesDasDemandas(banco, cicloDeVida, demandas, { escopo: "ativas" });
     return {
-      quantidade: pendenciasDasDemandas(banco, gestaoDeDemandas, demandas, sessoes, situacaoDa, relogio.agora()).length,
+      quantidade: pendenciasDasDemandas(cicloDeVida, gestaoDeDemandas, demandas, sessoes, situacaoDa, relogio.agora())
+        .length,
     };
   });
 }

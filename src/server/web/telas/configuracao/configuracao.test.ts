@@ -1,3 +1,4 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { EstadoDaConfiguracao, EstadoDoAmbiente, ProjetoCadastrado } from "../../../contrato/configuracao.ts";
@@ -18,7 +19,7 @@ import {
 import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 // A hora da próxima busca sai no fuso do navegador; aqui, um fuso fixo.
 process.env.TZ = "America/Sao_Paulo";

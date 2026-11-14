@@ -4,11 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
-import {
-  type ResumoDaDemanda,
-  CICLO_DA_DEMANDA,
-  listarResumosDasDemandas,
-} from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida, ResumoDaDemanda } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { BoardDeDemandas } from "../../contrato/demanda.ts";
 import { sessoesDasDemandas, ticketsComPiAtivo } from "../sessoes/historico_demanda.ts";
 import { bloqueiosDaDemanda, predecessorasDasDemandas, predecessorasDe } from "./predecessoras.ts";
@@ -32,25 +28,27 @@ const emExecucao = (ag: ResumoDaDemanda, comPiAtivo: ReadonlySet<string>): Board
 /** O board: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
 export function consultarBoardDeDemandas(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   relogio: Relogio,
   situacaoDa: SituacaoDaSessao = situacoesDoBanco(banco),
 ): BoardDeDemandas {
   return lerEmSnapshot(banco, () => {
-    const todas = listarResumosDasDemandas(banco);
+    const todas = cicloDeVida.andamentos();
     const comPiAtivo = ticketsComPiAtivo(banco);
+    const { demanda: cicloDaDemanda } = cicloDeVida.etapas();
     const predecessoras = predecessorasDasDemandas(
-      banco,
+      cicloDeVida,
       gestaoDeDemandas,
       todas.map((ag) => ag.demanda.id),
     );
     // As Pendências de todas as demandas em andamento numa leitura só; a terminada não espera ninguém.
-    const emAndamento = todas.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
+    const emAndamento = todas.filter((ag) => !cicloDaDemanda.ehTerminal(ag.demanda.estado));
     const pendencias = pendenciasDasDemandas(
-      banco,
+      cicloDeVida,
       gestaoDeDemandas,
       emAndamento,
-      sessoesDasDemandas(banco, emAndamento, { escopo: "ativas" }),
+      sessoesDasDemandas(banco, cicloDeVida, emAndamento, { escopo: "ativas" }),
       situacaoDa,
       relogio.agora(),
     );
@@ -62,12 +60,12 @@ export function consultarBoardDeDemandas(
           projeto,
           titulo,
           estado,
-          terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
+          terminal: cicloDaDemanda.ehTerminal(estado),
           rodadas: ag.rodadas.map((r) => {
-            const pr = prDoGateDaRodada(ag, r.rodada_id);
+            const pr = prDoGateDaRodada(cicloDeVida, ag, r.rodada_id);
             return { ref: enderecosNaDemanda(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
           }),
-          bloqueios: bloqueiosDaDemanda(predecessorasDe(predecessoras, id)),
+          bloqueios: bloqueiosDaDemanda(cicloDeVida.etapas(), predecessorasDe(predecessoras, id)),
           pendencias: pendencias.filter((p) => p.demanda === id),
         };
       }),

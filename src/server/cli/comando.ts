@@ -6,7 +6,7 @@ import { text } from "node:stream/consumers";
 import type { ParseArgsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../shared/nucleo/erros.ts";
-import { type CicloDeVida, schemaDoTipo, type TipoEvidencia } from "../../modulos/ciclo_de_vida/publico.ts";
+import type { CatalogoDoCicloDeVida, CicloDeVida, TipoEvidencia } from "../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import type { Relogio } from "../../shared/nucleo/relogio.ts";
 
@@ -74,7 +74,7 @@ export async function lerJsonDoArquivo(valor: string, stdin: NodeJS.ReadableStre
 }
 
 /** O schema JSON dos dados que o tipo de evidência aceita, como o `evidencia schema` o mostra, e a regra dos arquivos. */
-export function schemaJsonDoTipo(tipo: TipoEvidencia) {
-  const { dados, arquivos } = schemaDoTipo(tipo);
+export function schemaJsonDoTipo(catalogo: CatalogoDoCicloDeVida, tipo: TipoEvidencia) {
+  const { dados, arquivos } = catalogo.schemaDaEvidencia(tipo);
   return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
 }

@@ -14,7 +14,7 @@ import { registrarDemanda } from "../../../modulos/ciclo_de_vida/processo/nucleo
 import { iniciarTentativaDoTicket } from "../../../modulos/ciclo_de_vida/processo/nucleo/transicoes_do_ticket/inicio_da_execucao.ts";
 import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { removerProjetoComOQueDependeDele } from "./remocao_do_projeto.ts";
-import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { buscarProjeto, gravarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 const ANEXO_ORFAO = "a".repeat(64);
@@ -71,14 +71,25 @@ const contar = (banco: DatabaseSync, sql: string): unknown => banco.prepare(sql)
 test("recusa enquanto um ticket do projeto executa e, sem execução, apaga tudo o que depende do projeto, só dele", async () => {
   const { banco, raiz, fechar } = cenario();
   const recusa = { name: ErroDeRegra.name, message: /^o projeto a tem execução em andamento no I-1\.T1/ };
-  await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
+  await assert.rejects(
+    removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "a"),
+    recusa,
+  );
   banco.exec(
     "UPDATE processo_do_trabalho SET fim = '2026-01-01T00:01:00.000Z'; UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'",
   );
-  await assert.rejects(removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a"), recusa);
+  await assert.rejects(
+    removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "a"),
+    recusa,
+  );
   banco.exec("UPDATE ticket_demanda SET estado = 'aberto' WHERE demanda_id = 'I-1'");
 
-  const { avisos } = await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a");
+  const { avisos } = await removerProjetoComOQueDependeDele(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    "a",
+  );
 
   // Os repositórios do cenário não existem: só a limpeza das worktrees avisa.
   assert.deepEqual(avisos, [
@@ -133,7 +144,7 @@ test("remove as Tentativas antes dos tickets, sem deixar referência quebrada, e
   assert.equal(contar(banco, "SELECT count(*) AS quantidade FROM tentativa"), 1);
   banco.exec("UPDATE ticket_demanda SET estado = 'aberto'");
 
-  await removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "a");
+  await removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "a");
 
   assert.deepEqual(
     montarDemandasDoBanco(banco)
@@ -145,7 +156,7 @@ test("remove as Tentativas antes dos tickets, sem deixar referência quebrada, e
   assert.equal(contar(banco, "SELECT count(*) AS quantidade FROM ticket_demanda"), 0);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
   await assert.rejects(
-    removerProjetoComOQueDependeDele(banco, montarDemandasDoBanco(banco), "fantasma"),
+    removerProjetoComOQueDependeDele(banco, montarCicloDeVidaDoBanco(banco), montarDemandasDoBanco(banco), "fantasma"),
     ErroDeInexistente,
   );
   fechar();

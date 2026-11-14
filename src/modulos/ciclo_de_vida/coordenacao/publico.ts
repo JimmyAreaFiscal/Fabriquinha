@@ -7,3 +7,4 @@ export {
   montarCicloDeVida,
 } from "./aplicacao/ciclo_de_vida.ts";
 export type { CicloDeVidaDoAgente } from "./aplicacao/ciclo_de_vida_do_agente.ts";
+export type { Andamento, CatalogoDoCicloDeVida, SessaoNoCicloDeVida } from "./aplicacao/leituras_do_ciclo_de_vida.ts";

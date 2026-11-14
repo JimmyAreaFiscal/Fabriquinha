@@ -2,7 +2,7 @@
 // (D09) dos tickets e das rodadas, e os anexos das evidências. As ações do Auditor ficam em demandas_acoes.ts.
 import { z } from "zod";
 import { consultarBoardDeDemandas } from "../../../consultas/demandas/board_de_demandas.ts";
-import { consultarAnexoDaDemanda, consultarDemanda } from "../../../consultas/demandas/demanda.ts";
+import { consultarDemanda } from "../../../consultas/demandas/demanda.ts";
 import { BoardDeDemandas, PaginaDaDemanda } from "../../../contrato/demanda.ts";
 import { IdDoCaminho, SemCorpoEmJson, type Rota } from "../../rotas.ts";
 
@@ -17,10 +17,9 @@ const rfc5987 = (texto: string): string =>
   encodeURIComponent(texto).replaceAll(/['()*]/g, (c) => `%${Number(c.codePointAt(0)).toString(16).toUpperCase()}`);
 
 /** `GET /api/demandas/:id/anexos/:sha256`: o arquivo inteiro; o HTML roda numa origem opaca, sem alcançar a API. */
-function anexo({ banco, params, query, resposta }: Parameters<Rota["tratar"]>[0]): void {
+function anexo({ cicloDeVida, params, query, resposta }: Parameters<Rota["tratar"]>[0]): void {
   const dono = DonoDoAnexo.parse(Object.fromEntries(query));
-  const arquivo = consultarAnexoDaDemanda(
-    banco,
+  const arquivo = cicloDeVida.anexo(
     { demanda_id: String(params.id), tipo: dono.tipo, rodada_id: dono.rodada, ticket_id: dono.ticket },
     String(params.sha256),
   );
@@ -37,13 +36,15 @@ export const ROTAS_DAS_DEMANDAS: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/demandas",
-    tratar: ({ banco, demandas, relogio }) => consultarBoardDeDemandas(banco, demandas, relogio),
+    tratar: ({ banco, cicloDeVida, demandas, relogio }) =>
+      consultarBoardDeDemandas(banco, cicloDeVida, demandas, relogio),
     resposta: BoardDeDemandas,
   },
   {
     metodo: "GET",
     caminho: "/api/demandas/:id",
-    tratar: ({ banco, demandas, params, relogio }) => consultarDemanda(banco, demandas, String(params.id), relogio),
+    tratar: ({ banco, cicloDeVida, demandas, params, relogio }) =>
+      consultarDemanda(banco, cicloDeVida, demandas, String(params.id), relogio),
     resposta: PaginaDaDemanda,
   },
   { metodo: "GET", caminho: "/api/demandas/:id/anexos/:sha256", tratar: anexo, resposta: SemCorpoEmJson },

@@ -3,17 +3,18 @@
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
-import { andamentoDasDemandasEmLote, type PedidoDasMetricas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import type { CicloDeVida, PedidoDasMetricas } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 
 /** Os pedidos das demandas `ids`, ou de todas sem `ids`, na ordem em que foram registrados. */
 export const lerPedidosDasMetricas = (
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   ids?: readonly string[],
 ): PedidoDasMetricas[] =>
   lerEmSnapshot(banco, () => {
-    const andamentos = andamentoDasDemandasEmLote(banco, ids);
+    const andamentos = cicloDeVida.estados(ids);
     return gestaoDeDemandas.pedidos({ ids }).map(({ id, projeto, titulo, criadaEm, concluidaEm }) => {
       const { estado, estadoAlteradoEm } = encontrado(
         andamentos.get(id),

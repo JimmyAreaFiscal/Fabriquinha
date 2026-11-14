@@ -5,19 +5,11 @@ import { encontrado } from "../../../shared/nucleo/erros.ts";
 import type { Relogio } from "../../../shared/nucleo/relogio.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
 import {
-  type ResumoDaDemanda,
-  resumosDasDemandas,
-  CICLO_DA_DEMANDA,
-  CICLO_DO_TICKET,
+  type CatalogoDoCicloDeVida,
+  type CicloDeVida,
+  Endereco,
   EstadoDemanda,
-  estadoDaDemandaNaEtapa,
-  etapaDoEstado,
-  type EtapaTicket,
-  formatarRodadaRef,
-  formatarTicketRef,
-  PRIMEIRA_ETAPA_DA_DEMANDA,
-  resolverConfiguracaoAgente,
-  situacaoDasDemandas,
+  type ResumoDaDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { prDoEspaco } from "../../../modulos/repositorio/publico.ts";
 import type { GestaoDeDemandas, Projeto } from "../../../modulos/demandas/publico.ts";
@@ -35,30 +27,30 @@ export const idsDasDemandasDoProjeto = (gestaoDeDemandas: GestaoDeDemandas, proj
     .map(({ id }) => id)
     .reverse();
 
-/** O estado da demanda em que o trabalho da Etapa acontece; as Etapas das rodadas e do conflito acontecem em `em_execucao`. */
-const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
-  EstadoDemanda.options.find((estado) => etapaDoEstado(estado) === etapa) ?? "em_execucao";
-
 /**
  * O estado que a linha do tempo marca: o da demanda em andamento; o da Etapa mais adiantada dos tickets na cancelada,
  * que não guarda onde parou; e `concluida` (tudo feito) na concluída e na arquivada.
  * ponytail: a cancelada num gate aparece no estado do ticket, o de antes; um histórico de estados a acertaria.
  */
 /** @testes função pura da consulta, testada sem banco */
-export function estadoNaLinhaDoTempo({ demanda, tickets }: ResumoDaDemanda): EstadoDemanda {
-  if (CICLO_DA_DEMANDA.satisfazDependencia(demanda.estado)) return "concluida";
-  if (CICLO_DA_DEMANDA.estaEmAndamento(demanda.estado)) return demanda.estado;
+export function estadoNaLinhaDoTempo(
+  { demanda: cicloDaDemanda }: CatalogoDoCicloDeVida,
+  { demanda, tickets }: ResumoDaDemanda,
+): EstadoDemanda {
+  if (cicloDaDemanda.satisfazDependencia(demanda.estado)) return "concluida";
+  if (cicloDaDemanda.estaEmAndamento(demanda.estado)) return demanda.estado;
   return tickets
-    .map((t) => estadoDaEtapa(t.etapa))
+    .map((t) => cicloDaDemanda.estadoDaEtapa(t.etapa))
     .reduce<EstadoDemanda>(
       (maisAdiantado, estado) =>
         EstadoDemanda.options.indexOf(estado) > EstadoDemanda.options.indexOf(maisAdiantado) ? estado : maisAdiantado,
-      estadoDaDemandaNaEtapa(PRIMEIRA_ETAPA_DA_DEMANDA),
+      cicloDaDemanda.primeiroEstado,
     );
 }
 
 /** O que as leituras em lote trazem para montar a linha de uma demanda. */
 interface LeiturasDoProjeto {
+  cicloDeVida: CicloDeVida;
   etapas: Projeto["etapas"];
   predecessoras: ReturnType<typeof predecessorasDasDemandas>;
   sessoes: ReturnType<typeof sessaoDeCadaTicketDasDemandas>;
@@ -68,7 +60,8 @@ interface LeiturasDoProjeto {
 
 function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): DemandaDoProjeto {
   const { id } = ag.demanda;
-  const rodada = (rodada_id: number) => formatarRodadaRef({ demanda_id: id, rodada_id });
+  const catalogo = leituras.cicloDeVida.etapas();
+  const rodada = (rodada_id: number) => Endereco.daRodada(id, rodada_id).toString();
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
   const sessoes = encontrado(leituras.sessoes.get(id), `a demanda ${id} não foi lida`, "recarregue");
   return {
@@ -76,11 +69,13 @@ function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): Dem
     titulo: ag.demanda.titulo,
     tipo: ag.demanda.tipo,
     estado: ag.demanda.estado,
-    terminal: CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado),
-    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(ag.demanda.estado),
-    estadoNaLinhaDoTempo: estadoNaLinhaDoTempo(ag),
+    terminal: catalogo.demanda.ehTerminal(ag.demanda.estado),
+    satisfazDependencia: catalogo.demanda.satisfazDependencia(ag.demanda.estado),
+    estadoNaLinhaDoTempo: estadoNaLinhaDoTempo(catalogo, ag),
     estadoAlteradoEm: ag.demanda.estado_alterado_em,
-    bloqueadaPor: bloqueiosDaDemanda(predecessorasDe(leituras.predecessoras, id)).map((p) => p.demanda_id),
+    bloqueadaPor: bloqueiosDaDemanda(leituras.cicloDeVida.etapas(), predecessorasDe(leituras.predecessoras, id)).map(
+      (p) => p.demanda_id,
+    ),
     pendencias: leituras.pendencias.filter((p) => p.demanda === id),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoEspaco(ag, r.rodada_id);
@@ -93,19 +88,19 @@ function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): Dem
     }),
     tickets: ag.tickets.map((t) => {
       // O modelo do ticket, senão o da Etapa no projeto (D07).
-      const { modelo } = resolverConfiguracaoAgente({
+      const { modelo } = catalogo.configuracaoDoAgente({
         ticket: t.configuracao_agente,
         etapaDoProjeto: leituras.etapas.find((e) => e.etapa === t.etapa)?.configuracao_agente,
         padrao: {},
       });
       const sessao = sessoes.get(t.ticket_id);
-      const ticketRef = formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id });
+      const ticketRef = Endereco.doTicket(id, t.ticket_id).toString();
       return {
         ref: ticketRef,
         etapa: t.etapa,
         estado: t.estado,
-        terminal: CICLO_DO_TICKET.ehTerminal(t.estado),
-        satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
+        terminal: catalogo.ticket.ehTerminal(t.estado),
+        satisfazDependencia: catalogo.ticket.satisfazDependencia(t.estado),
         estadoAlteradoEm: t.estado_alterado_em,
         ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
         ...(t.titulo !== undefined && { titulo: t.titulo }),
@@ -123,6 +118,7 @@ function demandaDoProjeto(ag: ResumoDaDemanda, leituras: LeiturasDoProjeto): Dem
  */
 export function consultarProjeto(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   nome: string,
   filtro: FiltroDoProjeto,
@@ -131,7 +127,9 @@ export function consultarProjeto(
 ): ListaDoProjeto {
   const projeto = gestaoDeDemandas.projeto(nome, ORIENTACAO_PROJETO_INEXISTENTE);
   return lerEmSnapshot(banco, () => {
-    const todas = situacaoDasDemandas(banco, idsDasDemandasDoProjeto(gestaoDeDemandas, nome));
+    const doProjeto = idsDasDemandasDoProjeto(gestaoDeDemandas, nome);
+    const todas = [...cicloDeVida.estados(doProjeto)].map(([id, { estado }]) => ({ id, estado }));
+    const { demanda: cicloDaDemanda } = cicloDeVida.etapas();
     const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
     const mostrarDoEstado: Partial<Record<EstadoDemanda, boolean>> = {
       concluida: filtro.concluidas,
@@ -139,19 +137,20 @@ export function consultarProjeto(
       cancelada: filtro.canceladas,
     };
     const ids = todas.filter((d) => mostrarDoEstado[d.estado] ?? true).map((d) => d.id);
-    const resumos = resumosDasDemandas(banco, ids);
-    const naoTerminadas = resumos.filter((ag) => !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado));
+    const resumos = cicloDeVida.andamentos({ demandas: ids });
+    const naoTerminadas = resumos.filter((ag) => !cicloDaDemanda.ehTerminal(ag.demanda.estado));
     const leituras: LeiturasDoProjeto = {
+      cicloDeVida,
       etapas: projeto.etapas,
-      predecessoras: predecessorasDasDemandas(banco, gestaoDeDemandas, ids),
+      predecessoras: predecessorasDasDemandas(cicloDeVida, gestaoDeDemandas, ids),
       sessoes: sessaoDeCadaTicketDasDemandas(banco, ids),
       comPiAtivo: ticketsComPiAtivo(banco),
       // A demanda encerrada não espera ninguém.
       pendencias: pendenciasDasDemandas(
-        banco,
+        cicloDeVida,
         gestaoDeDemandas,
         naoTerminadas,
-        sessoesDasDemandas(banco, naoTerminadas, { escopo: "ativas" }),
+        sessoesDasDemandas(banco, cicloDeVida, naoTerminadas, { escopo: "ativas" }),
         situacaoDa,
         relogio.agora(),
       ),
@@ -159,7 +158,7 @@ export function consultarProjeto(
     return {
       demandas: resumos.map((ag) => demandaDoProjeto(ag, leituras)),
       contagem: {
-        andamento: todas.filter((d) => CICLO_DA_DEMANDA.estaEmAndamento(d.estado)).length,
+        andamento: todas.filter((d) => cicloDaDemanda.estaEmAndamento(d.estado)).length,
         concluidas: quantas("concluida"),
         arquivadas: quantas("arquivada"),
         canceladas: quantas("cancelada"),

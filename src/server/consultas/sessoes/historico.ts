@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import { ErroDeRegra } from "../../../shared/nucleo/erros.ts";
 import { lerEmSnapshot } from "../../../shared/armazenamento/snapshot.ts";
-import { Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { type CicloDeVida, Endereco } from "../../../modulos/ciclo_de_vida/publico.ts";
 import type { FiltroDeSessoes, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
 import { sessoesDeDemanda } from "./historico_demanda.ts";
 
@@ -20,11 +20,12 @@ function demandaDoEndereco(texto: string): string {
 /** As sessões do `filtro`, da que está assim há mais tempo para a mais recente. */
 export function consultarHistorico(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   { demanda, ...filtro }: FiltroDeSessoes,
 ): SessaoDeDemanda[] {
   return lerEmSnapshot(banco, () =>
-    sessoesDeDemanda(banco, gestaoDeDemandas, {
+    sessoesDeDemanda(banco, cicloDeVida, gestaoDeDemandas, {
       ...filtro,
       ...(demanda !== undefined && { demanda: demandaDoEndereco(demanda) }),
     }),

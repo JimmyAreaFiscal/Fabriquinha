@@ -1,3 +1,4 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import type { GestaoDeDemandas } from "../../modulos/demandas/publico.ts";
 import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../composicao/banco_da_fabriquinha.ts";
 import type { CicloDeVida } from "../../modulos/ciclo_de_vida/publico.ts";
@@ -58,7 +59,7 @@ test("lerJsonDoArquivo com opção lê o JSON da própria opção e cita a opç�
 });
 
 test("schemaJsonDoTipo traz o schema JSON dos dados e a regra dos arquivos do tipo", () => {
-  const schema = schemaJsonDoTipo("comportamento");
+  const schema = schemaJsonDoTipo(CATALOGO_DO_CICLO_DE_VIDA, "comportamento");
   assert.equal(schema.dados.type, "object");
   assert.deepEqual(schema.arquivos, schemaDoTipo("comportamento").arquivos);
 });

@@ -14,8 +14,15 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/demandas",
-    tratar: ({ banco, demandas, params, query, relogio }) =>
-      consultarProjeto(banco, demandas, String(params.nome), FiltroDoProjeto.parse(Object.fromEntries(query)), relogio),
+    tratar: ({ banco, cicloDeVida, demandas, params, query, relogio }) =>
+      consultarProjeto(
+        banco,
+        cicloDeVida,
+        demandas,
+        String(params.nome),
+        FiltroDoProjeto.parse(Object.fromEntries(query)),
+        relogio,
+      ),
     resposta: ListaDoProjeto,
   },
   {

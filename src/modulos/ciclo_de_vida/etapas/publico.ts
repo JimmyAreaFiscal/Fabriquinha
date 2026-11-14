@@ -39,7 +39,6 @@ export { DEFINICAO_DO_ENCERRAR_RODADA } from "./nucleo/encerrar_rodada/definicao
 export {
   DEFINICAO_DO_ENTENDER_E_DESENHAR,
   OBRIGATORIAS_DEMANDA,
-  type TipoDaDemanda,
   TIPOS_DA_DEMANDA,
 } from "./nucleo/entender_e_desenhar/definicao.ts";
 export { DEFINICAO_DO_IMPLEMENTAR } from "./nucleo/implementar/definicao.ts";

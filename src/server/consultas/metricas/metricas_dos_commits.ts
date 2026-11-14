@@ -2,16 +2,9 @@
 // commits que a Etapa de revisão revisou. O Repositório dá as alterações de cada commit de ticket; aqui elas se juntam
 // pela Etapa e pela rodada do ticket, que o Ciclo de Vida diz.
 import type { DatabaseSync } from "node:sqlite";
-import {
-  CATALOGO_DE_ETAPAS,
-  type EtapaTicket,
-  metricasDoCicloDeVida,
-  type MetricasDoProcesso,
-  type OrigemDosFatos,
-  type Recorte,
-} from "../../../modulos/ciclo_de_vida/publico.ts";
+import { type EtapaTicket, type MetricasDoProcesso, type Recorte } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { montarRepositorio } from "../../../modulos/repositorio/publico.ts";
-import { valoresDasEtapasQueDeclaram } from "./metrica_de_uso.ts";
+import { type DeclaracaoDasEtapas, type OrigemDasMetricas, valoresDasEtapasQueDeclaram } from "./metrica_de_uso.ts";
 
 export const DEFINICAO_DAS_ALTERACOES_POSTERIORES = {
   tipo: "alteracoes_posteriores",
@@ -67,28 +60,30 @@ export const alteracoesPosterioresDaEtapa =
  * rodadas e a da demanda, todos.
  */
 export const bugsNosArquivosRevisadosDaEtapa =
-  (commits: readonly CommitDaEtapa[]) =>
+  (commits: readonly CommitDaEtapa[], porEtapa: DeclaracaoDasEtapas) =>
   (etapa: EtapaTicket): { alteradasPorHumanos: number } => ({
     alteradasPorHumanos: commits
-      .filter((c) => CATALOGO_DE_ETAPAS[etapa].escopo === "demanda" || c.rodadaId !== null)
+      .filter((c) => porEtapa[etapa].escopo === "demanda" || c.rodadaId !== null)
       .reduce((soma, c) => soma + c.alteradasPorHumanos, 0),
   });
 
-const commitsDoRecorte = (origem: OrigemDosFatos, recorte: Recorte) =>
-  lerCommitsDoPeriodo(origem.banco, metricasDoCicloDeVida(origem, recorte));
+const commitsDoRecorte = (origem: OrigemDasMetricas, recorte: Recorte) =>
+  lerCommitsDoPeriodo(origem.banco, origem.cicloDeVida.metricas(origem, recorte));
 
 /** As alterações posteriores de cada Etapa que as declara, no recorte. */
 /** @testes o teste da métrica pede um recorte só; a produção junta as Etapas por parte */
-export const alteracoesPosterioresPorEtapa = (origem: OrigemDosFatos, recorte: Recorte) =>
+export const alteracoesPosterioresPorEtapa = (origem: OrigemDasMetricas, recorte: Recorte) =>
   valoresDasEtapasQueDeclaram(
+    origem.cicloDeVida.etapas().porEtapa,
     DEFINICAO_DAS_ALTERACOES_POSTERIORES.tipo,
     alteracoesPosterioresDaEtapa(commitsDoRecorte(origem, recorte)),
   );
 
 /** Os bugs nos arquivos revisados de cada Etapa que os declara, no recorte. */
 /** @testes o teste da métrica pede um recorte só; a produção junta as Etapas por parte */
-export const bugsNosArquivosRevisadosPorEtapa = (origem: OrigemDosFatos, recorte: Recorte) =>
+export const bugsNosArquivosRevisadosPorEtapa = (origem: OrigemDasMetricas, recorte: Recorte) =>
   valoresDasEtapasQueDeclaram(
+    origem.cicloDeVida.etapas().porEtapa,
     DEFINICAO_DOS_BUGS_NOS_ARQUIVOS_REVISADOS.tipo,
-    bugsNosArquivosRevisadosDaEtapa(commitsDoRecorte(origem, recorte)),
+    bugsNosArquivosRevisadosDaEtapa(commitsDoRecorte(origem, recorte), origem.cicloDeVida.etapas().porEtapa),
   );

@@ -4,5 +4,10 @@ import { EtapasDoSdlc } from "../../contrato/etapas.ts";
 import type { Rota } from "../rotas.ts";
 
 export const ROTAS_DAS_ETAPAS: Rota[] = [
-  { metodo: "GET", caminho: "/api/etapas", tratar: descreverEtapasDoSdlc, resposta: EtapasDoSdlc },
+  {
+    metodo: "GET",
+    caminho: "/api/etapas",
+    tratar: ({ cicloDeVida }) => descreverEtapasDoSdlc(cicloDeVida.etapas()),
+    resposta: EtapasDoSdlc,
+  },
 ];

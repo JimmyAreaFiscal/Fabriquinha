@@ -5,10 +5,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import { relogioDoSistema } from "../../../shared/nucleo/relogio.ts";
 import {
-  type ResumoDaDemanda,
-  resumosDasDemandas,
+  type CicloDeVida,
+  Endereco,
   type EtapaTicket,
-  formatarTicketRef,
+  type ResumoDaDemanda,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import {
   type Execucao,
@@ -18,7 +18,7 @@ import {
 } from "../../../modulos/sessoes/publico.ts";
 import type { GestaoDeDemandas } from "../../../modulos/demandas/publico.ts";
 import type { Resultado, SessaoDeDemanda } from "../../contrato/sessoes/historico.ts";
-import { montarCabecalhoDaSessao, sessaoDoTicketDoResumo } from "./chat.ts";
+import { montarCabecalhoDaSessao } from "./chat.ts";
 
 export type { Resultado, SessaoDeDemanda };
 
@@ -31,15 +31,17 @@ interface FiltroSessoesDemanda {
 
 /** As sessões dos `resumos` que casam com o filtro, cada uma com o resumo da demanda dela em `resumoDaDemanda`. */
 function sessoesDosResumos(
+  cicloDeVida: CicloDeVida,
   resumos: readonly ResumoDaSessao[],
   resumoDaDemanda: ReadonlyMap<string, ResumoDaDemanda>,
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
   return resumos
     .map((resumo) =>
-      sessaoDoTicketDoResumo(
+      cicloDeVida.sessaoDoTicket(
         encontrado(resumoDaDemanda.get(resumo.demanda_id), `a demanda ${resumo.demanda_id} não foi lida`, "recarregue"),
         resumo,
+        relogioDoSistema,
       ),
     )
     .filter(
@@ -48,7 +50,7 @@ function sessoesDosResumos(
         (filtro.etapa === undefined || ticket.etapa === filtro.etapa),
     )
     .map((sessaoDoTicket): SessaoDeDemanda => {
-      const { sessao, execucoes, ...resto } = montarCabecalhoDaSessao(sessaoDoTicket, relogioDoSistema);
+      const { sessao, execucoes, ...resto } = montarCabecalhoDaSessao(sessaoDoTicket);
       // O cabeçalho já recusa a sessão sem execução.
       const [primeira, ultima] = [execucoes[0], execucoes.at(-1)] as [Execucao, Execucao];
       return {
@@ -80,12 +82,13 @@ function sessoesDosResumos(
  */
 export function sessoesDasDemandas(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   demandas: readonly ResumoDaDemanda[],
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
   const resumoDaDemanda = new Map(demandas.map((ag) => [ag.demanda.id, ag]));
   const resumos = montarSessoesDeAgente({ banco }).listar({ demandas: [...resumoDaDemanda.keys()] });
-  return sessoesDosResumos(resumos, resumoDaDemanda, filtro);
+  return sessoesDosResumos(cicloDeVida, resumos, resumoDaDemanda, filtro);
 }
 
 /**
@@ -94,6 +97,7 @@ export function sessoesDasDemandas(
  */
 export function sessoesDeDemanda(
   banco: DatabaseSync,
+  cicloDeVida: CicloDeVida,
   gestaoDeDemandas: GestaoDeDemandas,
   filtro: FiltroSessoesDemanda,
 ): SessaoDeDemanda[] {
@@ -106,8 +110,15 @@ export function sessoesDeDemanda(
   const resumos = montarSessoesDeAgente({ banco }).listar(
     demandasDoFiltro === undefined ? {} : { demandas: demandasDoFiltro },
   );
-  const resumosDasDemandasLidas = resumosDasDemandas(banco, [...new Set(resumos.map((resumo) => resumo.demanda_id))]);
-  return sessoesDosResumos(resumos, new Map(resumosDasDemandasLidas.map((ag) => [ag.demanda.id, ag])), filtro);
+  const resumosDasDemandasLidas = cicloDeVida.andamentos({
+    demandas: [...new Set(resumos.map((resumo) => resumo.demanda_id))],
+  });
+  return sessoesDosResumos(
+    cicloDeVida,
+    resumos,
+    new Map(resumosDasDemandasLidas.map((ag) => [ag.demanda.id, ag])),
+    filtro,
+  );
 }
 
 /**
@@ -119,7 +130,7 @@ export const ticketsComPiAtivo = (banco: DatabaseSync): Set<string> =>
     montarSessoesDeAgente({ banco })
       .listar({ abertas: true })
       .filter(({ execucoes }) => execucoes.some((e) => e.fim == null && e.grupo_processo !== undefined))
-      .map(({ demanda_id, ticket_id }) => formatarTicketRef({ demanda_id, ticket_id })),
+      .map(({ demanda_id, ticket_id }) => Endereco.doTicket(demanda_id, ticket_id).toString()),
   );
 
 /** O id da sessão de cada ticket de cada demanda de `ids`; com mais de uma no ticket, vale a mais recente. */

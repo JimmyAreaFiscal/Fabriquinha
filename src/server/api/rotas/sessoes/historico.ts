@@ -10,8 +10,8 @@ export const ROTAS_DO_HISTORICO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/sessoes",
-    tratar: ({ banco, demandas, query }) =>
-      consultarHistorico(banco, demandas, FiltroDeSessoes.parse(Object.fromEntries(query))),
+    tratar: ({ banco, cicloDeVida, demandas, query }) =>
+      consultarHistorico(banco, cicloDeVida, demandas, FiltroDeSessoes.parse(Object.fromEntries(query))),
     resposta: SessaoDeDemanda.array(),
   },
 ];

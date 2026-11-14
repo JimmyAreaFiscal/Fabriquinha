@@ -4,15 +4,21 @@
 import type { DatabaseSync } from "node:sqlite";
 import { encontrado } from "../../../shared/nucleo/erros.ts";
 import {
-  CATALOGO_DE_ETAPAS,
+  type CatalogoDoCicloDeVida,
+  type CicloDeVida,
   EtapaTicket,
-  metricasDoCicloDeVida,
   type MetricasDoProcesso,
   type OrigemDosFatos,
   type Recorte,
   type TipoMetrica,
 } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { type CustoDoUso, type LinhaDeUso, montarSessoesDeAgente, Uso } from "../../../modulos/sessoes/publico.ts";
+
+/** Os fatos que as Métricas leem, com o Ciclo de Vida que dá as do processo e o catálogo das Etapas. */
+export type OrigemDasMetricas = OrigemDosFatos & { cicloDeVida: CicloDeVida };
+
+/** O que cada Etapa declara: o executor, o escopo e as Métricas. */
+export type DeclaracaoDasEtapas = CatalogoDoCicloDeVida["porEtapa"];
 
 export const DEFINICAO_DO_USO = { tipo: "uso", rotulo: "Uso", fonte: "Uso" } as const;
 
@@ -100,7 +106,8 @@ export function lerFatosDeUso(banco: DatabaseSync, processo: MetricasDoProcesso)
 export const somarUsos = (usos: readonly Uso[]): Uso => usos.reduce((total, uso) => total.somar(uso), Uso.vazio());
 
 // shortcut: o Uso declarado não tem Etapa e conta na Etapa de executor externo (só uma o é); dar Etapa à declaração se houver sessão externa de outra.
-const ETAPA_DO_USO_DECLARADO = EtapaTicket.options.find((etapa) => CATALOGO_DE_ETAPAS[etapa].executor === "externo");
+const etapaDoUsoDeclarado = (porEtapa: DeclaracaoDasEtapas) =>
+  EtapaTicket.options.find((etapa) => porEtapa[etapa].executor === "externo");
 
 const somar = (numeros: number[]) => numeros.reduce((soma, n) => soma + n, 0);
 
@@ -124,13 +131,17 @@ export function textoDoCusto({ conhecido, trabalhosSemCusto, trabalhosComCustoEs
 }
 
 /** A fórmula, pura: o Uso de cada Etapa; cada execução vale uma vez, e a sessão externa com Uso, uma sessão. */
-export function usoDaEtapa({ execucoes: todasAsExecucoes, usos, declarados }: FatosDeUso) {
+export function usoDaEtapa(
+  { execucoes: todasAsExecucoes, usos, declarados }: FatosDeUso,
+  porEtapa: DeclaracaoDasEtapas,
+) {
+  const etapaDoDeclarado = etapaDoUsoDeclarado(porEtapa);
   const execucoesPorEtapa = Map.groupBy(todasAsExecucoes, (execucao) => execucao.etapa);
   const usoPorEtapa = Map.groupBy(usos, (daExecucao) => daExecucao.etapa);
   const sessoesExternas = declarados.filter((declarado) => declarado.uso.porModelo().length > 0);
   return (etapa: EtapaTicket): ValorDoUso => {
     const execucoes = execucoesPorEtapa.get(etapa) ?? [];
-    const sessoesDaEtapa = etapa === ETAPA_DO_USO_DECLARADO ? sessoesExternas : [];
+    const sessoesDaEtapa = etapa === etapaDoDeclarado ? sessoesExternas : [];
     const usoExterno = somarUsos(sessoesDaEtapa.map((sessao) => sessao.uso));
     const uso = somarUsos((usoPorEtapa.get(etapa) ?? []).map((daExecucao) => daExecucao.uso)).somar(usoExterno);
     const modelos = uso.porModelo();
@@ -155,18 +166,22 @@ export function usoDaEtapa({ execucoes: todasAsExecucoes, usos, declarados }: Fa
 
 /** As Etapas que declaram a Métrica de `tipo`, na ordem do fluxo, cada uma com o valor dela. */
 export const valoresDasEtapasQueDeclaram = <Valor>(
+  porEtapa: DeclaracaoDasEtapas,
   tipo: TipoMetrica,
   valorDaEtapa: (etapa: EtapaTicket) => Valor,
 ): Map<EtapaTicket, Valor> =>
   new Map(
     EtapaTicket.options
-      .filter((etapa) => CATALOGO_DE_ETAPAS[etapa].metricas.includes(tipo))
+      .filter((etapa) => porEtapa[etapa].metricas.includes(tipo))
       .map((etapa) => [etapa, valorDaEtapa(etapa)]),
   );
 
 /** O Uso de cada Etapa que o declara, no recorte. */
-export const usoPorEtapa = (origem: OrigemDosFatos, recorte: Recorte): Map<EtapaTicket, ValorDoUso> =>
-  valoresDasEtapasQueDeclaram(
+export const usoPorEtapa = (origem: OrigemDasMetricas, recorte: Recorte): Map<EtapaTicket, ValorDoUso> => {
+  const { porEtapa } = origem.cicloDeVida.etapas();
+  return valoresDasEtapasQueDeclaram(
+    porEtapa,
     DEFINICAO_DO_USO.tipo,
-    usoDaEtapa(lerFatosDeUso(origem.banco, metricasDoCicloDeVida(origem, recorte))),
+    usoDaEtapa(lerFatosDeUso(origem.banco, origem.cicloDeVida.metricas(origem, recorte)), porEtapa),
   );
+};

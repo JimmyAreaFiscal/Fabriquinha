@@ -9,14 +9,15 @@ export const ROTAS_DAS_METRICAS: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/metricas",
-    tratar: ({ banco, demandas, query, relogio }) => consultarMetricasDosMeses(banco, demandas, filtro(query), relogio),
+    tratar: ({ banco, cicloDeVida, demandas, query, relogio }) =>
+      consultarMetricasDosMeses(banco, cicloDeVida, demandas, filtro(query), relogio),
     resposta: MetricasDosMeses,
   },
   {
     metodo: "GET",
     caminho: "/api/metricas/demandas",
-    tratar: ({ banco, demandas, query, relogio }) =>
-      consultarMetricasDasDemandas(banco, demandas, filtro(query), relogio),
+    tratar: ({ banco, cicloDeVida, demandas, query, relogio }) =>
+      consultarMetricasDasDemandas(banco, cicloDeVida, demandas, filtro(query), relogio),
     resposta: MetricasDasDemandas,
   },
 ];

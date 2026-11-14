@@ -1,3 +1,4 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
@@ -13,7 +14,7 @@ import { Projeto } from "../../../modulos/demandas/publico.ts";
 import { relogioFixo } from "../../../shared/nucleo/relogio.ts";
 import { ListaDoProjeto } from "../../contrato/projeto.ts";
 import { consultarProjeto, estadoNaLinhaDoTempo } from "./projeto.ts";
-import { montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../composicao/banco_da_fabriquinha.ts";
 import { gravarProjeto, registrarProjeto } from "../../../../apoio-testes/demandas_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -36,7 +37,15 @@ function bancoComProjetos(...nomes: string[]): DatabaseSync {
 }
 
 const consultar = (banco: DatabaseSync, nome: string, filtro: Partial<typeof SEM_FILTRO> = {}) =>
-  consultarProjeto(banco, montarDemandasDoBanco(banco), nome, { ...SEM_FILTRO, ...filtro }, relogio, semSessaoViva);
+  consultarProjeto(
+    banco,
+    montarCicloDeVidaDoBanco(banco),
+    montarDemandasDoBanco(banco),
+    nome,
+    { ...SEM_FILTRO, ...filtro },
+    relogio,
+    semSessaoViva,
+  );
 
 const concluido = (demanda_id: string, ticket_id: number, etapa: string, extra: object = {}) =>
   montarTicket(demanda_id, ticket_id, etapa, { estado: "concluido", ...extra });
@@ -278,10 +287,16 @@ test("projeto inexistente: erro de inexistência com a orientação da Configura
 test("a linha do tempo: o estado em andamento, tudo feito na concluída e na arquivada, e a etapa mais adiantada na cancelada", () => {
   const tickets = [montarTicket("I-1", 1, "implementar", { rodada_id: 1 }), montarTicket("I-1", 2, "planejar")];
   const noEstado = (estado: string, resto: object = {}) => montarAgregadoDemanda("I-1", estado, resto);
-  assert.equal(estadoNaLinhaDoTempo(noEstado("gate_planejamento", { tickets })), "gate_planejamento");
-  assert.equal(estadoNaLinhaDoTempo(noEstado("concluida", { tickets })), "concluida");
-  assert.equal(estadoNaLinhaDoTempo(noEstado("arquivada", { tickets })), "concluida");
-  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets })), "em_execucao");
-  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets: tickets.slice(1) })), "planejar");
-  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada")), "entender_e_desenhar");
+  assert.equal(
+    estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("gate_planejamento", { tickets })),
+    "gate_planejamento",
+  );
+  assert.equal(estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("concluida", { tickets })), "concluida");
+  assert.equal(estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("arquivada", { tickets })), "concluida");
+  assert.equal(estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("cancelada", { tickets })), "em_execucao");
+  assert.equal(
+    estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("cancelada", { tickets: tickets.slice(1) })),
+    "planejar",
+  );
+  assert.equal(estadoNaLinhaDoTempo(CATALOGO_DO_CICLO_DE_VIDA, noEstado("cancelada")), "entender_e_desenhar");
 });

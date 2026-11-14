@@ -1,3 +1,4 @@
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../../../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Execucao } from "../../../../modulos/sessoes/publico.ts";
@@ -8,7 +9,7 @@ import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } 
 import { descreverEtapasDoSdlc } from "../../../consultas/etapas.ts";
 import { definirEtapasDoSdlc } from "../../apresentacao/etapas.ts";
 
-definirEtapasDoSdlc(descreverEtapasDoSdlc());
+definirEtapasDoSdlc(descreverEtapasDoSdlc(CATALOGO_DO_CICLO_DE_VIDA));
 
 process.env.TZ = "America/Sao_Paulo";
 

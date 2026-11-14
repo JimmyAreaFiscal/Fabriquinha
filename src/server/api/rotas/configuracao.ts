@@ -96,8 +96,8 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "DELETE",
     caminho: "/api/projetos/:nome",
-    tratar: async ({ banco, demandas, params }) => {
-      const { avisos } = await removerProjetoComOQueDependeDele(banco, demandas, String(params.nome));
+    tratar: async ({ banco, cicloDeVida, demandas, params }) => {
+      const { avisos } = await removerProjetoComOQueDependeDele(banco, cicloDeVida, demandas, String(params.nome));
       return { avisos };
     },
     resposta: ProjetoRemovido,

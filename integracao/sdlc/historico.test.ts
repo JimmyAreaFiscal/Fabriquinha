@@ -1,6 +1,7 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25: cancelamento e arquivamento com dependentes e execução
 // em andamento (D08) e a demanda encaminhada de um achado da Avaliação, que saiu (D12, ticket 02). Banco sempre numa raiz
 // temporária; git real, pi falso.
+import { CATALOGO_DO_CICLO_DE_VIDA } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, cicloDoDespacho, configuracao } from "../../src/modulos/ciclo_de_vida/publico.ts";
@@ -35,7 +36,7 @@ import {
 import { registrarPedidoComProcesso } from "../../src/server/fluxos/registro_do_pedido.ts";
 import { enviarAoDesenvolvimento } from "../../src/server/fluxos/envio_ao_desenvolvimento.ts";
 import { cancelarDemandaEmCascata, decidirGateDaDemanda } from "../../src/server/fluxos/cancelamento_em_cascata.ts";
-import { montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
+import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/composicao/banco_da_fabriquinha.ts";
 import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida_de_teste.ts";
@@ -105,8 +106,9 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só no estado concluida/);
   assert.deepEqual(
     bloqueiosDaDemanda(
+      CATALOGO_DO_CICLO_DE_VIDA,
       predecessorasDe(
-        predecessorasDasDemandas(c.banco, montarDemandasDoBanco(c.banco), [dependeDaFeita]),
+        predecessorasDasDemandas(montarCicloDeVidaDoBanco(c.banco), montarDemandasDoBanco(c.banco), [dependeDaFeita]),
         dependeDaFeita,
       ),
     ),
@@ -116,8 +118,9 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.equal(demanda(c, feita).demanda.estado, "arquivada");
   assert.deepEqual(
     bloqueiosDaDemanda(
+      CATALOGO_DO_CICLO_DE_VIDA,
       predecessorasDe(
-        predecessorasDasDemandas(c.banco, montarDemandasDoBanco(c.banco), [dependeDaFeita]),
+        predecessorasDasDemandas(montarCicloDeVidaDoBanco(c.banco), montarDemandasDoBanco(c.banco), [dependeDaFeita]),
         dependeDaFeita,
       ),
     ),
@@ -160,7 +163,13 @@ test("CA-SDLC-25 (ticket 02): a demanda encaminhada de um achado antes da retira
   c.banco.prepare("UPDATE achado_avaliacao SET demanda_id = ? WHERE avaliacao_id = ?").run(nova.id, avaliacao);
 
   // A página da demanda abre com a origem legível, e a demanda de onde o achado veio segue como estava.
-  const pagina = consultarDemanda(c.banco, montarDemandasDoBanco(c.banco), nova.id, relogioDoSistema);
+  const pagina = consultarDemanda(
+    c.banco,
+    montarCicloDeVidaDoBanco(c.banco),
+    montarDemandasDoBanco(c.banco),
+    nova.id,
+    relogioDoSistema,
+  );
   assert.deepEqual(pagina.origem, { avaliacao, achado: 1, titulo: "Achado 1" });
   assert.deepEqual(pagina.demanda.estado, "entender_e_desenhar");
   assert.deepEqual(demanda(c, nova.id).demanda.criada_por, autor);

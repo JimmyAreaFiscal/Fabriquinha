@@ -24,7 +24,7 @@ export type EstadoDaSessao = "rodando" | "aguardando_humano" | "terminada";
 /** A Pendência como o chat a leva: `item` pelo endereço público (D09). */
 export type PendenciaDoChat = Omit<Pendencia, "item"> & { item: string };
 
-export const pendenciaDoChat = (pendencia: Pendencia): PendenciaDoChat => ({
+const pendenciaDoChat = (pendencia: Pendencia): PendenciaDoChat => ({
   ...pendencia,
   item: pendencia.item.toString(),
 });

@@ -1,6 +1,6 @@
 // Rotas do Início: o painel das demandas em andamento (a consulta monta o contrato), o contador de pendências do menu,
 // numa consulta leve própria, e as recusas do último ciclo do Despacho.
-import { Endereco, type MotivoDeRecusa, ultimasRecusas } from "../../../modulos/ciclo_de_vida/publico.ts";
+import { type CicloDeVida, Endereco, type MotivoDeRecusa } from "../../../modulos/ciclo_de_vida/publico.ts";
 import { consultarInicio } from "../../consultas/inicio/inicio.ts";
 import { consultarQuantidadeDePendencias } from "../../consultas/inicio/quantidade_de_pendencias.ts";
 import { RecusasDoDespacho } from "../../contrato/despacho.ts";
@@ -14,21 +14,24 @@ export const recusaEmJson = (motivo: MotivoDeRecusa): unknown =>
   );
 
 /** `GET /api/despacho`: por que cada item parado no último ciclo do Despacho não foi despachado. */
-const recusasDoDespacho = () => ({
-  recusas: [...ultimasRecusas()].map(([item, motivo]) => ({ item: item.toString(), motivo: recusaEmJson(motivo) })),
+const recusasDoDespacho = ({ cicloDeVida }: { cicloDeVida: CicloDeVida }) => ({
+  recusas: cicloDeVida
+    .recusasDoDespacho()
+    .map(({ item, motivo }) => ({ item: item.toString(), motivo: recusaEmJson(motivo) })),
 });
 
 export const ROTAS_DO_INICIO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/inicio",
-    tratar: ({ banco, demandas, relogio }) => consultarInicio(banco, demandas, relogio),
+    tratar: ({ banco, cicloDeVida, demandas, relogio }) => consultarInicio(banco, cicloDeVida, demandas, relogio),
     resposta: DadosDoInicio,
   },
   {
     metodo: "GET",
     caminho: "/api/pendencias/quantidade",
-    tratar: ({ banco, demandas, relogio }) => consultarQuantidadeDePendencias(banco, demandas, relogio),
+    tratar: ({ banco, cicloDeVida, demandas, relogio }) =>
+      consultarQuantidadeDePendencias(banco, cicloDeVida, demandas, relogio),
     resposta: QuantidadeDePendencias,
   },
   { metodo: "GET", caminho: "/api/despacho", tratar: recusasDoDespacho, resposta: RecusasDoDespacho },
