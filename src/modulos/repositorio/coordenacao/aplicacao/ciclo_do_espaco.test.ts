@@ -1,4 +1,5 @@
 // O ciclo do Espaço com git real (origin bare) e hospedagem falsa.
+import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -207,6 +208,7 @@ async function cenarioComContainer() {
         porta_da_api: 4999,
         home_do_usuario: c.raiz,
         pacote_do_harness: PACOTE,
+        instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
         dir_do_harness_do_auditor: dirDoPiDoAuditor(),
       },
       registrarErro: noLog,

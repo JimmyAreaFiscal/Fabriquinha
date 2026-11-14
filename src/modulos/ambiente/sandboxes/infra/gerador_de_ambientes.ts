@@ -8,7 +8,10 @@ import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
 import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import {
+  type InstalacaoDoHarness,
+  PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
+} from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { executar } from "../../../../shared/infra/processo.ts";
 import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import {
@@ -59,6 +62,8 @@ export interface Montagens {
   raiz: string;
   /** O `pacote-pi`, só em leitura. */
   pacote: string;
+  /** A instalação do harness no host: a raiz, montada em leitura, e o executável para onde o comando do container aponta. */
+  harness: InstalacaoDoHarness;
 }
 
 /** O que o container recebe por cópia (nunca por montagem), na criação: o pi do Auditor, `~/.claude` e `~/.codex`. */
@@ -117,7 +122,7 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
 
 /** Cria no host o que o container monta e devolve os `-v` (`origem:destino:modo`). */
 function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
-  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote } = montagens;
+  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote, harness } = montagens;
   const { sessoes, execucoes } = pastasDoAmbiente(raiz, idDoAmbiente);
   const gitDoClone = join(raiz_git, ".git");
   // Só estas pastas do `.git` aceitam escrita; o resto (`commondir`, `config`, `hooks`, `info`, `HEAD`) o git do usuário
@@ -134,6 +139,7 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
     [sessoes, join(raiz, "sessoes"), "rw"],
     [execucoes, join(raiz, "execucoes"), "rw"],
     [pacote, pacote, "ro"],
+    [harness.raiz, harness.raiz, "ro"],
   ];
   return montagensComModo.flatMap(([origem, destino, modo]) => ["-v", `${origem}:${destino}:${modo}`]);
 }
@@ -283,6 +289,23 @@ export class GeradorDeAmbientes {
 
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o
   // `kill -9 -1` da `limpar` derruba o `tail` e o tini sai junto. Trocar por um PID 1 que colha, se os zumbis pesarem.
+  /** O comando do harness (`pi`) no PATH do container, apontando para o executável montado do host. */
+  async #instalarComandoDoHarness(containerId: string, { comando, executavel }: InstalacaoDoHarness): Promise<void> {
+    await rodarDocker(
+      // Como root: a imagem pode rodar com usuário sem escrita em /usr/local/bin; a mínima (busybox) nem tem a pasta.
+      [
+        "exec",
+        "-u",
+        "0",
+        containerId,
+        "sh",
+        "-c",
+        `mkdir -p /usr/local/bin && ln -sf '${executavel}' /usr/local/bin/${comando}`,
+      ],
+      this.#limiteDoComandoMs,
+    );
+  }
+
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
    * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
@@ -321,6 +344,7 @@ export class GeradorDeAmbientes {
     );
     try {
       await this.#restringirSaidaParaOHost(id, containerId, portaDaApi);
+      if (montagens) await this.#instalarComandoDoHarness(containerId, montagens.harness);
       if (copias) await copiarParaOContainer(containerId, copias);
     } catch (erro) {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host

@@ -4,6 +4,7 @@
 // informa a indisponibilidade (MELHORIAS §8, regra 4).
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que cria e elimina os containers. A alocação devolvida é a
 // referência que a Execução usa para rodar comandos no container.
+import type { InstalacaoDoHarness } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
@@ -41,6 +42,8 @@ export interface ServicoDoConjunto {
   porta_da_api: number;
   home_do_usuario: string;
   pacote_do_harness: string;
+  /** Perguntada só ao criar um container: o host sem o harness instalado roda no host_local. */
+  instalacao_do_harness: () => InstalacaoDoHarness;
   dir_do_harness_do_auditor: string;
 }
 
@@ -137,6 +140,7 @@ export class ConjuntoDeSandboxes {
       raiz_git: projeto.raiz_git,
       raiz: servico.raiz,
       pacote: servico.pacote_do_harness,
+      harness: servico.instalacao_do_harness(),
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
