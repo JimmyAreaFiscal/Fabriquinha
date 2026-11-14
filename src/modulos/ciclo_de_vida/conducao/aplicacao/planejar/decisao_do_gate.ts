@@ -17,6 +17,7 @@ import type { Relogio } from "../../../../../shared/nucleo/relogio.ts";
 import { raizDo } from "../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { encerrarPiVivo, mandarAoPiVivoOcioso } from "../conducao_de_etapa/pi_vivo.ts";
+import { devolverAmbienteDoEspaco } from "../devolucao_do_ambiente.ts";
 import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
@@ -50,12 +51,13 @@ function reprovarGateDoPlanejamento(
  * existe é reaproveitado.
  */
 async function aprovarGateDoPlanejamento(
-  { banco, repositorio }: ModulosDoCiclo,
+  modulos: ModulosDoCiclo,
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
   relogio: Relogio,
 ): Promise<AgregadoDemanda> {
+  const { banco, repositorio } = modulos;
   const { demanda_id } = endereco;
   const ag = carregarDemanda(banco, demanda_id);
   gate.ensaiar(ag, endereco, entrada, ator, { agora: relogio.agora() }); // recusa antes de tocar o git (estado, falha, plano ausente)
@@ -64,8 +66,10 @@ async function aprovarGateDoPlanejamento(
   const projeto = projetosCadastrados().carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
+  // Cada Espaço devolve o Ambiente assim que fica pronto: preparar todos de uma vez exigiria um sandbox por Espaço ao mesmo tempo.
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
     await repositorio.prepararEspaco(projeto, espaco, log);
+    await devolverAmbienteDoEspaco(modulos, espaco.dono);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
@@ -88,7 +92,9 @@ async function aprovarGateDoPlanejamento(
   }
   const aprovado = decidirGateNaDemanda(banco, gate, endereco, entrada, ator, relogio);
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
-  encerrarPiVivo(banco, { demanda_id, ticket_id });
+  await encerrarPiVivo(banco, { demanda_id, ticket_id });
+  // O pi vivo impediu a devolução do Espaço da demanda ao prepará-lo; sem ele, o Ambiente volta ao conjunto.
+  await devolverAmbienteDoEspaco(modulos, { demanda_id });
   return aprovado;
 }
 
