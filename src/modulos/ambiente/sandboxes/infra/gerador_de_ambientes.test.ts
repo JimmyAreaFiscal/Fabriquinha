@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -294,6 +295,78 @@ test("criar copia o pi do Auditor, o .claude e o .codex para o home do container
   assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
 });
 
+test("criar monta a credencial do pi, do Claude e do Codex do host em vez de copiá-la, e o container vê a renovação", async () => {
+  const dirDoPi = join(base, "pi-com-credencial");
+  const home = join(base, "home-com-credencial");
+  mkdirSync(dirDoPi);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  mkdirSync(join(home, ".codex"));
+  writeFileSync(join(dirDoPi, "auth.json"), "pi-1");
+  writeFileSync(join(home, ".claude", ".credentials.json"), "claude-1");
+  writeFileSync(join(home, ".claude", "CLAUDE.md"), "instruções");
+  writeFileSync(join(home, ".codex", "auth.json"), "codex-1");
+  const antes = docker.registro().length;
+  const copias = { dir_do_pi: dirDoPi, home_do_usuario: home };
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, copias);
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  const credenciais = [
+    [join(dirDoPi, "auth.json"), join(homeDoContainer, ".pi", "agent", "auth.json"), "/home/node/.pi/agent/auth.json"],
+    [
+      join(home, ".claude", ".credentials.json"),
+      join(homeDoContainer, ".claude", ".credentials.json"),
+      "/home/node/.claude/.credentials.json",
+    ],
+    [join(home, ".codex", "auth.json"), join(homeDoContainer, ".codex", "auth.json"), "/home/node/.codex/auth.json"],
+  ] as const;
+  const montagens = docker.containers().find((container) => container.id === criado.container_id)?.montagens;
+  for (const [noHost, noContainer, destino] of credenciais) {
+    assert.ok(montagens?.includes(`${noHost}:${destino}:rw`), `${destino} não foi montado`);
+    assert.ok(lstatSync(noContainer).isSymbolicLink(), `${destino} foi copiado`);
+    // A renovação no host chega ao container já criado, e a do container chega ao host.
+    writeFileSync(noHost, "renovada-no-host");
+    assert.equal(readFileSync(noContainer, "utf8"), "renovada-no-host");
+    writeFileSync(noContainer, "renovada-no-container");
+    assert.equal(readFileSync(noHost, "utf8"), "renovada-no-container");
+  }
+  assert.equal(readFileSync(join(homeDoContainer, ".claude", "CLAUDE.md"), "utf8"), "instruções");
+  const chamadas = docker.registro().slice(antes);
+  assert.ok(chamadas.some((chamada) => chamada.includes("-u") && chamada.join(" ").includes("chown")));
+  // Sem a credencial do Claude e do Codex no host, só a do pi é montada.
+  const homeSemCredencial = join(base, "home-sem-credencial");
+  mkdirSync(join(homeSemCredencial, ".claude"), { recursive: true });
+  const outro = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+    dir_do_pi: dirDoPi,
+    home_do_usuario: homeSemCredencial,
+  });
+  assert.deepEqual(docker.containers().find((container) => container.id === outro.container_id)?.montagens, [
+    `${join(dirDoPi, "auth.json")}:/home/node/.pi/agent/auth.json:rw`,
+  ]);
+});
+
+test("criar com a imagem sem HOME falha antes de subir o container, com a orientação", async () => {
+  const dirDoPi = join(base, "pi-com-imagem-sem-home");
+  mkdirSync(dirDoPi);
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  const comImagemSemHome = join(base, "com-imagem-sem-home");
+  mkdirSync(comImagemSemHome);
+  writeFileSync(
+    join(comImagemSemHome, "docker"),
+    `#!/bin/sh\ncase "$*" in *'--entrypoint'*) exit 0;; esac\nexec '${join(base, "docker", "bin", "docker")}' "$@"\n`,
+  );
+  chmodSync(join(comImagemSemHome, "docker"), 0o755);
+  process.env.PATH = `${comImagemSemHome}:${caminhoOriginal ?? ""}`;
+  const antes = docker.containers().length;
+  try {
+    await assert.rejects(
+      gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, { dir_do_pi: dirDoPi, home_do_usuario: base }),
+      /a imagem node:22-alpine não tem um HOME.*imagem com HOME absoluto/s,
+    );
+  } finally {
+    process.env.PATH = `${join(base, "docker", "bin")}:${caminhoOriginal ?? ""}`;
+  }
+  assert.equal(docker.containers().length, antes);
+});
+
 test("criar tira das cópias o token do GitHub, e o resto do arquivo continua igual", async () => {
   const dirDoPi = join(base, "pi-com-token");
   const home = join(base, "home-com-token");
@@ -301,7 +374,7 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
   const tokenFinoDoGithub = `github_pat_${"x9".repeat(15)}`;
   mkdirSync(dirDoPi);
   mkdirSync(join(home, ".claude"), { recursive: true });
-  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "auth.json"), `{"github-copilot":"${token}"}`);
   writeFileSync(join(dirDoPi, "settings.json"), `{"github":"${token}","tema":"escuro"}`);
   mkdirSync(join(home, ".claude", "skills"));
   writeFileSync(
@@ -321,7 +394,8 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
     readFileSync(join(homeDoContainer, ".claude", "skills", "arquivo com espaço.md"), "utf8"),
     "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
   );
-  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
+  // A credencial montada é a do host: o token dela não é tirado (o `sed -i` reescreveria o arquivo do host).
+  assert.equal(readFileSync(join(dirDoPi, "auth.json"), "utf8"), `{"github-copilot":"${token}"}`);
 });
 
 test("criar com cópia que falha mata o docker exec da cópia, elimina o container e diz o motivo", async () => {
@@ -330,6 +404,7 @@ test("criar com cópia que falha mata o docker exec da cópia, elimina o contain
   mkdirSync(dirDoPi);
   mkdirSync(home);
   writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "settings.json"), "{}"); // sem configuração a copiar, não haveria tar
   // O `docker exec` da cópia guarda o pid e fica preso; o tar só falha depois disso, para encontrá-lo ainda vivo.
   const comExecDaCopiaPreso = join(base, "com-exec-da-copia-preso");
   const arquivoDoPidDoExecPreso = join(comExecDaCopiaPreso, "pid");
