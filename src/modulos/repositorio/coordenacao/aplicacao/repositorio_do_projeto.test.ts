@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import type { Ambiente, GestaoDeAmbientes } from "../../../ambiente/publico.ts";
+import { AmbienteHostLocal, gestaoQueSoUsa } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { espacoDaDemanda } from "../../espaco_de_trabalho/publico.ts";
 import { montarRepositorio } from "./repositorio_do_projeto.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
@@ -54,4 +57,27 @@ test("a varredura diária segue a cadência do agendador: varre a cada intervalo
   assert.equal(varreduras, 2, "a configuração que não se lê vale como desligada");
   assert.deepEqual(erros, []);
   await repositorio.parar();
+});
+
+test("devolverAmbiente limpa só o Ambiente do dono do Espaço e deixa a worktree onde está", async () => {
+  const limpos: string[] = [];
+  const ambienteDaDemanda = new AmbienteHostLocal();
+  const gestao: GestaoDeAmbientes = {
+    ...gestaoQueSoUsa(ambienteDaDemanda),
+    ambienteDo: (ocupante) => (ocupante === "I-1" ? ({ id: "sandbox-1" } as Ambiente) : ambienteDaDemanda),
+    limpar: (id) => {
+      limpos.push(id);
+      return Promise.resolve();
+    },
+  };
+  const repositorio = montarRepositorio({ banco: new DatabaseSync(":memory:"), ambientes: gestao });
+  const projeto = {
+    nome: "loja",
+    raiz_git: "/nao-existe",
+    branch_base: "main",
+    hospedagem: "github" as const,
+    verificacoes: { preparacao: [] },
+  };
+  await repositorio.devolverAmbiente(projeto, espacoDaDemanda(projeto, "I-1", "/nao-existe"), "/nao-existe/log");
+  assert.deepEqual(limpos, ["sandbox-1"]);
 });

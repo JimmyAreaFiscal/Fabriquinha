@@ -68,14 +68,19 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Zumbi não conta: sem init que o recolha (PID 1 que não faz wait), o morto continua no grupo e o kill 0 ainda acerta.
+const grupoEstaVivo = (grupo: number): boolean =>
+  readdirSync("/proc").some((pid) => {
+    try {
+      // "pid (comando) estado ppid grupo ...": o comando pode ter espaço e parêntese, então corta pelo último ")".
+      const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
+        .replace(/^.*\) /s, "")
+        .split(" ");
+      return Number(grupoDoProcesso) === grupo && estado !== "Z";
+    } catch {
+      return false; // o processo saiu entre o readdir e o read, ou não é um pid
+    }
+  });
 
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
