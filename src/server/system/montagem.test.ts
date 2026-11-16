@@ -567,15 +567,16 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
   const minuto = relogio(t);
   const { raiz, banco } = abrirBancoTemporario();
   salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
-  for (const [id, alocadoPara] of [
-    ["ocioso", "I-1"],
-    ["em-uso", "I-2"],
+  for (const [id, alocadoPara, slot] of [
+    ["ocioso", "I-1", 1],
+    ["em-uso", "I-2", 2],
   ] as const) {
     const container = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": id } });
     inserirAmbienteAlocado(banco, {
       id,
       container_id: container.id,
       imagem: "alpine",
+      slot,
       criado_em: "2020-01-01T00:00:00.000Z",
       alocado_para: alocadoPara,
     });

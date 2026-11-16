@@ -103,6 +103,11 @@ interface ContainerCriado {
   container_id: string;
 }
 
+/** O container que `criar` devolve: o slot que nomeou `fabriquinha-slot-<n>` no docker. */
+interface ContainerCriadoNoSlot extends ContainerCriado {
+  slot: number;
+}
+
 /** O projeto que tem imagem: `imagem_do_ambiente` é o caminho de um Dockerfile no repositório ou o nome de uma imagem. */
 interface ProjetoComImagem {
   nome: string;
@@ -308,22 +313,26 @@ export class GeradorDeAmbientes {
 
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
-   * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
+   * (`host-gateway`), só para a porta da API do agente. O nome no docker é `fabriquinha-slot-<slot>`: o docker não aceita
+   * espaço, e o nome repetido faz o `run` falhar. Sem `montagens`, o container nasce sem pasta do host; sem
    * `copias`, sem o pi, o `.claude` nem o `.codex`.
    */
   async criar(
     imagem: ImagemDoAmbiente,
     limites: Limites,
     portaDaApi: number,
+    slot: number,
     montagens?: Montagens,
     copias?: Copias,
-  ): Promise<ContainerCriado> {
+  ): Promise<ContainerCriadoNoSlot> {
     if (copias) exigirLoginDoPi(copias);
     const id = randomUUID();
     const containerId = await rodarDocker(
       [
         "run",
         "-d",
+        "--name",
+        `fabriquinha-slot-${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
         "--memory",
@@ -350,7 +359,7 @@ export class GeradorDeAmbientes {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
       throw erro;
     }
-    return { id, container_id: containerId };
+    return { id, container_id: containerId, slot };
   }
 
   /**

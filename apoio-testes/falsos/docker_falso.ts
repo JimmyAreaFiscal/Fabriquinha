@@ -33,6 +33,8 @@ const PASTA_DOS_PIDS_NO_CONTAINER = "/fabriquinha/pids";
 export interface ContainerFalso {
   id: string;
   imagem: string;
+  /** O `--name` do `run`; dois containers não têm o mesmo nome, como no docker de verdade. */
+  nome?: string;
   rotulos: Record<string, string>;
   memoria: number;
   cpus: number;
@@ -57,6 +59,7 @@ export interface DockerFalso {
   semearContainer: (semente: {
     id?: string;
     imagem?: string;
+    nome?: string;
     rotulos?: Record<string, string>;
     uso?: ContainerFalso["uso"];
   }) => ContainerFalso;
@@ -98,10 +101,11 @@ export function instalarDockerFalso(dir: string): DockerFalso {
   symlinkSync(import.meta.filename, join(dir, "bin", "docker"));
   process.env.PATH = `${join(dir, "bin")}:${process.env.PATH ?? ""}`;
   process.env.FALSO_DOCKER_DIR = dir;
-  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, rotulos, uso }) => {
+  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, nome, rotulos, uso }) => {
     const container: ContainerFalso = {
       id: id ?? randomBytes(32).toString("hex"),
       imagem: imagem ?? "alpine",
+      nome,
       rotulos: rotulos ?? {},
       memoria: 0,
       cpus: 0,
@@ -214,6 +218,7 @@ function executarDockerFalso(): void {
     writeFileSync(join(imagens, codificar(args[0] ?? "")), "");
   } else if (comando === "run" || comando === "create") {
     const { opcoes, resto } = tirarOpcoes(args, [
+      "--name",
       "--label",
       "--memory",
       "--cpus",
@@ -225,6 +230,9 @@ function executarDockerFalso(): void {
     ]);
     const [imagem = "", ...programa] = resto;
     if (!temImagem(imagem)) sair(125, `Unable to find image '${imagem}' locally`);
+    const nome = opcoes["--name"]?.[0];
+    if (nome && readdirSync(containers).some((id) => achar(id).nome === nome))
+      sair(125, `Conflict. The container name "/${nome}" is already in use`);
     if (opcoes["--rm"]) return; // roda e some, como o que aplica regras no namespace de rede de outro container
     const rotulos = Object.fromEntries(
       (opcoes["--label"] ?? []).map((rotulo) => [rotulo.split("=")[0] ?? "", rotulo.split("=").slice(1).join("=")]),
@@ -233,6 +241,7 @@ function executarDockerFalso(): void {
     const container: ContainerFalso = {
       id: randomBytes(32).toString("hex"),
       imagem,
+      nome,
       rotulos,
       memoria: memoria ? Number(memoria[1]) * 1048576 : 0,
       cpus: Number(opcoes["--cpus"]?.[0] ?? 0),
