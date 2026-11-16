@@ -11,4 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
     && mkdir -p /fabriquinha/pids \
     && chown node:node /fabriquinha/pids
 # Usuário não-root: o Claude Code do claude-bridge recusa --dangerously-skip-permissions como root.
+# O fuso do host: sem ele, os testes de data e hora de src/server/web falham no container.
+ENV TZ=America/Sao_Paulo
 USER node
