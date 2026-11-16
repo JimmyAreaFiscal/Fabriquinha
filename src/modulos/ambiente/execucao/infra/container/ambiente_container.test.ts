@@ -68,13 +68,26 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
+/** No Linux, o processo `Z` (zumbi) do grupo não conta: sem init que o recolha (PID 1 de sandbox), `kill(-grupo, 0)` ainda o vê. */
+const grupoTemProcessoQueNaoEZumbi = (grupo: number): boolean =>
+  readdirSync("/proc").some((pid) => {
+    try {
+      const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
+        .replace(/^.*\)\s/s, "")
+        .split(" ");
+      return estado !== "Z" && Number(grupoDoProcesso) === grupo;
+    } catch {
+      return false; // não é pid, ou o processo saiu durante a leitura
+    }
+  });
+
 const grupoEstaVivo = (grupo: number): boolean => {
   try {
     process.kill(-grupo, 0);
-    return true;
   } catch {
     return false;
   }
+  return existsSync("/proc/self/stat") ? grupoTemProcessoQueNaoEZumbi(grupo) : true;
 };
 
 /**

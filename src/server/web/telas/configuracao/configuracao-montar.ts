@@ -65,10 +65,12 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       configuracoes[etapa] = { ...(modelo && { modelo }), ...(effort && { effort: effort as Effort }) };
     }
   }
+  const imagem = valor(form, '[name="imagem_do_ambiente"]').trim();
   return {
     nome: valor(form, '[name="nome"]'),
     raiz_git: valor(form, '[name="raiz_git"]'),
     branch_base: valor(form, '[name="branch_base"]'),
+    ...(imagem && { imagem_do_ambiente: imagem }),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     configuracoes,
@@ -197,10 +199,12 @@ function montarProjeto(
   menuHtml: string,
   salvo: ProjetoCadastrado | undefined,
   modelosDoPi: readonly Modelo[],
+  ambienteEmContainer: boolean,
 ): void {
+  const rodaNoHost = ambienteEmContainer && salvo !== undefined && salvo.imagem_do_ambiente === undefined;
   const inicial: Rascunho = salvo ? rascunhoDe(salvo) : NOVO;
   const desenhar = (p: Rascunho, erros: Erros, falha?: string): void => {
-    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, falha }));
+    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, rodaNoHost, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
     if (salvo) montarRemocao(main, signal, salvo);
@@ -266,5 +270,9 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
     main.innerHTML = pagina(menuHtml, projetoInexistente(sel.nome));
     return;
   }
-  montarProjeto(main, signal, menuHtml, salvo, await api<Modelo[]>("/api/modelos", { signal }));
+  const [modelosDoPi, { configuracao }] = await Promise.all([
+    api<Modelo[]>("/api/modelos", { signal }),
+    api<EstadoDoAmbiente>("/api/ambiente", { signal }),
+  ]);
+  montarProjeto(main, signal, menuHtml, salvo, modelosDoPi, configuracao.tipo === "container");
 }
