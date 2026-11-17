@@ -30,6 +30,7 @@ import { ROTAS_DAS_DEMANDAS } from "./demandas/demandas.ts";
 import { ROTAS_DAS_ACOES_DE_DEMANDA } from "./demandas/demandas_acoes.ts";
 import { ROTAS_DO_HISTORICO } from "./sessoes/historico.ts";
 import { ROTAS_DO_INICIO } from "./inicio/inicio.ts";
+import { ROTAS_DAS_PASTAS } from "./pastas/pastas.ts";
 import { ROTAS_DAS_METRICAS } from "./metricas/metricas.ts";
 import { ROTAS_DO_PROJETO } from "./projeto/projeto.ts";
 import { ROTAS_DA_CONFIGURACAO_SDLC } from "./projeto/sdlc.ts";
@@ -47,6 +48,7 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DO_CHAT,
   ...ROTAS_DO_PROJETO,
   ...ROTAS_DAS_METRICAS,
+  ...ROTAS_DAS_PASTAS,
 ];
 
 /** As rotas de /api/agente/*: fora de `ROTAS`, porque entram com o token do processo e não com o cookie do navegador. */
