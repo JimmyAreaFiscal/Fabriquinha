@@ -241,13 +241,13 @@ test("configuração mínima aplica defaults e trim; opcionais ficam ausentes", 
   });
 });
 
-test("imagem_do_ambiente é gravada, lida e removida ao regravar sem ela", () => {
+test("arquivos_de_dependencias é gravada, lida e removida ao regravar sem ela", () => {
   comBanco((banco) => {
     const base = ProjetoConfigurado.parse(minima());
-    gravarProjeto(banco, { ...base, imagem_do_ambiente: "node:22" });
-    assert.equal(buscarProjeto(banco, "a")?.imagem_do_ambiente, "node:22");
+    gravarProjeto(banco, { ...base, arquivos_de_dependencias: ["requirements.txt", "web/package.json"] });
+    assert.deepEqual(buscarProjeto(banco, "a")?.arquivos_de_dependencias, ["requirements.txt", "web/package.json"]);
     gravarProjeto(banco, base);
-    assert.equal(Object.hasOwn(projetoExistente(banco, "a"), "imagem_do_ambiente"), false);
+    assert.equal(Object.hasOwn(projetoExistente(banco, "a"), "arquivos_de_dependencias"), false);
   });
 });
 

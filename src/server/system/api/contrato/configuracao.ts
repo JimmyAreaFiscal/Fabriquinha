@@ -54,6 +54,7 @@ export const FormularioDoProjeto = Projeto.pick({
   nome: true,
   raiz_git: true,
   branch_base: true,
+  arquivos_de_dependencias: true,
 }).extend({
   hospedagem: Hospedagem.optional(),
   preparacao: ComandosDePreparacao,

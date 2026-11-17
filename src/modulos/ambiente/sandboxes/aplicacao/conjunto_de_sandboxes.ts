@@ -61,11 +61,11 @@ export interface OcupanteDoAmbiente {
   pasta_das_worktrees_do_projeto: string;
 }
 
-/** O que o conjunto lê do Projeto: a imagem do Ambiente, e o clone de onde ela sai e o `.env` que o container recebe. */
+/** O que o conjunto lê do Projeto: os arquivos de dependências do Ambiente, e o clone de onde saem e o `.env` que o container recebe. */
 export interface ProjetoDoAmbiente {
   nome: string;
   raiz_git: string;
-  imagem_do_ambiente?: string;
+  arquivos_de_dependencias?: readonly string[];
 }
 
 /** Um container do conjunto como a lista o mostra: o gravado e, no Ambiente `container`, o uso medido agora pelo docker. */

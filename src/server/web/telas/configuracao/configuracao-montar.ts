@@ -42,7 +42,7 @@ function errosDe(erro: unknown): Erros {
 }
 
 const valor = (raiz: ParentNode, seletor: string): string =>
-  raiz.querySelector<HTMLInputElement | HTMLSelectElement>(seletor)?.value ?? "";
+  raiz.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(seletor)?.value ?? "";
 
 /** O que o formulário do agendador tem agora, no formato do F4 §3. */
 const lerAgendador = (form: HTMLFormElement) => ({
@@ -65,10 +65,16 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       configuracoes[etapa] = { ...(modelo && { modelo }), ...(effort && { effort: effort as Effort }) };
     }
   }
+  const arquivosDeDependencias = valor(form, '[name="arquivos_de_dependencias"]')
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
   return {
     nome: valor(form, '[name="nome"]'),
     raiz_git: valor(form, '[name="raiz_git"]'),
     branch_base: valor(form, '[name="branch_base"]'),
+    // Sem linha, o campo fica de fora: o projeto sem arquivo de dependências roda no host.
+    ...(arquivosDeDependencias.length > 0 && { arquivos_de_dependencias: arquivosDeDependencias }),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     configuracoes,

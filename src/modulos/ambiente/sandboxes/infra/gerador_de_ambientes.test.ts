@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -22,43 +21,65 @@ const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerador-"));
 const caminhoOriginal = process.env.PATH;
 const docker = instalarDockerFalso(join(base, "docker"));
 const raizGit = join(base, "repo");
-mkdirSync(join(raizGit, "ambiente"), { recursive: true });
-writeFileSync(join(raizGit, "ambiente", "Dockerfile"), "FROM alpine\n");
-const sha256DoDockerfile = createHash("sha256").update("FROM alpine\n").digest("hex");
+mkdirSync(join(raizGit, "web"), { recursive: true });
+writeFileSync(join(raizGit, "web", "package.json"), '{"name":"web"}');
+writeFileSync(join(raizGit, "web", "package-lock.json"), "{}");
+writeFileSync(join(raizGit, "requirements.txt"), "requests==2.32.0\n");
 const limites = { memoria_maxima_mb: 512, cpus: 1.5 };
 const PORTA_DA_API = 4999;
+docker.semearImagem("node:22-alpine");
 const gerador = new GeradorDeAmbientes();
 
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("garantirImagem faz o build do Dockerfile com a tag do projeto e do sha256, e não repete o build", async () => {
-  const projeto = { nome: "meu-projeto", raiz_git: raizGit, imagem_do_ambiente: "ambiente/Dockerfile" };
-  const tag = `fabriquinha/meu-projeto:${sha256DoDockerfile}`;
-  assert.equal(await gerador.garantirImagem(projeto), tag);
-  assert.equal(await gerador.garantirImagem(projeto), tag);
-  assert.deepEqual(docker.imagens(), [tag]);
-  const builds = docker.registro().filter(([comando]) => comando === "build");
-  assert.deepEqual(builds, [
-    ["build", "-t", tag, "-f", join(raizGit, "ambiente", "Dockerfile"), join(raizGit, "ambiente")],
-  ]);
+const TAG_DO_PROJETO = /^fabriquinha\/meu-projeto:[0-9a-f]{64}$/;
+const doProjeto = (...arquivos_de_dependencias: string[]) => ({
+  nome: "meu-projeto",
+  raiz_git: raizGit,
+  arquivos_de_dependencias,
 });
 
-test("garantirImagem faz o pull do nome de imagem que não está na máquina, uma vez só", async () => {
-  const projeto = { nome: "outro", raiz_git: raizGit, imagem_do_ambiente: "node:22-alpine" };
-  assert.equal(await gerador.garantirImagem(projeto), "node:22-alpine");
-  assert.equal(await gerador.garantirImagem(projeto), "node:22-alpine");
-  assert.deepEqual(
-    docker.registro().filter(([comando]) => comando === "pull"),
-    [["pull", "node:22-alpine"]],
+test("garantirImagem gera a imagem das dependências, com a tag do projeto e do hash, e não repete o build", async () => {
+  const projeto = doProjeto("requirements.txt", "web/package.json");
+  const tag = await gerador.garantirImagem(projeto);
+  assert.match(tag, TAG_DO_PROJETO);
+  assert.equal(await gerador.garantirImagem(projeto), tag);
+  assert.ok(docker.imagens().includes(tag));
+  const builds = docker.registro().filter(([comando]) => comando === "build");
+  assert.equal(builds.length, 1);
+  assert.deepEqual(builds[0]?.slice(0, 3), ["build", "-t", tag]);
+});
+
+test("garantirImagem gera outra imagem quando o arquivo de dependências ou o lockfile muda", async () => {
+  const antes = await gerador.garantirImagem(doProjeto("web/package.json"));
+  writeFileSync(join(raizGit, "web", "package.json"), '{"name":"web","dependencies":{"zod":"^4"}}');
+  const comOutroArquivo = await gerador.garantirImagem(doProjeto("web/package.json"));
+  writeFileSync(join(raizGit, "web", "package-lock.json"), '{"lockfileVersion":3}');
+  const comLockfile = await gerador.garantirImagem(doProjeto("web/package.json"));
+  assert.equal(new Set([antes, comOutroArquivo, comLockfile]).size, 3);
+});
+
+test("garantirImagem recusa o arquivo que não entende, o repetido e o que não existe", async () => {
+  await assert.rejects(gerador.garantirImagem(doProjeto("Dockerfile")), /não suportados/);
+  await assert.rejects(
+    gerador.garantirImagem(doProjeto("requirements.txt", "outra/requirements.txt")),
+    /não suportados/,
   );
+  await assert.rejects(gerador.garantirImagem(doProjeto("api/requirements.txt")), /api\/requirements.txt não existe/);
+});
+
+test("garantirImagem recusa o package.json sem package-lock.json ao lado, que o npm ci exige", async () => {
+  mkdirSync(join(raizGit, "sem-lock"), { recursive: true });
+  writeFileSync(join(raizGit, "sem-lock", "package.json"), '{"name":"sem-lock"}');
+  await assert.rejects(gerador.garantirImagem(doProjeto("sem-lock/package.json")), /não tem package-lock.json/);
 });
 
 test("garantirImagem explica a falha do build", async () => {
   docker.falharComando("build", "sem espaço em disco");
   await assert.rejects(
-    gerador.garantirImagem({ nome: "x", raiz_git: raizGit, imagem_do_ambiente: "ambiente/Dockerfile" }),
+    gerador.garantirImagem(doProjeto("requirements.txt")),
     /docker build falhou: sem espaço em disco/,
   );
   rmSync(join(base, "docker", "falhas", "build"));

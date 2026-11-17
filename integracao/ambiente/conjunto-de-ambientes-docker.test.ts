@@ -14,7 +14,16 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";
 
-const IMAGEM_MINIMA = "busybox:1";
+/** Um repositório com um `package.json` sem dependências e o lockfile que o `npm ci` exige: a imagem sai só com Node e Git. */
+function repositorioSemDependencias(pasta: string): string {
+  const raizGit = mkdtempSync(join(pasta, "repo-"));
+  writeFileSync(join(raizGit, "package.json"), '{"name":"minimo","version":"1.0.0"}');
+  writeFileSync(
+    join(raizGit, "package-lock.json"),
+    '{"name":"minimo","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"minimo","version":"1.0.0"}}}',
+  );
+  return raizGit;
+}
 
 const dockerDeVerdade = (...args: string[]): string => execFileSync("docker", args, { encoding: "utf8" }).trim();
 
@@ -55,7 +64,11 @@ test(
       rmSync(raiz, { recursive: true, force: true });
       fechar();
     });
-    const projeto = { nome: "projeto", raiz_git: mkdtempSync(join(raiz, "repo-")), imagem_do_ambiente: IMAGEM_MINIMA };
+    const projeto = {
+      nome: "projeto",
+      raiz_git: repositorioSemDependencias(raiz),
+      arquivos_de_dependencias: ["package.json"],
+    };
     const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") });
 
     // aloca
@@ -118,8 +131,8 @@ test(
     });
     const projeto = {
       nome: "projeto",
-      raiz_git: mkdtempSync(join(raiz, "repo-")),
-      imagem_do_ambiente: "node:22-bookworm-slim",
+      raiz_git: repositorioSemDependencias(raiz),
+      arquivos_de_dependencias: ["package.json"],
     };
     const alocado = await gestao.alocar(
       { dono: "espaco", pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") },
@@ -143,5 +156,140 @@ test(
     assert.equal(cli.saida.trim(), join(PACOTE, "bin", "fabriquinha"));
     const outros = await noContainer("for c in gh az docker claude codex; do command -v $c; done; true");
     assert.equal(outros.saida.trim(), "");
+  },
+);
+
+const COM_DOCKER = {
+  skip: process.env.FABRIQUINHA_TESTE_DOCKER
+    ? false
+    : "defina FABRIQUINHA_TESTE_DOCKER=1 para rodar com o Docker de verdade",
+};
+
+/** Um repositório com os arquivos de dependências dados (e o `package-lock.json`, gerado pelo npm, se há `package.json`). */
+function repositorioComDependencias(pasta: string, arquivos: Record<string, string>): string {
+  const raizGit = mkdtempSync(join(pasta, "repo-"));
+  for (const [nome, conteudo] of Object.entries(arquivos)) writeFileSync(join(raizGit, nome), conteudo);
+  if ("package.json" in arquivos) gerarPackageLock(raizGit);
+  return raizGit;
+}
+
+function gerarPackageLock(raizGit: string): void {
+  execFileSync("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
+    cwd: raizGit,
+    stdio: "ignore",
+  });
+}
+
+/** A gestão de Ambientes em container, que gera a imagem do projeto pelos arquivos de dependências; `limpar` elimina o que criou. */
+async function gestaoEmContainerQueGeraImagens(nomeDoProjeto: string) {
+  const { banco, fechar } = abrirBancoTemporario();
+  const raiz = raizCompartilhadaComODocker();
+  const dirDoPi = join(raiz, "pi-do-auditor");
+  mkdirSync(dirDoPi);
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  const gestao = await montarGestaoDeAmbientes({
+    banco,
+    configuracao: () => ConfiguracaoDoAmbiente.parse({ tipo: "container" }),
+    servico: {
+      raiz,
+      porta_da_api: 1,
+      home_do_usuario: raiz,
+      pacote_do_harness: PACOTE,
+      instalacao_do_harness: () => instalacaoDoPi(),
+      dir_do_harness_do_auditor: dirDoPi,
+    },
+    registrarErro: noLog,
+  });
+  const containersCriados: string[] = [];
+  after(async () => {
+    await gestao.parar();
+    for (const containerId of containersCriados)
+      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" });
+    for (const imagem of imagensDoProjeto(nomeDoProjeto))
+      execFileSync("docker", ["rmi", "--force", imagem], { stdio: "ignore" });
+    rmSync(raiz, { recursive: true, force: true });
+    fechar();
+  });
+  async function alocarEmContainer(dono: string, projeto: { raiz_git: string; arquivos_de_dependencias: string[] }) {
+    const ambiente = await gestao.alocar(
+      { dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", nomeDoProjeto) },
+      { nome: nomeDoProjeto, ...projeto },
+    );
+    assert.ok(ambiente instanceof AmbienteContainer);
+    containersCriados.push(ambiente.container_id);
+    return ambiente;
+  }
+  return { raiz, alocarEmContainer };
+}
+
+const imagensDoProjeto = (nomeDoProjeto: string) =>
+  dockerDeVerdade("image", "ls", "--quiet", `fabriquinha/${nomeDoProjeto}`).split("\n").filter(Boolean);
+const rodarNoContainer = (ambiente: AmbienteContainer, comando: string) =>
+  ambiente.executar({ programa: comando, argumentos: [], cwd: "/", env: {}, noShell: true, limiteMs: 60_000 });
+
+test("CA-1: o container sobe com as bibliotecas do requirements.txt já instaladas", COM_DOCKER, async () => {
+  const nomeDoProjeto = `projeto-python-${String(process.pid)}`;
+  const { raiz, alocarEmContainer } = await gestaoEmContainerQueGeraImagens(nomeDoProjeto);
+  const raizGit = repositorioComDependencias(raiz, { "requirements.txt": "six==1.16.0\n" });
+
+  const ambiente = await alocarEmContainer("espaco", {
+    raiz_git: raizGit,
+    arquivos_de_dependencias: ["requirements.txt"],
+  });
+
+  const resultado = await rodarNoContainer(ambiente, "python3 -c 'import six; print(six.__version__)'");
+  assert.equal(resultado.codigo, 0, resultado.saida);
+  assert.equal(resultado.saida.trim(), "1.16.0");
+});
+
+test("CA-2: o container sobe com as dependências do package.json já instaladas", COM_DOCKER, async () => {
+  const nomeDoProjeto = `projeto-node-${String(process.pid)}`;
+  const { raiz, alocarEmContainer } = await gestaoEmContainerQueGeraImagens(nomeDoProjeto);
+  const raizGit = repositorioComDependencias(raiz, {
+    "package.json": '{"name":"com-dependencia","version":"1.0.0","dependencies":{"left-pad":"1.3.0"}}',
+  });
+
+  const ambiente = await alocarEmContainer("espaco", { raiz_git: raizGit, arquivos_de_dependencias: ["package.json"] });
+
+  const resultado = await rodarNoContainer(ambiente, 'node -e \'console.log(require("left-pad")("a", 3).length)\'');
+  assert.equal(resultado.codigo, 0, resultado.saida);
+  assert.equal(resultado.saida.trim(), "3");
+});
+
+test(
+  "CA-3 e CA-4: sem mudança no arquivo a imagem é reaproveitada; com mudança, nasce outra com as dependências novas",
+  COM_DOCKER,
+  async () => {
+    const nomeDoProjeto = `projeto-reuso-${String(process.pid)}`;
+    const { raiz, alocarEmContainer } = await gestaoEmContainerQueGeraImagens(nomeDoProjeto);
+    const raizGit = repositorioComDependencias(raiz, {
+      "package.json": '{"name":"reuso","version":"1.0.0","dependencies":{"left-pad":"1.3.0"}}',
+    });
+    const projeto = { raiz_git: raizGit, arquivos_de_dependencias: ["package.json"] };
+    const imagemDoContainer = (ambiente: AmbienteContainer) =>
+      dockerDeVerdade("inspect", "-f", "{{.Image}}", ambiente.container_id);
+
+    const primeiro = await alocarEmContainer("espaco-1", projeto);
+    const imagemDoPrimeiro = imagemDoContainer(primeiro);
+    assert.equal(imagensDoProjeto(nomeDoProjeto).length, 1);
+
+    // CA-3: outro ticket, o mesmo arquivo: a mesma imagem, sem gerar outra.
+    const segundo = await alocarEmContainer("espaco-2", projeto);
+    assert.notEqual(segundo.container_id, primeiro.container_id);
+    assert.equal(imagemDoContainer(segundo), imagemDoPrimeiro);
+    assert.equal(imagensDoProjeto(nomeDoProjeto).length, 1);
+
+    // CA-4: o arquivo muda (outra dependência): uma imagem nova, com a dependência nova, e a antiga segue.
+    writeFileSync(
+      join(raizGit, "package.json"),
+      '{"name":"reuso","version":"1.0.0","dependencies":{"left-pad":"1.3.0","is-odd":"3.0.1"}}',
+    );
+    gerarPackageLock(raizGit);
+    const terceiro = await alocarEmContainer("espaco-3", projeto);
+    assert.notEqual(imagemDoContainer(terceiro), imagemDoPrimeiro);
+    assert.equal(imagensDoProjeto(nomeDoProjeto).length, 2);
+    const resultado = await rodarNoContainer(terceiro, "node -e 'console.log(require(\"is-odd\")(3))'");
+    assert.equal(resultado.saida.trim(), "true", resultado.saida);
+    assert.notEqual((await rodarNoContainer(primeiro, "node -e 'require(\"is-odd\")'")).codigo, 0);
   },
 );

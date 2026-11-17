@@ -120,10 +120,11 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   banco.close();
 });
 
-test("gravarConfiguracaoSdlc grava as verificações e preserva etapas e preparação do cadastro", () => {
+test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, preparação e arquivos de dependências do cadastro", () => {
   const banco = novoBanco();
   const cadastrado = registrarProjeto(banco, {
     ...exemplo,
+    arquivos_de_dependencias: ["package.json"],
     etapas: [{ etapa: "implementar", configuracao_agente: { effort: "high" } }],
   });
   const configurado = Projeto.parse({
@@ -146,6 +147,7 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas e prepara
   const esperado = {
     ...configurado,
     etapas: cadastrado.etapas,
+    arquivos_de_dependencias: ["package.json"],
     verificacoes: { ...configurado.verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(gravarConfiguracaoSdlc(banco, configurado), esperado);

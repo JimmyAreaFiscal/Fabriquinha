@@ -10,6 +10,7 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { grupoDeProcessoVivo } from "../../../../../../apoio-testes/grupo_de_processo_vivo.ts";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
@@ -68,22 +69,13 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
  * init recolhê-lo. Espera até 2 s antes de dizer que ele sobreviveu.
  */
 async function grupoMorre(grupo: number): Promise<boolean> {
   const limite = Date.now() + 2000;
-  while (grupoEstaVivo(grupo)) {
+  while (grupoDeProcessoVivo(grupo)) {
     if (Date.now() > limite) return false;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -303,7 +295,7 @@ test("lancar: falha do stdin e do docker chegam a aoFalhar", async () => {
 test("sinalizar: o sinal chega ao grupo inteiro do processo, dentro do container", async () => {
   const processo = ambiente.lancar(comando("sh", ["-c", "sleep 30 & sleep 31"]));
   const grupo = await esperarOArquivoDePid(processo.identificador.grupo_processo);
-  assert.equal(grupoEstaVivo(grupo), true);
+  assert.equal(grupoDeProcessoVivo(grupo), true);
   await ambiente.sinalizar(processo.identificador, "SIGKILL");
   assert.equal(await processo.saiu, 137);
   assert.equal(await grupoMorre(grupo), true);

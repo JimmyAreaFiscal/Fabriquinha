@@ -47,7 +47,7 @@ export interface GestaoDeAmbientes {
   /**
    * O Ambiente em que o ocupante passa a rodar. No `container`, o do conjunto: o que ele já tem, um livre da imagem do
    * projeto ou um novo; na capacidade e sem parado que ceda a vaga, lança `ErroExterno`. No `host_local`, ou para o
-   * projeto sem imagem do Ambiente, o do serviço.
+   * projeto sem arquivo de dependências, o do serviço.
    */
   alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente>;
   /** O Ambiente já alocado ao `ocupante`; sem alocação, sem ocupante ou no `host_local`, o do serviço. */
@@ -104,10 +104,10 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   }
 
   async alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente> {
-    const { imagem_do_ambiente } = projeto;
-    if (!this.#ehContainer || imagem_do_ambiente === undefined) return this.#doServico;
+    const { arquivos_de_dependencias } = projeto;
+    if (!this.#ehContainer || !arquivos_de_dependencias?.length) return this.#doServico;
     const container = this.#comoAmbienteContainer(
-      await this.#sandboxes.alocar(ocupante, { ...projeto, imagem_do_ambiente }),
+      await this.#sandboxes.alocar(ocupante, { ...projeto, arquivos_de_dependencias }),
     );
     container.levarEnvDoProjeto(projeto.raiz_git);
     return container;
