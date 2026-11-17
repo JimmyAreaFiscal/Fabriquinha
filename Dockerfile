@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
 # O navegador do Playwright do e2e e as bibliotecas de sistema dele, na versão do package.json, numa pasta que o usuário
 # node lê; sem elas o Chromium não abre (faltam libnss3, libgbm, libX11...).
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN npx -y playwright@1.61.1 install --with-deps chromium && rm -rf /var/lib/apt/lists/* /root/.npm && chmod -R a+rX /ms-playwright
+RUN npx -y playwright@1.61.1 install --with-deps chromium && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/* && chmod -R a+rX /ms-playwright
 # O fuso do host: sem ele, os testes de data e hora de src/server/web falham no container.
 ENV TZ=America/Sao_Paulo
 # Usuário não-root: o Claude Code do claude-bridge recusa --dangerously-skip-permissions como root.
