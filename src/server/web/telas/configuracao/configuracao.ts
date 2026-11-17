@@ -4,6 +4,7 @@ import type { Projeto } from "../../../../modulos/demandas/publico.ts";
 import type { Hospedagem } from "../../../../modulos/repositorio/publico.ts";
 import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
 import type { EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import type { ListaDePastas } from "../../../system/api/contrato/pastas.ts";
 import type {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -266,11 +267,13 @@ function texto(
   caminho: string,
   rotulo: string,
   valor: string,
-  { classe = "", mono = false, extra = "", ajuda = "" } = {},
+  { classe = "", mono = false, extra = "", ajuda = "", botaoAoLado = "" } = {},
 ): string {
   const m = marca(erros, caminho);
   const ajudaHtml = ajuda && `<span class="ajuda">${ajuda}</span>`;
-  return `<div class="campo${classe}${m.classe}"><label for="${idDe(caminho)}">${rotulo}</label><input${mono ? ' class="mono"' : ""} id="${idDe(caminho)}" name="${caminho}" value="${escapar(valor)}"${extra}${m.aria}>${m.msg}${ajudaHtml}</div>`;
+  const input = `<input${mono ? ' class="mono"' : ""} id="${idDe(caminho)}" name="${caminho}" value="${escapar(valor)}"${extra}${m.aria}>`;
+  const controle = botaoAoLado && `<div class="campo-com-botao">${input}${botaoAoLado}</div>`;
+  return `<div class="campo${classe}${m.classe}"><label for="${idDe(caminho)}">${rotulo}</label>${controle || input}${m.msg}${ajudaHtml}</div>`;
 }
 
 const remover = '<button type="button" class="x" data-remover title="Remover" aria-label="Remover">×</button>';
@@ -319,6 +322,9 @@ function modelosEEffortsPorEtapa(erros: Erros, p: ConfiguracoesPorEtapa, modelos
 
 const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
 
+/** O botão ao lado da raiz Git que abre o navegador de pastas. */
+const BOTAO_ESCOLHER_PASTA = '<button type="button" class="btn" data-abrir-pastas>Escolher pasta…</button>';
+
 /** Projeto (F7 §4.4) nos três grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
 export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, falha }: OpcoesDoProjeto): string {
   const titulo = novo
@@ -344,7 +350,7 @@ export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, fal
     ? ""
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
-<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
+<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', botaoAoLado: BOTAO_ESCOLHER_PASTA, ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
@@ -353,6 +359,24 @@ ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 /** A confirmação de remover o projeto, que não tem volta: o nome e o que sai junto. */
 export const confirmacaoDeRemover = (nome: string): string =>
   `<dialog class="dialogo" data-dialogo-remover aria-labelledby="titulo-remover"><h2 id="titulo-remover">Remover o projeto ${escapar(nome)}</h2><p>O projeto <strong>${escapar(nome)}</strong> será apagado com as demandas, em qualquer estado, e os tickets, as sessões, as evidências, as decisões e o custo delas. Saem do disco as worktrees e as pastas de execução; o repositório original não é tocado. Não dá para desfazer.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-remover>Remover projeto</button></form></dialog>`;
+
+/** A caixa do navegador de pastas, vazia: o conteúdo de cada pasta entra em `[data-conteudo-pastas]`. */
+export const dialogoDePastas = (): string =>
+  `<dialog class="dialogo dialogo-pastas" data-dialogo-pastas aria-labelledby="titulo-pastas"><h2 id="titulo-pastas">Escolher a pasta do repositório</h2><div data-conteudo-pastas></div><p class="msg-erro" role="alert" data-erro-pastas hidden></p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-primario" data-escolher-pasta>Escolher esta pasta</button></form></dialog>`;
+
+/** O conteúdo da caixa para uma pasta: o caminho atual, a pasta pai, as subpastas (com a marca de Git) e o aviso de inacessível. */
+export function conteudoDasPastas({ caminho, pai, acessivel, pastas }: ListaDePastas): string {
+  const paiHtml =
+    pai === null ? "" : `<button type="button" class="btn" data-pasta="${escapar(pai)}">↑ Pasta pai</button>`;
+  const itens = pastas.map(
+    (p) =>
+      `<li><button type="button" class="pasta" data-pasta="${escapar(p.caminho)}">${escapar(p.nome)}${p.repositorioGit ? '<span class="pill pill-ok">git</span>' : ""}${p.acessivel ? "" : '<span class="pill pill-neutro">inacessível</span>'}</button></li>`,
+  );
+  let subpastas = `<ul class="lista-pastas">${itens.join("")}</ul>`;
+  if (!acessivel) subpastas = '<p class="msg-erro" role="alert">Pasta inacessível: sem permissão de leitura.</p>';
+  else if (itens.length === 0) subpastas = '<p class="muted">Nenhuma subpasta.</p>';
+  return `<div class="caminho-atual"><code class="mono" data-caminho-atual>${escapar(caminho)}</code>${paiHtml}</div>${subpastas}`;
+}
 
 /** A página: o cabeçalho, o menu e o painel do item escolhido. */
 export const pagina = (menuHtml: string, painel: string): string =>

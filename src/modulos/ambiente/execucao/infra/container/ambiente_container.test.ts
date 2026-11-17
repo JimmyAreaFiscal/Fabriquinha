@@ -68,10 +68,30 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
+/** Sem init que recolha órfãos (PID 1 que não faz wait), o grupo morto fica só com zumbis, e `kill(-grupo, 0)` ainda o vê. */
+const grupoSoTemZumbis = (grupo: number): boolean => {
+  try {
+    return readdirSync("/proc")
+      .filter((entrada) => /^\d+$/.test(entrada))
+      .every((pid) => {
+        try {
+          const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
+            .replace(/^.*\) /, "")
+            .split(" ");
+          return Number(grupoDoProcesso) !== grupo || estado === "Z";
+        } catch {
+          return true; // o processo saiu entre o readdir e o read
+        }
+      });
+  } catch {
+    return false; // sem /proc (fora do Linux), vale só o kill
+  }
+};
+
 const grupoEstaVivo = (grupo: number): boolean => {
   try {
     process.kill(-grupo, 0);
-    return true;
+    return !grupoSoTemZumbis(grupo);
   } catch {
     return false;
   }

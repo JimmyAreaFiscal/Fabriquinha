@@ -11,6 +11,8 @@ import {
   ambiente,
   confirmacaoDeEliminar,
   confirmacaoDeRemover,
+  conteudoDasPastas,
+  dialogoDePastas,
   errosDoZod,
   formularioDeProjeto,
   menu,
@@ -427,4 +429,47 @@ test("confirmação de eliminar: o id escapado e o botão que confirma", () => {
     html,
     /<button type="button" class="btn btn-perigo-cheio" data-confirmar-eliminar>Eliminar container<\/button>/,
   );
+});
+
+test("a raiz Git tem o botão de escolher pasta ao lado do campo, que segue editável", () => {
+  const html = formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() });
+  assert.match(
+    html,
+    /<label for="campo-raiz_git">Caminho do repositório<\/label><div class="campo-com-botao"><input class="mono" id="campo-raiz_git" name="raiz_git" value="" placeholder="\/home\/…\/meu-projeto"><button type="button" class="btn" data-abrir-pastas>Escolher pasta…<\/button><\/div>/,
+  );
+  assert.equal(html.match(/data-abrir-pastas/g)?.length, 1);
+});
+
+test("conteudoDasPastas: caminho atual, pasta pai, subpastas com a marca de Git e de inacessível", () => {
+  const html = conteudoDasPastas({
+    caminho: "/code",
+    pai: "/",
+    acessivel: true,
+    pastas: [
+      { nome: "loja", caminho: "/code/loja", repositorioGit: true, acessivel: true },
+      { nome: 'a"b', caminho: '/code/a"b', repositorioGit: false, acessivel: false },
+    ],
+  });
+  assert.match(
+    html,
+    /<code class="mono" data-caminho-atual>\/code<\/code><button type="button" class="btn" data-pasta="\/">↑ Pasta pai<\/button>/,
+  );
+  assert.match(html, /data-pasta="\/code\/loja">loja<span class="pill pill-ok">git<\/span><\/button>/);
+  assert.match(html, /data-pasta="\/code\/a&#34;b">a&#34;b<span class="pill pill-neutro">inacessível<\/span>/);
+});
+
+test("conteudoDasPastas: a raiz não tem pasta pai; pasta inacessível avisa e mantém a pasta pai; vazia avisa", () => {
+  const raiz = conteudoDasPastas({ caminho: "/", pai: null, acessivel: true, pastas: [] });
+  assert.doesNotMatch(raiz, /Pasta pai/);
+  assert.match(raiz, /Nenhuma subpasta/);
+  const bloqueada = conteudoDasPastas({ caminho: "/root", pai: "/", acessivel: false, pastas: [] });
+  assert.match(bloqueada, /role="alert">Pasta inacessível/);
+  assert.match(bloqueada, /data-pasta="\/">↑ Pasta pai/);
+  assert.doesNotMatch(bloqueada, /lista-pastas/);
+});
+
+test("dialogoDePastas: a caixa com o conteúdo, o erro e o Escolher", () => {
+  const html = dialogoDePastas();
+  assert.match(html, /^<dialog class="dialogo dialogo-pastas" data-dialogo-pastas/);
+  assert.match(html, /data-conteudo-pastas><\/div>.*data-erro-pastas hidden.*data-escolher-pasta>Escolher esta pasta/);
 });
