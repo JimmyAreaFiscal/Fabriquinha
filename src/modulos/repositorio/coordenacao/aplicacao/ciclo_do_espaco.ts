@@ -59,6 +59,16 @@ abstract class CicloDoEspaco {
   }
 
   /**
+   * Devolve ao conjunto o Ambiente do dono do Espaço, limpo e sem ocupante, e o ciclo volta ao Ambiente do serviço. A
+   * worktree e a posse do Espaço ficam no host: o Espaço sem Ambiente é válido até a próxima operação alocar de novo.
+   */
+  async devolverAmbiente(): Promise<void> {
+    const ocupante = ocupanteDoDono(this.espaco.dono);
+    await this.#ambientes.limpar(this.#ambientes.ambienteDo(ocupante).id);
+    this.ambiente = this.#ambientes.ambienteDo(ocupante);
+  }
+
+  /**
    * Garante a worktree do Espaço e a Preparação (só na primeira vez ou depois de merge que avança a HEAD). Devolve a
    * pasta e se buscou a base: quem chama varre os commits humanos depois, fora da fila git do projeto.
    */
@@ -79,6 +89,7 @@ abstract class CicloDoEspaco {
    * falhou só é reconhecida pela lista.
    */
   async limpar(pendentes?: readonly string[]): Promise<{ removidos: string[]; pendentes: string[] }> {
+    await this.alocarAmbiente();
     const resultado = await limparDemanda(
       this.ambiente,
       this.registro.raiz,
@@ -86,8 +97,7 @@ abstract class CicloDoEspaco {
       pendentes ?? (await pendenciasDoEspaco(this.ambiente, this.projeto, this.espaco)),
     );
     // O Ambiente só volta ao conjunto quando o Espaço acabou de verdade; com pendência, a repetição do limpar o libera.
-    if (resultado.pendentes.length === 0)
-      await this.#ambientes.limpar(this.#ambientes.ambienteDo(ocupanteDoDono(this.espaco.dono)).id);
+    if (resultado.pendentes.length === 0) await this.devolverAmbiente();
     return resultado;
   }
 }
@@ -112,11 +122,13 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
   }
 
   async atualizarComBase(): Promise<ResultadoAtualizacao> {
+    await this.alocarAmbiente();
     return atualizarWorktreeRodada(this.ambiente, this.registro.raiz, this.projeto, this.#rodada, this.registro.log);
   }
 
   /** Integra o PR na hospedagem e avança a ref local da Demanda: o merge da hospedagem é o único commit novo dela. */
   async integrar(): Promise<void> {
+    await this.alocarAmbiente();
     const { demanda_id } = this.espaco.dono;
     const pr = existe(this.espaco.pr, `o Espaço ${this.espaco.branch} não tem PR publicado`, "publique o PR da rodada");
     const { raiz } = this.registro;

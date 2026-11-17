@@ -332,3 +332,37 @@ test("sem conjunto (host local) ou sem imagem no Projeto o docker nunca é chama
   assert.deepEqual(docker.registro().slice(chamadasDaSubida), []);
   assert.deepEqual(listarAmbientes(banco), []);
 });
+
+test("devolverAmbiente deixa o container livre sem ocupante, a worktree intacta, e uma nova alocação funciona", async () => {
+  const { banco, cicloDaDemanda } = await cenarioComContainer();
+  const { pasta } = await cicloDaDemanda().criar();
+  const ciclo = cicloDaDemanda();
+  await ciclo.devolverAmbiente();
+  const [devolvido] = listarAmbientes(banco);
+  assert.equal(devolvido?.estado, "livre");
+  assert.equal(devolvido.alocado_para, null);
+  assert.ok(existsSync(pasta));
+  assert.equal(ciclo.ambiente.id, "host_local"); // sem alocação, o ciclo volta ao Ambiente do serviço
+  await cicloDaDemanda().criar();
+  assert.equal(listarAmbientes(banco).length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.estado, "alocado");
+});
+
+test("devolver o Ambiente do Espaço da demanda não afeta o Ambiente da rodada em curso", async () => {
+  const { banco, cicloDaDemanda, cicloDaRodada } = await cenarioComContainer();
+  await cicloDaDemanda().criar();
+  await cicloDaRodada().criar();
+  await cicloDaDemanda().devolverAmbiente();
+  const porOcupante = new Map(listarAmbientes(banco).map((a) => [a.alocado_para, a.estado]));
+  assert.equal(porOcupante.get("I-1.R1"), "alocado");
+  assert.equal(porOcupante.get(null), "livre");
+});
+
+test("limpar aloca o Ambiente quando o Espaço devolveu o dele e o devolve de novo ao fim", async () => {
+  const { banco, cicloDaDemanda } = await cenarioComContainer();
+  await cicloDaDemanda().criar();
+  await cicloDaDemanda().devolverAmbiente();
+  await cicloDaDemanda().limpar();
+  assert.equal(listarAmbientes(banco).length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.estado, "livre");
+});

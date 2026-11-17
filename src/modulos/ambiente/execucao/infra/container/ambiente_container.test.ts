@@ -68,26 +68,19 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-// Sem um init que recolha os filhos (um container cujo PID 1 é um `tail`), o morto fica zumbi e o `kill 0` ainda o
-// enxerga: o grupo só está vivo se algum membro não é zumbi.
-const ehMembroVivoDoGrupo = (pid: string, grupo: number): boolean => {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    const [estado, , grupoDoProcesso] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    return Number(grupoDoProcesso) === grupo && estado !== "Z";
-  } catch {
-    return false; // o processo saiu entre a listagem e a leitura
-  }
-};
-
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-  } catch {
-    return false;
-  }
-  return readdirSync("/proc").some((pid) => /^\d+$/.test(pid) && ehMembroVivoDoGrupo(pid, grupo));
-};
+// Zumbi não conta: sem init que o recolha (PID 1 que não faz wait), o morto continua no grupo e o kill 0 ainda acerta.
+const grupoEstaVivo = (grupo: number): boolean =>
+  readdirSync("/proc").some((pid) => {
+    try {
+      // "pid (comando) estado ppid grupo ...": o comando pode ter espaço e parêntese, então corta pelo último ")".
+      const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
+        .replace(/^.*\) /s, "")
+        .split(" ");
+      return Number(grupoDoProcesso) === grupo && estado !== "Z";
+    } catch {
+      return false; // o processo saiu entre o readdir e o read, ou não é um pid
+    }
+  });
 
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o

@@ -23,6 +23,10 @@ if (process.env.PI_CODING_AGENT_DIR === undefined) {
   });
 }
 
+// Os testes das telas leem o mês e o dia no fuso do navegador, fixado já na importação do módulo (antes de o teste poder
+// mudar `TZ`): sem fuso fixo aqui, a máquina em UTC os reprova.
+process.env.TZ ??= "America/Sao_Paulo";
+
 // Nenhum teste roda o pi de verdade: sem `FABRIQUINHA_PI`, vale o pi falso sem roteiro, de quem o serviço que sobe lê o
 // catálogo de preços. Quem precisa de outro roteiro instala o seu (`instalarPiFalso`).
 process.env.FABRIQUINHA_PI ??= join(import.meta.dirname, "falsos", "pi_falso.ts");

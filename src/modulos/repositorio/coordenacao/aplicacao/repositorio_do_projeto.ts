@@ -183,6 +183,11 @@ export interface RepositorioDoProjeto {
     log: string,
     pendentes?: readonly string[],
   ): Promise<LimpezaDoEspaco>;
+  /**
+   * Devolve ao conjunto o Ambiente do dono do Espaço (limpo, sem ocupante) sem limpar o Espaço: a worktree e a posse ficam
+   * no host. A próxima operação do Espaço (preparar, atualizar com a base, integrar, limpar) aloca de novo.
+   */
+  devolverAmbiente(projeto: ProjetoDoEspaco, espaco: EspacoDeTrabalho, log: string): Promise<void>;
   /** As alterações da base publicada nos 12 meses até `agora`, por arquivo. */
   heatmap(projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "branch_base">, agora: Instante): Promise<Heatmap>;
   /** As métricas do Repositório das `demandas` no período, lidas em lote; quem agrupa por Etapa, mês ou demanda é quem pede. */
@@ -328,6 +333,7 @@ export function montarRepositorio({ banco, ambientes, varredura }: MontagemDoRep
       const sobras = await sobrasDaDemanda(cicloDoEspacoLimpo.ambiente, projeto, feito.removidos);
       return { ...feito, sobras };
     },
+    devolverAmbiente: (projeto, espaco, log) => ciclo(projeto, espaco, log).devolverAmbiente(),
     heatmap: (projeto, agora) => heatmapDo(projeto, agora),
     metricas: (pedido) => metricasDosCommits(banco, pedido),
     esquecer(projeto, demandas) {

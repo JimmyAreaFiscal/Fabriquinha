@@ -24,8 +24,8 @@ export function mandarAoPiVivoOcioso(banco: DatabaseSync, ticket: Ticket, mensag
   }
 }
 
-/** Encerra o pi vivo da sessão do ticket, se há: a execução ganha o fim. */
-export function encerrarPiVivo(banco: DatabaseSync, ticket: Ticket): void {
+/** Encerra o pi vivo da sessão do ticket, se há, e espera a execução ganhar o fim. */
+export async function encerrarPiVivo(banco: DatabaseSync, ticket: Ticket): Promise<void> {
   const viva = piVivoDoTicket(banco, ticket);
-  if (viva) void montarSessoesDeAgente({ banco }).encerrar(String(viva.execucao));
+  if (viva) await montarSessoesDeAgente({ banco }).encerrar(String(viva.execucao));
 }
