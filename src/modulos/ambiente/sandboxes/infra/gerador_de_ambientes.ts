@@ -24,6 +24,8 @@ import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
+/** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
+const TAMANHO_DO_SHM = "1g";
 const PASTA_DE_TRABALHO = "/trabalho";
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
@@ -330,6 +332,9 @@ export class GeradorDeAmbientes {
         `${String(limites.memoria_maxima_mb)}m`,
         "--cpus",
         String(limites.cpus),
+        // O Chromium do e2e cai ("Page crashed") com os 64 MB padrão do /dev/shm do container.
+        "--shm-size",
+        TAMANHO_DO_SHM,
         "--workdir",
         PASTA_DE_TRABALHO,
         "--add-host",

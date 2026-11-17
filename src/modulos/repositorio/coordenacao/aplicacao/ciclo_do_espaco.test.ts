@@ -127,6 +127,47 @@ test("integrar da rodada integra o PR pela hospedagem e avança a demanda local 
   );
 });
 
+test("integrar avança a demanda mesmo quando o Ambiente ainda vê a ref remota de antes do fetch", async () => {
+  const { c, espacoDemanda, espacoRodada, daDemanda, daRodada } = cenario();
+  await daDemanda().criar();
+  const { pasta } = await daRodada().criar();
+  commitarArquivo(pasta, "a.txt", "a\n");
+  rodarGit(c.repo, "push", "-q", "origin", espacoDemanda.branch, espacoRodada.branch);
+  hospedagem.abrirPr({
+    head: espacoRodada.branch,
+    base: espacoDemanda.branch,
+    titulo: "t",
+    corpo: "c",
+    estado: "aberto",
+  });
+  // O container do Docker Desktop lê o `.git` do host pelo virtiofs, que guarda o arquivo da ref que o fetch do host
+  // trocou: dentro dele, a ref remota continua na ponta de antes do merge.
+  const refRemota = join(c.repo, ".git", "refs", "remotes", "origin", ...espacoDemanda.branch.split("/"));
+  const pontaAntesDoMerge = rodarGit(c.repo, "rev-parse", espacoDemanda.branch);
+  class AmbienteComARefRemotaEmCache extends AmbienteHostLocal {
+    override executar(comando: Parameters<AmbienteHostLocal["executar"]>[0]) {
+      writeFileSync(refRemota, `${pontaAntesDoMerge}\n`);
+      return super.executar(comando);
+    }
+  }
+  const ambienteComCache = new AmbienteComARefRemotaEmCache();
+  const espacoComPr = {
+    ...espacoRodada,
+    pr: { numero: 1, url: "https://github.com/org/loja/pull/1", head: "a", estado: "aberto" } as const,
+  };
+  await new CicloDoEspacoDaRodada(
+    espacoComPr,
+    c.projeto,
+    { raiz: c.raiz, log: c.log },
+    ambienteComCache,
+    gestaoQueSoUsa(ambienteComCache),
+  ).integrar();
+  assert.equal(
+    rodarGit(c.repo, "rev-parse", espacoDemanda.branch),
+    rodarGit(c.bare, "rev-parse", espacoDemanda.branch),
+  );
+});
+
 test("o ciclo da rodada recusa o Espaço sem PR e o que não é de rodada", async () => {
   const { c, espacoDemanda, daRodada } = cenario();
   await assert.rejects(daRodada().integrar(), /não tem PR publicado/);
