@@ -2,7 +2,7 @@
 // agendador; o cadastro grava o projeto sem colunas do fluxo legado, com a chave do SonarQube no nome dele.
 import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, realpathSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
@@ -457,4 +457,43 @@ test("Ambiente: o tamanho do conjunto é variável sem limite por padrão; o fix
   await expect(capacidade).toHaveValue("");
   await expect(minimo).toHaveValue("4");
   expect(fabriquinha.dockerFalso.registro()).toEqual([]);
+});
+
+test("a raiz Git escolhida pelo navegador de pastas: entra, avisa a pasta sem leitura, volta e escolhe o repositório (I-309)", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  const repo = clone(fabriquinha.raiz);
+  const pastaSemLeitura = join(fabriquinha.raiz, "fechada");
+  mkdirSync(pastaSemLeitura);
+  chmodSync(pastaSemLeitura, 0o000);
+  try {
+    await pagina.goto(`${fabriquinha.base}/config?novo`);
+    const campoDaRaizGit = pagina.getByLabel("Caminho do repositório");
+    await campoDaRaizGit.fill(fabriquinha.raiz);
+    await pagina.getByRole("button", { name: "Escolher pasta…" }).click();
+
+    // CA-1 e CA-2: a caixa abre na pasta do campo, com o caminho atual e as subpastas marcadas.
+    const caixa = pagina.locator("[data-dialogo-pastas]");
+    await expect(caixa).toBeVisible();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(realpathSync(fabriquinha.raiz));
+    await expect(caixa.getByRole("button", { name: "loja git" })).toBeVisible();
+    await expect(caixa.getByRole("button", { name: "fechada inacessível" })).toBeVisible();
+    await fotografar(pagina, info, "navegador-de-pastas");
+
+    // CA-5: a pasta sem leitura avisa e a caixa segue usável pela pasta pai.
+    await caixa.getByRole("button", { name: "fechada inacessível" }).click();
+    await expect(caixa.getByRole("alert")).toHaveText("Pasta inacessível: sem permissão de leitura.");
+    await caixa.getByRole("button", { name: "↑ Pasta pai" }).click();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(realpathSync(fabriquinha.raiz));
+
+    // CA-3: entrar no repositório e escolher fecha a caixa e põe o caminho absoluto no campo.
+    await caixa.getByRole("button", { name: "loja git" }).click();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(repo);
+    await caixa.getByRole("button", { name: "Escolher esta pasta" }).click();
+    await expect(caixa).toBeHidden();
+    await expect(campoDaRaizGit).toHaveValue(repo);
+  } finally {
+    chmodSync(pastaSemLeitura, 0o755);
+  }
 });
