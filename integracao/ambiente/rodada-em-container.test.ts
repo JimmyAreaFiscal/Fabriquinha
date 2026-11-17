@@ -551,7 +551,7 @@ test(
 );
 
 test(
-  "o container enxerga só as sessões e execuções do próprio Espaço, e recebe cópias do pi, do .claude e do .codex",
+  "o container enxerga só as sessões e execuções do próprio Espaço, e recebe cópias da configuração do pi, do .claude e do .codex e as credenciais montadas",
   COM_DOCKER,
   async (t) => {
     const { c } = await cenarioEmContainer(t);
@@ -562,6 +562,8 @@ test(
       mkdirSync(join(c.raiz, pasta), { recursive: true });
       writeFileSync(join(c.raiz, pasta, arquivo), `copia de ${pasta}`);
     }
+    writeFileSync(join(c.raiz, ".claude", ".credentials.json"), "{}");
+    writeFileSync(join(c.raiz, ".codex", "auth.json"), "{}");
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const espaco = Endereco.daRodada(id, 1).toString();
     const ambiente = ambienteAlocadoPara(c, espaco);
@@ -572,7 +574,7 @@ test(
     ambiente.abrigarProcesso(join(c.raiz, "execucoes", "E-propria"), "sessao-propria");
 
     const { codigo, saida } = await ambiente.executar({
-      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; test -f $HOME/.pi/agent/auth.json && echo tem-auth`,
+      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in .pi/agent/auth.json .claude/.credentials.json .codex/auth.json; do test -f $HOME/$a && echo tem-$a; done`,
       argumentos: [],
       cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
       env: {},
@@ -585,7 +587,8 @@ test(
     assert.doesNotMatch(saida, /de-outro-espaco/);
     assert.match(saida, /copia de \.claude/);
     assert.match(saida, /copia de \.codex/);
-    assert.match(saida, /tem-auth/);
+    for (const credencial of [".pi/agent/auth.json", ".claude/.credentials.json", ".codex/auth.json"])
+      assert.match(saida, new RegExp(`tem-${credencial.replaceAll(".", "\\.")}`));
     // As montagens do container são exatamente estas, e nenhuma delas é o home, o ~/.pi ou a pasta inteira de sessões.
     const binds = (
       JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
@@ -594,14 +597,26 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // Pelo caminho das pastas copiadas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
+    // Das pastas copiadas só o arquivo da credencial é montado (em leitura e escrita), e não a pasta: o resto é cópia.
+    // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
+    const credenciais = [
+      join(dirDoPiDoAuditor(), "auth.json"),
+      join(c.raiz, ".claude", ".credentials.json"),
+      join(c.raiz, ".codex", "auth.json"),
+    ];
     const copiadas = [dirDoPiDoAuditor(), join(c.raiz, ".claude"), join(c.raiz, ".codex")];
-    assert.ok(
-      !origens.some((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
+    assert.deepEqual(
+      origens.filter((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
+      credenciais,
     );
-    // A décima é a instalação do pi, só em leitura.
+    for (const credencial of credenciais)
+      assert.ok(
+        binds?.some((bind) => bind.startsWith(`${credencial}:`) && bind.endsWith(":rw")),
+        credencial,
+      );
+    // A última é a instalação do pi, só em leitura.
     assert.ok(binds?.includes(`${INSTALACAO_DO_PI_FALSO.raiz}:${INSTALACAO_DO_PI_FALSO.raiz}:ro`));
-    assert.equal(binds?.length, 10);
+    assert.equal(binds?.length, 13);
   },
 );
 

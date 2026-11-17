@@ -83,7 +83,7 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
 
 /**
  * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
- * Configuração lida do banco), o `auth.json` do pi que o container recebe e o pi falso na imagem, que devolve com a
+ * Configuração lida do banco), o `auth.json` do pi que o container monta do host e o pi falso na imagem, que devolve com a
  * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
  * container alcança; só o teste da rede põe um servidor nela.
  */
@@ -135,7 +135,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
     ligarGestaoDeAmbientesNosModulos();
     await montada.parar();
     for (const containerId of containersDoCenario)
-      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" });
+      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" }); // NOSONAR
   });
   return { pi: piDoContainer, gestao };
 }
