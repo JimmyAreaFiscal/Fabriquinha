@@ -2,6 +2,7 @@
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
 import type { Parametros } from "../../compartilhado/caminhos.ts";
+import type { ListaDePastas } from "../../../system/api/contrato/pastas.ts";
 import type {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -14,6 +15,8 @@ import {
   ambiente,
   confirmacaoDeEliminar,
   confirmacaoDeRemover,
+  conteudoDasPastas,
+  dialogoDePastas,
   type Erros,
   errosDoZod,
   etapasDoFormulario,
@@ -191,6 +194,52 @@ function montarRemocao(main: HTMLElement, signal: AbortSignal, salvo: ProjetoLis
   });
 }
 
+/**
+ * O navegador de pastas da raiz Git: abre na pasta do campo (ou no home, se vazio ou inválido), entra e volta pelas
+ * pastas, e Escolher preenche o campo com o caminho absoluto da pasta aberta.
+ */
+function montarNavegadorDePastas(main: HTMLElement, form: HTMLFormElement, signal: AbortSignal): void {
+  main.querySelector(".painel-config")?.insertAdjacentHTML("beforeend", dialogoDePastas());
+  const dialogo = main.querySelector<HTMLDialogElement>("[data-dialogo-pastas]");
+  const conteudo = dialogo?.querySelector("[data-conteudo-pastas]");
+  const erro = dialogo?.querySelector<HTMLElement>("[data-erro-pastas]");
+  const campoDaRaizGit = form.querySelector<HTMLInputElement>('[name="raiz_git"]');
+  if (!dialogo || !conteudo || !erro || !campoDaRaizGit) return;
+  let pastaAberta = "";
+  const abrirPasta = async (caminho: string): Promise<void> => {
+    const consulta = caminho ? `?caminho=${encodeURIComponent(caminho)}` : "";
+    const lista = await api<ListaDePastas>(`/api/pastas${consulta}`, { signal });
+    pastaAberta = lista.caminho;
+    erro.hidden = true;
+    conteudo.innerHTML = conteudoDasPastas(lista);
+  };
+  main.querySelector("[data-abrir-pastas]")?.addEventListener("click", () => {
+    // O caminho digitado que não é uma pasta (422) não impede o navegador: ele abre no home.
+    abrirPasta(campoDaRaizGit.value.trim())
+      .catch((error_: unknown) => {
+        if (error_ instanceof ErroDaApi && error_.status === 422) return abrirPasta("");
+        throw error_;
+      })
+      .then(() => {
+        dialogo.showModal();
+      })
+      .catch(mostrarErro);
+  });
+  conteudo.addEventListener("click", (evento) => {
+    const destino = evento.target instanceof Element ? evento.target.closest<HTMLElement>("[data-pasta]") : null;
+    if (!destino?.dataset.pasta) return;
+    // A falha vai para a própria caixa: o aviso da página fica atrás dela.
+    abrirPasta(destino.dataset.pasta).catch((error_: unknown) => {
+      erro.textContent = error_ instanceof Error ? error_.message : String(error_);
+      erro.hidden = false;
+    });
+  });
+  dialogo.querySelector("[data-escolher-pasta]")?.addEventListener("click", () => {
+    campoDaRaizGit.value = pastaAberta;
+    dialogo.close();
+  });
+}
+
 function montarProjeto(
   main: HTMLElement,
   signal: AbortSignal,
@@ -204,6 +253,7 @@ function montarProjeto(
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
     if (salvo) montarRemocao(main, signal, salvo);
+    montarNavegadorDePastas(main, form, signal);
     // O "padrão do pi" fica apagado; escolher um modelo ou effort o acende.
     form.addEventListener("change", (evento) => {
       if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
