@@ -7,6 +7,7 @@ export type Pagina =
   | "heatmap"
   | "metricas"
   | "historico"
+  | "ambientes"
   | "chat"
   | "configuracao"
   | "sdlc"
@@ -27,6 +28,7 @@ const PAGINAS: readonly (readonly [string, Pagina])[] = [
   ["/demandas/:demanda", "demanda"],
   ["/metrics", "metricas"],
   ["/history", "historico"],
+  ["/ambientes", "ambientes"],
   ["/sessions/:sessao", "chat"],
   ["/config", "configuracao"],
 ];

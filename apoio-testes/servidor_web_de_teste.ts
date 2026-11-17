@@ -70,6 +70,7 @@ export async function servir(
   const ambientes: AmbientesDoServico = gestaoDoCenario
     ? {
         gestao: gestaoDoCenario,
+        raiz: raizDo(banco),
         configurar: (configuracao) => {
           salvarConfiguracaoDoAmbiente(banco, configuracao);
         },

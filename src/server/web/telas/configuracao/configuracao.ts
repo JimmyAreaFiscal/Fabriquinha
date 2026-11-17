@@ -210,16 +210,20 @@ const FORMATO_DAS_CPUS = new Intl.NumberFormat("pt-BR", { minimumFractionDigits:
 const FORMATO_DA_MEMORIA = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 /** A CPU e a memória que o docker mediu no container; sem medida (host local ou docker fora do ar), um traço. */
-function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"]): string {
+export function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"] | null): string {
   const [cpus, memoria] = medido
     ? [`${FORMATO_DAS_CPUS.format(medido.cpus)} CPUs`, `${FORMATO_DA_MEMORIA.format(medido.memoria_mb)} MB`]
     : ["—", "—"];
   return `<td class="num">${cpus}</td><td class="num">${memoria}</td>`;
 }
 
+/** O nome que o operador vê do container do slot `n` (no docker, `fabriquinha-slot-<n>`); sem slot, um traço. */
+export const nomeDoSlot = (slot: number | null): string => (slot === null ? "—" : `Fabriquinha - Slot ${String(slot)}`);
+
 // shortcut: o alocado mostra a criação do container, porque a tabela não guarda quando foi alocado; gravar o instante da alocação se isso confundir.
 function linhaDoAmbiente({
   id,
+  slot,
   imagem,
   estado,
   alocado_para,
@@ -229,7 +233,7 @@ function linhaDoAmbiente({
 }: EstadoDoAmbiente["conjunto"][number]): string {
   const desde = instanteLegivel(estado === "alocado" ? criado_em : (liberado_em ?? criado_em));
   const podeEliminar = estado === "livre" || estado === "sujo";
-  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
+  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td>${nomeDoSlot(slot)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
 }
 
 /**
@@ -242,7 +246,7 @@ export function ambiente({ configuracao, conjunto }: EstadoDoAmbiente, erros: Er
   const linhas = conjunto.map(linhaDoAmbiente);
   const tabela =
     linhas.length > 0
-      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Container</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
       : '<p class="muted">Nenhum container no conjunto.</p>';
   return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3>${seletorDoAmbiente(erros, "tipo", "Tipo de Ambiente", TIPOS_DE_AMBIENTE, configuracao.tipo)}<div class="limites-ambiente">${campos(LIMITES_DO_CONTAINER)}</div></div><div class="grupo"><h3>Tamanho do conjunto <span class="nota">· o fixo mantém os containers que criou; o variável elimina os livres ociosos até o mínimo; sem vaga, o trabalho espera e tenta de novo</span></h3>${seletorDoAmbiente(erros, "conjunto", "Tipo de conjunto", TIPOS_DE_CONJUNTO, configuracao.conjunto)}<div class="limites-ambiente">${campos(LIMITES_DO_CONJUNTO)}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
 }
