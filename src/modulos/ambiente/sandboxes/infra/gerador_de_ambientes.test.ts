@@ -392,6 +392,15 @@ test("criar sem a imagem falha com a orientação", async () => {
   );
 });
 
+test("listarSlotsTomadosNoDocker traz o número de cada fabriquinha-slot-<n>, com o rótulo ou sem, e ignora outro nome", async () => {
+  docker.semearContainer({ nome: "fabriquinha-slot-12" });
+  docker.semearContainer({ nome: "fabriquinha-slot-abc" });
+  docker.semearContainer({ nome: "antes-fabriquinha-slot-13" });
+  const tomados = await gerador.listarSlotsTomadosNoDocker();
+  assert.ok(tomados.has(12));
+  assert.ok(![13, Number.NaN].some((numero) => tomados.has(numero)));
+});
+
 test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou não", async () => {
   const antes = (await gerador.listarDaFabriquinha()).length;
   docker.semearContainer({ rotulos: { "com.docker.compose.project": "sonarqube" } });

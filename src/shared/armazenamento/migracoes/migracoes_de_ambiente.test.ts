@@ -6,14 +6,14 @@ import { test } from "node:test";
 import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
 import { VERSAO_DO_SLOT_DO_AMBIENTE } from "./migracoes_de_ambiente.ts";
 
-const EM = "2026-01-01T00:00:00.000Z";
+const CRIADO_EM_DOS_AMBIENTES = "2026-01-01T00:00:00.000Z";
 
 const inserirAmbiente = (banco: DatabaseSync, id: string, estado: string, slot?: number) => {
   const alocadoPara = estado === "alocado" ? `'${id}-dono'` : "NULL";
-  const [coluna, valor] = slot === undefined ? ["", ""] : [", slot", `, ${String(slot)}`];
+  const [colunaDoSlot, valorDoSlot] = slot === undefined ? ["", ""] : [", slot", `, ${String(slot)}`];
   banco.exec(
-    `INSERT INTO ambiente (id, container_id, imagem, estado, alocado_para, criado_em${coluna})
-     VALUES ('${id}', 'c-${id}', 'alpine', '${estado}', ${alocadoPara}, '${EM}'${valor})`,
+    `INSERT INTO ambiente (id, container_id, imagem, estado, alocado_para, criado_em${colunaDoSlot})
+     VALUES ('${id}', 'c-${id}', 'alpine', '${estado}', ${alocadoPara}, '${CRIADO_EM_DOS_AMBIENTES}'${valorDoSlot})`,
   );
 };
 

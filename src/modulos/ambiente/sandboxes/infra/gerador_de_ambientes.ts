@@ -23,6 +23,8 @@ import {
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
+/** O começo do nome no docker do container do slot `n`: `fabriquinha-slot-<n>`. */
+const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
 /** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
 const TAMANHO_DO_SHM = "1g";
@@ -334,7 +336,7 @@ export class GeradorDeAmbientes {
         "run",
         "-d",
         "--name",
-        `fabriquinha-slot-${String(slot)}`,
+        `${PREFIXO_DO_NOME_DO_SLOT}${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
         "--memory",
@@ -448,5 +450,24 @@ export class GeradorDeAmbientes {
         const [containerId = "", id = ""] = linha.split("\t");
         return { id, container_id: containerId };
       });
+  }
+
+  /**
+   * Os slots cujo nome `fabriquinha-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
+   * instância ou teste no mesmo daemon e o que um `rm` ainda não tirou. Criar com um deles falharia por nome repetido.
+   */
+  async listarSlotsTomadosNoDocker(): Promise<Set<number>> {
+    const saida = await rodarDocker(
+      ["ps", "--all", "--filter", `name=${PREFIXO_DO_NOME_DO_SLOT}`, "--format", "{{.Names}}"],
+      this.#limiteDoComandoMs,
+    );
+    const padraoDoNomeDoSlot = new RegExp(`^${PREFIXO_DO_NOME_DO_SLOT}(\\d+)$`);
+    return new Set(
+      saida
+        .split("\n")
+        .map((nome) => padraoDoNomeDoSlot.exec(nome)?.[1])
+        .filter((numero) => numero !== undefined)
+        .map(Number),
+    );
   }
 }
