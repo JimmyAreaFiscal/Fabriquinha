@@ -839,3 +839,25 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
   assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
+
+test("o formulário grava a imagem do Ambiente, a mantém ao recarregar e a apaga quando ela vem ausente", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  const cadastrado = await cadastrarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), imagem_do_ambiente: "Dockerfile" },
+    conferenciasDo(banco),
+  );
+  assert.equal(cadastrado.imagem_do_ambiente, "Dockerfile");
+  assert.equal(buscarProjeto(banco, "loja")?.imagem_do_ambiente, "Dockerfile");
+  const trocado = await editarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), imagem_do_ambiente: "node:22" },
+    conferenciasDo(banco),
+  );
+  assert.equal(trocado.imagem_do_ambiente, "node:22");
+  await editarProjetoDoFormulario(banco, formularioDeLoja(repo), conferenciasDo(banco));
+  assert.equal(Object.hasOwn(buscarProjeto(banco, "loja") ?? {}, "imagem_do_ambiente"), false);
+  banco.close();
+});

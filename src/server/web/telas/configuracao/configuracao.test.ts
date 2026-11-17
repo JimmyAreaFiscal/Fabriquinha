@@ -428,3 +428,26 @@ test("confirmação de eliminar: o id escapado e o botão que confirma", () => {
     /<button type="button" class="btn btn-perigo-cheio" data-confirmar-eliminar>Eliminar container<\/button>/,
   );
 });
+
+test("imagem do Ambiente: o campo traz o valor atual ou vazio, com a ajuda; rascunhoDe só a leva quando existe", () => {
+  assert.equal(Object.hasOwn(rascunhoDe(LOJA), "imagem_do_ambiente"), false);
+  assert.equal(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }).imagem_do_ambiente, "Dockerfile");
+  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
+  assert.match(
+    formularioDeProjeto(rascunhoDe(LOJA), opcoes),
+    /<label for="campo-imagem_do_ambiente">Imagem do Ambiente<\/label><input class="mono" id="campo-imagem_do_ambiente" name="imagem_do_ambiente" value=""[^>]*>.*caminho de um Dockerfile no repositório ou o nome de uma imagem; vazio mantém o projeto no host/,
+  );
+  assert.match(
+    formularioDeProjeto(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }), opcoes),
+    /name="imagem_do_ambiente" value="Dockerfile"/,
+  );
+});
+
+test("o aviso de que o projeto roda no host só aparece quando a tela manda rodaNoHost", () => {
+  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
+  assert.doesNotMatch(formularioDeProjeto(rascunhoDe(LOJA), opcoes), /data-aviso-host/);
+  assert.match(
+    formularioDeProjeto(rascunhoDe(LOJA), { ...opcoes, rodaNoHost: true }),
+    /<p class="msg-erro" role="status" data-aviso-host>[^<]*roda no host\.<\/p>/,
+  );
+});
