@@ -218,6 +218,21 @@ test("cada container ocupa o menor slot livre: 1 no primeiro, 3 com 1 e 2 vivos,
   );
 });
 
+test("listar devolve o conjunto na ordem dos slots, mesmo com o slot reaproveitado criado depois", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "variavel" });
+  await conjunto.alocar(ocupante("I-1"), alpine);
+  const segundo = await conjunto.alocar(ocupante("I-2"), alpine);
+  await conjunto.alocar(ocupante("I-3"), alpine);
+  await liberar("I-2");
+  await conjunto.eliminar(segundo.id);
+  await conjunto.alocar(ocupante("I-4"), alpine);
+
+  assert.deepEqual(
+    (await conjunto.listar()).map(({ slot }) => slot),
+    [1, 2, 3],
+  );
+});
+
 test("dois alocar ao mesmo tempo recebem slots diferentes", async () => {
   const { docker, conjunto } = cenario({ conjunto: "variavel" });
   const alocados = await Promise.all([
