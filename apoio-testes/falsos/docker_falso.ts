@@ -6,7 +6,9 @@
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
 //   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
-//   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
+//   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); o `-v <arquivo do host>:/home/node/...`
+//   vira um symlink para o arquivo do host nesse `HOME` (o bind mount de arquivo: mesma escrita, vista dos dois lados), e
+//   `run --rm --entrypoint sh <imagem> -c 'echo "$HOME"'` responde `/home/node`; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
@@ -21,13 +23,16 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { constants } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const PASTA_DOS_PIDS_NO_CONTAINER = "/fabriquinha/pids";
+/** O `HOME` que a imagem falsa diz ter; o `-v` de arquivo para baixo dele vira um symlink no `homes/<id>` do container. */
+const HOME_DA_IMAGEM_FALSA = "/home/node";
 
 /** Um container do docker falso. `memoria` em bytes, como o `HostConfig.Memory` do docker de verdade. */
 export interface ContainerFalso {
@@ -222,10 +227,15 @@ function executarDockerFalso(): void {
       "--add-host",
       "--net",
       "--cap-add",
+      "--entrypoint",
     ]);
     const [imagem = "", ...programa] = resto;
     if (!temImagem(imagem)) sair(125, `Unable to find image '${imagem}' locally`);
-    if (opcoes["--rm"]) return; // roda e some, como o que aplica regras no namespace de rede de outro container
+    // roda e some, como o que aplica regras no namespace de rede de outro container
+    if (opcoes["--rm"]) {
+      if (opcoes["--entrypoint"]) console.log(HOME_DA_IMAGEM_FALSA);
+      return;
+    }
     const rotulos = Object.fromEntries(
       (opcoes["--label"] ?? []).map((rotulo) => [rotulo.split("=")[0] ?? "", rotulo.split("=").slice(1).join("=")]),
     );
@@ -242,6 +252,14 @@ function executarDockerFalso(): void {
       hospedeiros: opcoes["--add-host"] ?? [],
     };
     writeFileSync(arquivoDoContainer(container.id), JSON.stringify(container));
+    for (const montagem of container.montagens) {
+      const [origem = "", destino = ""] = montagem.split(":");
+      if (!destino.startsWith(`${HOME_DA_IMAGEM_FALSA}/`) || !existsSync(origem) || !statSync(origem).isFile())
+        continue;
+      const noHome = join(homeDoContainer(dir, container.id), destino.slice(HOME_DA_IMAGEM_FALSA.length + 1));
+      mkdirSync(dirname(noHome), { recursive: true });
+      symlinkSync(origem, noHome);
+    }
     console.log(container.id);
   } else if (comando === "start") {
     const container = achar(args[0] ?? "");

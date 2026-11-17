@@ -66,7 +66,10 @@ export interface Montagens {
   harness: InstalacaoDoHarness;
 }
 
-/** O que o container recebe por cópia (nunca por montagem), na criação: o pi do Auditor, `~/.claude` e `~/.codex`. */
+/**
+ * O que o container recebe do pi do Auditor, de `~/.claude` e de `~/.codex`, na criação: a configuração por cópia; a
+ * credencial (o `auth.json` do pi, o `.credentials.json` do Claude e o `auth.json` do Codex), montada do host.
+ */
 export interface Copias {
   /** O `PI_CODING_AGENT_DIR` do Auditor (`auth.json`, `settings.json`, `trust.json`...): vira o `~/.pi/agent` do container. */
   dir_do_pi: string;
@@ -144,18 +147,22 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
   return montagensComModo.flatMap(([origem, destino, modo]) => ["-v", `${origem}:${destino}:${modo}`]);
 }
 
-/** O container não leva credencial de hospedagem (o push é do core): o token do GitHub que estiver nas pastas copiadas sai da cópia. */
-const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
+/**
+ * O container não leva credencial de hospedagem (o push é do core): o token do GitHub que estiver nas pastas copiadas sai
+ * da cópia. A credencial montada fica de fora: o `sed -i` a trocaria por outro arquivo (EBUSY) ou, se passasse, mexeria no
+ * arquivo do host.
+ */
+const comandoQueTiraTokenDoGithub = (credencialMontada: string | undefined) =>
+  `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do [ "$arquivo" = "$d/${credencialMontada ?? ""}" ] && continue; sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
 
 /**
- * O que vai de cada pasta para o container: só a configuração (credenciais, ajustes, instruções, skills, extensões e
- * pacotes do harness). Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
+ * O que vai de cada pasta para o container: só a configuração (ajustes, instruções, skills, extensões e pacotes do
+ * harness; a credencial é montada, `CREDENCIAL_POR_DESTINO`). Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
  * read it") e o agente do container não precisa deles. Caminhos relativos à raiz da pasta; o que não existe é pulado.
  */
 const CONFIGURACAO_POR_DESTINO = {
   // npm/ e git/ são os pacotes do `settings.json` (o pi-claude-bridge); bin/ tem o rg e o fd das ferramentas do pi.
   [DIR_DO_PI_NO_HOME]: [
-    "auth.json",
     "settings.json",
     "trust.json",
     "models.json",
@@ -169,11 +176,48 @@ const CONFIGURACAO_POR_DESTINO = {
     "git",
     "bin",
   ],
-  ".claude": [".credentials.json", "settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
-  ".codex": ["auth.json", "config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
+  ".claude": ["settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
+  ".codex": ["config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
 } as const;
 
 type DestinoNoHome = keyof typeof CONFIGURACAO_POR_DESTINO;
+
+/**
+ * A credencial de cada destino, que o container monta do host (bind mount de arquivo, `rw`) em vez de copiar: o token de
+ * atualização do OAuth é rotativo, e uma cópia deixa de valer quando o host ou outro container renova a dele. Com o
+ * arquivo único, a renovação de qualquer um vale para todos, e o container já criado vê a credencial nova.
+ * shortcut: o bind mount de arquivo segue o inode; se quem renova a troca por `rename` (o host cria outro inode, e o
+ * container fica com o velho; o container recebe EBUSY), passar para uma pasta de credenciais montada, com symlink.
+ * Não foi possível conferir com o Docker real (a máquina do ticket não tem Docker).
+ */
+const CREDENCIAL_POR_DESTINO: Record<DestinoNoHome, string> = {
+  [DIR_DO_PI_NO_HOME]: "auth.json",
+  ".claude": ".credentials.json",
+  ".codex": "auth.json",
+};
+
+/** As pastas do host que vão para o container, e para onde, relativo ao `HOME` do container. */
+function pastasParaOContainer({ dir_do_pi, home_do_usuario }: Copias): [string, DestinoNoHome][] {
+  const pastas: [string, DestinoNoHome][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
+  for (const pasta of [".claude", ".codex"] as const)
+    if (existsSync(join(home_do_usuario, pasta))) pastas.push([join(home_do_usuario, pasta), pasta]);
+  return pastas;
+}
+
+interface CredencialParaMontar {
+  arquivoNoHost: string;
+  destinoNoHome: DestinoNoHome;
+}
+
+/** As credenciais que existem no host (a do Claude e a do Codex são opcionais). */
+function credenciaisParaMontar(copias: Copias): CredencialParaMontar[] {
+  return pastasParaOContainer(copias)
+    .map(([pasta, destinoNoHome]): CredencialParaMontar => ({
+      arquivoNoHost: join(pasta, CREDENCIAL_POR_DESTINO[destinoNoHome]),
+      destinoNoHome,
+    }))
+    .filter(({ arquivoNoHost }) => existsSync(arquivoNoHost));
+}
 
 /**
  * Copia `origem` (uma pasta do host) para `destinoNoHome`, relativo ao `HOME` do container, por `tar` no `docker exec`:
@@ -184,6 +228,7 @@ function copiarParaOHomeDoContainer(
   origem: string,
   destinoNoHome: DestinoNoHome,
   limiteMs: number,
+  credencialMontada: string | undefined,
 ): Promise<void> {
   const configuracao = CONFIGURACAO_POR_DESTINO[destinoNoHome].filter((item) => existsSync(join(origem, item)));
   // Sem nada da configuração, não há o que copiar (e o tar recusa criar um arquivo vazio).
@@ -201,7 +246,7 @@ function copiarParaOHomeDoContainer(
         containerId,
         "sh",
         "-c",
-        `d="$HOME/${destinoNoHome}" && mkdir -p "$d" && tar -x --no-same-owner -C "$d" && ${COMANDO_QUE_TIRA_TOKEN_DO_GITHUB}`,
+        `d="$HOME/${destinoNoHome}" && mkdir -p "$d" && tar -x --no-same-owner -C "$d" && ${comandoQueTiraTokenDoGithub(credencialMontada)}`,
       ],
       { stdio: ["pipe", "ignore", "pipe"], signal: sinal },
     );
@@ -243,13 +288,20 @@ function exigirLoginDoPi({ dir_do_pi }: Copias): void {
     );
 }
 
-/** Copia para o container o pi do Auditor e, se existem, o `.claude` e o `.codex` do usuário. */
-async function copiarParaOContainer(containerId: string, { dir_do_pi, home_do_usuario }: Copias): Promise<void> {
-  const copias: [string, DestinoNoHome][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
-  for (const pasta of [".claude", ".codex"] as const)
-    if (existsSync(join(home_do_usuario, pasta))) copias.push([join(home_do_usuario, pasta), pasta]);
-  for (const [origem, destinoNoHome] of copias)
-    await copiarParaOHomeDoContainer(containerId, origem, destinoNoHome, LIMITE_COMANDO_MS);
+/** Copia para o container a configuração do pi do Auditor e, se existem, a do `.claude` e a do `.codex` do usuário. */
+async function copiarParaOContainer(
+  containerId: string,
+  copias: Copias,
+  credenciaisMontadas: DestinoNoHome[],
+): Promise<void> {
+  for (const [origem, destinoNoHome] of pastasParaOContainer(copias))
+    await copiarParaOHomeDoContainer(
+      containerId,
+      origem,
+      destinoNoHome,
+      LIMITE_COMANDO_MS,
+      credenciaisMontadas.includes(destinoNoHome) ? CREDENCIAL_POR_DESTINO[destinoNoHome] : undefined,
+    );
 }
 
 /** Constrói a imagem das regras de rede, se ela ainda não está na máquina. */
@@ -306,6 +358,43 @@ export class GeradorDeAmbientes {
     );
   }
 
+  /** O `HOME` do usuário que o container usa por padrão (o que o `docker exec` vê), para montar a credencial no lugar dela. */
+  async #descobrirHomeDoContainer(id: string, imagem: ImagemDoAmbiente): Promise<string> {
+    const home = await rodarDocker(
+      [
+        "run",
+        "--rm",
+        "--label",
+        `${ROTULO_DO_AMBIENTE}=${id}-home`,
+        "--memory",
+        "64m",
+        "--cpus",
+        "0.5",
+        "--entrypoint",
+        "sh",
+        imagem,
+        "-c",
+        'echo "$HOME"',
+      ],
+      this.#limiteDoComandoMs,
+    );
+    if (!home.startsWith("/"))
+      throw new ErroDeRegra(`a imagem ${imagem} não tem um HOME (veio "${home}")`, "use uma imagem com HOME absoluto");
+    return home;
+  }
+
+  /** O docker cria as pastas do arquivo montado como root; o usuário do container (dono do HOME) precisa escrever nelas. */
+  async #devolverPastasDasCredenciaisAoUsuario(
+    containerId: string,
+    homeDoContainer: string,
+    destinosMontados: DestinoNoHome[],
+  ): Promise<void> {
+    const pastas = destinosMontados.map((destino) => `'${homeDoContainer}/${destino}'`).join(" ");
+    // sobe de cada pasta montada até o HOME (o `.pi/agent` e o `.pi`)
+    const roteiro = `dono=$(stat -c %u:%g '${homeDoContainer}') && for p in ${pastas}; do while [ "$p" != '${homeDoContainer}' ]; do chown "$dono" "$p"; p=$(dirname "$p"); done; done`;
+    await rodarDocker(["exec", "-u", "0", containerId, "sh", "-c", roteiro], this.#limiteDoComandoMs);
+  }
+
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
    * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
@@ -319,7 +408,9 @@ export class GeradorDeAmbientes {
     copias?: Copias,
   ): Promise<ContainerCriado> {
     if (copias) exigirLoginDoPi(copias);
+    const credenciais = copias ? credenciaisParaMontar(copias) : [];
     const id = randomUUID();
+    const homeDoContainer = credenciais.length > 0 ? await this.#descobrirHomeDoContainer(id, imagem) : "";
     const containerId = await rodarDocker(
       [
         "run",
@@ -335,6 +426,10 @@ export class GeradorDeAmbientes {
         "--add-host",
         "host.docker.internal:host-gateway",
         ...(montagens ? argumentosDasMontagens(montagens, id) : []),
+        ...credenciais.flatMap(({ arquivoNoHost, destinoNoHome }) => [
+          "-v",
+          `${arquivoNoHost}:${homeDoContainer}/${destinoNoHome}/${CREDENCIAL_POR_DESTINO[destinoNoHome]}:rw`,
+        ]),
         imagem,
         "tail",
         "-f",
@@ -345,7 +440,11 @@ export class GeradorDeAmbientes {
     try {
       await this.#restringirSaidaParaOHost(id, containerId, portaDaApi);
       if (montagens) await this.#instalarComandoDoHarness(containerId, montagens.harness);
-      if (copias) await copiarParaOContainer(containerId, copias);
+      if (copias) {
+        const destinosMontados = credenciais.map(({ destinoNoHome }) => destinoNoHome);
+        await this.#devolverPastasDasCredenciaisAoUsuario(containerId, homeDoContainer, destinosMontados);
+        await copiarParaOContainer(containerId, copias, destinosMontados);
+      }
     } catch (erro) {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
       throw erro;

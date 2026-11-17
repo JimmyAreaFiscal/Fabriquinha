@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -135,6 +135,17 @@ test("run grava os -v e os --add-host, e o inspect os mostra", () => {
     Binds: ["/a:/a:rw", "/b:/b:ro"],
     ExtraHosts: ["host.docker.internal:host-gateway"],
   });
+});
+
+test("run com -v de arquivo do host sob o /home/node liga o arquivo ao HOME do container, e a imagem diz o HOME", () => {
+  assert.equal(docker("run", "--rm", "--entrypoint", "sh", "alpine", "-c", 'echo "$HOME"').stdout.trim(), "/home/node");
+  const credencial = join(base, "credencial.json");
+  writeFileSync(credencial, "{}");
+  const id = docker("run", "-d", "-v", `${credencial}:/home/node/.claude/.credentials.json:rw`, "alpine").stdout.trim();
+  const noContainer = join(falso.homeDoContainer(id), ".claude", ".credentials.json");
+  assert.ok(lstatSync(noContainer).isSymbolicLink());
+  writeFileSync(credencial, '{"novo":true}');
+  assert.equal(readFileSync(noContainer, "utf8"), '{"novo":true}');
 });
 
 test("exec com -w e --env-file roda o roteiro no host só com o env do arquivo, e o código de saída volta", () => {

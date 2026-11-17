@@ -212,7 +212,7 @@ export class AmbienteContainer implements Ambiente {
       `mkdir -p ${PASTA_DOS_PIDS}`,
       `echo $$ > ${PASTA_DOS_PIDS}/${String(identificador.grupo_processo)}`,
       `export PATH=${entreAspas(this.#binDoPacote)}:"$PATH"`,
-      `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // a cópia do pi do Auditor, feita na criação do container
+      `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // o pi do Auditor no container: a configuração copiada e o auth.json montado do host, na criação
       `exec ${programaEArgumentos.map(entreAspas).join(" ")}`,
     ].join("; ");
     return {
