@@ -24,6 +24,7 @@ import {
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { AmbientesDoServico, Rota } from "./rotas.ts";
 import { ROTAS_DO_CHAT } from "./sessoes/chat.ts";
+import { ROTAS_DOS_AMBIENTES } from "./ambientes/ambientes.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./configuracao/configuracao.ts";
 import { ROTAS_DAS_ETAPAS } from "./configuracao/etapas.ts";
 import { ROTAS_DAS_DEMANDAS } from "./demandas/demandas.ts";
@@ -42,6 +43,7 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DAS_ETAPAS,
   ...ROTAS_DO_HISTORICO,
   ...ROTAS_DA_CONFIGURACAO,
+  ...ROTAS_DOS_AMBIENTES,
   ...ROTAS_DA_CONFIGURACAO_SDLC,
   ...ROTAS_DAS_DEMANDAS,
   ...ROTAS_DAS_ACOES_DE_DEMANDA,

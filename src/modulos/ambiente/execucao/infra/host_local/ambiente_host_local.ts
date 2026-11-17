@@ -57,6 +57,10 @@ export class AmbienteHostLocal implements Ambiente {
     return Promise.resolve();
   }
 
+  sandboxCaiu(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   caminhoNoAmbiente(caminhoNoHost: string): string {
     return caminhoNoHost;
   }

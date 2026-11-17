@@ -24,7 +24,7 @@ export type ProjetoListado = Projeto;
  * O projeto no formulário, só com o que o cadastro pede; o novo ainda não tem hospedagem (o F5 a deduz do remoto ao
  * salvar).
  */
-export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> &
+export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "imagem_do_ambiente"> &
   ConfiguracoesPorEtapa & { preparacao: string[]; hospedagem?: Hospedagem };
 
 /** O projeto cadastrado como o formulário o edita: a preparação da worktree solta das Verificações. */
@@ -33,6 +33,7 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
+  imagem_do_ambiente,
   verificacoes,
   configuracoes,
 }: ProjetoCadastrado): Rascunho => ({
@@ -40,6 +41,7 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
+  ...(imagem_do_ambiente && { imagem_do_ambiente }),
   preparacao: verificacoes.preparacao,
   configuracoes,
 });
@@ -209,16 +211,20 @@ const FORMATO_DAS_CPUS = new Intl.NumberFormat("pt-BR", { minimumFractionDigits:
 const FORMATO_DA_MEMORIA = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 /** A CPU e a memória que o docker mediu no container; sem medida (host local ou docker fora do ar), um traço. */
-function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"]): string {
+export function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"] | null): string {
   const [cpus, memoria] = medido
     ? [`${FORMATO_DAS_CPUS.format(medido.cpus)} CPUs`, `${FORMATO_DA_MEMORIA.format(medido.memoria_mb)} MB`]
     : ["—", "—"];
   return `<td class="num">${cpus}</td><td class="num">${memoria}</td>`;
 }
 
+/** O nome que o operador vê do container do slot `n` (no docker, `fabriquinha-slot-<n>`); sem slot, um traço. */
+export const nomeDoSlot = (slot: number | null): string => (slot === null ? "—" : `Fabriquinha - Slot ${String(slot)}`);
+
 // shortcut: o alocado mostra a criação do container, porque a tabela não guarda quando foi alocado; gravar o instante da alocação se isso confundir.
 function linhaDoAmbiente({
   id,
+  slot,
   imagem,
   estado,
   alocado_para,
@@ -228,7 +234,7 @@ function linhaDoAmbiente({
 }: EstadoDoAmbiente["conjunto"][number]): string {
   const desde = instanteLegivel(estado === "alocado" ? criado_em : (liberado_em ?? criado_em));
   const podeEliminar = estado === "livre" || estado === "sujo";
-  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
+  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td>${nomeDoSlot(slot)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
 }
 
 /**
@@ -241,7 +247,7 @@ export function ambiente({ configuracao, conjunto }: EstadoDoAmbiente, erros: Er
   const linhas = conjunto.map(linhaDoAmbiente);
   const tabela =
     linhas.length > 0
-      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Container</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
       : '<p class="muted">Nenhum container no conjunto.</p>';
   return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3>${seletorDoAmbiente(erros, "tipo", "Tipo de Ambiente", TIPOS_DE_AMBIENTE, configuracao.tipo)}<div class="limites-ambiente">${campos(LIMITES_DO_CONTAINER)}</div></div><div class="grupo"><h3>Tamanho do conjunto <span class="nota">· o fixo mantém os containers que criou; o variável elimina os livres ociosos até o mínimo; sem vaga, o trabalho espera e tenta de novo</span></h3>${seletorDoAmbiente(erros, "conjunto", "Tipo de conjunto", TIPOS_DE_CONJUNTO, configuracao.conjunto)}<div class="limites-ambiente">${campos(LIMITES_DO_CONJUNTO)}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
 }
@@ -255,6 +261,8 @@ interface OpcoesDoProjeto {
   /** Os modelos que o pi lista (`GET /api/modelos`), para o seletor de cada etapa. */
   modelosDoPi: readonly Modelo[];
   erros: Erros;
+  /** O Ambiente está em container e o projeto salvo não tem imagem: o trabalho dele roda no host. */
+  rodaNoHost?: boolean;
   /** A mensagem do servidor que não é de um campo (502 do F5, 409), no rodapé. */
   falha?: string;
 }
@@ -326,7 +334,10 @@ const plural = (n: number, um: string, varios: string): string => `${String(n)} 
 const BOTAO_ESCOLHER_PASTA = '<button type="button" class="btn" data-abrir-pastas>Escolher pasta…</button>';
 
 /** Projeto (F7 §4.4) nos três grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
-export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, falha }: OpcoesDoProjeto): string {
+export function formularioDeProjeto(
+  p: Rascunho,
+  { novo, modelosDoPi, erros, rodaNoHost, falha }: OpcoesDoProjeto,
+): string {
   const titulo = novo
     ? "Novo projeto"
     : `${escapar(p.nome)}<button type="button" class="btn btn-perigo remover-projeto" data-remover-projeto aria-label="Remover o projeto ${escapar(p.nome)}">Remover</button>`;
@@ -345,12 +356,16 @@ export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, fal
   const rodape =
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
     `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
+  const avisoDoHost = rodaNoHost
+    ? '<p class="msg-erro" role="status" data-aviso-host>O Ambiente está em container, mas este projeto não tem imagem: o trabalho dele roda no host.</p>'
+    : "";
   // Fora do h2: o título acessível do formulário continua o nome do projeto.
   const sdlc = novo
     ? ""
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', botaoAoLado: BOTAO_ESCOLHER_PASTA, ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
+<div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${texto(erros, "imagem_do_ambiente", "Imagem do Ambiente", p.imagem_do_ambiente ?? "", { classe: " largo", mono: true, extra: ' placeholder="Dockerfile"', ajuda: "caminho de um Dockerfile no repositório ou o nome de uma imagem; vazio mantém o projeto no host" })}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;

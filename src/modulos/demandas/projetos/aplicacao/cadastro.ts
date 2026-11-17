@@ -90,7 +90,7 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
 }
 
 /** O projeto como o formulário o manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> & {
+export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "imagem_do_ambiente"> & {
   hospedagem?: Hospedagem;
   preparacao: Projeto["verificacoes"]["preparacao"];
   configuracoes: ConfiguracoesDasEtapas;

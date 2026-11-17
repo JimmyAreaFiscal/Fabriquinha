@@ -38,6 +38,7 @@ import { triarPergunta } from "../politica_dos_agentes/auditor_automatico.ts";
 import { falhaDaTentativaDaExecucao } from "../politica_dos_agentes/condutor.ts";
 import { execucoesDoTicket, type TicketRef } from "../politica_dos_agentes/processo_do_ticket.ts";
 import { lancamentoDoTicket } from "./lancamento_do_ticket.ts";
+import { devolverAmbienteSeOTicketEsperaOHumano, encerrarPiQueAssentaNoGateDoPlano } from "../devolucao_do_ambiente.ts";
 import type { ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
 import { projetosCadastrados, type ProjetoConduzido } from "../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
@@ -227,7 +228,7 @@ export function iniciarExecucaoDemanda(
     padrao: {},
   });
   const c: Conducao = { ...modulos, ref, ag, ticket, projeto, opcoes, relogio };
-  const { execucao, fim } = modulos.sessoes.lancar({
+  const lancada = modulos.sessoes.lancar({
     contexto: { demanda_id: ref.demanda_id, ticket_id: ref.ticket_id },
     modo: opcoes.modo ?? "autonomo",
     ...(opcoes.iniciarEmSessaoNova && { sessaoNova: true }),
@@ -238,9 +239,13 @@ export function iniciarExecucaoDemanda(
       abrirTentativaDoTicket(banco, ref, aberta.execucao);
     },
     preparar: (aberta) => prepararOAgenteAnotandoAFalha(c, aberta),
-    aoEncerrar: (aberta, falha) => fecharOTicket(c, aberta.log, daTentativa(falha)),
+    aoEncerrar: async (aberta, falha) => {
+      await fecharOTicket(c, aberta.log, daTentativa(falha));
+      await devolverAmbienteSeOTicketEsperaOHumano(modulos, ref);
+    },
   });
-  return { id: execucao.id, fim: fim.then(daTentativa) };
+  if (opcoes.modo === "interativo") encerrarPiQueAssentaNoGateDoPlano(modulos, lancada);
+  return { id: lancada.execucao.id, fim: lancada.fim.then(daTentativa) };
 }
 
 /**

@@ -19,6 +19,7 @@ test("o rótulo da causa: o reinício tem o seu; as demais falhas de ambiente, o
     "modelo_sem_resposta",
     "comando_ausente",
     "servico_externo_inacessivel",
+    "sandbox_caiu",
   ] as const) {
     assert.equal(rotuloDaCausa(causa), "falha de infraestrutura");
   }
@@ -44,4 +45,17 @@ test("o erro vira resultado num ponto só: reprovação, infraestrutura ou falha
   assert.deepEqual(falhaDoErro(regra), falhaQueExigeOAuditor(regra.message));
   assert.deepEqual(falhaDoErro("texto solto"), { tipo: "interrompida", por: FABRIQUINHA, motivo: "texto solto" });
   assert.equal(falhaQueExigeOAuditor("x".repeat(3000)).motivo.length, 2000);
+});
+
+test("o sandbox caído (docker parado, container parado ou sumido) é falha de infraestrutura, mesmo num erro de regra", () => {
+  for (const relato of [
+    "docker build falhou: Cannot connect to the Docker daemon at unix:///var/run/docker.sock (confira se o Docker está rodando)",
+    "Error response from daemon: container 4f2a9c is not running",
+    "Error response from daemon: No such container: 4f2a9c",
+  ]) {
+    const falha = { tipo: "falha_infraestrutura", causa: "sandbox_caiu", motivo: `falha de infraestrutura: ${relato}` };
+    assert.deepEqual(falhaDoErro(new ErroDeRegra(relato)), falha);
+    assert.deepEqual(resultadoDoErro(new Error(relato)), falha);
+  }
+  assert.equal(falhaDoErro(new ErroDeRegra("o docker build falhou: sem espaço em disco")).tipo, "interrompida");
 });

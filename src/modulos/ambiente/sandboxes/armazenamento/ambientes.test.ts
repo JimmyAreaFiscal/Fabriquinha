@@ -30,14 +30,15 @@ const novo = (id: string, imagem = "fabriquinha/loja:abc", alocadoPara = `I-1/${
   alocado_para: alocadoPara,
 });
 
-test("inserir grava o Ambiente alocado ao Espaço e buscar o acha pelo Espaço", () => {
+test("inserir grava o Ambiente alocado ao Espaço, com o slot, e buscar o acha pelo Espaço", () => {
   const banco = bancoComConjunto();
-  inserirAmbienteAlocado(banco, novo("a1"));
+  inserirAmbienteAlocado(banco, { ...novo("a1"), slot: 3 });
 
   assert.deepEqual(buscarAmbienteAlocadoPara(banco, "I-1/a1"), {
     id: "a1",
     container_id: "container-a1",
     imagem: "fabriquinha/loja:abc",
+    slot: 3,
     estado: "alocado",
     alocado_para: "I-1/a1",
     criado_em: T1,
@@ -62,6 +63,7 @@ test("liberar tira o Espaço e grava quando; só o livre da imagem pedida é alo
     id: "a2",
     container_id: "container-a2",
     imagem: "fabriquinha/loja:abc",
+    slot: null,
     estado: "alocado",
     alocado_para: "I-2/1",
     criado_em: T1,

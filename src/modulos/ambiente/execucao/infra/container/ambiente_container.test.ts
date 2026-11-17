@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
+import { grupoEstaVivo } from "../../../../../../apoio-testes/grupo_de_processo.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteContainer } from "./ambiente_container.ts";
 import { pastasDoAmbiente } from "../../../sandboxes/infra/pastas_do_ambiente.ts";
@@ -66,35 +67,6 @@ function comandoNoShell(linha: string, resto: Partial<ComandoNoAmbiente> = {}): 
 const arquivosDePid = (): string[] => {
   const pasta = join(dirDoDockerFalso, "pids", containerId);
   return existsSync(pasta) ? readdirSync(pasta) : [];
-};
-
-/** Sem init que recolha órfãos (PID 1 que não faz wait), o grupo morto fica só com zumbis, e `kill(-grupo, 0)` ainda o vê. */
-const grupoSoTemZumbis = (grupo: number): boolean => {
-  try {
-    return readdirSync("/proc")
-      .filter((entrada) => /^\d+$/.test(entrada))
-      .every((pid) => {
-        try {
-          const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
-            .replace(/^.*\) /, "")
-            .split(" ");
-          return Number(grupoDoProcesso) !== grupo || estado === "Z";
-        } catch {
-          return true; // o processo saiu entre o readdir e o read
-        }
-      });
-  } catch {
-    return false; // sem /proc (fora do Linux), vale só o kill
-  }
-};
-
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return !grupoSoTemZumbis(grupo);
-  } catch {
-    return false;
-  }
 };
 
 /**
@@ -358,6 +330,43 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
   await assert.rejects(
     ambiente.sinalizar({ ambiente_id: "host_local", grupo_processo: 1 }, "SIGTERM"),
     /é do ambiente host_local, não do amb-1.*sinalize pelo ambiente que lançou/s,
+  );
+});
+
+test("sandboxCaiu: só o container rodando e com o docker respondendo está de pé", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-2",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  assert.equal(await doContainer.sandboxCaiu(), false);
+  docker.pararDocker();
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    docker.religarDocker();
+  }
+  docker.pararContainer(id);
+  assert.equal(await doContainer.sandboxCaiu(), true);
+  const pathComDocker = process.env.PATH;
+  process.env.PATH = "/inexistente"; // o docker nem roda
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    process.env.PATH = pathComDocker;
+  }
+  assert.equal(
+    await new AmbienteContainer({
+      id: "amb-3",
+      container_id: "sumido",
+      bin_do_pacote: binDoPacote,
+      raiz: base,
+      url_da_api: urlDaApi,
+    }).sandboxCaiu(),
+    true,
   );
 });
 

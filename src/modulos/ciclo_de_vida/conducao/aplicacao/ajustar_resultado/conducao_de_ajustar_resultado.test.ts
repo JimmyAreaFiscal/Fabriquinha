@@ -33,9 +33,17 @@ import { ConducaoDeAjustarResultado } from "./conducao_de_ajustar_resultado.ts";
 import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 
-/** O mesmo caminho de efeitos do gate, com o pi de ociosidade curta para a execução terminar logo e o `fim` poder ser esperado. */
-async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: string) {
-  limitarTempoDoPi(banco, 0.02);
+/**
+ * O mesmo caminho de efeitos do gate, com o pi de ociosidade curta (`minutosDeOciosidade`) para a execução terminar logo e
+ * o `fim` poder ser esperado; `modulos` troca os da condução (o Repositório espiado).
+ */
+async function reprovarPRRodadaComLimiteCurto(
+  banco: DatabaseSync,
+  motivo: string,
+  minutosDeOciosidade = 0.02,
+  modulos = modulosDoCicloDeTeste(banco),
+) {
+  limitarTempoDoPi(banco, minutosDeOciosidade);
   await guardarMarcoDaSessao(modulosDoCicloDeTeste(banco), REF, carregarDemanda(banco, DEMANDA));
   const reprovada = comDemanda(banco, DEMANDA, (a) =>
     GATES.gate_pr.regra.decidir(a, ENDERECO, { resultado: "reprovado", motivo }, AUDITOR, {
@@ -44,7 +52,7 @@ async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: strin
   );
   const ticket = sessaoDaRodada(reprovada, REF);
   const execucao = await new ConducaoDeAjustarResultado({
-    ...modulosDoCicloDeTeste(banco),
+    ...modulos,
     relogio: relogioFixo("2026-01-01T00:00:00.000Z"),
     registro: anotar,
   }).iniciar(Endereco.doTicket(DEMANDA, ticket.ticket_id));
@@ -154,4 +162,21 @@ test("o pi que falha na conversa devolve as branches ao marco e deixa o ticket d
   assert.ok(await fim);
   assert.equal(sujo(), false);
   assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
+});
+
+test("I-312: a sessão de ajustes cujo pi a ociosidade encerra à espera do Auditor devolve o Ambiente da rodada", async () => {
+  const { banco } = await cenarioDeAjustes();
+  const modulos = modulosDoCicloDeTeste(banco);
+  const donosQueDevolveram: unknown[] = [];
+  const repositorio = {
+    ...modulos.repositorio,
+    devolverAmbiente: (_projeto: unknown, espaco: { dono: unknown }) => {
+      donosQueDevolveram.push(espaco.dono);
+      return Promise.resolve();
+    },
+  } as typeof modulos.repositorio;
+  const { fim } = await reprovarPRRodadaComLimiteCurto(banco, MOTIVO, 0.02, { ...modulos, repositorio });
+  await fim;
+  assert.equal(carregarDemanda(banco, DEMANDA).rodadas[0]?.estado, "ajustar_resultado");
+  assert.deepEqual(donosQueDevolveram, [REF]);
 });

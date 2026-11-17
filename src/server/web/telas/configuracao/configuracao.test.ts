@@ -327,6 +327,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-livre",
       container_id: "c1",
+      slot: 1,
       imagem: "fabriquinha/loja:abc",
       estado: "livre",
       alocado_para: null,
@@ -337,6 +338,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-sujo",
       container_id: "c2",
+      slot: null,
       imagem: "alpine",
       estado: "sujo",
       alocado_para: null,
@@ -346,6 +348,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-<x>",
       container_id: "c3",
+      slot: 3,
       imagem: "alpine",
       estado: "alocado",
       alocado_para: "I-1",
@@ -372,19 +375,19 @@ test("ambiente: tipo, limites e uma linha por container, com a CPU e a memória 
   assert.doesNotMatch(html, /data-so-no-variavel disabled/);
   assert.match(
     html,
-    /<thead><tr><th>Id<\/th><th>Imagem<\/th><th>Estado<\/th><th>Alocado para<\/th><th>Desde<\/th><th class="num">CPU<\/th><th class="num">Memória<\/th><th><\/th><\/tr><\/thead>/,
+    /<thead><tr><th>Id<\/th><th>Container<\/th><th>Imagem<\/th><th>Estado<\/th><th>Alocado para<\/th><th>Desde<\/th><th class="num">CPU<\/th><th class="num">Memória<\/th><th><\/th><\/tr><\/thead>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td class="num">0,00 CPUs<\/td><td class="num">2 MB<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
+    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td>Fabriquinha - Slot 1<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td class="num">0,00 CPUs<\/td><td class="num">2 MB<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-sujo">.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td class="num">—<\/td><td class="num">—<\/td><td><button[^>]*>Eliminar</,
+    /<tr data-ambiente="a-sujo"><td class="mono">a-sujo<\/td><td>—<\/td>.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td class="num">—<\/td><td class="num">—<\/td><td><button[^>]*>Eliminar</,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td class="num">1,38 CPUs<\/td><td class="num">1.536 MB<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
+    /<tr data-ambiente="a-&#60;x&#62;">.*<td>Fabriquinha - Slot 3<\/td>.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td class="num">1,38 CPUs<\/td><td class="num">1.536 MB<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
   );
   assert.equal(html.match(/ disabled>/g)?.length, 1);
 });
@@ -472,4 +475,27 @@ test("dialogoDePastas: a caixa com o conteúdo, o erro e o Escolher", () => {
   const html = dialogoDePastas();
   assert.match(html, /^<dialog class="dialogo dialogo-pastas" data-dialogo-pastas/);
   assert.match(html, /data-conteudo-pastas><\/div>.*data-erro-pastas hidden.*data-escolher-pasta>Escolher esta pasta/);
+});
+
+test("imagem do Ambiente: o campo traz o valor atual ou vazio, com a ajuda; rascunhoDe só a leva quando existe", () => {
+  assert.equal(Object.hasOwn(rascunhoDe(LOJA), "imagem_do_ambiente"), false);
+  assert.equal(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }).imagem_do_ambiente, "Dockerfile");
+  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
+  assert.match(
+    formularioDeProjeto(rascunhoDe(LOJA), opcoes),
+    /<label for="campo-imagem_do_ambiente">Imagem do Ambiente<\/label><input class="mono" id="campo-imagem_do_ambiente" name="imagem_do_ambiente" value=""[^>]*>.*caminho de um Dockerfile no repositório ou o nome de uma imagem; vazio mantém o projeto no host/,
+  );
+  assert.match(
+    formularioDeProjeto(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }), opcoes),
+    /name="imagem_do_ambiente" value="Dockerfile"/,
+  );
+});
+
+test("o aviso de que o projeto roda no host só aparece quando a tela manda rodaNoHost", () => {
+  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
+  assert.doesNotMatch(formularioDeProjeto(rascunhoDe(LOJA), opcoes), /data-aviso-host/);
+  assert.match(
+    formularioDeProjeto(rascunhoDe(LOJA), { ...opcoes, rodaNoHost: true }),
+    /<p class="msg-erro" role="status" data-aviso-host>[^<]*roda no host\.<\/p>/,
+  );
 });

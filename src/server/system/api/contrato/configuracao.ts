@@ -20,6 +20,7 @@ const AmbienteDoConjunto = z.strictObject({
   id: z.string(),
   container_id: z.string(),
   imagem: z.string(),
+  slot: z.number().nullable(),
   estado: z.enum(["livre", "alocado", "sujo", "eliminado"]),
   alocado_para: z.string().nullable(),
   criado_em: z.string(),
@@ -54,6 +55,7 @@ export const FormularioDoProjeto = Projeto.pick({
   nome: true,
   raiz_git: true,
   branch_base: true,
+  imagem_do_ambiente: true,
 }).extend({
   hospedagem: Hospedagem.optional(),
   preparacao: ComandosDePreparacao,
