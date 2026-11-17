@@ -14,7 +14,7 @@
 // pode estar parado (`pararContainer`, ou o `stop`); o `start` o religa sem o que vive no tmpfs, onde o gerador grava o marcador das
 // regras de rede (`exec touch`, conferido por `exec test -e`).
 // `ps`, `inspect` e `stats` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>\t<estado>", `inspect` imprime o
-// JSON e `stats` imprime "<id>\t<CPU>\t<memória>" de cada container pedido, com o uso semeado (sem ele, o de um parado).
+// JSON (só o `--format {{.State.Running}}` é atendido: imprime `true` ou `false`) e `stats` imprime "<id>\t<CPU>\t<memória>" de cada container pedido, com o uso semeado (sem ele, o de um parado).
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -292,21 +292,24 @@ function executarDockerFalso(): void {
         console.log(`${container.id}\t${container.rotulos[rotulo] ?? ""}\t${container.estado}`);
   } else if (comando === "inspect") {
     const container = achar(args.at(-1) ?? "");
-    console.log(
-      JSON.stringify([
-        {
-          Id: container.id,
-          Config: { Image: container.imagem, Labels: container.rotulos },
-          HostConfig: {
-            Memory: container.memoria,
-            NanoCpus: container.cpus * 1e9,
-            Binds: container.montagens,
-            ExtraHosts: container.hospedeiros,
+    if (tirarOpcoes(args, ["--format"]).opcoes["--format"]?.[0] === "{{.State.Running}}")
+      console.log(String(container.estado === "running"));
+    else
+      console.log(
+        JSON.stringify([
+          {
+            Id: container.id,
+            Config: { Image: container.imagem, Labels: container.rotulos },
+            HostConfig: {
+              Memory: container.memoria,
+              NanoCpus: container.cpus * 1e9,
+              Binds: container.montagens,
+              ExtraHosts: container.hospedeiros,
+            },
+            State: { Running: container.estado === "running" },
           },
-          State: { Running: container.estado === "running" },
-        },
-      ]),
-    );
+        ]),
+      );
   } else if (comando === "stats") {
     const { resto } = tirarOpcoes(args, ["--format"]);
     for (const container of resto.map((id) => achar(id)))

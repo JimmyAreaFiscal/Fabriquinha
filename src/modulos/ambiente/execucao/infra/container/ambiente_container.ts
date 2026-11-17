@@ -158,6 +158,13 @@ export class AmbienteContainer implements Ambiente {
     );
   }
 
+  async sandboxCaiu(): Promise<boolean> {
+    const estado = await executar("docker", ["inspect", "--format", "{{.State.Running}}", this.container_id], {
+      limiteMs: LIMITE_DO_SINAL_MS,
+    }).catch(() => undefined);
+    return estado?.codigo !== 0 || estado.saida.trim() !== "true";
+  }
+
   caminhoNoAmbiente(caminhoNoHost: string): string {
     return caminhoNoHost;
   }
