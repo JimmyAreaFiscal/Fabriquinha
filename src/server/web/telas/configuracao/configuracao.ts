@@ -208,7 +208,7 @@ const FORMATO_DAS_CPUS = new Intl.NumberFormat("pt-BR", { minimumFractionDigits:
 const FORMATO_DA_MEMORIA = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 /** A CPU e a memória que o docker mediu no container; sem medida (host local ou docker fora do ar), um traço. */
-function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"]): string {
+export function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"] | null): string {
   const [cpus, memoria] = medido
     ? [`${FORMATO_DAS_CPUS.format(medido.cpus)} CPUs`, `${FORMATO_DA_MEMORIA.format(medido.memoria_mb)} MB`]
     : ["—", "—"];
