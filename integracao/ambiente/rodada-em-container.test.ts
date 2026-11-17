@@ -30,8 +30,13 @@ import {
 import { montarSessoesDeAgente } from "../../src/modulos/sessoes/publico.ts";
 import { dirDoPiDoAuditor, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { anotar, noLog } from "../../src/shared/infra/registro.ts";
-import { relogioDoSistema } from "../../src/shared/nucleo/relogio.ts";
-import { caminhoDaWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
+import { relogioDoSistema, relogioFixo } from "../../src/shared/nucleo/relogio.ts";
+import {
+  caminhoDaWorktreeRodada,
+  espacoDaRodada,
+  exigirGit,
+  ocupanteDoAmbiente,
+} from "../../apoio-testes/repositorio_de_teste.ts";
 import { iniciarServico } from "../../src/server/system/montagem.ts";
 import { raizDo } from "../../src/shared/armazenamento/banco.ts";
 import { servirWeb } from "../../src/server/system/api/servidor.ts";
@@ -81,9 +86,9 @@ let gestaoDoCenario: GestaoDeAmbientes | undefined;
 async function cenarioEmContainer(t: TestContext, portaDaApi?: number) {
   const c = criarCenario(t, "loja", raizCompartilhadaComODocker());
   projetoDeTesteEmContainer(c);
-  const { pi, gestao } = await ligarContainerAoCenario(t, c, portaDaApi);
+  const { pi, gestao, dockerQueCai, subirDeNovo } = await ligarContainerAoCenario(t, c, portaDaApi);
   gestaoDoCenario = gestao;
-  return { c, pi, gestao };
+  return { c, pi, gestao, dockerQueCai, subirDeNovo };
 }
 
 /**
@@ -691,6 +696,100 @@ test(
       else process.env.FABRIQUINHA_PORTA = portaAntes;
       await servico.parar();
     }
+  },
+);
+
+test(
+  "I-315 CA-2, CA-1 e CA-5: o Docker cai com o pi no container, a Tentativa é falha de infraestrutura e, com o serviço subindo sem o Docker, o ticket volta sozinho num container novo quando ele responde",
+  COM_DOCKER,
+  async (t) => {
+    const { c, pi, dockerQueCai, subirDeNovo } = await cenarioEmContainer(t);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const ref = ticketDe(c, id, 1);
+    const dono = Endereco.daRodada(id, 1).toString();
+    const containerAntes = ambienteAlocadoPara(c, dono).container_id;
+
+    // CA-2: o pi começa e não termina; o Docker cai no meio da execução (o container para e o daemon deixa de responder).
+    pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, termina: "nunca", uso: null }]);
+    const implementacao = ciclo(c, despachoComVerificacoesReais);
+    await esperar(() => SO_NO_CONTAINER.test(processosNoContainer(containerAntes)), "o pi vivo no container");
+    execFileSync("docker", ["stop", "--time", "1", containerAntes]);
+    dockerQueCai.parar();
+    await implementacao;
+    assert.partialDeepStrictEqual(c.banco.prepare("SELECT * FROM tentativa WHERE ticket_id = ?").get(ref.ticket_id), {
+      resultado_tipo: "falha_infraestrutura",
+      causa: "sandbox_caiu",
+    });
+    assert.equal(statusDe(c, ref), "falhou");
+
+    // CA-1: o serviço sobe com o Docker fora; nenhum sandbox é alocado até a conferência, que roda sozinha quando ele volta.
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    gestaoDoCenario = await subirDeNovo();
+    const projeto = montarDemandasDoBanco(c.banco).projeto(c.projeto);
+    const ocupante = ocupanteDoAmbiente(espacoDaRodada(projeto, id, 1, c.raiz), c.raiz, c.projeto);
+    await assert.rejects(gestaoDoCenario.alocar(ocupante, projeto), /ainda não foi conferido/);
+    dockerQueCai.religar();
+    t.mock.timers.tick(60_000);
+    await esperar(
+      () => c.banco.prepare("SELECT id FROM ambiente WHERE container_id = ?").get(containerAntes) === undefined,
+      "a conferência eliminou o container parado",
+    );
+    t.mock.timers.reset();
+
+    // CA-5: passada a espera da política, a Fabriquinha retoma o ticket e ele roda em outro container, sem ação manual.
+    const depoisDaEspera = new Date(Date.now() + 10 * 60_000).toISOString();
+    assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, relogioFixo(depoisDaEspera)), [
+      `${id}.T${String(ref.ticket_id)}`,
+    ]);
+    pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, uso: null }]);
+    await ciclo(c, despachoComVerificacoesReais);
+    assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
+    const containerDepois = ambienteAlocadoPara(c, dono).container_id;
+    assert.notEqual(containerDepois, containerAntes);
+    assert.equal(
+      execFileSync("docker", ["inspect", "-f", "{{.State.Running}}", containerDepois], { encoding: "utf8" }).trim(),
+      "true",
+    );
+  },
+);
+
+test(
+  "I-315 CA-4: o container parado e religado fora da Fabriquinha não é entregue, e o sandbox entregue só alcança a porta da API do agente no host",
+  COM_DOCKER,
+  async (t) => {
+    const portaDaApi = await escutarNoHost(t);
+    const outraPorta = await escutarNoHost(t);
+    const { c, gestao } = await cenarioEmContainer(t, portaDaApi);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
+    const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
+    const conectar = (ambiente: AmbienteContainer, porta: number) =>
+      ambiente.executar({ programa: "node", argumentos: ["-e", CONECTA_NO_HOST, String(porta)], cwd, env: {} });
+
+    // O Espaço devolve o container ao conjunto; alguém fora da Fabriquinha o para e o religa, e ele volta sem as regras de rede.
+    const religado = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
+    await gestao.limpar(religado.id);
+    execFileSync("docker", ["stop", "--time", "1", religado.container_id]);
+    execFileSync("docker", ["start", religado.container_id]);
+    assert.equal((await conectar(religado, outraPorta)).saida.trim(), "conectou", "o religado alcança qualquer porta");
+
+    // Quem pede um sandbox não recebe o religado: ele é eliminado e o entregue tem as regras.
+    const projeto = montarDemandasDoBanco(c.banco).projeto(c.projeto);
+    const entregue = await gestao.alocar(
+      ocupanteDoAmbiente(espacoDaRodada(projeto, id, 1, c.raiz), c.raiz, c.projeto),
+      projeto,
+    );
+    assert.ok(entregue instanceof AmbienteContainer);
+    assert.notEqual(entregue.container_id, religado.container_id);
+    assert.equal(
+      execFileSync("docker", ["ps", "--all", "--quiet", "--filter", `id=${religado.container_id}`], {
+        encoding: "utf8",
+      }),
+      "",
+    );
+    assert.equal((await conectar(entregue, portaDaApi)).saida.trim(), "conectou");
+    const aOutra = await conectar(entregue, outraPorta);
+    assert.notEqual(aOutra.codigo, 0);
+    assert.doesNotMatch(aOutra.saida, /conectou/);
   },
 );
 

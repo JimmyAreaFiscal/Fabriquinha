@@ -174,6 +174,23 @@ test("o variável elimina os ociosos só até o mínimo, o sujo e o livre mais a
   assert.equal(docker.containers().length, 2);
 });
 
+test("o livre que parou e foi religado fora da Fabriquinha não é entregue: sai do conjunto e o ocupante recebe um container novo", async () => {
+  const { conjunto, docker, estados, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 2 });
+  const religado = await conjunto.alocar(ocupante("I-1"), alpine);
+  await liberar("I-1");
+  docker.pararContainer(religado.container_id);
+  docker.religarContainer(religado.container_id);
+
+  const novo = await conjunto.alocar(ocupante("I-2"), alpine);
+
+  assert.notEqual(novo.container_id, religado.container_id);
+  assert.deepEqual(estados(), [["alocado", "I-2", "alpine"]]);
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [novo.container_id],
+  );
+});
+
 const nomesNoDocker = (docker: ReturnType<typeof instalarDockerFalso>) =>
   docker
     .containers()

@@ -111,6 +111,10 @@ export class AmbienteFalso implements Ambiente {
     return this.hostLocal.sinalizar(identificador, sinal);
   }
 
+  sandboxCaiu(): Promise<boolean> {
+    return this.hostLocal.sandboxCaiu();
+  }
+
   caminhoNoAmbiente(caminhoNoHost: string): string {
     return this.hostLocal.caminhoNoAmbiente(caminhoNoHost);
   }

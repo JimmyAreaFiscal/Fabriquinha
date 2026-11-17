@@ -346,6 +346,43 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
   );
 });
 
+test("sandboxCaiu: só o container rodando e com o docker respondendo está de pé", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-2",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  assert.equal(await doContainer.sandboxCaiu(), false);
+  docker.pararDocker();
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    docker.religarDocker();
+  }
+  docker.pararContainer(id);
+  assert.equal(await doContainer.sandboxCaiu(), true);
+  const pathComDocker = process.env.PATH;
+  process.env.PATH = "/inexistente"; // o docker nem roda
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    process.env.PATH = pathComDocker;
+  }
+  assert.equal(
+    await new AmbienteContainer({
+      id: "amb-3",
+      container_id: "sumido",
+      bin_do_pacote: binDoPacote,
+      raiz: base,
+      url_da_api: urlDaApi,
+    }).sandboxCaiu(),
+    true,
+  );
+});
+
 test("o caminho no ambiente é o do host (mesmos caminhos nas montagens)", () => {
   assert.equal(ambiente.caminhoNoAmbiente("/a/b"), "/a/b");
   assert.equal(ambiente.id, "amb-1");
