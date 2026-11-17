@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -69,19 +68,19 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-// Sem init que recolha órfãos (como no sandbox), os mortos ficam zumbis e o grupo ainda "existe" para o kernel; só conta quem não é zumbi.
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-  } catch {
-    return false;
-  }
-  const processos = execFileSync("ps", ["-A", "-o", "pgid=,stat="], { encoding: "utf8" }).split("\n");
-  return processos.some((linha) => {
-    const [grupoDoProcesso, estado] = linha.trim().split(/\s+/);
-    return Number(grupoDoProcesso) === grupo && !estado?.startsWith("Z");
+// Zumbi não conta: sem init que o recolha (PID 1 que não faz wait), o morto continua no grupo e o kill 0 ainda acerta.
+const grupoEstaVivo = (grupo: number): boolean =>
+  readdirSync("/proc").some((pid) => {
+    try {
+      // "pid (comando) estado ppid grupo ...": o comando pode ter espaço e parêntese, então corta pelo último ")".
+      const [estado, , grupoDoProcesso] = readFileSync(`/proc/${pid}/stat`, "utf8")
+        .replace(/^.*\) /s, "")
+        .split(" ");
+      return Number(grupoDoProcesso) === grupo && estado !== "Z";
+    } catch {
+      return false; // o processo saiu entre o readdir e o read, ou não é um pid
+    }
   });
-};
 
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
