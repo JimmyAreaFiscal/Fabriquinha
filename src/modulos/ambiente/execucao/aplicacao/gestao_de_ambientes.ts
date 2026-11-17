@@ -1,9 +1,10 @@
 // A gestão dos Ambientes (CONCEITOS.md §7), a única entrada do domínio: quem monta entrega a Configuração do Ambiente, o
-// banco do inventário e o que o serviço sabe de si; a montagem confere o conjunto com o docker na subida e liga a
-// eliminação dos ociosos, que `parar` desliga. Quem pede um Ambiente recebe o do host local ou o container alocado do
+// banco do inventário e o que o serviço sabe de si; a montagem confere o conjunto com o docker na subida (e, sem o docker,
+// de novo a cada minuto, até ele responder) e liga a eliminação dos ociosos, que `parar` desliga. Quem pede um Ambiente recebe o do host local ou o container alocado do
 // conjunto, que executa, lança e sinaliza nele. Ambiente não conhece demandas, tickets nem etapas: o ocupante é opaco.
 import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
+import { ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import {
@@ -19,8 +20,8 @@ import type { Ambiente } from "../infra/ambiente.ts";
 import { AmbienteContainer } from "../infra/container/ambiente_container.ts";
 import { AmbienteHostLocal } from "../infra/host_local/ambiente_host_local.ts";
 
-/** De quanto em quanto tempo a gestão procura os containers ociosos para eliminar. */
-const INTERVALO_DA_ELIMINACAO_DE_OCIOSOS_MS = 60_000;
+/** De quanto em quanto tempo a gestão procura os containers ociosos para eliminar ou, antes da conferência, tenta conferir. */
+const INTERVALO_DA_MANUTENCAO_DO_CONJUNTO_MS = 60_000;
 
 /** O que quem monta a gestão entrega a ela. */
 export interface MontagemDaGestaoDeAmbientes {
@@ -62,13 +63,14 @@ export interface GestaoDeAmbientes {
 
 /**
  * Monta a gestão. No `container`, antes de devolvê-la, confere o conjunto com o docker (elimina os órfãos e limpa os que o
- * reinício deixou alocados); a falha vai a `registrarErro` e fica para a próxima subida. Daí em diante, de minuto em
+ * reinício deixou alocados e os que pararam). O docker que não responde não impede a subida: a falha vai a
+ * `registrarErro`, nenhum sandbox é alocado e a manutenção do minuto seguinte tenta de novo. Depois da conferência, de minuto em
  * minuto, o conjunto variável elimina os ociosos enquanto o tipo for `container`.
  */
 export async function montarGestaoDeAmbientes(montagem: MontagemDaGestaoDeAmbientes): Promise<GestaoDeAmbientes> {
   const gestao = new GestaoDoConjunto(montagem);
   if (montagem.configuracao().tipo === "container") await gestao.reconciliarNaSubida();
-  gestao.ligarEliminacaoDeOciosos();
+  gestao.ligarManutencaoPeriodicaDoConjunto();
   return gestao;
 }
 
@@ -78,9 +80,11 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   readonly #relogio: Relogio;
   readonly #registrarErro: (erro: unknown) => void;
   readonly #doServico = new AmbienteHostLocal();
-  #relogioDaEliminacao: NodeJS.Timeout | undefined;
-  /** A eliminação dos ociosos em andamento: no máximo uma, e o `parar` a espera. */
-  #eliminacaoEmAndamento: Promise<void> | undefined;
+  #relogioDaManutencaoDoConjunto: NodeJS.Timeout | undefined;
+  /** A manutenção (conferência ou eliminação dos ociosos) em andamento: no máximo uma, e o `parar` a espera. */
+  #manutencaoDoConjuntoEmAndamento: Promise<void> | undefined;
+  /** Se o conjunto já foi conferido com o docker; até lá, nenhum sandbox é alocado. */
+  #conjuntoConferido = false;
 
   constructor({
     banco,
@@ -106,6 +110,11 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   async alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente> {
     const { imagem_do_ambiente } = projeto;
     if (!this.#ehContainer || imagem_do_ambiente === undefined) return this.#doServico;
+    if (!this.#conjuntoConferido)
+      throw new ErroExterno(
+        "o conjunto de sandboxes ainda não foi conferido com o docker",
+        "o trabalho volta a tentar quando o Docker responder; confira se o Docker está rodando",
+      );
     const container = this.#comoAmbienteContainer(
       await this.#sandboxes.alocar(ocupante, { ...projeto, imagem_do_ambiente }),
     );
@@ -127,31 +136,36 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   }
 
   async parar(): Promise<void> {
-    clearInterval(this.#relogioDaEliminacao);
-    await this.#eliminacaoEmAndamento;
+    clearInterval(this.#relogioDaManutencaoDoConjunto);
+    await this.#manutencaoDoConjuntoEmAndamento;
   }
 
-  reconciliarNaSubida(): Promise<void> {
-    return this.#sandboxes.reconciliarNaSubida().catch(this.#registrarErro);
+  async reconciliarNaSubida(): Promise<void> {
+    try {
+      await this.#sandboxes.reconciliarNaSubida();
+      this.#conjuntoConferido = true;
+    } catch (erro) {
+      this.#registrarErro(erro);
+    }
   }
 
-  ligarEliminacaoDeOciosos(): void {
-    // A batida nunca lança: a falha (até a de ler a Configuração) vai a `registrarErro`, e a batida seguinte roda.
-    this.#relogioDaEliminacao = setInterval(() => {
+  ligarManutencaoPeriodicaDoConjunto(): void {
+    // A manutenção nunca lança: a falha (até a de ler a Configuração) vai a `registrarErro`, e a do minuto seguinte roda.
+    this.#relogioDaManutencaoDoConjunto = setInterval(() => {
       try {
-        if (!this.#ehContainer || this.#eliminacaoEmAndamento) return;
-        this.#eliminacaoEmAndamento = this.#sandboxes
-          .eliminarOciosos(this.#relogio.agora())
-          .catch(this.#registrarErro)
-          .finally(() => {
-            this.#eliminacaoEmAndamento = undefined;
-          });
+        if (!this.#ehContainer || this.#manutencaoDoConjuntoEmAndamento) return;
+        const reconciliacaoOuEliminacaoDeOciosos = this.#conjuntoConferido
+          ? this.#sandboxes.eliminarOciosos(this.#relogio.agora()).catch(this.#registrarErro)
+          : this.reconciliarNaSubida();
+        this.#manutencaoDoConjuntoEmAndamento = reconciliacaoOuEliminacaoDeOciosos.finally(() => {
+          this.#manutencaoDoConjuntoEmAndamento = undefined;
+        });
       } catch (erro) {
         this.#registrarErro(erro);
       }
-    }, INTERVALO_DA_ELIMINACAO_DE_OCIOSOS_MS);
+    }, INTERVALO_DA_MANUTENCAO_DO_CONJUNTO_MS);
     // O relógio não segura o processo: quem o mantém vivo é o servidor; os testes que não param a gestão terminam.
-    this.#relogioDaEliminacao.unref();
+    this.#relogioDaManutencaoDoConjunto.unref();
   }
 
   #comoAmbienteContainer({ id, container_id }: Pick<AmbienteGravado, "id" | "container_id">): AmbienteContainer {

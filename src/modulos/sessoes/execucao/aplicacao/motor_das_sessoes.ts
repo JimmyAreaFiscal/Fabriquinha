@@ -434,13 +434,14 @@ export class MotorDasSessoes {
         if (feito || !estaViva.ocupado || ferramentasRodando.size > 0 || pendentes.size > 0) return;
         const silencioMin = r.silencioMaximoDoModeloMin ?? SILENCIO_MAXIMO_DO_MODELO_MIN;
         vigiaDoModelo = setTimeout(() => {
-          const falha: FalhaDaExecucao = {
+          const falha: Extract<FalhaDaExecucao, { tipo: "falha_infraestrutura" }> = {
             tipo: "falha_infraestrutura",
             causa: "modelo_sem_resposta",
             motivo: `o modelo ficou ${String(silencioMin)} min sem responder (tempo limite sem eventos do pi)`,
           };
           anotar(r.log, falha.motivo);
-          fim(falha);
+          // Com o sandbox vivo a falha é a de sempre; com ele caído, o silêncio é consequência dele.
+          void falhaConsiderandoOSandbox(falha).then(fim);
         }, silencioMin * 60_000);
       };
       const mudou = () => {
@@ -557,6 +558,13 @@ export class MotorDasSessoes {
       /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
       let ocupadoAntesDoPrompt = false;
       const ambienteDoPi = r.ambiente ?? this.#ambienteDoServico;
+      /** Com o sandbox do pi caído a falha é de infraestrutura (o docker parou ou o container sumiu); com ele vivo, é `falha`. */
+      const falhaConsiderandoOSandbox = async (
+        falha: FalhaDaExecucao & { motivo: string },
+      ): Promise<FalhaDaExecucao> =>
+        (await ambienteDoPi.sandboxCaiu())
+          ? { tipo: "falha_infraestrutura", causa: "sandbox_caiu", motivo: `o sandbox caiu: ${falha.motivo}` }
+          : falha;
       const pi = this.lancarSemPrenderASessao(sessao, () =>
         this.harness.lancar(ambienteDoPi, r.lancamento, { cwd: r.cwd, log: r.log, variaveisDoServico }, (evento) => {
           if (agenteTerminou) estaViva.naoGravadas = [];
@@ -622,14 +630,16 @@ export class MotorDasSessoes {
       void pi.saiu.then((codigo) => {
         // Sem código, o pi do Ambiente cujos processos morrem com o serviço morreu por sinal: o cgroup do serviço ou um kill
         // externo, que a Fabriquinha trata como reinício. Nos outros o reinício é decidido na subida do serviço.
-        fim(
-          codigo === null && ambienteDoPi.processosMorremComOServico
-            ? { tipo: "servico_reiniciado" }
-            : {
-                tipo: "falha_do_agente",
-                motivo: `o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`,
-              },
-        );
+        if (codigo === null && ambienteDoPi.processosMorremComOServico) {
+          fim({ tipo: "servico_reiniciado" });
+          return;
+        }
+        // Depois do fim (a execução terminou e o pi saiu), não há o que consultar.
+        if (feito) return;
+        void falhaConsiderandoOSandbox({
+          tipo: "falha_do_agente",
+          motivo: `o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`,
+        }).then(fim);
       });
       const estaViva: Viva = {
         execucao: id,

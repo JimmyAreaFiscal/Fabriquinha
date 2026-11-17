@@ -29,6 +29,12 @@ const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
 /** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
 const TAMANHO_DO_SHM = "1g";
 const PASTA_DE_TRABALHO = "/trabalho";
+/**
+ * Onde o container tem o tmpfs que guarda o marcador das regras de rede: o docker esvazia o tmpfs quando o container
+ * para, e as regras (no namespace de rede) se perdem junto, então o marcador ausente diz que o container não as tem.
+ */
+const PASTA_DO_MARCADOR_DAS_REGRAS = "/run/fabriquinha";
+const MARCADOR_DAS_REGRAS_DE_REDE = `${PASTA_DO_MARCADOR_DAS_REGRAS}/regras-de-rede`;
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
 /** A medição do uso, que a tela de Configuração espera: o docker travado só deixa o medido de fora, sem segurar a tela. */
@@ -105,6 +111,12 @@ interface ContainerCriado {
   /** O id do Ambiente, o valor do rótulo `fabriquinha.ambiente`. */
   id: string;
   container_id: string;
+}
+
+/** Um container da Fabriquinha como o `docker ps` o lista. */
+interface ContainerListado extends ContainerCriado {
+  /** `false` para o que parou (ou nunca subiu). */
+  rodando: boolean;
 }
 
 /** O container que `criar` devolve: o slot que nomeou `fabriquinha-slot-<n>` no docker. */
@@ -348,6 +360,8 @@ export class GeradorDeAmbientes {
         TAMANHO_DO_SHM,
         "--workdir",
         PASTA_DE_TRABALHO,
+        "--tmpfs",
+        PASTA_DO_MARCADOR_DAS_REGRAS,
         "--add-host",
         "host.docker.internal:host-gateway",
         ...(montagens ? argumentosDasMontagens(montagens, id) : []),
@@ -400,6 +414,24 @@ export class GeradorDeAmbientes {
       ],
       LIMITE_COMANDO_MS,
     );
+    await rodarDocker(["exec", "-u", "0", containerId, "touch", MARCADOR_DAS_REGRAS_DE_REDE], this.#limiteDoComandoMs);
+  }
+
+  /**
+   * O container está rodando com as regras de rede que a Fabriquinha pôs? O parado e o religado fora dela (que perdeu as
+   * regras) dizem que não; o docker que não responde lança, porque não diz nada do container.
+   */
+  async regrasDeRedeIntactas(container: ContainerCriado): Promise<boolean> {
+    try {
+      await rodarDocker(
+        ["exec", container.container_id, "test", "-e", MARCADOR_DAS_REGRAS_DE_REDE],
+        this.#limiteDoComandoMs,
+      );
+      return true;
+    } catch (erro) {
+      if (/Cannot connect to the Docker daemon|passou do limite/.test(String(erro))) throw erro;
+      return false;
+    }
   }
 
   /** Mata todos os processos do container (menos o primeiro, que o mantém vivo) e esvazia `/tmp` e a pasta de trabalho. */
@@ -430,7 +462,7 @@ export class GeradorDeAmbientes {
   }
 
   /** Só os containers com o rótulo `fabriquinha.ambiente`, parados ou não. */
-  async listarDaFabriquinha(): Promise<ContainerCriado[]> {
+  async listarDaFabriquinha(): Promise<ContainerListado[]> {
     const saida = await rodarDocker(
       [
         "ps",
@@ -439,7 +471,7 @@ export class GeradorDeAmbientes {
         "--filter",
         `label=${ROTULO_DO_AMBIENTE}`,
         "--format",
-        `{{.ID}}\t{{.Label "${ROTULO_DO_AMBIENTE}"}}`,
+        `{{.ID}}\t{{.Label "${ROTULO_DO_AMBIENTE}"}}\t{{.State}}`,
       ],
       this.#limiteDoComandoMs,
     );
@@ -447,8 +479,8 @@ export class GeradorDeAmbientes {
       .split("\n")
       .filter(Boolean)
       .map((linha) => {
-        const [containerId = "", id = ""] = linha.split("\t");
-        return { id, container_id: containerId };
+        const [containerId = "", id = "", estado = ""] = linha.split("\t");
+        return { id, container_id: containerId, rodando: estado === "running" };
       });
   }
 
