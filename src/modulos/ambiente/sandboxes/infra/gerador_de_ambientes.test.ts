@@ -23,6 +23,7 @@ const docker = instalarDockerFalso(join(base, "docker"));
 const raizGit = join(base, "repo");
 mkdirSync(join(raizGit, "web"), { recursive: true });
 writeFileSync(join(raizGit, "web", "package.json"), '{"name":"web"}');
+writeFileSync(join(raizGit, "web", "package-lock.json"), "{}");
 writeFileSync(join(raizGit, "requirements.txt"), "requests==2.32.0\n");
 const limites = { memoria_maxima_mb: 512, cpus: 1.5 };
 const PORTA_DA_API = 4999;
@@ -55,7 +56,7 @@ test("garantirImagem gera outra imagem quando o arquivo de dependências ou o lo
   const antes = await gerador.garantirImagem(doProjeto("web/package.json"));
   writeFileSync(join(raizGit, "web", "package.json"), '{"name":"web","dependencies":{"zod":"^4"}}');
   const comOutroArquivo = await gerador.garantirImagem(doProjeto("web/package.json"));
-  writeFileSync(join(raizGit, "web", "package-lock.json"), "{}");
+  writeFileSync(join(raizGit, "web", "package-lock.json"), '{"lockfileVersion":3}');
   const comLockfile = await gerador.garantirImagem(doProjeto("web/package.json"));
   assert.equal(new Set([antes, comOutroArquivo, comLockfile]).size, 3);
 });
@@ -67,6 +68,12 @@ test("garantirImagem recusa o arquivo que não entende, o repetido e o que não 
     /não suportados/,
   );
   await assert.rejects(gerador.garantirImagem(doProjeto("api/requirements.txt")), /api\/requirements.txt não existe/);
+});
+
+test("garantirImagem recusa o package.json sem package-lock.json ao lado, que o npm ci exige", async () => {
+  mkdirSync(join(raizGit, "sem-lock"), { recursive: true });
+  writeFileSync(join(raizGit, "sem-lock", "package.json"), '{"name":"sem-lock"}');
+  await assert.rejects(gerador.garantirImagem(doProjeto("sem-lock/package.json")), /não tem package-lock.json/);
 });
 
 test("garantirImagem explica a falha do build", async () => {

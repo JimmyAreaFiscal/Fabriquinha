@@ -143,7 +143,7 @@ function dockerfileDasDependencias(nomesDosArquivos: readonly string[]): string 
       : []),
     ...(comNode
       ? [
-          `COPY ${PACKAGE_JSON} ${PACKAGE_LOCK}* ./`,
+          `COPY ${PACKAGE_JSON} ${PACKAGE_LOCK} ./`,
           "RUN npm ci",
           "ENV NODE_PATH=/dependencias/node_modules PATH=/dependencias/node_modules/.bin:$PATH",
         ]
@@ -153,7 +153,7 @@ function dockerfileDasDependencias(nomesDosArquivos: readonly string[]): string 
   ].join("\n");
 }
 
-/** Copia os arquivos de dependências (e o `package-lock.json`, se há) para `contexto` e devolve os nomes. */
+/** Copia os arquivos de dependências (e o `package-lock.json`, que o `npm ci` exige) para `contexto` e devolve os nomes. */
 function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, contexto: string): string[] {
   const nomes = projeto.arquivos_de_dependencias.map((caminho) => basename(caminho));
   const naoEntendido = nomes.find((nome) => nome !== REQUIREMENTS && nome !== PACKAGE_JSON);
@@ -170,8 +170,14 @@ function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, contex
         "confira o caminho na Configuração do projeto",
       );
     copyFileSync(origem, join(contexto, basename(caminho)));
+    if (basename(caminho) !== PACKAGE_JSON) continue;
     const lock = join(dirname(origem), PACKAGE_LOCK);
-    if (basename(caminho) === PACKAGE_JSON && existsSync(lock)) copyFileSync(lock, join(contexto, PACKAGE_LOCK));
+    if (!existsSync(lock))
+      throw new ErroDeRegra(
+        `o ${PACKAGE_JSON} ${caminho} não tem ${PACKAGE_LOCK} ao lado, e o npm ci precisa dele`,
+        `gere o ${PACKAGE_LOCK} com npm install e o versione`,
+      );
+    copyFileSync(lock, join(contexto, PACKAGE_LOCK));
   }
   return nomes;
 }

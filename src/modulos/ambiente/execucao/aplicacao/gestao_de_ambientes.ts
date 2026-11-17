@@ -47,7 +47,7 @@ export interface GestaoDeAmbientes {
   /**
    * O Ambiente em que o ocupante passa a rodar. No `container`, o do conjunto: o que ele já tem, um livre da imagem do
    * projeto ou um novo; na capacidade e sem parado que ceda a vaga, lança `ErroExterno`. No `host_local`, ou para o
-   * projeto sem imagem do Ambiente, o do serviço.
+   * projeto sem arquivo de dependências, o do serviço.
    */
   alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente>;
   /** O Ambiente já alocado ao `ocupante`; sem alocação, sem ocupante ou no `host_local`, o do serviço. */

@@ -345,6 +345,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
   const { c, banco, config } = await cenario(3);
   writeFileSync(join(c.repo, "package.json"), "{}");
+  writeFileSync(join(c.repo, "package-lock.json"), "{}");
   // O gerador lê o arquivo de dependências no repositório do projeto, que neste cenário não existe.
   banco
     .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")

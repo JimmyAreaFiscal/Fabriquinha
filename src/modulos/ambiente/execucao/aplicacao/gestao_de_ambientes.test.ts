@@ -32,6 +32,7 @@ after(() => {
 });
 
 writeFileSync(join(base, "package.json"), "{}");
+writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
 const projetoComDependencias = (arquivo?: string) =>
   Projeto.parse({

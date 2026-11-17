@@ -35,6 +35,7 @@ const SERVICO = {
   dir_do_harness_do_auditor: dirDoPiDoAuditorDoTeste,
 };
 writeFileSync(join(base, "package.json"), "{}");
+writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
 const projetoDoArquivo = (arquivo: string) => ({ nome: "loja", raiz_git: base, arquivos_de_dependencias: [arquivo] });
 const doNode = projetoDoArquivo("package.json");

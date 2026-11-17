@@ -220,6 +220,7 @@ async function cenarioComContainer() {
   });
   const registro = { raiz: c.raiz, log: c.log };
   writeFileSync(join(c.projeto.raiz_git, "package.json"), "{}");
+  writeFileSync(join(c.projeto.raiz_git, "package-lock.json"), "{}");
   const projeto = { ...c.projeto, arquivos_de_dependencias: ["package.json"] };
   return {
     c,
