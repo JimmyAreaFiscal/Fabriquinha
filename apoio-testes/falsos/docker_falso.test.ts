@@ -106,6 +106,38 @@ test("rm tira o container; um que não existe falha", () => {
   assert.match(de_novo.stderr, /No such container/);
 });
 
+const dockerAssincrono = (...args: string[]): Promise<{ codigo: number | null; stderr: string }> => {
+  const processo = spawn("docker", args, { stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  processo.stderr.on("data", (pedaco: Buffer) => (stderr += pedaco.toString()));
+  return once(processo, "close").then(([codigo]) => ({ codigo: codigo as number | null, stderr }));
+};
+
+test("run com --name ao mesmo tempo que outros run, start e rm nunca lê um container pela metade nem um que acabou de sair", async () => {
+  docker("pull", "alpine");
+  const removiveis = Array.from({ length: 10 }, () => falso.semearContainer({}).id);
+  const parados = Array.from({ length: 10 }, () => falso.semearContainer({}).id);
+  const resultados = await Promise.all([
+    ...Array.from({ length: 20 }, (_, indice) =>
+      dockerAssincrono("run", "-d", "--name", `concorrente-${String(indice)}`, "alpine", "tail"),
+    ),
+    ...parados.map((id) => dockerAssincrono("start", id)),
+    ...removiveis.map((id) => dockerAssincrono("rm", "-f", id)),
+  ]);
+  assert.deepEqual(
+    resultados.filter(({ codigo }) => codigo !== 0),
+    [],
+  );
+});
+
+test("ps com --format {{.Names}} e o filtro de nome lista os nomes que contêm o pedaço", () => {
+  falso.semearContainer({ nome: "fabriquinha-slot-41" });
+  falso.semearContainer({ nome: "outro-41" });
+  const nomes = docker("ps", "--all", "--filter", "name=fabriquinha-slot-", "--format", "{{.Names}}").stdout;
+  assert.ok(nomes.split("\n").includes("fabriquinha-slot-41"));
+  assert.ok(!nomes.includes("outro-41"));
+});
+
 test("comando sem suporte sai com 2 e falharComando derruba o comando; tudo vai para o registro", () => {
   assert.equal(docker("volume", "ls").status, 2);
   falso.falharComando("pull", "sem rede");

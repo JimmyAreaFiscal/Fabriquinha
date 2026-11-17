@@ -8,6 +8,9 @@ import { join } from "node:path";
 import "../src/server/system/banco_da_fabriquinha.ts";
 import { ligarGestaoDeAmbientesNosModulos } from "./falsos/ambiente_falso.ts";
 
+// As telas formatam datas no fuso local, e os testes esperam o de São Paulo; sem isto, a máquina em UTC os reprova.
+process.env.TZ ??= "America/Sao_Paulo";
+
 // Nenhum teste lê o `~/.pi/agent` do Auditor: copiado para o container falso, ele mudava no meio da cópia pelo pi de
 // verdade (`tar: file changed as we read it`), levava as credenciais do Auditor e exigia o login dele na máquina. Os
 // testes têm um login vazio; quem precisa de outro aponta o seu.

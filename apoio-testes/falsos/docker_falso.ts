@@ -20,6 +20,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -33,6 +34,8 @@ const PASTA_DOS_PIDS_NO_CONTAINER = "/fabriquinha/pids";
 export interface ContainerFalso {
   id: string;
   imagem: string;
+  /** O `--name` do `run`; dois containers não têm o mesmo nome, como no docker de verdade. */
+  nome?: string;
   rotulos: Record<string, string>;
   memoria: number;
   cpus: number;
@@ -57,6 +60,7 @@ export interface DockerFalso {
   semearContainer: (semente: {
     id?: string;
     imagem?: string;
+    nome?: string;
     rotulos?: Record<string, string>;
     uso?: ContainerFalso["uso"];
   }) => ContainerFalso;
@@ -81,13 +85,24 @@ const pastas = (dir: string) => ({
   registro: join(dir, "registro.jsonl"),
 });
 
+// Vários `docker` falsos rodam ao mesmo tempo: o que lista pula o container que um `rm` tirou entre o readdir e a leitura.
 function lerContainers(dir: string): ContainerFalso[] {
   const pasta = pastas(dir).containers;
-  return readdirSync(pasta).map((arquivo) => JSON.parse(readFileSync(join(pasta, arquivo), "utf8")) as ContainerFalso);
+  return readdirSync(pasta).flatMap((arquivo) => {
+    try {
+      return [JSON.parse(readFileSync(join(pasta, arquivo), "utf8")) as ContainerFalso];
+    } catch (erro) {
+      if ((erro as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw erro;
+    }
+  });
 }
 
+// Grava fora da pasta e renomeia para dentro: quem lê ao mesmo tempo vê o arquivo inteiro ou nenhum, nunca pela metade.
 function gravarContainer(dir: string, container: ContainerFalso): void {
-  writeFileSync(join(pastas(dir).containers, container.id), JSON.stringify(container));
+  const temporario = join(dir, `.gravando-${randomBytes(8).toString("hex")}`);
+  writeFileSync(temporario, JSON.stringify(container));
+  renameSync(temporario, join(pastas(dir).containers, container.id));
 }
 
 /** Instala o docker falso: um `docker` à frente no PATH e o estado em `dir`, que tem de ser uma pasta nova. */
@@ -98,10 +113,11 @@ export function instalarDockerFalso(dir: string): DockerFalso {
   symlinkSync(import.meta.filename, join(dir, "bin", "docker"));
   process.env.PATH = `${join(dir, "bin")}:${process.env.PATH ?? ""}`;
   process.env.FALSO_DOCKER_DIR = dir;
-  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, rotulos, uso }) => {
+  const semearContainer: DockerFalso["semearContainer"] = ({ id, imagem, nome, rotulos, uso }) => {
     const container: ContainerFalso = {
       id: id ?? randomBytes(32).toString("hex"),
       imagem: imagem ?? "alpine",
+      nome,
       rotulos: rotulos ?? {},
       memoria: 0,
       cpus: 0,
@@ -214,6 +230,7 @@ function executarDockerFalso(): void {
     writeFileSync(join(imagens, codificar(args[0] ?? "")), "");
   } else if (comando === "run" || comando === "create") {
     const { opcoes, resto } = tirarOpcoes(args, [
+      "--name",
       "--label",
       "--memory",
       "--cpus",
@@ -226,6 +243,9 @@ function executarDockerFalso(): void {
     ]);
     const [imagem = "", ...programa] = resto;
     if (!temImagem(imagem)) sair(125, `Unable to find image '${imagem}' locally`);
+    const nome = opcoes["--name"]?.[0];
+    if (nome && lerContainers(dir).some((existente) => existente.nome === nome))
+      sair(125, `Conflict. The container name "/${nome}" is already in use`);
     if (opcoes["--rm"]) return; // roda e some, como o que aplica regras no namespace de rede de outro container
     const rotulos = Object.fromEntries(
       (opcoes["--label"] ?? []).map((rotulo) => [rotulo.split("=")[0] ?? "", rotulo.split("=").slice(1).join("=")]),
@@ -234,6 +254,7 @@ function executarDockerFalso(): void {
     const container: ContainerFalso = {
       id: randomBytes(32).toString("hex"),
       imagem,
+      nome,
       rotulos,
       memoria: memoria ? Number(memoria[1]) * 1048576 : 0,
       cpus: Number(opcoes["--cpus"]?.[0] ?? 0),
@@ -242,15 +263,20 @@ function executarDockerFalso(): void {
       montagens: opcoes["-v"] ?? [],
       hospedeiros: opcoes["--add-host"] ?? [],
     };
-    writeFileSync(arquivoDoContainer(container.id), JSON.stringify(container));
+    gravarContainer(dir, container);
     console.log(container.id);
   } else if (comando === "start") {
     const container = achar(args[0] ?? "");
-    writeFileSync(arquivoDoContainer(container.id), JSON.stringify({ ...container, estado: "running" }));
+    gravarContainer(dir, { ...container, estado: "running" });
   } else if (comando === "ps") {
     const { opcoes } = tirarOpcoes(args, ["--filter", "--format"]);
-    const rotulo = (opcoes["--filter"]?.[0] ?? "").replace(/^label=/, "");
-    for (const container of readdirSync(containers).map((id) => achar(id)))
+    const filtro = opcoes["--filter"]?.[0] ?? "";
+    if (filtro.startsWith("name=")) {
+      for (const { nome } of lerContainers(dir)) if (nome?.includes(filtro.slice("name=".length))) console.log(nome);
+      return;
+    }
+    const rotulo = filtro.replace(/^label=/, "");
+    for (const container of lerContainers(dir))
       if (!rotulo || rotulo in container.rotulos) console.log(`${container.id}\t${container.rotulos[rotulo] ?? ""}`);
   } else if (comando === "inspect") {
     const container = achar(args.at(-1) ?? "");
@@ -278,10 +304,7 @@ function executarDockerFalso(): void {
     const container = achar(resto[0] ?? "");
     if (container.estado !== "running") sair(1, `Error response from daemon: container ${container.id} is not running`);
     const programa = resto.slice(1);
-    writeFileSync(
-      arquivoDoContainer(container.id),
-      JSON.stringify({ ...container, comandos: [...container.comandos, programa] }),
-    );
+    gravarContainer(dir, { ...container, comandos: [...container.comandos, programa] });
     const [shell, opcaoC, roteiro = ""] = programa;
     if (shell === "cat" && opcaoC === "/etc/hosts")
       for (const hospedeiro of container.hospedeiros) console.log(`172.17.0.1\t${hospedeiro.split(":")[0] ?? ""}`);

@@ -83,6 +83,8 @@ export class ConjuntoDeSandboxes {
   readonly #servico: ServicoDoConjunto;
   /** Os containers que um `alocar` está criando e que o banco ainda não tem: ocupam vaga desde a decisão de criar. */
   #criacoesEmAndamento = 0;
+  /** Os slots desses containers: o banco ainda não os tem, mas já não estão livres para outro `alocar`. */
+  readonly #slotsEmCriacao = new Set<number>();
 
   constructor(
     banco: DatabaseSync,
@@ -144,11 +146,16 @@ export class ConjuntoDeSandboxes {
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
+    let slot: number | undefined;
     try {
       if (paradoQueCedeAVaga) await this.#eliminarContainerReservado(paradoQueCedeAVaga);
-      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias);
+      // Lido depois do `rm` do parado, para o slot dele voltar a servir; do `await` à reserva não há outro.
+      const slotsTomadosNoDocker = await this.#gerador.listarSlotsTomadosNoDocker();
+      slot = this.#reservarMenorSlotLivre(slotsTomadosNoDocker);
+      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, slot, montagens, copias);
     } finally {
       this.#criacoesEmAndamento--;
+      if (slot !== undefined) this.#slotsEmCriacao.delete(slot);
     }
   }
 
@@ -173,6 +180,23 @@ export class ConjuntoDeSandboxes {
     }
     this.#criacoesEmAndamento++;
     return paradoQueCedeAVaga;
+  }
+
+  /**
+   * Reserva, sem `await`, o menor número >= 1 que nenhum container vivo do banco, em criação ou com o nome tomado no
+   * docker usa: o do eliminado volta a servir quando o `rm` o tira do docker. Contar o docker cobre o reservado para
+   * eliminar cujo `rm` não acabou ou falhou e o container de outra instância no mesmo daemon, que nunca é removido.
+   */
+  #reservarMenorSlotLivre(slotsTomadosNoDocker: ReadonlySet<number>): number {
+    const emUso = new Set<number | null>([
+      ...listarAmbientes(this.#banco).map(({ slot }) => slot),
+      ...this.#slotsEmCriacao,
+      ...slotsTomadosNoDocker,
+    ]);
+    let slot = 1;
+    while (emUso.has(slot)) slot++;
+    this.#slotsEmCriacao.add(slot);
+    return slot;
   }
 
   /** Limpa o container `id` alocado e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. O que não está alocado fica como está. */
@@ -226,8 +250,10 @@ export class ConjuntoDeSandboxes {
   }
 
   /**
-   * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado; linha
-   * do banco cujo container sumiu vira `eliminado`. O que não tem o rótulo nem aparece, porque a listagem só traz os da
+   * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado, o que
+   * libera o nome `fabriquinha-slot-<n>` que uma subida anterior deixou; linha do banco cujo container sumiu vira
+   * `eliminado`, e a sem slot (de antes do slot existir) é eliminada com o container, depois de recolher ao Espaço o que
+   * ele deixou nas pastas do container. O que não tem o rótulo nem aparece, porque a listagem só traz os da
    * Fabriquinha. Todo container ainda `alocado` era de um ocupante da instância anterior, cujo processo morreu com o
    * reinício: é limpo e volta `livre` (`sujo` se a limpeza falhar).
    * ponytail: um `alocar` que chegue durante esta espera pode ter o container recém-alocado limpo; a subida é curta e o
@@ -240,12 +266,16 @@ export class ConjuntoDeSandboxes {
     const containersDoDocker = new Set(noDocker.map(({ container_id }) => container_id));
     for (const orfao of noDocker.filter(({ container_id }) => !containersDoBanco.has(container_id)))
       await this.#gerador.eliminar(orfao);
-    for (const sumido of noBanco.filter(({ container_id }) => !containersDoDocker.has(container_id)))
-      eliminarAmbiente(this.#banco, sumido.id);
-    for (const alocado of noBanco.filter(
-      ({ estado, container_id }) => estado === "alocado" && containersDoDocker.has(container_id),
-    ))
-      await this.#limparEDevolver(alocado);
+    for (const ambiente of noBanco) {
+      if (!containersDoDocker.has(ambiente.container_id)) eliminarAmbiente(this.#banco, ambiente.id);
+      else if (ambiente.slot === null) {
+        // Como no `limpar`: o que o Espaço pôs nas pastas do container vai para ele antes de o container sair.
+        if (ambiente.estado === "alocado")
+          recolherParaOEspaco(this.#servico.raiz, ambiente.id, String(ambiente.alocado_para));
+        await this.#gerador.eliminar(ambiente);
+        eliminarAmbiente(this.#banco, ambiente.id);
+      } else if (ambiente.estado === "alocado") await this.#limparEDevolver(ambiente);
+    }
   }
 
   /** O que o conjunto sabe do serviço: a raiz, a porta da API e o harness que o `AmbienteContainer` usa. */
@@ -257,10 +287,11 @@ export class ConjuntoDeSandboxes {
     imagem: string,
     alocadoPara: string,
     portaDaApi: number,
+    slot: number,
     montagens: Montagens,
     copias: Copias,
   ): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, montagens, copias);
+    const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, slot, montagens, copias);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,
