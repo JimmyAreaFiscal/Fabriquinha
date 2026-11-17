@@ -72,6 +72,8 @@ test("criar sobe o container com rótulo, memória e CPUs, e o ambiente volta co
     [container?.rotulos, container?.memoria, container?.cpus, container?.imagem, container?.estado],
     [{ "fabriquinha.ambiente": criado.id }, 512 * 1048576, 1.5, "node:22-alpine", "running"],
   );
+  const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
+  assert.equal(run[run.indexOf("--shm-size") + 1], "1g");
 });
 
 test("criar liga o container ao host pelo host-gateway, mesmo sem montagens, e trava no namespace dele tudo que não é a porta da API", async () => {
