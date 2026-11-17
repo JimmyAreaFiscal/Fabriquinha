@@ -5,8 +5,8 @@ import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_d
 /** Um container do conjunto e quem o ocupa; sem ocupante (livre ou sujo, ou que o Ciclo de Vida não reconhece), os campos dele são `null`. */
 const ContainerDoAmbiente = z.strictObject({
   id: z.string(),
-  /** O nome no docker; `null` quando o docker não respondeu à medição. */
-  nome_do_container: z.string().nullable(),
+  /** O número que nomeia o container (`fabriquinha-slot-<n>`); `null` no que nasceu antes de o slot existir. */
+  slot: z.number().nullable(),
   imagem: z.string(),
   estado: z.enum(["livre", "alocado", "sujo", "eliminado"]),
   /** O uso de CPU (em núcleos) e de memória medido agora; `null` quando o docker não respondeu. */
@@ -15,7 +15,10 @@ const ContainerDoAmbiente = z.strictObject({
   demanda: z.string().nullable(),
   /** O ticket (ou os tickets) em execução no Espaço que ocupa o container; `null` entre um ticket e outro. */
   ticket: z.string().nullable(),
+  /** A worktree relativa à pasta de worktrees do serviço (`loja/I-1/rodadas/1`), a que a tela mostra. */
   worktree: z.string().nullable(),
+  /** O caminho absoluto da mesma worktree, para quem precisa abri-la. */
+  caminho_completo_da_worktree: z.string().nullable(),
   branch: z.string().nullable(),
 });
 

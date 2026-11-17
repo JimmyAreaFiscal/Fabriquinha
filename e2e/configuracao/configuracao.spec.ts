@@ -369,14 +369,7 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
     await expect(celulas.nth(7)).toHaveText(memoria);
   }
   expect(dockerFalso.registro().filter(([comando]) => comando === "stats")).toEqual([
-    [
-      "stats",
-      "--no-stream",
-      "--format",
-      "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.Name}}",
-      ocupado.id,
-      ocioso.id,
-    ],
+    ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}", ocupado.id, ocioso.id],
   ]);
   for (const largura of [1440, 375]) {
     await pagina.setViewportSize({ width: largura, height: 900 });

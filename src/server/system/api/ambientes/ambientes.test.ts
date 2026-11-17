@@ -31,7 +31,10 @@ after(() => {
 });
 
 /** O Ambiente em `container` e a demanda I-1 do projeto `loja`, com o T3 em execução na rodada R1. */
-async function cenario(tipo: "container" | "host_local" = "container", outrosTickets: object[] = []) {
+async function montarCenarioDaDemandaEmExecucao(
+  tipo: "container" | "host_local" = "container",
+  outrosTickets: object[] = [],
+) {
   const { banco, raiz } = abrirBancoTemporario();
   salvarConfiguracaoDoAmbiente(banco, ConfiguracaoDoAmbiente.parse({ tipo }));
   cadastrarProjetoLoja(banco);
@@ -65,43 +68,43 @@ async function cenario(tipo: "container" | "host_local" = "container", outrosTic
       resposta: undefined as unknown as ServerResponse,
     });
   };
-  const consultar = (demandas = montarDemandasDoBanco(banco)) =>
+  const consultarAmbientesDoCenario = (demandas = montarDemandasDoBanco(banco)) =>
     consultarAmbientesEmUso(banco, montarCicloDeVidaDoBanco(banco), ambientes, demandas);
-  const semear = (id: string, alocadoPara: string, uso?: { cpu: string; memoria: string }) => {
+  const semearContainerAlocado = (id: string, alocadoPara: string, uso?: { cpu: string; memoria: string }) => {
     const container = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": id }, ...(uso && { uso }) });
     inserirAmbienteAlocado(banco, {
       id,
       container_id: container.id,
       imagem: "alpine",
+      slot: Number(id.slice(-1)),
       alocado_para: alocadoPara,
       criado_em: `2026-11-09T10:00:0${id.slice(-1)}.000Z`,
     });
     return container;
   };
-  return { banco, raiz, docker, consultar, chamarRota, semear };
+  return { banco, raiz, docker, consultarAmbientesDoCenario, chamarRota, semearContainerAlocado };
 }
 
-const nomeNoDocker = (container: { id: string }) => `falso_${container.id.slice(0, 12)}`;
-
 test("CA-1: o container ocupado traz nome, imagem, estado, uso e o projeto, a demanda, o ticket, a worktree e a branch", async () => {
-  const { raiz, consultar, semear } = await cenario();
-  const ocupado = semear("a-1", "I-1.R1", { cpu: "37.50%", memoria: "300MiB / 2GiB" });
+  const { raiz, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1.R1", { cpu: "37.50%", memoria: "300MiB / 2GiB" });
 
-  const resposta = await consultar();
+  const resposta = await consultarAmbientesDoCenario();
 
   assert.deepEqual(resposta, {
     tipo: "container",
     containers: [
       {
         id: "a-1",
-        nome_do_container: nomeNoDocker(ocupado),
+        slot: 1,
         imagem: "alpine",
         estado: "alocado",
         medido: { cpus: 0.375, memoria_mb: 300 },
         projeto: "loja",
         demanda: "I-1",
         ticket: "I-1.T3",
-        worktree: join(raiz, "worktrees", "loja", "I-1", "rodadas", "1"),
+        worktree: join("loja", "I-1", "rodadas", "1"),
+        caminho_completo_da_worktree: join(raiz, "worktrees", "loja", "I-1", "rodadas", "1"),
         branch: "fabriquinha/I-1-1",
       },
     ],
@@ -110,39 +113,43 @@ test("CA-1: o container ocupado traz nome, imagem, estado, uso e o projeto, a de
 });
 
 test("o container do Espaço da demanda traz a worktree e a branch da demanda, e sem ticket em execução nela o ticket vem vazio", async () => {
-  const { raiz, consultar, semear } = await cenario();
-  semear("a-1", "I-1");
+  const { raiz, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1");
 
-  const [container] = (await consultar()).containers;
+  const [container] = (await consultarAmbientesDoCenario()).containers;
 
-  assert.deepEqual(container && [container.demanda, container.ticket, container.worktree, container.branch], [
-    "I-1",
-    null,
-    join(raiz, "worktrees", "loja", "I-1", "demanda"),
-    "fabriquinha/I-1",
-  ]);
+  assert.deepEqual(
+    container && [
+      container.demanda,
+      container.ticket,
+      container.worktree,
+      container.caminho_completo_da_worktree,
+      container.branch,
+    ],
+    ["I-1", null, join("loja", "I-1", "demanda"), join(raiz, "worktrees", "loja", "I-1", "demanda"), "fabriquinha/I-1"],
+  );
 });
 
 test("os tickets em execução no mesmo Espaço saem juntos", async () => {
-  const { consultar, semear } = await cenario("container", [
+  const { consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao("container", [
     montarTicket("I-1", 4, "revisar_rodada", { rodada_id: 1, estado: "em_execucao" }),
   ]);
-  semear("a-1", "I-1.R1");
+  semearContainerAlocado("a-1", "I-1.R1");
 
-  const [container] = (await consultar()).containers;
+  const [container] = (await consultarAmbientesDoCenario()).containers;
 
   assert.equal(container?.ticket, "I-1.T3, I-1.T4");
 });
 
 test("CA-3: o container livre traz nome, imagem, estado e uso, com projeto, demanda, ticket, worktree e branch vazios", async () => {
-  const { banco, consultar, semear } = await cenario();
-  const livre = semear("a-1", "I-1.R1");
+  const { banco, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1.R1");
   liberarAmbiente(banco, "a-1", "livre", "2026-11-09T11:00:00.000Z");
 
-  assert.deepEqual((await consultar()).containers, [
+  assert.deepEqual((await consultarAmbientesDoCenario()).containers, [
     {
       id: "a-1",
-      nome_do_container: nomeNoDocker(livre),
+      slot: 1,
       imagem: "alpine",
       estado: "livre",
       medido: { cpus: 0, memoria_mb: 0 },
@@ -150,48 +157,53 @@ test("CA-3: o container livre traz nome, imagem, estado e uso, com projeto, dema
       demanda: null,
       ticket: null,
       worktree: null,
+      caminho_completo_da_worktree: null,
       branch: null,
     },
   ]);
 });
 
 test("o ocupante que o Ciclo de Vida não reconhece (endereço fora do formato ou demanda que não existe) fica sem projeto, demanda, ticket, worktree e branch", async () => {
-  const { consultar, semear } = await cenario();
-  semear("a-1", "ocupante-estranho");
-  semear("a-2", "I-99");
+  const { consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "ocupante-estranho");
+  semearContainerAlocado("a-2", "I-99");
 
-  const { containers } = await consultar();
+  const { containers } = await consultarAmbientesDoCenario();
 
   assert.equal(containers.length, 2);
   for (const container of containers) {
     assert.equal(container.estado, "alocado");
     assert.deepEqual(
-      [container.projeto, container.demanda, container.ticket, container.worktree, container.branch],
-      [null, null, null, null, null],
+      [
+        container.projeto,
+        container.demanda,
+        container.ticket,
+        container.worktree,
+        container.caminho_completo_da_worktree,
+        container.branch,
+      ],
+      [null, null, null, null, null, null],
     );
   }
 });
 
-test("o docker que não responde deixa o nome e o uso vazios, e o resto da linha segue", async () => {
-  const { docker, consultar, semear } = await cenario();
-  semear("a-1", "I-1.R1");
+test("o docker que não responde deixa só o uso vazio: o slot e o resto da linha seguem", async () => {
+  const { docker, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1.R1");
   docker.falharComando("stats", "Cannot connect to the Docker daemon");
 
-  const [container] = (await consultar()).containers;
+  const [container] = (await consultarAmbientesDoCenario()).containers;
 
-  assert.deepEqual(container && [container.nome_do_container, container.medido, container.demanda], [
-    null,
-    null,
-    "I-1",
-  ]);
+  assert.deepEqual(container && [container.slot, container.medido, container.demanda], [1, null, "I-1"]);
 });
 
 test("CA-4: no host_local a consulta diz o tipo, sem containers e sem chamar o docker", async () => {
-  const { docker, consultar, semear } = await cenario("host_local");
-  semear("a-1", "I-1.R1");
+  const { docker, consultarAmbientesDoCenario, semearContainerAlocado } =
+    await montarCenarioDaDemandaEmExecucao("host_local");
+  semearContainerAlocado("a-1", "I-1.R1");
   const chamadasAntes = docker.registro().length;
 
-  const resposta = await consultar();
+  const resposta = await consultarAmbientesDoCenario();
 
   assert.deepEqual(resposta, { tipo: "host_local", containers: [] });
   assert.equal(docker.registro().length, chamadasAntes);
@@ -199,16 +211,16 @@ test("CA-4: no host_local a consulta diz o tipo, sem containers e sem chamar o d
 });
 
 test("GET /api/ambientes está na tabela de rotas e devolve a consulta", async () => {
-  const { chamarRota, consultar, semear } = await cenario();
-  semear("a-1", "I-1.R1");
+  const { chamarRota, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1.R1");
 
-  assert.deepEqual(await chamarRota(), await consultar());
+  assert.deepEqual(await chamarRota(), await consultarAmbientesDoCenario());
 });
 
 test("a falha que não é de regra, como a do banco, não vira ocupante vazio", async () => {
-  const { banco, consultar, semear } = await cenario();
-  semear("a-1", "I-1.R1");
+  const { banco, consultarAmbientesDoCenario, semearContainerAlocado } = await montarCenarioDaDemandaEmExecucao();
+  semearContainerAlocado("a-1", "I-1.R1");
   const demandasQueFalham = { ...montarDemandasDoBanco(banco), projeto: () => assert.fail("banco indisponível") };
 
-  await assert.rejects(consultar(demandasQueFalham), /banco indisponível/);
+  await assert.rejects(consultarAmbientesDoCenario(demandasQueFalham), /banco indisponível/);
 });

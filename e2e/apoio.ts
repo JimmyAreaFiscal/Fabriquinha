@@ -116,11 +116,10 @@ export const test = base.extend<{
         log += parte.toString();
       });
       atuais.push({ servico, stderr: () => log });
-      // O `web.url` nasce inteiro (escrito ao lado e renomeado): existir basta. A subida leva ~1 s; os 30 s cobrem a
-      // máquina carregada, com vários serviços subindo ao mesmo tempo.
+      // O `web.url` nasce inteiro (escrito ao lado e renomeado): existir basta.
       const arquivo = join(raiz, "web.url");
       for (let i = 0; !existsSync(arquivo); i++) {
-        if (servico.exitCode !== null || i > 600) throw new Error(`a Fabriquinha não subiu:\n${log}`);
+        if (servico.exitCode !== null || i > 200) throw new Error(`a Fabriquinha não subiu:\n${log}`);
         await dormir(50);
       }
       return { servico, link: readFileSync(arquivo, "utf8"), stderr: () => log };

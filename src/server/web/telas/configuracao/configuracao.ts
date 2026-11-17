@@ -215,6 +215,9 @@ export function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"]
   return `<td class="num">${cpus}</td><td class="num">${memoria}</td>`;
 }
 
+/** O nome que o operador vê do container do slot `n` (no docker, `fabriquinha-slot-<n>`); sem slot, um traço. */
+export const nomeDoSlot = (slot: number | null): string => (slot === null ? "—" : `Fabriquinha - Slot ${String(slot)}`);
+
 // shortcut: o alocado mostra a criação do container, porque a tabela não guarda quando foi alocado; gravar o instante da alocação se isso confundir.
 function linhaDoAmbiente({
   id,
@@ -228,7 +231,7 @@ function linhaDoAmbiente({
 }: EstadoDoAmbiente["conjunto"][number]): string {
   const desde = instanteLegivel(estado === "alocado" ? criado_em : (liberado_em ?? criado_em));
   const podeEliminar = estado === "livre" || estado === "sujo";
-  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td>${slot === null ? "—" : `Fabriquinha - Slot ${String(slot)}`}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
+  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td>${nomeDoSlot(slot)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
 }
 
 /**

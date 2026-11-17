@@ -1,5 +1,6 @@
 // A consulta da tela Ambientes (F7 §4.2): o Ambiente não conhece demandas, então aqui o ocupante opaco do container
 // (`I-n` ou `I-n.Rm`) é traduzido, pelo Ciclo de Vida e pelo Repositório, em projeto, demanda, ticket, worktree e branch.
+import { join, relative } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { type CicloDeVida, Endereco } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import type { GestaoDeDemandas } from "../../../../modulos/demandas/publico.ts";
@@ -11,10 +12,17 @@ import type { AmbientesDoServico } from "../rotas.ts";
 
 type OcupanteDoContainer = Pick<
   AmbientesEmUso["containers"][number],
-  "projeto" | "demanda" | "ticket" | "worktree" | "branch"
+  "projeto" | "demanda" | "ticket" | "worktree" | "caminho_completo_da_worktree" | "branch"
 >;
 
-const SEM_OCUPANTE: OcupanteDoContainer = { projeto: null, demanda: null, ticket: null, worktree: null, branch: null };
+const SEM_OCUPANTE: OcupanteDoContainer = {
+  projeto: null,
+  demanda: null,
+  ticket: null,
+  worktree: null,
+  caminho_completo_da_worktree: null,
+  branch: null,
+};
 
 /** O ocupante do container em projeto, demanda, ticket, worktree e branch; o que o Ciclo de Vida não reconhece fica sem ocupante. */
 function traduzirOcupanteEmDemanda(
@@ -39,7 +47,8 @@ function traduzirOcupanteEmDemanda(
       projeto: resumo.demanda.projeto,
       demanda: demanda_id,
       ticket: ticketsEmExecucao.length > 0 ? ticketsEmExecucao.join(", ") : null,
-      worktree: espaco.pasta,
+      worktree: relative(join(raiz, "worktrees"), espaco.pasta),
+      caminho_completo_da_worktree: espaco.pasta,
       branch: espaco.branch,
     };
   } catch (erro) {
@@ -60,9 +69,9 @@ export async function consultarAmbientesEmUso(
   const conjunto = await ambientes.gestao.listar();
   return {
     tipo,
-    containers: conjunto.map(({ id, nome_do_container, imagem, estado, alocado_para, medido }) => ({
+    containers: conjunto.map(({ id, slot, imagem, estado, alocado_para, medido }) => ({
       id,
-      nome_do_container: nome_do_container ?? null,
+      slot,
       imagem,
       estado,
       medido: medido ?? null,

@@ -84,18 +84,12 @@ export interface Recursos {
   memoria_mb: number;
 }
 
-/** O que o `docker stats` mede de um container: o nome dele no docker e o uso. */
-export interface MedicaoDoContainer {
-  nome: string;
-  uso: Recursos;
-}
-
 /** Quantos MB tem cada unidade em que o `docker stats` escreve a memória usada. */
 const MB_POR_UNIDADE_DO_DOCKER = { B: 1 / 1048576, KiB: 1 / 1024, MiB: 1, GiB: 1024, TiB: 1048576 } as const;
 
-/** Uma linha do `docker stats` (`<id>\t52.50%\t256MiB / 2GiB\t<nome>`): o id do container, o uso e o nome dele. */
-function medicaoDaLinhaDoStats(linha: string): [string, MedicaoDoContainer] {
-  const [containerId = "", cpu = "", memoria = "", nome = ""] = linha.split("\t");
+/** Uma linha do `docker stats` (`<id>\t52.50%\t256MiB / 2GiB`): o id do container e o uso dele. */
+function usoDaLinhaDoStats(linha: string): [string, Recursos] {
+  const [containerId = "", cpu = "", memoria = ""] = linha.split("\t");
   const percentual = /^(\d+(?:\.\d+)?)%$/.exec(cpu);
   const usada = /^(\d+(?:\.\d+)?)(B|KiB|MiB|GiB|TiB) \//.exec(memoria);
   if (!percentual || !usada)
@@ -103,10 +97,7 @@ function medicaoDaLinhaDoStats(linha: string): [string, MedicaoDoContainer] {
   const unidade = usada[2] as keyof typeof MB_POR_UNIDADE_DO_DOCKER;
   return [
     containerId,
-    {
-      nome,
-      uso: { cpus: Number(percentual[1]) / 100, memoria_mb: Number(usada[1]) * MB_POR_UNIDADE_DO_DOCKER[unidade] },
-    },
+    { cpus: Number(percentual[1]) / 100, memoria_mb: Number(usada[1]) * MB_POR_UNIDADE_DO_DOCKER[unidade] },
   ];
 }
 
@@ -428,14 +419,14 @@ export class GeradorDeAmbientes {
     }
   }
 
-  /** O nome e o uso de CPU e de memória de cada container, medidos agora pelo docker numa chamada só; sem container, nem chama. */
-  async medirUso(containerIds: readonly string[]): Promise<Map<string, MedicaoDoContainer>> {
+  /** O uso de CPU e de memória de cada container, medido agora pelo docker numa chamada só; sem container, nem chama. */
+  async medirUso(containerIds: readonly string[]): Promise<Map<string, Recursos>> {
     if (containerIds.length === 0) return new Map();
     const saida = await rodarDocker(
-      ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.Name}}", ...containerIds],
+      ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}", ...containerIds],
       Math.min(this.#limiteDoComandoMs, LIMITE_DA_MEDICAO_MS),
     );
-    return new Map(saida.split("\n").filter(Boolean).map(medicaoDaLinhaDoStats));
+    return new Map(saida.split("\n").filter(Boolean).map(usoDaLinhaDoStats));
   }
 
   /** Só os containers com o rótulo `fabriquinha.ambiente`, parados ou não. */
