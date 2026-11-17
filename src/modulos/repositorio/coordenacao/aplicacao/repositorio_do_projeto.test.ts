@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { Ambiente, GestaoDeAmbientes } from "../../../ambiente/publico.ts";
@@ -80,4 +81,32 @@ test("devolverAmbiente limpa só o Ambiente do dono do Espaço e deixa a worktre
   };
   await repositorio.devolverAmbiente(projeto, espacoDaDemanda(projeto, "I-1", "/nao-existe"), "/nao-existe/log");
   assert.deepEqual(limpos, ["sandbox-1"]);
+});
+
+test("o git do Espaço que ainda tem o Ambiente alocado roda nele, sem alocar outro nem devolver o dele", async () => {
+  const pedidosAGestao: string[] = [];
+  const ambienteAlocado = new AmbienteHostLocal();
+  const gestao: GestaoDeAmbientes = {
+    ...gestaoQueSoUsa(ambienteAlocado),
+    ambienteDo: (ocupante) => (ocupante === "I-1" ? ambienteAlocado : ({ id: "do-servico" } as Ambiente)),
+    alocar: () => {
+      pedidosAGestao.push("alocar");
+      return Promise.resolve(ambienteAlocado);
+    },
+    limpar: (id) => {
+      pedidosAGestao.push(`limpar ${id}`);
+      return Promise.resolve();
+    },
+  };
+  const repositorio = montarRepositorio({ banco: new DatabaseSync(":memory:"), ambientes: gestao });
+  const projeto = {
+    nome: "loja",
+    raiz_git: "/nao-existe",
+    branch_base: "main",
+    hospedagem: "github" as const,
+    verificacoes: { preparacao: [] },
+  };
+  const espaco = { ...espacoDaDemanda(projeto, "I-1", "/nao-existe"), pasta: tmpdir() };
+  assert.match(await repositorio.gitNoEspaco(projeto, espaco, "--version"), /^git version/);
+  assert.deepEqual(pedidosAGestao, []);
 });

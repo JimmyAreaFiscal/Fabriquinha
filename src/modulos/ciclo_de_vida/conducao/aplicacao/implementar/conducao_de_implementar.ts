@@ -129,6 +129,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
     const espaco = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
     const ambiente = ambientes.ambienteDo(ocupanteDoDono(espaco.dono));
     const commitComMarca = await repositorio.gitNoEspaco(
+      projeto,
       espaco,
       "log",
       "--fixed-strings",
@@ -167,7 +168,7 @@ export class ConducaoDeImplementar extends ConducaoAgentica {
       projeto,
       e2e,
       worktree,
-      lerGitDoEspaco: (...argumentos) => repositorio.gitNoEspaco(espaco, ...argumentos),
+      lerGitDoEspaco: (...argumentos) => repositorio.gitNoEspaco(projeto, espaco, ...argumentos),
       opcoes: this.opcoes.opcoesSonar,
     });
     if (this.deps.emParada()) return falhaPorServicoReiniciado;
