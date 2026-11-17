@@ -75,6 +75,8 @@ test("criar sobe o container com nome do slot, rótulo, memória e CPUs, e o amb
     [container?.nome, container?.rotulos, container?.memoria, container?.cpus, container?.imagem, container?.estado],
     ["fabriquinha-slot-7", { "fabriquinha.ambiente": criado.id }, 512 * 1048576, 1.5, "node:22-alpine", "running"],
   );
+  const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
+  assert.equal(run[run.indexOf("--shm-size") + 1], "1g");
 });
 
 test("criar com o nome do slot já tomado no docker falha por nome repetido", async () => {

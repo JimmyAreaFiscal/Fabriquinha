@@ -124,8 +124,14 @@ export class CicloDoEspacoDaRodada extends CicloDoEspaco {
     const { pasta: demanda, branch } = espacoDaDemanda(this.projeto, demanda_id, raiz);
     await naFilaDoProjeto(raiz, this.projeto.nome, async () => {
       // No clone, e não na worktree: o Ambiente do Espaço controla o `.git` da worktree, e o fetch roda com as credenciais do core.
-      await exigirGit(this.projeto.raiz_git, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-      await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
+      const refRemota = `refs/remotes/origin/${branch}`;
+      await exigirGit(this.projeto.raiz_git, "fetch", "origin", `+refs/heads/${branch}:${refRemota}`);
+      // O SHA lido no host, e não o nome da ref: o container do Docker Desktop vê o `.git` pelo virtiofs, que guarda o
+      // arquivo da ref que o fetch acabou de trocar, e o merge pela ref daria "Already up to date" na ponta antiga.
+      const mergeDoPR = (
+        await exigirGit(this.projeto.raiz_git, "rev-parse", "--verify", `${refRemota}^{commit}`)
+      ).trim();
+      await exigirGitNoAmbiente(this.ambiente, demanda, "merge", "--ff-only", mergeDoPR);
     });
   }
 }

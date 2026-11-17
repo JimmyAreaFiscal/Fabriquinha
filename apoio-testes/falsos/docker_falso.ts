@@ -222,6 +222,7 @@ function executarDockerFalso(): void {
       "--label",
       "--memory",
       "--cpus",
+      "--shm-size",
       "--workdir",
       "-v",
       "--add-host",
