@@ -48,6 +48,9 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness/);
   await pagina.getByLabel("Nome", { exact: true }).fill("Loja X");
   await pagina.getByLabel("Caminho do repositório").fill(repo);
+  await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("");
+  await expect(formulario).not.toContainText(/[Ii]magem/);
+  await pagina.getByLabel("Arquivos de dependências").fill("requirements.txt\npackage.json\n");
   await pagina.getByRole("button", { name: "+ comando" }).click();
   await pagina.getByLabel("Preparação da worktree: comando 1").fill("npm ci");
   // O projeto novo já escolhe o modelo e o effort de uma etapa; as outras ficam no padrão do pi.
@@ -63,6 +66,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   );
   await expect(pagina.locator(".rodape-form")).toContainText("1 campo com erro");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
+  await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("requirements.txt\npackage.json");
   await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
 
   await nome.fill("loja");
@@ -73,6 +77,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(menu.getByRole("link", { name: "loja" })).toContainText("GitHub");
   await expect(pagina.getByLabel("Nome", { exact: true })).toHaveAttribute("readonly", "");
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
+  await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("requirements.txt\npackage.json");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
   await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
   await expect(pagina.getByLabel("Effort de Planejar")).toHaveValue("high");
@@ -86,7 +91,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     hospedagem: "github",
     chave_sonarqube: "loja",
     link_produto: null,
-    arquivos_de_dependencias: null,
+    arquivos_de_dependencias: JSON.stringify(["requirements.txt", "package.json"]),
   });
   // A preparação vai para a tabela que o fluxo da demanda lê ao criar a worktree.
   expect({ ...banco.prepare("SELECT * FROM comando_preparacao_projeto").get() }).toEqual({
