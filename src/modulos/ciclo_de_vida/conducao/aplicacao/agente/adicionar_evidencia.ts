@@ -107,12 +107,8 @@ export async function adicionarEvidenciaComAnexosEnviados(
   if (pedido.dados === undefined) throw new ErroDeRegra("falta --dados", "passe --dados <arquivo.json|->");
   const dados = await lerJson(pedido.dados);
   let anexos = pedido.anexos.map((anexo) => anexo.caminho);
-  const espaco = espacoDoTicket(
-    agregadoLido,
-    ticket,
-    projetosCadastrados().projetoExistente(banco, agente.projeto),
-    realpathSync(raizDo(banco)),
-  );
+  const projeto = projetosCadastrados().projetoExistente(banco, agente.projeto);
+  const espaco = espacoDoTicket(agregadoLido, ticket, projeto, realpathSync(raizDo(banco)));
   const origens = origensDosAnexos(banco, agente, espaco);
   if (tipo === "aula_codigo") {
     if (anexos.length > 0) {
@@ -121,7 +117,7 @@ export async function adicionarEvidenciaComAnexosEnviados(
     // O HTML nasce dos trechos, antes de a submissão ser avaliada; a API devolve o ZodError como 422.
     const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
     const html = await gerarAula(
-      (...argumentos) => repositorio.gitNoEspaco(espaco, ...argumentos),
+      (...argumentos) => repositorio.gitNoEspaco(projeto, espaco, ...argumentos),
       agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
       trechos as Trecho[],
     );

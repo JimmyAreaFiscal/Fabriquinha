@@ -25,7 +25,7 @@ export function commitarTicketDemanda(
     titulo,
     etapa,
   }: {
-    projeto: Pick<ProjetoConduzido, "nome" | "raiz_git">;
+    projeto: Pick<ProjetoConduzido, "nome" | "raiz_git" | "imagem_do_ambiente">;
     espaco: EspacoDeTrabalho;
     tipo: "feat" | "fix";
     titulo: string;

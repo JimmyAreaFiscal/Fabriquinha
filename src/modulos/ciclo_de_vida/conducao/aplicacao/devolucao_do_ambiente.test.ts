@@ -42,7 +42,7 @@ async function cenarioComConjunto(
   const cenario = cenarioDePlanejamento(opcoes);
   const { c, banco } = cenario;
   banco.prepare("UPDATE projeto SET imagem_do_ambiente = 'alpine' WHERE nome = 'loja'").run();
-  instalarDockerFalso(join(c.raiz, "docker"));
+  const docker = instalarDockerFalso(join(c.raiz, "docker"));
   const configuracao = ConfiguracaoDoAmbiente.parse({
     tipo: "container",
     conjunto: "fixo",
@@ -60,7 +60,7 @@ async function cenarioComConjunto(
     dir_do_harness_do_auditor: piDoAuditor,
   };
   await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
-  return cenario;
+  return { ...cenario, docker };
 }
 
 const noGateDoPlano = { estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true } as const;
@@ -79,7 +79,7 @@ test("CA-2: aprovar o plano com o conjunto de 1 sandbox prepara a demanda e a ro
   const { banco, c } = await cenarioComConjunto(t, 1, noGateDoPlano);
   await aprovarGateDoPlanejamento(banco);
   const dir = join(c.raiz, "worktrees", "loja", "I-1");
-  for (const w of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
+  for (const worktree of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, worktree, "preparado")), worktree);
   assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "livre", alocado_para: null }]);
   assert.equal(carregarDemanda(banco, "I-1").demanda.estado, "em_execucao");
 });
@@ -107,6 +107,34 @@ test("o ticket que termina sem gate nem falha mantém o Ambiente do Espaço", as
   await prepararEspacoDoTicket(banco, {});
   await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), { demanda_id: "I-1", ticket_id: 1 });
   assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "alocado", alocado_para: "I-1" }]);
+});
+
+test("o ticket da demanda que termina com ela em em_execucao (a revisão reprovou e abriu rodadas corretivas) devolve o Ambiente do Espaço da demanda", async (t) => {
+  const { banco } = await cenarioComConjunto(t, 1, {
+    estado: "em_execucao",
+    estadoDoTicket: "em_execucao",
+    comPlano: true,
+  });
+  await prepararEspacoDoTicket(banco, {});
+  assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "alocado", alocado_para: "I-1" }]);
+  await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), { demanda_id: "I-1", ticket_id: 1 });
+  assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "livre", alocado_para: null }]);
+});
+
+test("o git do Espaço que devolveu o Ambiente roda num sandbox realocado, nunca no host, e o devolve ao fim", async (t) => {
+  const { banco, docker } = await cenarioComConjunto(t, 1, noGateDoPlano);
+  const { espaco } = await prepararEspacoDoTicket(banco, {});
+  const modulos = modulosDoCicloDeTeste(banco);
+  await devolverAmbienteDoEspaco(modulos, { demanda_id: "I-1" });
+  const chamadasAntesDoGit = docker.registro().length;
+  const projeto = projetosCadastrados().carregarProjeto(banco, "loja");
+  await modulos.repositorio.gitNoEspaco(projeto, espaco, "rev-parse", "HEAD");
+  const gitNoSandbox = docker
+    .registro()
+    .slice(chamadasAntesDoGit)
+    .filter((argumentos) => argumentos[0] === "exec" && JSON.stringify(argumentos).includes("rev-parse"));
+  assert.equal(gitNoSandbox.length, 1, "o rev-parse rodou pelo docker exec, no sandbox");
+  assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "livre", alocado_para: null }]);
 });
 
 test("ticket inexistente não devolve nada", async (t) => {
@@ -213,15 +241,15 @@ test("o pi que assenta com a demanda no gate do plano é encerrado e o Espaço d
   const { banco, prompts } = cenarioDePlanejamento({ estadoDoTicket: "em_execucao" });
   // A ociosidade só encerraria o pi em 30 s: o encerramento em segundos tem de vir do gate.
   const { modulos, devolvidos, fim } = planejarComEspiaDaDevolucao(banco, 0.5);
-  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
-  await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do Auditor
+  while (prompts().length === 0) await new Promise((acordar) => setTimeout(acordar, 20));
+  await new Promise((acordar) => setTimeout(acordar, 100)); // o pi assenta: ocioso, à espera do Auditor
   proporPlanoDoAgente(banco, "I-1", plano()); // o plano chega e a demanda vai ao gate
   const viva = modulos.sessoes.listar({ demandas: ["I-1"] })[0]?.situacao;
   assert.ok(viva);
   modulos.sessoes.mandar(String(viva.execucao), { type: "prompt", message: "o plano foi enviado" });
   const encerradoPeloGate = await Promise.race([
     fim.then(() => true),
-    new Promise((r) => setTimeout(r, 15_000, false)),
+    new Promise((acordar) => setTimeout(acordar, 15_000, false)),
   ]);
   assert.equal(encerradoPeloGate, true);
   await fim;
