@@ -106,11 +106,14 @@ export class ConjuntoDeSandboxes {
   }
 
   /**
-   * O conjunto vivo, do mais antigo ao mais novo, com o uso medido de cada container numa chamada só ao docker, no
-   * Ambiente `container`; no `host_local` o docker nunca é chamado. O docker que não responde só deixa o medido de fora.
+   * O conjunto vivo, na ordem dos slots (o sem slot por último, do mais antigo ao mais novo), com o uso medido de cada
+   * container numa chamada só ao docker, no Ambiente `container`; no `host_local` o docker nunca é chamado. O docker que
+   * não responde só deixa o medido de fora.
    */
   async listar(): Promise<SituacaoDoAmbiente[]> {
-    const gravados = listarAmbientes(this.#banco);
+    const gravados = listarAmbientes(this.#banco).sort(
+      (a, b) => (a.slot ?? Number.POSITIVE_INFINITY) - (b.slot ?? Number.POSITIVE_INFINITY),
+    );
     if (this.#configuracao().tipo === "host_local") return gravados;
     const medidos = await this.#gerador
       .medirUso(gravados.map(({ container_id }) => container_id))
