@@ -48,7 +48,7 @@ const MOTIVO_SO_OS_TESTES_AFETADOS =
   "I-316: o agente roda só os testes afetados pelo diff; a suíte inteira e as fitness ficam com a Fabriquinha";
 const LINHA_DE_TESTES_DO_AGENTE = "Rode os testes e as verificações do projeto até passarem.\n";
 const LINHAS_DE_SO_OS_TESTES_AFETADOS =
-  "Rode só os testes dos arquivos que o diff toca e dos módulos que os importam, mais o tipo (`tsc`), o lint e o formato inteiros, até passarem.\n" +
+  "Rode só os testes dos arquivos que o diff toca e dos módulos que os importam, mais a checagem de tipos, o lint e o formato inteiros, até passarem.\n" +
   "   Não rode a suíte inteira com cobertura nem as fitness functions: a Fabriquinha roda depois de você. Se ela reprovar, corrija e rode de novo só o que falhou.\n";
 const LINHA_DO_ESTRESSE =
   "   Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/server/system/`, qualquer pasta `armazenamento/` ou `infra/` de `src/` ou os condutores do agendador e das execuções (`src/modulos/ciclo_de_vida/despacho/aplicacao/`, `src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts`, `src/modulos/ciclo_de_vida/conducao/aplicacao/chat_do_auditor/`, `src/modulos/sessoes/execucao/aplicacao/motor_das_sessoes.ts`).";
