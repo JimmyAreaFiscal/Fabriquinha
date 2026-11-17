@@ -20,8 +20,8 @@ export interface DockerQueCai {
 }
 
 const SCRIPT_DO_DOCKER = String.raw`#!/bin/sh
-estado="$(dirname "$0")/.."
-if [ -e "$estado/parado" ]; then
+pasta_do_estado="$(dirname "$0")/.."
+if [ -e "$pasta_do_estado/parado" ]; then
   echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" >&2
   exit 1
 fi
@@ -31,9 +31,9 @@ case "$1 $*" in
     printf '%s\n' "$saida" | while IFS= read -r linha; do
       id=$(printf '%s' "$linha" | cut -f1)
       [ -n "$id" ] || continue
-      while read -r meu; do
-        case "$meu" in "$id"*) printf '%s\n' "$linha"; break;; esac
-      done < "$estado/incluidos"
+      while read -r container_incluido; do
+        case "$container_incluido" in "$id"*) printf '%s\n' "$linha"; break;; esac
+      done < "$pasta_do_estado/incluidos"
     done
     ;;
   *) exec "__DOCKER_DE_VERDADE__" "$@" ;;

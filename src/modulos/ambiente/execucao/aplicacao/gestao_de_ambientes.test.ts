@@ -61,10 +61,10 @@ function comoContainer(ambiente: unknown): AmbienteContainer {
   return ambiente;
 }
 
-/** Espera o trabalho que a batida disparou, que roda o docker (falso) de verdade e que o teste não tem como aguardar. */
-async function esperarAte(condicao: () => boolean): Promise<void> {
-  for (let tentativa = 0; !condicao() && tentativa < 200; tentativa++) await setTimeout(25);
-  assert.ok(condicao());
+/** Espera a manutenção que o relógio do conjunto disparou, que roda o docker (falso) de verdade e que o teste não tem como aguardar. */
+async function esperarAManutencaoDoConjunto(manutencaoConcluida: () => boolean): Promise<void> {
+  for (let tentativa = 0; !manutencaoConcluida() && tentativa < 200; tentativa++) await setTimeout(25);
+  assert.ok(manutencaoConcluida());
 }
 
 let cenarios = 0;
@@ -480,7 +480,7 @@ test("na subida do host_local o docker nunca é chamado", async () => {
   assert.equal(docker.registro().length, chamadasAntes);
 });
 
-test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele responde, a batida confere o conjunto e libera a alocação", async (t) => {
+test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele responde, a manutenção periódica confere o conjunto e libera a alocação", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { docker, banco, alocar } = await cenario();
   const ambiente = await alocar();
@@ -498,13 +498,13 @@ test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele r
   await assert.rejects(gestao.alocar(espacoB, projeto), (erro) => erro instanceof ErroExterno);
   assert.ok(gestao.ambienteDo("I-1") instanceof AmbienteContainer);
 
-  t.mock.timers.tick(60_000); // a batida tenta e o docker continua fora
-  await esperarAte(() => erros.length === 2);
+  t.mock.timers.tick(60_000); // a manutenção periódica tenta e o docker continua fora
+  await esperarAManutencaoDoConjunto(() => erros.length === 2);
   assert.equal(listarAmbientes(banco)[0]?.estado, "alocado");
 
   docker.religarDocker();
   t.mock.timers.tick(60_000);
-  await esperarAte(() => listarAmbientes(banco)[0]?.estado === "livre");
+  await esperarAManutencaoDoConjunto(() => listarAmbientes(banco)[0]?.estado === "livre");
   assert.equal(listarAmbientes(banco)[0]?.estado, "livre", "o docker respondeu: a conferência rodou sozinha");
   assert.equal(comoContainer(await gestao.alocar(espacoB, projeto)).container_id, ambiente.container_id);
 
@@ -517,7 +517,7 @@ test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele r
       .slice(chamadasAntes)
       .some(([comando]) => comando === "ps"),
     false,
-    "conferido, a batida só elimina ociosos",
+    "conferido, a manutenção periódica só elimina ociosos",
   );
 });
 
