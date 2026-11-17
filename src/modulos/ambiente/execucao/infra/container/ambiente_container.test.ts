@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -68,14 +69,15 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Zumbi não conta: sem um init que recolha os órfãos (o PID 1 de um container de CI), o processo morto fica no grupo e o
+// `kill(-grupo, 0)` o acha para sempre.
+const grupoEstaVivo = (grupo: number): boolean =>
+  spawnSync("ps", ["-eo", "pgid=,stat="], { encoding: "utf8" })
+    .stdout.split("\n")
+    .some((linha) => {
+      const [pgid, estado = ""] = linha.trim().split(/\s+/);
+      return Number(pgid) === grupo && !estado.startsWith("Z");
+    });
 
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
