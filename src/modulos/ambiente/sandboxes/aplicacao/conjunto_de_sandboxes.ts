@@ -260,11 +260,11 @@ export class ConjuntoDeSandboxes {
   /**
    * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado, o que
    * libera o nome `fabriquinha-slot-<n>` que uma subida anterior deixou; linha do banco cujo container sumiu vira
-   * `eliminado`. O que parou está perdido (religado, ficaria sem as regras de rede) e o sem slot é de antes do slot
-   * existir: os dois são eliminados com o container, depois de recolher ao Espaço as sessões e execuções do ocupante. O
-   * que não tem o rótulo nem aparece, porque a listagem só traz os da Fabriquinha. Todo container ainda `alocado` e
-   * rodando era de um ocupante da instância anterior, cujo processo morreu com o reinício: é limpo e volta `livre`
-   * (`sujo` se a limpeza falhar).
+   * `eliminado`. O que parou está perdido (religado, ficaria sem as regras de rede) e o sem slot (de antes do slot
+   * existir) também: as sessões e execuções do ocupante vão para o Espaço e o container é eliminado. O que não tem o
+   * rótulo nem aparece, porque a listagem só traz os da Fabriquinha. Todo container ainda `alocado` e rodando era de um
+   * ocupante da instância anterior, cujo processo morreu com o reinício: é limpo e volta `livre` (`sujo` se a limpeza
+   * falhar).
    * ponytail: um `alocar` que chegue durante esta espera pode ter o container recém-alocado limpo; a subida é curta e o
    * agendador só liga depois dela.
    */
@@ -280,7 +280,7 @@ export class ConjuntoDeSandboxes {
       await this.#gerador.eliminar(orfao);
     for (const ambiente of noBanco) {
       if (!containersDoDocker.has(ambiente.container_id)) eliminarAmbiente(this.#banco, ambiente.id);
-      else if (ambiente.slot === null || containersParados.has(ambiente.container_id))
+      else if (containersParados.has(ambiente.container_id) || ambiente.slot === null)
         await this.#eliminarPerdido(ambiente);
       else if (ambiente.estado === "alocado") await this.#limparEDevolver(ambiente);
     }

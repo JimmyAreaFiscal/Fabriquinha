@@ -346,14 +346,11 @@ function executarDockerFalso(): void {
     gravarContainer(dir, { ...container, comandos: [...container.comandos, programa] });
     const [shell, opcaoC, roteiro = ""] = programa;
     if (shell === "touch" && opcaoC !== undefined)
-      writeFileSync(
-        arquivoDoContainer(container.id),
-        JSON.stringify({
-          ...container,
-          comandos: [...container.comandos, programa],
-          marcadores: [...(container.marcadores ?? []), opcaoC],
-        }),
-      );
+      gravarContainer(dir, {
+        ...container,
+        comandos: [...container.comandos, programa],
+        marcadores: [...(container.marcadores ?? []), opcaoC],
+      });
     if (shell === "test" && opcaoC === "-e" && !container.marcadores?.includes(roteiro)) sair(1, "");
     if (shell === "cat" && opcaoC === "/etc/hosts")
       for (const hospedeiro of container.hospedeiros) console.log(`172.17.0.1\t${hospedeiro.split(":")[0] ?? ""}`);
