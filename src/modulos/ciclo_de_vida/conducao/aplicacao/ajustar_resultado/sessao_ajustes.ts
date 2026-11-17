@@ -76,7 +76,7 @@ export async function restaurar(
     [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz)],
   ];
   // A branch do marco é a do Espaço: o marco a guarda para o leitor do arquivo.
-  for (const [{ sha }, espaco] of pontas) await repositorio.voltarEspaco(espaco, sha, log);
+  for (const [{ sha }, espaco] of pontas) await repositorio.voltarEspaco(projeto, espaco, sha, log);
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }
 
@@ -90,13 +90,14 @@ export async function guardarMarcoDaSessao(
   ag: AgregadoDemanda,
 ): Promise<void> {
   const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
-  const espacoDaDemanda = espacoDoTicket(
-    ag,
-    {},
-    projetosCadastrados().projetoExistente(banco, ag.demanda.projeto),
-    raizDo(banco),
+  const projeto = projetosCadastrados().projetoExistente(banco, ag.demanda.projeto);
+  const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raizDo(banco));
+  const demanda = await repositorio.gitNoEspaco(
+    projeto,
+    espacoDaDemanda,
+    "rev-parse",
+    `refs/heads/${ag.demanda.branch}`,
   );
-  const demanda = await repositorio.gitNoEspaco(espacoDaDemanda, "rev-parse", `refs/heads/${ag.demanda.branch}`);
   const marco: Marco = {
     rodada: { branch, sha: pr.head },
     demanda: { branch: ag.demanda.branch, sha: demanda.trim() },
