@@ -311,22 +311,23 @@ test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou n�
   assert.ok(docker.containers().length > listados.length);
 });
 
-test("medirUso lê numa chamada só o uso de CPU e de memória dos containers pedidos, em CPUs e MB", async () => {
+test("medirUso lê numa chamada só o nome e o uso de CPU e de memória dos containers pedidos, em CPUs e MB", async () => {
   const ocupado = docker.semearContainer({ uso: { cpu: "52.50%", memoria: "256MiB / 2GiB" } });
   const pesado = docker.semearContainer({ uso: { cpu: "150.00%", memoria: "1.5GiB / 4GiB" } });
   const parado = docker.semearContainer({ uso: { cpu: "0.00%", memoria: "512KiB / 1GiB" } });
   const zerado = docker.semearContainer({});
   const chamadasAntes = docker.registro().length;
+  const nomeNoDocker = ({ id }: { id: string }) => `falso_${id.slice(0, 12)}`;
 
   const uso = await gerador.medirUso([ocupado.id, pesado.id, parado.id, zerado.id]);
 
   assert.deepEqual(
     uso,
     new Map([
-      [ocupado.id, { cpus: 0.525, memoria_mb: 256 }],
-      [pesado.id, { cpus: 1.5, memoria_mb: 1536 }],
-      [parado.id, { cpus: 0, memoria_mb: 0.5 }],
-      [zerado.id, { cpus: 0, memoria_mb: 0 }],
+      [ocupado.id, { nome: nomeNoDocker(ocupado), uso: { cpus: 0.525, memoria_mb: 256 } }],
+      [pesado.id, { nome: nomeNoDocker(pesado), uso: { cpus: 1.5, memoria_mb: 1536 } }],
+      [parado.id, { nome: nomeNoDocker(parado), uso: { cpus: 0, memoria_mb: 0.5 } }],
+      [zerado.id, { nome: nomeNoDocker(zerado), uso: { cpus: 0, memoria_mb: 0 } }],
     ]),
   );
   assert.deepEqual(docker.registro().slice(chamadasAntes), [
@@ -334,7 +335,7 @@ test("medirUso lê numa chamada só o uso de CPU e de memória dos containers pe
       "stats",
       "--no-stream",
       "--format",
-      "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}",
+      "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.Name}}",
       ocupado.id,
       pesado.id,
       parado.id,

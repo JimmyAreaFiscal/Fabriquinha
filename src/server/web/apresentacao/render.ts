@@ -115,6 +115,7 @@ const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/projects", "Projetos", ["projeto", "heatmap", "sdlc", "demandas"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
+  ["/ambientes", "Ambientes", ["ambientes"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -138,6 +139,7 @@ export const TITULOS: Record<Pagina, string> = {
   heatmap: "Heatmap",
   metricas: "Métricas",
   historico: "Histórico",
+  ambientes: "Ambientes",
   chat: "Chat",
   configuracao: "Configuração",
   sdlc: "Configuração SDLC",

@@ -14,6 +14,7 @@ import { sinalNoGrupo } from "../../src/shared/infra/processo.ts";
 import { expect, projeto, test } from "../apoio.ts";
 import { semearTicketAberto } from "../demandas-apoio.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { grupoEstaVivo as grupoVivo } from "../../apoio-testes/grupo_de_processo.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 // Um pi que não termina sozinho: só o sinal o encerra.
@@ -246,16 +247,6 @@ function execucoesDoT1(raiz: string): { grupo_processo?: number | null; fim?: st
   banco.close();
   return execucoes;
 }
-
-/** O grupo de processo existe (o `kill -0` não lança). */
-const grupoVivo = (pgid: number): boolean => {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 // MELHORIAS §5.2 e §5.3 (ticket 20): o serviço cai (SIGKILL, sem parada limpa) com o pi do T1 rodando. A identidade do
 // processo (a execução e o grupo do pi) já estava gravada; a subida seguinte mata o pi órfão por ela e falha o ticket como

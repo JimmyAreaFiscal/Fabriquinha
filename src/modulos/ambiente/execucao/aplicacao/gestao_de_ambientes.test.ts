@@ -548,9 +548,14 @@ test("listar traz o conjunto com o uso de CPU e de memória medido de cada conta
 
   const conjunto = await gestao.listar();
 
+  const nomeNoDocker = ({ container_id }: { container_id: string }) => `falso_${container_id.slice(0, 12)}`;
   assert.deepEqual(conjunto, [
-    { ...listarAmbientes(banco)[0], medido: { cpus: 0.375, memoria_mb: 300 } },
-    { ...listarAmbientes(banco)[1], medido: { cpus: 0, memoria_mb: 2 } },
+    {
+      ...listarAmbientes(banco)[0],
+      nome_do_container: nomeNoDocker(ocupado),
+      medido: { cpus: 0.375, memoria_mb: 300 },
+    },
+    { ...listarAmbientes(banco)[1], nome_do_container: nomeNoDocker(livre), medido: { cpus: 0, memoria_mb: 2 } },
   ]);
   assert.deepEqual(
     docker
@@ -586,5 +591,11 @@ test("listar o conjunto vazio não chama o docker, e o container gravado vem com
     criado_em: "2026-11-13T10:00:00.000Z",
   });
   const [gravado] = listarAmbientes(banco);
-  assert.deepEqual(await gestao.listar(), [{ ...gravado, medido: { cpus: 0.1, memoria_mb: 1024 } }]);
+  assert.deepEqual(await gestao.listar(), [
+    {
+      ...gravado,
+      nome_do_container: `falso_${String(gravado?.container_id.slice(0, 12))}`,
+      medido: { cpus: 0.1, memoria_mb: 1024 },
+    },
+  ]);
 });

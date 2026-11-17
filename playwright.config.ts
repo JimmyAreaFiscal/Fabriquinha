@@ -15,6 +15,10 @@ export default defineConfig({
   testDir: "e2e",
   outputDir: pastaDaSaida,
   fullyParallel: true,
+  // Cada teste sobe o próprio serviço; com a metade dos núcleos em paralelo, numa máquina carregada a subida estourava o
+  // tempo. O timeout fica acima da espera da subida (e2e/apoio.ts), que conta dentro dele.
+  workers: 4,
+  timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   reporter: "list",
   use: {
