@@ -23,7 +23,11 @@ import {
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
+/** O começo do nome no docker do container do slot `n`: `fabriquinha-slot-<n>`. */
+const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
+/** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
+const TAMANHO_DO_SHM = "1g";
 const PASTA_DE_TRABALHO = "/trabalho";
 /**
  * Onde o container tem o tmpfs que guarda o marcador das regras de rede: o docker esvazia o tmpfs quando o container
@@ -113,6 +117,11 @@ interface ContainerCriado {
 interface ContainerListado extends ContainerCriado {
   /** `false` para o que parou (ou nunca subiu). */
   rodando: boolean;
+}
+
+/** O container que `criar` devolve: o slot que nomeou `fabriquinha-slot-<n>` no docker. */
+interface ContainerCriadoNoSlot extends ContainerCriado {
+  slot: number;
 }
 
 /** O projeto que tem imagem: `imagem_do_ambiente` é o caminho de um Dockerfile no repositório ou o nome de uma imagem. */
@@ -320,28 +329,35 @@ export class GeradorDeAmbientes {
 
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
-   * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
+   * (`host-gateway`), só para a porta da API do agente. O nome no docker é `fabriquinha-slot-<slot>`: o docker não aceita
+   * espaço, e o nome repetido faz o `run` falhar. Sem `montagens`, o container nasce sem pasta do host; sem
    * `copias`, sem o pi, o `.claude` nem o `.codex`.
    */
   async criar(
     imagem: ImagemDoAmbiente,
     limites: Limites,
     portaDaApi: number,
+    slot: number,
     montagens?: Montagens,
     copias?: Copias,
-  ): Promise<ContainerCriado> {
+  ): Promise<ContainerCriadoNoSlot> {
     if (copias) exigirLoginDoPi(copias);
     const id = randomUUID();
     const containerId = await rodarDocker(
       [
         "run",
         "-d",
+        "--name",
+        `${PREFIXO_DO_NOME_DO_SLOT}${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
         "--memory",
         `${String(limites.memoria_maxima_mb)}m`,
         "--cpus",
         String(limites.cpus),
+        // O Chromium do e2e cai ("Page crashed") com os 64 MB padrão do /dev/shm do container.
+        "--shm-size",
+        TAMANHO_DO_SHM,
         "--workdir",
         PASTA_DE_TRABALHO,
         "--tmpfs",
@@ -364,7 +380,7 @@ export class GeradorDeAmbientes {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
       throw erro;
     }
-    return { id, container_id: containerId };
+    return { id, container_id: containerId, slot };
   }
 
   /**
@@ -466,5 +482,24 @@ export class GeradorDeAmbientes {
         const [containerId = "", id = "", estado = ""] = linha.split("\t");
         return { id, container_id: containerId, rodando: estado === "running" };
       });
+  }
+
+  /**
+   * Os slots cujo nome `fabriquinha-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
+   * instância ou teste no mesmo daemon e o que um `rm` ainda não tirou. Criar com um deles falharia por nome repetido.
+   */
+  async listarSlotsTomadosNoDocker(): Promise<Set<number>> {
+    const saida = await rodarDocker(
+      ["ps", "--all", "--filter", `name=${PREFIXO_DO_NOME_DO_SLOT}`, "--format", "{{.Names}}"],
+      this.#limiteDoComandoMs,
+    );
+    const padraoDoNomeDoSlot = new RegExp(`^${PREFIXO_DO_NOME_DO_SLOT}(\\d+)$`);
+    return new Set(
+      saida
+        .split("\n")
+        .map((nome) => padraoDoNomeDoSlot.exec(nome)?.[1])
+        .filter((numero) => numero !== undefined)
+        .map(Number),
+    );
   }
 }
