@@ -24,6 +24,8 @@ const AmbienteDoConjunto = z.strictObject({
   alocado_para: z.string().nullable(),
   criado_em: z.string(),
   liberado_em: z.string().nullable(),
+  /** O nome do container no docker; ausente quando o uso não foi medido. */
+  nome_do_container: z.string().optional(),
   /** O uso de CPU (em núcleos) e de memória medido agora; ausente no host local ou quando o docker não responde. */
   medido: z.strictObject({ cpus: z.number(), memoria_mb: z.number() }).optional(),
 });

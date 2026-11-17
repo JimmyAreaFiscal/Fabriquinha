@@ -43,6 +43,7 @@ export async function montarAmbientesDoServico({
   });
   return {
     gestao,
+    raiz,
     configurar: (configuracao) => {
       salvarConfiguracaoDoAmbiente(banco, configuracao);
     },

@@ -16,6 +16,8 @@ import type { Parametros } from "../../web/compartilhado/caminhos.ts";
 /** O que o serviço expõe do Ambiente ao web: a gestão que ele montou e a gravação da Configuração com que a montou. */
 export interface AmbientesDoServico {
   gestao: GestaoDeAmbientes;
+  /** A pasta de dados do serviço, de onde saem as worktrees que os containers montam. */
+  raiz: string;
   /** Grava a Configuração do Ambiente, já validada; a gestão a lê na pergunta seguinte. */
   configurar(configuracao: ConfiguracaoDoAmbiente): void;
 }

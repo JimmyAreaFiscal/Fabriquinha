@@ -19,7 +19,13 @@ import {
   reservarAmbienteParaEliminar,
 } from "../armazenamento/ambientes.ts";
 import type { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
-import type { Copias, GeradorDeAmbientes, Montagens, Recursos } from "../infra/gerador_de_ambientes.ts";
+import type {
+  Copias,
+  GeradorDeAmbientes,
+  MedicaoDoContainer,
+  Montagens,
+  Recursos,
+} from "../infra/gerador_de_ambientes.ts";
 import { recolherParaOEspaco } from "../infra/pastas_do_ambiente.ts";
 
 const MS_POR_MINUTO = 60_000;
@@ -67,6 +73,8 @@ export interface ProjetoDoAmbiente {
 
 /** Um container do conjunto como a lista o mostra: o gravado e, no Ambiente `container`, o uso medido agora pelo docker. */
 export interface SituacaoDoAmbiente extends AmbienteGravado {
+  /** O nome do container no docker; ausente, como o `medido`, no `host_local` ou quando o docker não responde. */
+  nome_do_container?: string;
   /** Ausente no `host_local`, que nunca chama o docker, ou quando o docker não responde. */
   medido?: Recursos;
 }
@@ -109,10 +117,10 @@ export class ConjuntoDeSandboxes {
     if (this.#configuracao().tipo === "host_local") return gravados;
     const medidos = await this.#gerador
       .medirUso(gravados.map(({ container_id }) => container_id))
-      .catch(() => new Map<string, Recursos>());
+      .catch(() => new Map<string, MedicaoDoContainer>());
     return gravados.map((gravado) => {
-      const medido = medidos.get(gravado.container_id);
-      return medido ? { ...gravado, medido } : gravado;
+      const medicao = medidos.get(gravado.container_id);
+      return medicao ? { ...gravado, nome_do_container: medicao.nome, medido: medicao.uso } : gravado;
     });
   }
 

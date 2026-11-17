@@ -11,7 +11,7 @@
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
 // `ps`, `inspect` e `stats` não interpretam o `--format`: `ps` imprime "<id>\t<valor do rótulo filtrado>", `inspect` imprime o
-// JSON e `stats` imprime "<id>\t<CPU>\t<memória>" de cada container pedido, com o uso semeado (sem ele, o de um parado).
+// JSON e `stats` imprime "<id>\t<CPU>\t<memória>\t<nome>" de cada container pedido (o nome é `falso_<12 primeiros do id>`), com o uso semeado (sem ele, o de um parado).
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -71,6 +71,9 @@ export interface DockerFalso {
 }
 
 const homeDoContainer = (dir: string, id: string) => join(dir, "homes", id);
+
+/** O nome que o docker falso dá ao container no `stats`: o docker de verdade sorteia um. */
+const nomeDoContainer = ({ id }: ContainerFalso) => `falso_${id.slice(0, 12)}`;
 
 const codificar = (nome: string) => Buffer.from(nome).toString("hex");
 
@@ -271,7 +274,9 @@ function executarDockerFalso(): void {
   } else if (comando === "stats") {
     const { resto } = tirarOpcoes(args, ["--format"]);
     for (const container of resto.map((id) => achar(id)))
-      console.log(`${container.id}\t${container.uso?.cpu ?? "0.00%"}\t${container.uso?.memoria ?? "0B / 0B"}`);
+      console.log(
+        `${container.id}\t${container.uso?.cpu ?? "0.00%"}\t${container.uso?.memoria ?? "0B / 0B"}\t${nomeDoContainer(container)}`,
+      );
   } else if (comando === "exec") {
     const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file"]);
     const container = achar(resto[0] ?? "");

@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
+import { grupoEstaVivo } from "../../../../../../apoio-testes/grupo_de_processo.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteContainer } from "./ambiente_container.ts";
 import { pastasDoAmbiente } from "../../../sandboxes/infra/pastas_do_ambiente.ts";
@@ -66,15 +67,6 @@ function comandoNoShell(linha: string, resto: Partial<ComandoNoAmbiente> = {}): 
 const arquivosDePid = (): string[] => {
   const pasta = join(dirDoDockerFalso, "pids", containerId);
   return existsSync(pasta) ? readdirSync(pasta) : [];
-};
-
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return true;
-  } catch {
-    return false;
-  }
 };
 
 /**

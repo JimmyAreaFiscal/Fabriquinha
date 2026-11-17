@@ -786,7 +786,7 @@ test(
           proximaBusca: () => new Date().toISOString(),
         },
         // A gestão do cenário: uma segunda montagem conferiria o conjunto do Docker da máquina.
-        ambientes: { gestao, configurar: () => undefined },
+        ambientes: { gestao, raiz: raizDo(c.banco), configurar: () => undefined },
         demandas: montarDemandasDoBanco(c.banco),
         repositorio: montarRepositorio({ banco: c.banco, ambientes: gestao }),
         relogio: relogioDoSistema,
