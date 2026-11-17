@@ -50,7 +50,7 @@ import {
 import { cicloDoEspaco } from "./ciclo_do_espaco.ts";
 
 /** O Projeto como o Espaço o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
-type ProjetoDoEspaco = ProjetoDoRepositorio & { imagem_do_ambiente?: string };
+type ProjetoDoEspaco = ProjetoDoRepositorio & { arquivos_de_dependencias?: readonly string[] };
 
 /** O que o PR leva: título e corpo já no limite da hospedagem, os PRs já registrados e a marca que adota o perdido. */
 interface PedidoDePR {

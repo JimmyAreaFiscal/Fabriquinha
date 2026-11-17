@@ -3,7 +3,7 @@
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -344,7 +344,11 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 
 test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
   const { c, banco, config } = await cenario(3);
-  banco.prepare("UPDATE projeto SET imagem_do_ambiente = 'alpine' WHERE nome = 'loja'").run();
+  writeFileSync(join(c.repo, "package.json"), "{}");
+  // O gerador lê o arquivo de dependências no repositório do projeto, que neste cenário não existe.
+  banco
+    .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")
+    .run(c.repo);
   instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
   const servico = {
     raiz: c.raiz,

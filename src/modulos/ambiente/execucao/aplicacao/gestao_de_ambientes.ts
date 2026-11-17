@@ -104,10 +104,10 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   }
 
   async alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente> {
-    const { imagem_do_ambiente } = projeto;
-    if (!this.#ehContainer || imagem_do_ambiente === undefined) return this.#doServico;
+    const { arquivos_de_dependencias } = projeto;
+    if (!this.#ehContainer || !arquivos_de_dependencias?.length) return this.#doServico;
     const container = this.#comoAmbienteContainer(
-      await this.#sandboxes.alocar(ocupante, { ...projeto, imagem_do_ambiente }),
+      await this.#sandboxes.alocar(ocupante, { ...projeto, arquivos_de_dependencias }),
     );
     container.levarEnvDoProjeto(projeto.raiz_git);
     return container;

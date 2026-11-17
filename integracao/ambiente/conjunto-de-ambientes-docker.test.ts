@@ -14,7 +14,16 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";
 
-const IMAGEM_MINIMA = "busybox:1";
+/** Um repositório com um `package.json` sem dependências e o lockfile que o `npm ci` exige: a imagem sai só com Node e Git. */
+function repositorioSemDependencias(pasta: string): string {
+  const raizGit = mkdtempSync(join(pasta, "repo-"));
+  writeFileSync(join(raizGit, "package.json"), '{"name":"minimo","version":"1.0.0"}');
+  writeFileSync(
+    join(raizGit, "package-lock.json"),
+    '{"name":"minimo","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"minimo","version":"1.0.0"}}}',
+  );
+  return raizGit;
+}
 
 const dockerDeVerdade = (...args: string[]): string => execFileSync("docker", args, { encoding: "utf8" }).trim();
 
@@ -55,7 +64,11 @@ test(
       rmSync(raiz, { recursive: true, force: true });
       fechar();
     });
-    const projeto = { nome: "projeto", raiz_git: mkdtempSync(join(raiz, "repo-")), imagem_do_ambiente: IMAGEM_MINIMA };
+    const projeto = {
+      nome: "projeto",
+      raiz_git: repositorioSemDependencias(raiz),
+      arquivos_de_dependencias: ["package.json"],
+    };
     const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") });
 
     // aloca
@@ -118,8 +131,8 @@ test(
     });
     const projeto = {
       nome: "projeto",
-      raiz_git: mkdtempSync(join(raiz, "repo-")),
-      imagem_do_ambiente: "node:22-bookworm-slim",
+      raiz_git: repositorioSemDependencias(raiz),
+      arquivos_de_dependencias: ["package.json"],
     };
     const alocado = await gestao.alocar(
       { dono: "espaco", pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") },

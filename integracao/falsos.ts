@@ -71,7 +71,7 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
     c.banco,
     Projeto.parse({
       ...projeto,
-      imagem_do_ambiente: "Dockerfile",
+      arquivos_de_dependencias: ["package.json"],
       verificacoes: {
         preparacao: ["node --version"],
         fitness: [{ nome: "e2e", comando: "npm run e2e", descricao: "o programa imprime a soma" }],
@@ -135,7 +135,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
     ligarGestaoDeAmbientesNosModulos();
     await montada.parar();
     for (const containerId of containersDoCenario)
-      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" });
+      execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" }); // NOSONAR
   });
   return { pi: piDoContainer, gestao };
 }

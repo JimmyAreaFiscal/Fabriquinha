@@ -19,13 +19,17 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
 
-const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, imagem_do_ambiente";
+const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, arquivos_de_dependencias";
 
 /** Monta o projeto da `linha` com as tabelas da sua configuração; quem chama garante o snapshot. */
 function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
   const nome = String(linha.nome);
+  const { arquivos_de_dependencias, ...colunas } = semNulos(linha);
   return Projeto.parse({
-    ...semNulos(linha),
+    ...colunas,
+    ...(typeof arquivos_de_dependencias === "string" && {
+      arquivos_de_dependencias: JSON.parse(arquivos_de_dependencias) as unknown,
+    }),
     etapas: listar(
       banco,
       "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa",
@@ -112,7 +116,7 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
         `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (nome) DO UPDATE SET raiz_git = excluded.raiz_git, branch_base = excluded.branch_base,
            hospedagem = excluded.hospedagem, chave_sonarqube = excluded.chave_sonarqube,
-           imagem_do_ambiente = excluded.imagem_do_ambiente`,
+           arquivos_de_dependencias = excluded.arquivos_de_dependencias`,
       )
       .run(
         nome,
@@ -120,7 +124,7 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
         projeto.branch_base,
         projeto.hospedagem,
         projeto.chave_sonarqube,
-        projeto.imagem_do_ambiente ?? null,
+        projeto.arquivos_de_dependencias ? JSON.stringify(projeto.arquivos_de_dependencias) : null,
       );
     for (const tabela of [
       "glob_e2e",

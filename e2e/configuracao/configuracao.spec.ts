@@ -86,7 +86,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     hospedagem: "github",
     chave_sonarqube: "loja",
     link_produto: null,
-    imagem_do_ambiente: null,
+    arquivos_de_dependencias: null,
   });
   // A preparação vai para a tabela que o fluxo da demanda lê ao criar a worktree.
   expect({ ...banco.prepare("SELECT * FROM comando_preparacao_projeto").get() }).toEqual({

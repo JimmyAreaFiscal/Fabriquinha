@@ -34,8 +34,11 @@ const SERVICO = {
   instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
   dir_do_harness_do_auditor: dirDoPiDoAuditorDoTeste,
 };
-const projetoDaImagem = (imagem_do_ambiente: string) => ({ nome: "loja", raiz_git: base, imagem_do_ambiente });
-const alpine = projetoDaImagem("alpine");
+writeFileSync(join(base, "package.json"), "{}");
+writeFileSync(join(base, "requirements.txt"), "requests\n");
+const projetoDoArquivo = (arquivo: string) => ({ nome: "loja", raiz_git: base, arquivos_de_dependencias: [arquivo] });
+const doNode = projetoDoArquivo("package.json");
+const doPython = projetoDoArquivo("requirements.txt");
 const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join(base, "worktrees", "loja") });
 const ehAIndisponibilidadeDoConjunto = (erro: unknown) =>
   erro instanceof ErroExterno && erro.message.includes("nenhum sandbox disponível: o conjunto está na capacidade");
@@ -71,6 +74,8 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
     criacoes,
     estados,
     pastaDoDocker,
+    /** A imagem que o conjunto gera para o projeto, como o gerador a nomeia. */
+    imagemDe: (projeto: typeof doNode) => new GeradorDeAmbientes().garantirImagem(projeto),
     aos: (minuto: number) => {
       instante = new Date(Date.parse("2026-11-13T10:00:00.000Z") + minuto * 60_000).toISOString();
     },
@@ -78,41 +83,44 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
 }
 
 test("variável na capacidade e sem parado: informa a indisponibilidade sem criar container; liberado um, o próximo o reusa", async () => {
-  const { conjunto, criacoes, estados, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 2 });
-  const primeiro = await conjunto.alocar(ocupante("I-1"), alpine);
-  await conjunto.alocar(ocupante("I-2"), alpine);
+  const { conjunto, criacoes, estados, liberar, imagemDe } = cenario({
+    conjunto: "variavel",
+    capacidade_do_conjunto: 2,
+  });
+  const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
+  await conjunto.alocar(ocupante("I-2"), doNode);
 
-  await assert.rejects(conjunto.alocar(ocupante("I-3"), alpine), ehAIndisponibilidadeDoConjunto);
+  await assert.rejects(conjunto.alocar(ocupante("I-3"), doNode), ehAIndisponibilidadeDoConjunto);
   assert.equal(criacoes(), 2);
 
   await liberar("I-1");
-  const reusado = await conjunto.alocar(ocupante("I-3"), alpine);
+  const reusado = await conjunto.alocar(ocupante("I-3"), doNode);
   assert.equal(reusado.container_id, primeiro.container_id);
   assert.equal(criacoes(), 2);
   assert.deepEqual(estados(), [
-    ["alocado", "I-3", "alpine"],
-    ["alocado", "I-2", "alpine"],
+    ["alocado", "I-3", await imagemDe(doNode)],
+    ["alocado", "I-2", await imagemDe(doNode)],
   ]);
 });
 
 test("fixo na capacidade: o parado de outra imagem cede a vaga, o sujo primeiro, e o conjunto não cresce", async () => {
-  const { docker, conjunto, estados, pastaDoDocker, aos, liberar } = cenario({
+  const { docker, conjunto, estados, pastaDoDocker, aos, liberar, imagemDe } = cenario({
     conjunto: "fixo",
     capacidade_do_conjunto: 2,
   });
-  await conjunto.alocar(ocupante("I-1"), alpine);
-  const sujo = await conjunto.alocar(ocupante("I-2"), alpine);
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const sujo = await conjunto.alocar(ocupante("I-2"), doNode);
   await liberar("I-1");
   aos(1);
   docker.falharComando("exec", "container travado");
   await liberar("I-2");
   rmSync(join(pastaDoDocker, "falhas", "exec"));
 
-  await conjunto.alocar(ocupante("I-3"), projetoDaImagem("busybox"));
+  await conjunto.alocar(ocupante("I-3"), doPython);
 
   assert.deepEqual(estados(), [
-    ["livre", null, "alpine"],
-    ["alocado", "I-3", "busybox"],
+    ["livre", null, await imagemDe(doNode)],
+    ["alocado", "I-3", await imagemDe(doPython)],
   ]);
   assert.ok(
     docker.registro().some(([comando, , id]) => comando === "rm" && id === sujo.container_id),
@@ -124,8 +132,8 @@ test("fixo na capacidade: o parado de outra imagem cede a vaga, o sujo primeiro,
 test("dois alocar ao mesmo tempo na última vaga: um recebe o container, o outro é informado da indisponibilidade", async () => {
   const { docker, conjunto } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
   const resultados = await Promise.allSettled([
-    conjunto.alocar(ocupante("I-1"), alpine),
-    conjunto.alocar(ocupante("I-2"), alpine),
+    conjunto.alocar(ocupante("I-1"), doNode),
+    conjunto.alocar(ocupante("I-2"), doNode),
   ]);
   assert.deepEqual(resultados.map(({ status }) => status).sort(), ["fulfilled", "rejected"]);
   const recusa = resultados.find((resultado) => resultado.status === "rejected");
@@ -136,26 +144,26 @@ test("dois alocar ao mesmo tempo na última vaga: um recebe o container, o outro
 test("a criação que falha devolve a vaga ao conjunto", async () => {
   const { docker, conjunto, pastaDoDocker } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
   docker.falharComando("run", "docker travado");
-  await assert.rejects(conjunto.alocar(ocupante("I-1"), alpine), /docker travado/);
+  await assert.rejects(conjunto.alocar(ocupante("I-1"), doNode), /docker travado/);
   rmSync(join(pastaDoDocker, "falhas", "run"));
-  await conjunto.alocar(ocupante("I-1"), alpine);
+  await conjunto.alocar(ocupante("I-1"), doNode);
   assert.equal(docker.containers().length, 1);
 });
 
 test("o fixo mantém os parados além da ociosidade", async () => {
-  const { conjunto, estados, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 2 });
-  await conjunto.alocar(ocupante("I-1"), alpine);
+  const { conjunto, estados, liberar, imagemDe } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 2 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
   await liberar("I-1");
   await conjunto.eliminarOciosos("2026-11-14T10:00:00.000Z");
-  assert.deepEqual(estados(), [["livre", null, "alpine"]]);
+  assert.deepEqual(estados(), [["livre", null, await imagemDe(doNode)]]);
 });
 
 test("o variável elimina os ociosos só até o mínimo, o sujo e o livre mais antigo primeiro", async () => {
-  const { docker, conjunto, estados, pastaDoDocker, aos, liberar } = cenario({
+  const { docker, conjunto, estados, pastaDoDocker, aos, liberar, imagemDe } = cenario({
     conjunto: "variavel",
     minimo_do_conjunto: 2,
   });
-  for (const dono of ["I-1", "I-2", "I-3", "I-4"]) await conjunto.alocar(ocupante(dono), alpine);
+  for (const dono of ["I-1", "I-2", "I-3", "I-4"]) await conjunto.alocar(ocupante(dono), doNode);
   await liberar("I-1");
   aos(1);
   await liberar("I-3");
@@ -167,8 +175,8 @@ test("o variável elimina os ociosos só até o mínimo, o sujo e o livre mais a
   await conjunto.eliminarOciosos("2026-11-14T10:00:00.000Z");
 
   assert.deepEqual(estados(), [
-    ["livre", null, "alpine"],
-    ["alocado", "I-4", "alpine"],
+    ["livre", null, await imagemDe(doNode)],
+    ["alocado", "I-4", await imagemDe(doNode)],
   ]);
   assert.equal(docker.containers().length, 2);
 });

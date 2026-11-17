@@ -6,6 +6,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
+import { grupoDeProcessoVivo } from "../../apoio-testes/grupo_de_processo_vivo.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
@@ -247,16 +248,6 @@ function execucoesDoT1(raiz: string): { grupo_processo?: number | null; fim?: st
   return execucoes;
 }
 
-/** O grupo de processo existe (o `kill -0` não lança). */
-const grupoVivo = (pgid: number): boolean => {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 // MELHORIAS §5.2 e §5.3 (ticket 20): o serviço cai (SIGKILL, sem parada limpa) com o pi do T1 rodando. A identidade do
 // processo (a execução e o grupo do pi) já estava gravada; a subida seguinte mata o pi órfão por ela e falha o ticket como
 // "serviço reiniciado", e o 1º ciclo do agendador o retoma com uma execução nova só: nada roda em dobro, nada se perde.
@@ -274,14 +265,14 @@ test.describe("ticket 20: queda no meio da execução", () => {
     const saiu = once(fabriquinha.servico, "exit");
     fabriquinha.servico.kill("SIGKILL");
     await saiu;
-    expect(grupoVivo(pgidDaQueda)).toBe(true); // o pi sobreviveu à queda do serviço
+    expect(grupoDeProcessoVivo(pgidDaQueda)).toBe(true); // o pi sobreviveu à queda do serviço
     rmSync(join(fabriquinha.raiz, "web.url")); // a queda não apaga o link morto
     const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
     banco.exec("UPDATE configuracao SET agendador_ativo = 1, intervalo_min = 1");
     banco.close();
 
     const nova = await fabriquinha.reiniciar();
-    await expect.poll(() => grupoVivo(pgidDaQueda)).toBe(false);
+    await expect.poll(() => grupoDeProcessoVivo(pgidDaQueda)).toBe(false);
     const [daQueda] = execucoesDoT1(fabriquinha.raiz);
     expect(execucoesDoT1(fabriquinha.raiz)).toHaveLength(1);
     expect(daQueda?.fim).not.toBeNull();
@@ -298,7 +289,7 @@ test.describe("ticket 20: queda no meio da execução", () => {
     expect(execucoes.filter((execucao) => execucao.fim === null)).toHaveLength(1);
     const pgidDaRetomada = Number(execucoes[1]?.grupo_processo);
     expect(pgidDaRetomada).not.toBe(pgidDaQueda);
-    expect(grupoVivo(pgidDaRetomada)).toBe(true);
+    expect(grupoDeProcessoVivo(pgidDaRetomada)).toBe(true);
     await pagina.reload();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
       /Sessão pi ativa|Em execução \(sistema\)/,
