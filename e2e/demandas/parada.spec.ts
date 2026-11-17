@@ -247,15 +247,14 @@ function execucoesDoT1(raiz: string): { grupo_processo?: number | null; fim?: st
   return execucoes;
 }
 
-/** O grupo de processo existe (o `kill -0` não lança). */
-const grupoVivo = (pgid: number): boolean => {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** O grupo de processo tem algum membro que não é zumbi (sem init que colha, o morto continua no `kill -0`). */
+const grupoVivo = (pgid: number): boolean =>
+  execFileSync("ps", ["-eo", "pgid=,stat="], { encoding: "utf8" })
+    .split("\n")
+    .some((linha) => {
+      const [grupo, estado] = linha.trim().split(/\s+/);
+      return Number(grupo) === pgid && !estado?.startsWith("Z");
+    });
 
 // MELHORIAS §5.2 e §5.3 (ticket 20): o serviço cai (SIGKILL, sem parada limpa) com o pi do T1 rodando. A identidade do
 // processo (a execução e o grupo do pi) já estava gravada; a subida seguinte mata o pi órfão por ela e falha o ticket como
