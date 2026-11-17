@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -68,13 +69,18 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
+// Sem init que recolha órfãos (como no sandbox), os mortos ficam zumbis e o grupo ainda "existe" para o kernel; só conta quem não é zumbi.
 const grupoEstaVivo = (grupo: number): boolean => {
   try {
     process.kill(-grupo, 0);
-    return true;
   } catch {
     return false;
   }
+  const processos = execFileSync("ps", ["-A", "-o", "pgid=,stat="], { encoding: "utf8" }).split("\n");
+  return processos.some((linha) => {
+    const [grupoDoProcesso, estado] = linha.trim().split(/\s+/);
+    return Number(grupoDoProcesso) === grupo && !estado?.startsWith("Z");
+  });
 };
 
 /**
