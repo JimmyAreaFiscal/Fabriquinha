@@ -8,7 +8,10 @@ import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
 import { dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
-import { PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import {
+  type InstalacaoDoHarness,
+  PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
+} from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { executar } from "../../../../shared/infra/processo.ts";
 import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import {
@@ -20,7 +23,11 @@ import {
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
+/** O começo do nome no docker do container do slot `n`: `fabriquinha-slot-<n>`. */
+const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
+/** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
+const TAMANHO_DO_SHM = "1g";
 const PASTA_DE_TRABALHO = "/trabalho";
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
@@ -59,6 +66,8 @@ export interface Montagens {
   raiz: string;
   /** O `pacote-pi`, só em leitura. */
   pacote: string;
+  /** A instalação do harness no host: a raiz, montada em leitura, e o executável para onde o comando do container aponta. */
+  harness: InstalacaoDoHarness;
 }
 
 /** O que o container recebe por cópia (nunca por montagem), na criação: o pi do Auditor, `~/.claude` e `~/.codex`. */
@@ -107,6 +116,11 @@ interface ContainerCriado {
   container_id: string;
 }
 
+/** O container que `criar` devolve: o slot que nomeou `fabriquinha-slot-<n>` no docker. */
+interface ContainerCriadoNoSlot extends ContainerCriado {
+  slot: number;
+}
+
 /** O projeto que tem imagem: `imagem_do_ambiente` é o caminho de um Dockerfile no repositório ou o nome de uma imagem. */
 interface ProjetoComImagem {
   nome: string;
@@ -126,7 +140,7 @@ async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
 
 /** Cria no host o que o container monta e devolve os `-v` (`origem:destino:modo`). */
 function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): string[] {
-  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote } = montagens;
+  const { pastaDasWorktreesDoProjeto, raiz_git, raiz, pacote, harness } = montagens;
   const { sessoes, execucoes } = pastasDoAmbiente(raiz, idDoAmbiente);
   const gitDoClone = join(raiz_git, ".git");
   // Só estas pastas do `.git` aceitam escrita; o resto (`commondir`, `config`, `hooks`, `info`, `HEAD`) o git do usuário
@@ -143,6 +157,7 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
     [sessoes, join(raiz, "sessoes"), "rw"],
     [execucoes, join(raiz, "execucoes"), "rw"],
     [pacote, pacote, "ro"],
+    [harness.raiz, harness.raiz, "ro"],
   ];
   return montagensComModo.flatMap(([origem, destino, modo]) => ["-v", `${origem}:${destino}:${modo}`]);
 }
@@ -151,19 +166,51 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
 const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
 
 /**
+ * O que vai de cada pasta para o container: só a configuração (credenciais, ajustes, instruções, skills, extensões e
+ * pacotes do harness). Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
+ * read it") e o agente do container não precisa deles. Caminhos relativos à raiz da pasta; o que não existe é pulado.
+ */
+const CONFIGURACAO_POR_DESTINO = {
+  // npm/ e git/ são os pacotes do `settings.json` (o pi-claude-bridge); bin/ tem o rg e o fd das ferramentas do pi.
+  [DIR_DO_PI_NO_HOME]: [
+    "auth.json",
+    "settings.json",
+    "trust.json",
+    "models.json",
+    "claude-bridge.json",
+    "AGENTS.md",
+    "SYSTEM.md",
+    "skills",
+    "extensions",
+    "agents",
+    "npm",
+    "git",
+    "bin",
+  ],
+  ".claude": [".credentials.json", "settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
+  ".codex": ["auth.json", "config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
+} as const;
+
+type DestinoNoHome = keyof typeof CONFIGURACAO_POR_DESTINO;
+
+/**
  * Copia `origem` (uma pasta do host) para `destinoNoHome`, relativo ao `HOME` do container, por `tar` no `docker exec`:
  * é cópia, e não montagem, então o que o agente altera ali não volta ao host.
  */
 function copiarParaOHomeDoContainer(
   containerId: string,
   origem: string,
-  destinoNoHome: string,
+  destinoNoHome: DestinoNoHome,
   limiteMs: number,
 ): Promise<void> {
+  const configuracao = CONFIGURACAO_POR_DESTINO[destinoNoHome].filter((item) => existsSync(join(origem, item)));
+  // Sem nada da configuração, não há o que copiar (e o tar recusa criar um arquivo vazio).
+  if (configuracao.length === 0) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const sinal = AbortSignal.timeout(limiteMs);
     // O tar e o docker vêm do PATH do serviço, como em `executar`; o docker falso dos testes entra assim.
-    const empacotar = spawn("tar", ["-C", origem, "-c", "."], { stdio: ["ignore", "pipe", "pipe"], signal: sinal }); // NOSONAR
+    const argumentosDoTar = ["-C", origem, "-c", "--", ...configuracao];
+    const empacotar = spawn("tar", argumentosDoTar, { stdio: ["ignore", "pipe", "pipe"], signal: sinal }); // NOSONAR
     const extrair = spawn(
       "docker", // NOSONAR
       [
@@ -216,8 +263,8 @@ function exigirLoginDoPi({ dir_do_pi }: Copias): void {
 
 /** Copia para o container o pi do Auditor e, se existem, o `.claude` e o `.codex` do usuário. */
 async function copiarParaOContainer(containerId: string, { dir_do_pi, home_do_usuario }: Copias): Promise<void> {
-  const copias: [string, string][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
-  for (const pasta of [".claude", ".codex"])
+  const copias: [string, DestinoNoHome][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
+  for (const pasta of [".claude", ".codex"] as const)
     if (existsSync(join(home_do_usuario, pasta))) copias.push([join(home_do_usuario, pasta), pasta]);
   for (const [origem, destinoNoHome] of copias)
     await copiarParaOHomeDoContainer(containerId, origem, destinoNoHome, LIMITE_COMANDO_MS);
@@ -260,30 +307,54 @@ export class GeradorDeAmbientes {
 
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o
   // `kill -9 -1` da `limpar` derruba o `tail` e o tini sai junto. Trocar por um PID 1 que colha, se os zumbis pesarem.
+  /** O comando do harness (`pi`) no PATH do container, apontando para o executável montado do host. */
+  async #instalarComandoDoHarness(containerId: string, { comando, executavel }: InstalacaoDoHarness): Promise<void> {
+    await rodarDocker(
+      // Como root: a imagem pode rodar com usuário sem escrita em /usr/local/bin; a mínima (busybox) nem tem a pasta.
+      [
+        "exec",
+        "-u",
+        "0",
+        containerId,
+        "sh",
+        "-c",
+        `mkdir -p /usr/local/bin && ln -sf '${executavel}' /usr/local/bin/${comando}`,
+      ],
+      this.#limiteDoComandoMs,
+    );
+  }
+
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
-   * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
+   * (`host-gateway`), só para a porta da API do agente. O nome no docker é `fabriquinha-slot-<slot>`: o docker não aceita
+   * espaço, e o nome repetido faz o `run` falhar. Sem `montagens`, o container nasce sem pasta do host; sem
    * `copias`, sem o pi, o `.claude` nem o `.codex`.
    */
   async criar(
     imagem: ImagemDoAmbiente,
     limites: Limites,
     portaDaApi: number,
+    slot: number,
     montagens?: Montagens,
     copias?: Copias,
-  ): Promise<ContainerCriado> {
+  ): Promise<ContainerCriadoNoSlot> {
     if (copias) exigirLoginDoPi(copias);
     const id = randomUUID();
     const containerId = await rodarDocker(
       [
         "run",
         "-d",
+        "--name",
+        `${PREFIXO_DO_NOME_DO_SLOT}${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
         "--memory",
         `${String(limites.memoria_maxima_mb)}m`,
         "--cpus",
         String(limites.cpus),
+        // O Chromium do e2e cai ("Page crashed") com os 64 MB padrão do /dev/shm do container.
+        "--shm-size",
+        TAMANHO_DO_SHM,
         "--workdir",
         PASTA_DE_TRABALHO,
         "--add-host",
@@ -298,12 +369,13 @@ export class GeradorDeAmbientes {
     );
     try {
       await this.#restringirSaidaParaOHost(id, containerId, portaDaApi);
+      if (montagens) await this.#instalarComandoDoHarness(containerId, montagens.harness);
       if (copias) await copiarParaOContainer(containerId, copias);
     } catch (erro) {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
       throw erro;
     }
-    return { id, container_id: containerId };
+    return { id, container_id: containerId, slot };
   }
 
   /**
@@ -387,5 +459,24 @@ export class GeradorDeAmbientes {
         const [containerId = "", id = ""] = linha.split("\t");
         return { id, container_id: containerId };
       });
+  }
+
+  /**
+   * Os slots cujo nome `fabriquinha-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
+   * instância ou teste no mesmo daemon e o que um `rm` ainda não tirou. Criar com um deles falharia por nome repetido.
+   */
+  async listarSlotsTomadosNoDocker(): Promise<Set<number>> {
+    const saida = await rodarDocker(
+      ["ps", "--all", "--filter", `name=${PREFIXO_DO_NOME_DO_SLOT}`, "--format", "{{.Names}}"],
+      this.#limiteDoComandoMs,
+    );
+    const padraoDoNomeDoSlot = new RegExp(`^${PREFIXO_DO_NOME_DO_SLOT}(\\d+)$`);
+    return new Set(
+      saida
+        .split("\n")
+        .map((nome) => padraoDoNomeDoSlot.exec(nome)?.[1])
+        .filter((numero) => numero !== undefined)
+        .map(Number),
+    );
   }
 }

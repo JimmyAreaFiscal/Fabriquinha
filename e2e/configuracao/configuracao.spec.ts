@@ -251,6 +251,7 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     id: "amb-livre",
     container_id: livre.id,
     imagem: "alpine",
+    slot: 1,
     alocado_para: "I-1",
     criado_em: "2026-11-09T10:00:00.000Z",
   });
@@ -259,6 +260,7 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     id: "amb-alocado",
     container_id: alocado.id,
     imagem: "node:22",
+    slot: 2,
     alocado_para: "I-2",
     criado_em: "2026-11-09T12:00:00.000Z",
   });
@@ -276,19 +278,20 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
   const linhaDoLivre = pagina.locator('tr[data-ambiente="amb-livre"]');
   const linhaDoAlocado = pagina.locator('tr[data-ambiente="amb-alocado"]');
   const data = /\d{2}\/\d{2}\/\d{4}/;
-  for (const [linha, id, imagem, estado, alocadoPara] of [
-    [linhaDoLivre, "amb-livre", "alpine", "livre", "—"],
-    [linhaDoAlocado, "amb-alocado", "node:22", "alocado", "I-2"],
+  for (const [linha, id, container, imagem, estado, alocadoPara] of [
+    [linhaDoLivre, "amb-livre", "Fabriquinha - Slot 1", "alpine", "livre", "—"],
+    [linhaDoAlocado, "amb-alocado", "Fabriquinha - Slot 2", "node:22", "alocado", "I-2"],
   ] as const) {
     const celulas = linha.locator("td");
     await expect(celulas.nth(0)).toHaveText(id);
-    await expect(celulas.nth(1)).toHaveText(imagem);
-    await expect(celulas.nth(2)).toHaveText(estado);
-    await expect(celulas.nth(3)).toHaveText(alocadoPara);
-    await expect(celulas.nth(4)).toHaveText(data);
+    await expect(celulas.nth(1)).toHaveText(container);
+    await expect(celulas.nth(2)).toHaveText(imagem);
+    await expect(celulas.nth(3)).toHaveText(estado);
+    await expect(celulas.nth(4)).toHaveText(alocadoPara);
+    await expect(celulas.nth(5)).toHaveText(data);
     // Com host_local, o docker não mede o uso.
-    await expect(celulas.nth(5)).toHaveText("—");
     await expect(celulas.nth(6)).toHaveText("—");
+    await expect(celulas.nth(7)).toHaveText("—");
   }
   await expect(linhaDoAlocado.getByRole("button", { name: "Eliminar" })).toBeDisabled();
   await expect(linhaDoLivre.getByRole("button", { name: "Eliminar" })).toBeEnabled();
@@ -348,6 +351,7 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
   await expect(pagina.getByLabel("Tipo de Ambiente")).toHaveValue("container");
   await expect(pagina.locator(".conjunto-ambiente thead th")).toHaveText([
     "Id",
+    "Container",
     "Imagem",
     "Estado",
     "Alocado para",
@@ -361,8 +365,8 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
     ["amb-ocioso", "0,00 CPUs", "1.536 MB"],
   ] as const) {
     const celulas = pagina.locator(`tr[data-ambiente="${id}"] td`);
-    await expect(celulas.nth(5)).toHaveText(cpu);
-    await expect(celulas.nth(6)).toHaveText(memoria);
+    await expect(celulas.nth(6)).toHaveText(cpu);
+    await expect(celulas.nth(7)).toHaveText(memoria);
   }
   expect(dockerFalso.registro().filter(([comando]) => comando === "stats")).toEqual([
     [
@@ -380,7 +384,7 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
     await fotografar(pagina, info, `configuracao-ambiente-medido-${String(largura)}`);
   }
   // No celular, a tabela rola de lado dentro do painel, como antes: rolada até o fim, a CPU e a memória aparecem.
-  const memoriaDoOcupado = pagina.locator('tr[data-ambiente="amb-ocupado"] td').nth(6);
+  const memoriaDoOcupado = pagina.locator('tr[data-ambiente="amb-ocupado"] td').nth(7);
   await memoriaDoOcupado.scrollIntoViewIfNeeded();
   await expect(memoriaDoOcupado).toBeInViewport();
   // De volta ao topo da página, a tabela continua rolada de lado: a foto inteira não repete o menu fixo no meio.

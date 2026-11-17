@@ -11,7 +11,7 @@ import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
-import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
+import { INSTALACAO_DO_PI_FALSO, type PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   despachoDasEtapas,
   ConducaoDePlanejar,
@@ -373,6 +373,14 @@ test(
     const segundaExecucao = execucoesDe(c, ticket).at(-1);
     assert.notEqual(segundaExecucao?.id, primeiraExecucao.id);
     motorDoBanco(c.banco).encerrar(String(segundaExecucao?.id));
+    // O encerramento ainda escreve no log da execução depois de gravar o fim; o último `estado` do SSE sai depois disso.
+    // Sem esperá-lo, a escrita cai depois que o cenário apagou a raiz.
+    const encerrada = (evento: EventoDoChat) =>
+      evento.type === "estado" &&
+      (evento.execucoes as { id: string; fim: string | null }[] | undefined)?.some(
+        (execucao) => execucao.id === segundaExecucao?.id && execucao.fim !== null,
+      ) === true;
+    await esperar(() => eventos.some(encerrada), "o último estado do pi retomado");
   },
 );
 
@@ -591,7 +599,9 @@ test(
     assert.ok(
       !origens.some((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
     );
-    assert.equal(binds?.length, 9);
+    // A décima é a instalação do pi, só em leitura.
+    assert.ok(binds?.includes(`${INSTALACAO_DO_PI_FALSO.raiz}:${INSTALACAO_DO_PI_FALSO.raiz}:ro`));
+    assert.equal(binds?.length, 10);
   },
 );
 

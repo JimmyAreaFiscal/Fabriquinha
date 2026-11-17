@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { montarGestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
-import { PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
+import { instalacaoDoPi, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
 import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";
@@ -41,6 +41,7 @@ test(
         porta_da_api: 1,
         home_do_usuario: raiz,
         pacote_do_harness: PACOTE,
+        instalacao_do_harness: () => instalacaoDoPi(),
         dir_do_harness_do_auditor: dirDoPi,
       },
       registrarErro: noLog,
@@ -86,5 +87,61 @@ test(
     await gestao.deletar(reusado.id);
     assert.deepEqual(await gestao.listar(), []);
     assert.equal(dockerDeVerdade("ps", "--all", "--quiet", "--filter", `id=${alocado.container_id}`), "");
+  },
+);
+
+test(
+  "o container de Ambiente roda o pi do host e o fabriquinha do pacote, e nenhum outro CLI do host",
+  {
+    skip: process.env.FABRIQUINHA_TESTE_DOCKER
+      ? false
+      : "defina FABRIQUINHA_TESTE_DOCKER=1 para rodar com o Docker de verdade",
+  },
+  async () => {
+    const { banco, fechar } = abrirBancoTemporario();
+    const raiz = raizCompartilhadaComODocker();
+    const dirDoPi = join(raiz, "pi-do-auditor");
+    mkdirSync(dirDoPi);
+    writeFileSync(join(dirDoPi, "auth.json"), "{}");
+    const gestao = await montarGestaoDeAmbientes({
+      banco,
+      configuracao: () => ConfiguracaoDoAmbiente.parse({ tipo: "container" }),
+      servico: {
+        raiz,
+        porta_da_api: 1,
+        home_do_usuario: raiz,
+        pacote_do_harness: PACOTE,
+        instalacao_do_harness: () => instalacaoDoPi(),
+        dir_do_harness_do_auditor: dirDoPi,
+      },
+      registrarErro: noLog,
+    });
+    const projeto = {
+      nome: "projeto",
+      raiz_git: mkdtempSync(join(raiz, "repo-")),
+      imagem_do_ambiente: "node:22-bookworm-slim",
+    };
+    const alocado = await gestao.alocar(
+      { dono: "espaco", pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") },
+      projeto,
+    );
+    after(async () => {
+      await gestao.parar();
+      if (alocado instanceof AmbienteContainer)
+        execFileSync("docker", ["rm", "--force", alocado.container_id], { stdio: "ignore" });
+      rmSync(raiz, { recursive: true, force: true });
+      fechar();
+    });
+    assert.ok(alocado instanceof AmbienteContainer);
+    const noContainer = (linha: string) =>
+      alocado.executar({ programa: linha, argumentos: [], cwd: "/", env: {}, noShell: true, limiteMs: 60_000 });
+
+    const pi = await noContainer("pi --version");
+    assert.equal(pi.codigo, 0, pi.saida);
+    assert.match(pi.saida, /\d+\.\d+\.\d+/);
+    const cli = await noContainer("command -v fabriquinha");
+    assert.equal(cli.saida.trim(), join(PACOTE, "bin", "fabriquinha"));
+    const outros = await noContainer("for c in gh az docker claude codex; do command -v $c; done; true");
+    assert.equal(outros.saida.trim(), "");
   },
 );

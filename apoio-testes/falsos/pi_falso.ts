@@ -19,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { setTimeout as dormir } from "node:timers/promises";
 
 /** Um evento a emitir no stdout, ou uma pausa antes do próximo. */
@@ -569,3 +570,10 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
 }
 
 if (import.meta.main) await executarPiFalso();
+
+/** A instalação do harness dos testes que montam o Ambiente sem o pi do host: este arquivo, na pasta dos falsos. */
+export const INSTALACAO_DO_PI_FALSO = {
+  comando: "pi",
+  executavel: fileURLToPath(import.meta.url),
+  raiz: dirname(fileURLToPath(import.meta.url)),
+};

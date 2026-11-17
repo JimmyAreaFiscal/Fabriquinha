@@ -19,6 +19,7 @@ import { raizDo } from "../../../../../../shared/armazenamento/banco.ts";
 import { anotar, logDaOperacao } from "../../../../../../shared/infra/registro.ts";
 import { ConducaoDeAjustarResultado } from "../../ajustar_resultado/conducao_de_ajustar_resultado.ts";
 import { guardarMarcoDaSessao, sessaoDaRodada } from "../../ajustar_resultado/sessao_ajustes.ts";
+import { devolverAmbienteDoEspaco } from "../../devolucao_do_ambiente.ts";
 import { projetosCadastrados } from "../../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../../modulos_do_ciclo.ts";
 
@@ -38,12 +39,13 @@ const referenciaDaRodada = (endereco: Endereco) => ({
  * confirmação não grava nada: o gate segue aberto para nova tentativa.
  */
 async function aprovarPR(
-  { banco, repositorio }: ModulosDoCiclo,
+  modulos: ModulosDoCiclo,
   endereco: Endereco,
   entrada: EntradaDoGate,
   ator: Ator,
   relogio: Relogio,
 ): Promise<AgregadoDemanda> {
+  const { banco, repositorio } = modulos;
   const ref = referenciaDaRodada(endereco);
   const ag = carregarDemanda(banco, ref.demanda_id);
   const rodada = existe(
@@ -78,6 +80,8 @@ async function aprovarPR(
   );
   const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
   await repositorio.integrarPR(projeto, espaco, log);
+  // A integração é o último uso do Ambiente da rodada.
+  await devolverAmbienteDoEspaco(modulos, ref);
 
   return aprovarPRIntegradoDaRodada(banco, gate, endereco, entrada, ator, relogio, {
     rodada_id: ref.rodada_id,
