@@ -476,3 +476,33 @@ test("comando que passa do limite é morto e a falha diz o limite", async () => 
     process.env.PATH = `${join(base, "docker", "bin")}:${caminhoOriginal ?? ""}`;
   }
 });
+
+test("criar monta o tmpfs do marcador e o grava depois das regras de rede; só então as regras contam como intactas", async () => {
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
+  const chamadas = docker.registro();
+  const run = chamadas.findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
+  assert.equal(run[run.indexOf("--tmpfs") + 1], "/run/fabriquinha");
+  const posicao = (comando: string, opcao: string) =>
+    chamadas.findLastIndex(([nome, primeira]) => nome === comando && primeira === opcao);
+  assert.ok(posicao("run", "--rm") < posicao("exec", "-u"), "o marcador vem depois das regras");
+  assert.equal(await gerador.regrasDeRedeIntactas(criado), true);
+});
+
+test("regrasDeRedeIntactas: o parado e o religado fora da Fabriquinha não as têm; o docker fora do ar lança", async () => {
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
+  docker.pararContainer(criado.container_id);
+  assert.equal(await gerador.regrasDeRedeIntactas(criado), false, "parado");
+  docker.religarContainer(criado.container_id);
+  assert.equal(await gerador.regrasDeRedeIntactas(criado), false, "religado, sem o marcador do tmpfs");
+
+  docker.pararDocker();
+  await assert.rejects(gerador.regrasDeRedeIntactas(criado), /Cannot connect to the Docker daemon/);
+  docker.religarDocker();
+});
+
+test("listarDaFabriquinha diz quais containers estão rodando", async () => {
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API);
+  assert.equal((await gerador.listarDaFabriquinha()).find((c) => c.id === criado.id)?.rodando, true);
+  docker.pararContainer(criado.container_id);
+  assert.equal((await gerador.listarDaFabriquinha()).find((c) => c.id === criado.id)?.rodando, false);
+});

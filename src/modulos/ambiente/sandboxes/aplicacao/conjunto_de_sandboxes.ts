@@ -122,7 +122,8 @@ export class ConjuntoDeSandboxes {
   /**
    * Dá ao ocupante um livre da mesma imagem ou, sem nenhum, um container novo; o que já tem um recebe o mesmo. Na
    * capacidade, o novo toma a vaga de um parado e, sem parado, lança `ErroExterno` de indisponibilidade: quem pede decide
-   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura).
+   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura). O container que parou, ou que foi religado
+   * fora da Fabriquinha e perdeu as regras de rede, nunca é entregue: é eliminado e o ocupante recebe outro.
    */
   async alocar(
     { dono: alocadoPara, pasta_das_worktrees_do_projeto }: OcupanteDoAmbiente,
@@ -130,11 +131,18 @@ export class ConjuntoDeSandboxes {
   ): Promise<AmbienteGravado> {
     const servico = this.#servico;
     const imagem = await this.#gerador.garantirImagem(projeto);
-    // Tudo daqui até o retorno é síncrono, então dois alocar ao mesmo tempo nunca pegam o mesmo livre.
+    // Pegar o livre é um UPDATE só, então dois alocar ao mesmo tempo nunca pegam o mesmo; a conferência vem depois.
     const jaAlocado = buscarAmbienteAlocadoPara(this.#banco, alocadoPara);
-    if (jaAlocado) return jaAlocado;
-    const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
-    if (livreReaproveitado) return livreReaproveitado;
+    if (jaAlocado) {
+      if (await this.#gerador.regrasDeRedeIntactas(jaAlocado)) return jaAlocado;
+      await this.#eliminarPerdido(jaAlocado); // parou ou foi religado sem as regras: o ocupante recebe um novo
+    }
+    // Cada livre é entregue só depois de conferido, porque o docker pode ter parado enquanto ele esperava.
+    const pegarLivre = () => alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
+    for (let livre = pegarLivre(); livre; livre = pegarLivre()) {
+      if (await this.#gerador.regrasDeRedeIntactas(livre)) return livre;
+      await this.#eliminarPerdido(livre);
+    }
     const montagens: Montagens = {
       pastaDasWorktreesDoProjeto: pasta_das_worktrees_do_projeto,
       raiz_git: projeto.raiz_git,
@@ -227,9 +235,10 @@ export class ConjuntoDeSandboxes {
 
   /**
    * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado; linha
-   * do banco cujo container sumiu vira `eliminado`. O que não tem o rótulo nem aparece, porque a listagem só traz os da
-   * Fabriquinha. Todo container ainda `alocado` era de um ocupante da instância anterior, cujo processo morreu com o
-   * reinício: é limpo e volta `livre` (`sujo` se a limpeza falhar).
+   * do banco cujo container sumiu vira `eliminado`; o que parou está perdido (religado, ficaria sem as regras de rede):
+   * as sessões e execuções do ocupante vão para o Espaço e o container é eliminado. O que não tem o rótulo nem aparece,
+   * porque a listagem só traz os da Fabriquinha. Todo container ainda `alocado` e rodando era de um ocupante da instância
+   * anterior, cujo processo morreu com o reinício: é limpo e volta `livre` (`sujo` se a limpeza falhar).
    * ponytail: um `alocar` que chegue durante esta espera pode ter o container recém-alocado limpo; a subida é curta e o
    * agendador só liga depois dela.
    */
@@ -238,12 +247,18 @@ export class ConjuntoDeSandboxes {
     const noBanco = listarAmbientes(this.#banco);
     const containersDoBanco = new Set(noBanco.map(({ container_id }) => container_id));
     const containersDoDocker = new Set(noDocker.map(({ container_id }) => container_id));
+    const containersParados = new Set(
+      noDocker.filter(({ rodando }) => !rodando).map(({ container_id }) => container_id),
+    );
     for (const orfao of noDocker.filter(({ container_id }) => !containersDoBanco.has(container_id)))
       await this.#gerador.eliminar(orfao);
     for (const sumido of noBanco.filter(({ container_id }) => !containersDoDocker.has(container_id)))
       eliminarAmbiente(this.#banco, sumido.id);
+    for (const parado of noBanco.filter(({ container_id }) => containersParados.has(container_id)))
+      await this.#eliminarPerdido(parado);
     for (const alocado of noBanco.filter(
-      ({ estado, container_id }) => estado === "alocado" && containersDoDocker.has(container_id),
+      ({ estado, container_id }) =>
+        estado === "alocado" && containersDoDocker.has(container_id) && !containersParados.has(container_id),
     ))
       await this.#limparEDevolver(alocado);
   }
@@ -276,6 +291,13 @@ export class ConjuntoDeSandboxes {
       throw erro;
     }
     return alocado;
+  }
+
+  /** Elimina o container que parou ou perdeu as regras de rede, depois de recolher para o Espaço o que o ocupante pôs nele. */
+  async #eliminarPerdido(perdido: AmbienteGravado): Promise<void> {
+    if (perdido.estado === "alocado") recolherParaOEspaco(this.#servico.raiz, perdido.id, String(perdido.alocado_para));
+    eliminarAmbiente(this.#banco, perdido.id);
+    await this.#gerador.eliminar(perdido);
   }
 
   // A linha já está `eliminado` (reservada). Se o docker falhar aqui, o container fica órfão com o rótulo e a

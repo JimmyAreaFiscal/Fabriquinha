@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -68,14 +69,15 @@ const arquivosDePid = (): string[] => {
   return existsSync(pasta) ? readdirSync(pasta) : [];
 };
 
-const grupoEstaVivo = (grupo: number): boolean => {
-  try {
-    process.kill(-grupo, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// Zumbi não conta: sem um init que recolha os órfãos (o PID 1 de um container de CI), o processo morto fica no grupo e o
+// `kill(-grupo, 0)` o acha para sempre.
+const grupoEstaVivo = (grupo: number): boolean =>
+  spawnSync("ps", ["-eo", "pgid=,stat="], { encoding: "utf8" })
+    .stdout.split("\n")
+    .some((linha) => {
+      const [pgid, estado = ""] = linha.trim().split(/\s+/);
+      return Number(pgid) === grupo && !estado.startsWith("Z");
+    });
 
 /**
  * O grupo sinalizado morre logo, mas não no mesmo instante em que o líder sai: o filho órfão do `sh` ainda existe até o
@@ -338,6 +340,43 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
   await assert.rejects(
     ambiente.sinalizar({ ambiente_id: "host_local", grupo_processo: 1 }, "SIGTERM"),
     /é do ambiente host_local, não do amb-1.*sinalize pelo ambiente que lançou/s,
+  );
+});
+
+test("sandboxCaiu: só o container rodando e com o docker respondendo está de pé", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-2",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  assert.equal(await doContainer.sandboxCaiu(), false);
+  docker.pararDocker();
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    docker.religarDocker();
+  }
+  docker.pararContainer(id);
+  assert.equal(await doContainer.sandboxCaiu(), true);
+  const pathComDocker = process.env.PATH;
+  process.env.PATH = "/inexistente"; // o docker nem roda
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    process.env.PATH = pathComDocker;
+  }
+  assert.equal(
+    await new AmbienteContainer({
+      id: "amb-3",
+      container_id: "sumido",
+      bin_do_pacote: binDoPacote,
+      raiz: base,
+      url_da_api: urlDaApi,
+    }).sandboxCaiu(),
+    true,
   );
 });
 

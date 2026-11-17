@@ -186,3 +186,39 @@ test("exec de outro comando só vai para o registro, sem rodar no host", () => {
   const { id } = falso.semearContainer({});
   assert.equal(docker("exec", id, "sh", "-c", "exit 9").status, 0);
 });
+
+test("pararDocker faz todo comando falhar como o docker desligado, e religarDocker o devolve", () => {
+  const { id } = falso.semearContainer({});
+  falso.pararDocker();
+  for (const args of [["ps"], ["exec", id, "true"], ["rm", id]]) {
+    const resposta = docker(...args);
+    assert.equal(resposta.status, 1);
+    assert.match(resposta.stderr, /Cannot connect to the Docker daemon/);
+  }
+  assert.equal(falso.containers().length > 0, true, "o que está nos containers não muda");
+  falso.religarDocker();
+  assert.equal(docker("ps").status, 0);
+});
+
+test("o container parado aparece como exited no ps, recusa exec e perde o marcador do tmpfs ao religar", () => {
+  const { id } = falso.semearContainer({ rotulos: { "fabriquinha.ambiente": "amb-parado" } });
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "sem o marcador");
+  assert.equal(docker("exec", "-u", "0", id, "touch", "/run/fabriquinha/regras").status, 0);
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 0);
+
+  falso.pararContainer(id);
+  falso.pararContainer("inexistente");
+  assert.match(docker("ps", "--filter", "label=fabriquinha.ambiente").stdout, new RegExp(`${id}\tamb-parado\texited`));
+  assert.match(docker("exec", id, "true").stderr, /is not running/);
+
+  falso.religarContainer(id);
+  falso.religarContainer("inexistente");
+  assert.match(docker("ps", "--filter", "label=fabriquinha.ambiente").stdout, new RegExp(`${id}\tamb-parado\trunning`));
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "o tmpfs voltou vazio");
+
+  docker("exec", id, "touch", "/run/fabriquinha/regras");
+  assert.equal(docker("stop", id).status, 0);
+  assert.equal(falso.containers().find((container) => container.id === id)?.estado, "exited");
+  assert.equal(docker("start", id).status, 0);
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "o start também esvazia o tmpfs");
+});
