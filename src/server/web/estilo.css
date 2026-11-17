@@ -1188,6 +1188,22 @@ input.erro {
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
+/* Ambientes: cada célula numa linha só, para as linhas terem a mesma altura em qualquer largura. */
+.tabela-dos-ambientes td {
+  white-space: nowrap;
+}
+/* Um valor longo sem espaço (a imagem com o hash inteiro na tag) corta com reticências; o inteiro fica no `title`. */
+.tabela td.corta {
+  max-width: 16ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 1280px) {
+  .tabela td.corta {
+    max-width: 32ch;
+  }
+}
 .tabela tr:last-child td {
   border-bottom: 0;
 }
