@@ -6,7 +6,6 @@ import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
-import { grupoDeProcessoVivo } from "../../apoio-testes/grupo_de_processo_vivo.ts";
 import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import { motivoDaFalhaDoTicket, carregarDemanda } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { abrirBancoDaFabriquinha, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
@@ -15,6 +14,7 @@ import { sinalNoGrupo } from "../../src/shared/infra/processo.ts";
 import { expect, projeto, test } from "../apoio.ts";
 import { semearTicketAberto } from "../demandas-apoio.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
+import { grupoEstaVivo } from "../../apoio-testes/grupo_de_processo.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 
 // Um pi que não termina sozinho: só o sinal o encerra.
@@ -265,14 +265,14 @@ test.describe("ticket 20: queda no meio da execução", () => {
     const saiu = once(fabriquinha.servico, "exit");
     fabriquinha.servico.kill("SIGKILL");
     await saiu;
-    expect(grupoDeProcessoVivo(pgidDaQueda)).toBe(true); // o pi sobreviveu à queda do serviço
+    expect(grupoEstaVivo(pgidDaQueda)).toBe(true); // o pi sobreviveu à queda do serviço
     rmSync(join(fabriquinha.raiz, "web.url")); // a queda não apaga o link morto
     const banco = abrirBancoDaFabriquinha(fabriquinha.raiz);
     banco.exec("UPDATE configuracao SET agendador_ativo = 1, intervalo_min = 1");
     banco.close();
 
     const nova = await fabriquinha.reiniciar();
-    await expect.poll(() => grupoDeProcessoVivo(pgidDaQueda)).toBe(false);
+    await expect.poll(() => grupoEstaVivo(pgidDaQueda)).toBe(false);
     const [daQueda] = execucoesDoT1(fabriquinha.raiz);
     expect(execucoesDoT1(fabriquinha.raiz)).toHaveLength(1);
     expect(daQueda?.fim).not.toBeNull();
@@ -289,7 +289,7 @@ test.describe("ticket 20: queda no meio da execução", () => {
     expect(execucoes.filter((execucao) => execucao.fim === null)).toHaveLength(1);
     const pgidDaRetomada = Number(execucoes[1]?.grupo_processo);
     expect(pgidDaRetomada).not.toBe(pgidDaQueda);
-    expect(grupoDeProcessoVivo(pgidDaRetomada)).toBe(true);
+    expect(grupoEstaVivo(pgidDaRetomada)).toBe(true);
     await pagina.reload();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
       /Sessão pi ativa|Em execução \(sistema\)/,

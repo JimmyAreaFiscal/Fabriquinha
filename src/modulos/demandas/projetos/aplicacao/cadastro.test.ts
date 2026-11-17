@@ -841,3 +841,25 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
   assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
+
+test("o formulário grava os arquivos de dependências, os troca e os apaga quando vêm ausentes", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  const cadastrado = await cadastrarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), arquivos_de_dependencias: ["package.json"] },
+    conferenciasDo(banco),
+  );
+  assert.deepEqual(cadastrado.arquivos_de_dependencias, ["package.json"]);
+  assert.deepEqual(buscarProjeto(banco, "loja")?.arquivos_de_dependencias, ["package.json"]);
+  const trocado = await editarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), arquivos_de_dependencias: ["requirements.txt"] },
+    conferenciasDo(banco),
+  );
+  assert.deepEqual(trocado.arquivos_de_dependencias, ["requirements.txt"]);
+  await editarProjetoDoFormulario(banco, formularioDeLoja(repo), conferenciasDo(banco));
+  assert.equal(Object.hasOwn(buscarProjeto(banco, "loja") ?? {}, "arquivos_de_dependencias"), false);
+  banco.close();
+});

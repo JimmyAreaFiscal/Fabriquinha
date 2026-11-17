@@ -4,6 +4,7 @@ import type { Projeto } from "../../../../modulos/demandas/publico.ts";
 import type { Hospedagem } from "../../../../modulos/repositorio/publico.ts";
 import type { Effort, Modelo } from "../../../../modulos/sessoes/publico.ts";
 import type { EtapaTicket } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import type { ListaDePastas } from "../../../system/api/contrato/pastas.ts";
 import type {
   EstadoDaConfiguracao,
   EstadoDoAmbiente,
@@ -210,16 +211,20 @@ const FORMATO_DAS_CPUS = new Intl.NumberFormat("pt-BR", { minimumFractionDigits:
 const FORMATO_DA_MEMORIA = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 /** A CPU e a memória que o docker mediu no container; sem medida (host local ou docker fora do ar), um traço. */
-function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"]): string {
+export function usoMedido(medido: EstadoDoAmbiente["conjunto"][number]["medido"] | null): string {
   const [cpus, memoria] = medido
     ? [`${FORMATO_DAS_CPUS.format(medido.cpus)} CPUs`, `${FORMATO_DA_MEMORIA.format(medido.memoria_mb)} MB`]
     : ["—", "—"];
   return `<td class="num">${cpus}</td><td class="num">${memoria}</td>`;
 }
 
+/** O nome que o operador vê do container do slot `n` (no docker, `fabriquinha-slot-<n>`); sem slot, um traço. */
+export const nomeDoSlot = (slot: number | null): string => (slot === null ? "—" : `Fabriquinha - Slot ${String(slot)}`);
+
 // shortcut: o alocado mostra a criação do container, porque a tabela não guarda quando foi alocado; gravar o instante da alocação se isso confundir.
 function linhaDoAmbiente({
   id,
+  slot,
   imagem,
   estado,
   alocado_para,
@@ -229,7 +234,7 @@ function linhaDoAmbiente({
 }: EstadoDoAmbiente["conjunto"][number]): string {
   const desde = instanteLegivel(estado === "alocado" ? criado_em : (liberado_em ?? criado_em));
   const podeEliminar = estado === "livre" || estado === "sujo";
-  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
+  return `<tr data-ambiente="${escapar(id)}"><td class="mono">${escapar(id)}</td><td>${nomeDoSlot(slot)}</td><td class="mono">${escapar(imagem)}</td><td>${estado}</td><td>${alocado_para ? escapar(alocado_para) : "—"}</td><td>${desde}</td>${usoMedido(medido)}<td><button type="button" class="btn btn-perigo" data-eliminar="${escapar(id)}" aria-label="Eliminar o container ${escapar(id)}"${podeEliminar ? "" : " disabled"}>Eliminar</button></td></tr>`;
 }
 
 /**
@@ -242,7 +247,7 @@ export function ambiente({ configuracao, conjunto }: EstadoDoAmbiente, erros: Er
   const linhas = conjunto.map(linhaDoAmbiente);
   const tabela =
     linhas.length > 0
-      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+      ? `<div class="rola"><table class="tabela"><thead><tr><th>Id</th><th>Container</th><th>Imagem</th><th>Estado</th><th>Alocado para</th><th>Desde</th><th class="num">CPU</th><th class="num">Memória</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
       : '<p class="muted">Nenhum container no conjunto.</p>';
   return `<h2>Ambiente</h2><form class="form" data-ambiente novalidate><div class="grupo"><h3>Onde o trabalho roda <span class="nota">· com Host local, o docker nunca é chamado</span></h3>${seletorDoAmbiente(erros, "tipo", "Tipo de Ambiente", TIPOS_DE_AMBIENTE, configuracao.tipo)}<div class="limites-ambiente">${campos(LIMITES_DO_CONTAINER)}</div></div><div class="grupo"><h3>Tamanho do conjunto <span class="nota">· o fixo mantém os containers que criou; o variável elimina os livres ociosos até o mínimo; sem vaga, o trabalho espera e tenta de novo</span></h3>${seletorDoAmbiente(erros, "conjunto", "Tipo de conjunto", TIPOS_DE_CONJUNTO, configuracao.conjunto)}<div class="limites-ambiente">${campos(LIMITES_DO_CONJUNTO)}</div></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form><div class="grupo conjunto-ambiente"><h3>Conjunto de containers <span class="nota">· só os que a Fabriquinha criou; o Eliminar vale para o livre ou sujo</span></h3>${tabela}</div>`;
 }
@@ -256,6 +261,8 @@ interface OpcoesDoProjeto {
   /** Os modelos que o pi lista (`GET /api/modelos`), para o seletor de cada etapa. */
   modelosDoPi: readonly Modelo[];
   erros: Erros;
+  /** O Ambiente está em container e o projeto salvo não tem arquivo de dependências: o trabalho dele roda no host. */
+  rodaNoHost?: boolean;
   /** A mensagem do servidor que não é de um campo (502 do F5, 409), no rodapé. */
   falha?: string;
 }
@@ -268,11 +275,13 @@ function texto(
   caminho: string,
   rotulo: string,
   valor: string,
-  { classe = "", mono = false, extra = "", ajuda = "" } = {},
+  { classe = "", mono = false, extra = "", ajuda = "", botaoAoLado = "" } = {},
 ): string {
   const m = marca(erros, caminho);
   const ajudaHtml = ajuda && `<span class="ajuda">${ajuda}</span>`;
-  return `<div class="campo${classe}${m.classe}"><label for="${idDe(caminho)}">${rotulo}</label><input${mono ? ' class="mono"' : ""} id="${idDe(caminho)}" name="${caminho}" value="${escapar(valor)}"${extra}${m.aria}>${m.msg}${ajudaHtml}</div>`;
+  const input = `<input${mono ? ' class="mono"' : ""} id="${idDe(caminho)}" name="${caminho}" value="${escapar(valor)}"${extra}${m.aria}>`;
+  const controle = botaoAoLado && `<div class="campo-com-botao">${input}${botaoAoLado}</div>`;
+  return `<div class="campo${classe}${m.classe}"><label for="${idDe(caminho)}">${rotulo}</label>${controle || input}${m.msg}${ajudaHtml}</div>`;
 }
 
 const remover = '<button type="button" class="x" data-remover title="Remover" aria-label="Remover">×</button>';
@@ -329,8 +338,14 @@ function modelosEEffortsPorEtapa(erros: Erros, p: ConfiguracoesPorEtapa, modelos
 
 const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
 
+/** O botão ao lado da raiz Git que abre o navegador de pastas. */
+const BOTAO_ESCOLHER_PASTA = '<button type="button" class="btn" data-abrir-pastas>Escolher pasta…</button>';
+
 /** Projeto (F7 §4.4) nos três grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
-export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, falha }: OpcoesDoProjeto): string {
+export function formularioDeProjeto(
+  p: Rascunho,
+  { novo, modelosDoPi, erros, rodaNoHost, falha }: OpcoesDoProjeto,
+): string {
   const titulo = novo
     ? "Novo projeto"
     : `${escapar(p.nome)}<button type="button" class="btn btn-perigo remover-projeto" data-remover-projeto aria-label="Remover o projeto ${escapar(p.nome)}">Remover</button>`;
@@ -349,12 +364,16 @@ export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, fal
   const rodape =
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
     `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
+  const avisoDoHost = rodaNoHost
+    ? '<p class="msg-erro" role="status" data-aviso-host>O Ambiente está em container, mas este projeto não tem arquivo de dependências: o trabalho dele roda no host.</p>'
+    : "";
   // Fora do h2: o título acessível do formulário continua o nome do projeto.
   const sdlc = novo
     ? ""
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
-<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${arquivosDeDependencias(erros, p.arquivos_de_dependencias)}</div></div>
+<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', botaoAoLado: BOTAO_ESCOLHER_PASTA, ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
+<div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${arquivosDeDependencias(erros, p.arquivos_de_dependencias)}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
@@ -363,6 +382,24 @@ ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 /** A confirmação de remover o projeto, que não tem volta: o nome e o que sai junto. */
 export const confirmacaoDeRemover = (nome: string): string =>
   `<dialog class="dialogo" data-dialogo-remover aria-labelledby="titulo-remover"><h2 id="titulo-remover">Remover o projeto ${escapar(nome)}</h2><p>O projeto <strong>${escapar(nome)}</strong> será apagado com as demandas, em qualquer estado, e os tickets, as sessões, as evidências, as decisões e o custo delas. Saem do disco as worktrees e as pastas de execução; o repositório original não é tocado. Não dá para desfazer.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-remover>Remover projeto</button></form></dialog>`;
+
+/** A caixa do navegador de pastas, vazia: o conteúdo de cada pasta entra em `[data-conteudo-pastas]`. */
+export const dialogoDePastas = (): string =>
+  `<dialog class="dialogo dialogo-pastas" data-dialogo-pastas aria-labelledby="titulo-pastas"><h2 id="titulo-pastas">Escolher a pasta do repositório</h2><div data-conteudo-pastas></div><p class="msg-erro" role="alert" data-erro-pastas hidden></p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-primario" data-escolher-pasta>Escolher esta pasta</button></form></dialog>`;
+
+/** O conteúdo da caixa para uma pasta: o caminho atual, a pasta pai, as subpastas (com a marca de Git) e o aviso de inacessível. */
+export function conteudoDasPastas({ caminho, pai, acessivel, pastas }: ListaDePastas): string {
+  const paiHtml =
+    pai === null ? "" : `<button type="button" class="btn" data-pasta="${escapar(pai)}">↑ Pasta pai</button>`;
+  const itens = pastas.map(
+    (p) =>
+      `<li><button type="button" class="pasta" data-pasta="${escapar(p.caminho)}">${escapar(p.nome)}${p.repositorioGit ? '<span class="pill pill-ok">git</span>' : ""}${p.acessivel ? "" : '<span class="pill pill-neutro">inacessível</span>'}</button></li>`,
+  );
+  let subpastas = `<ul class="lista-pastas">${itens.join("")}</ul>`;
+  if (!acessivel) subpastas = '<p class="msg-erro" role="alert">Pasta inacessível: sem permissão de leitura.</p>';
+  else if (itens.length === 0) subpastas = '<p class="muted">Nenhuma subpasta.</p>';
+  return `<div class="caminho-atual"><code class="mono" data-caminho-atual>${escapar(caminho)}</code>${paiHtml}</div>${subpastas}`;
+}
 
 /** A página: o cabeçalho, o menu e o painel do item escolhido. */
 export const pagina = (menuHtml: string, painel: string): string =>

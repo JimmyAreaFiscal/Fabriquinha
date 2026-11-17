@@ -192,3 +192,7 @@ test("sinalizar: recusa processo de outro ambiente", async () => {
     /o processo é do ambiente container_x, não do host_local/,
   );
 });
+
+test("sandboxCaiu: o host local nunca cai", async () => {
+  assert.equal(await new AmbienteHostLocal().sandboxCaiu(), false);
+});

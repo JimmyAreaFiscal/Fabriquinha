@@ -1,13 +1,13 @@
-// A migração 57, de Demandas (banco na versão 56): o `Dockerfile` do projeto vira `package.json`, a outra imagem e o
+// A migração 58, de Demandas (banco na versão 57): o `Dockerfile` do projeto vira `package.json`, a outra imagem e o
 // projeto sem imagem ficam sem arquivos (host local), e a coluna `imagem_do_ambiente` sai.
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
 
-test("a migração 57 converte Dockerfile em package.json, zera as outras imagens e remove imagem_do_ambiente", () => {
+test("a migração 58 converte Dockerfile em package.json, zera as outras imagens e remove imagem_do_ambiente", () => {
   const banco = new DatabaseSync(":memory:");
-  migrarBancoDaFabriquinha(banco, 56);
+  migrarBancoDaFabriquinha(banco, 57);
   const inserir = banco.prepare(
     "INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube, imagem_do_ambiente) VALUES (?, ?, 'main', 'github', ?, ?)",
   );
@@ -17,7 +17,7 @@ test("a migração 57 converte Dockerfile em package.json, zera as outras imagen
 
   migrarBancoDaFabriquinha(banco);
 
-  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, 57);
+  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, 58);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
   const colunas = banco
     .prepare("PRAGMA table_info(projeto)")

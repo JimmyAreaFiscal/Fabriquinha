@@ -135,7 +135,7 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       DROP TABLE arquivo_previsto_rodada;
       DROP TABLE arquivo_previsto_demanda;
     `);
-    // A 57 trocou a imagem do Ambiente do projeto pelos arquivos de dependências: a volta devolve a coluna da imagem, vazia, e apaga a nova.
+    // A 58 trocou a imagem do Ambiente do projeto pelos arquivos de dependências: a volta devolve a coluna da imagem, vazia, e apaga a nova.
     banco.exec(`
       ALTER TABLE projeto ADD COLUMN imagem_do_ambiente TEXT CHECK (imagem_do_ambiente IS NULL OR length(imagem_do_ambiente) > 0);
       ALTER TABLE projeto DROP COLUMN arquivos_de_dependencias;

@@ -2,13 +2,14 @@
 // é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { after, type TestContext } from "node:test";
 import { hospedagemFalsa } from "../apoio-testes/falsos/hospedagem_falsa.ts";
+import { instalarDockerQueCai } from "../apoio-testes/falsos/docker_que_cai.ts";
 import { type GestaoDeAmbientes, montarGestaoDeAmbientes } from "../src/modulos/ambiente/publico.ts";
 import { noLog } from "../src/shared/infra/registro.ts";
 import {
@@ -94,42 +95,15 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
  * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
  * Configuração lida do banco), o `auth.json` do pi que o container recebe e o pi falso do harness, que devolve com a
  * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
- * container alcança; só o teste da rede põe um servidor nela.
+ * container alcança; só o teste da rede põe um servidor nela. O docker que o serviço chama é o `dockerQueCai`, que o
+ * teste derruba e religa; `subirDeNovo` para a gestão e monta outra sobre o mesmo banco, como o serviço que sobe depois.
  */
 export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
   writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
   const instalacaoDoPi = instalarPiFalsoNoContainer(c.raiz);
-  // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.
-  const montada = await montarGestaoDeAmbientes({
-    banco: c.banco,
-    configuracao: () => configuracaoDoAmbiente(c.banco),
-    servico: {
-      raiz: c.raiz,
-      porta_da_api: portaDaApi,
-      home_do_usuario: c.raiz,
-      pacote_do_harness: PACOTE,
-      instalacao_do_harness: () => instalacaoDoPi,
-      dir_do_harness_do_auditor: dirDoPiDoAuditor(),
-    },
-    registrarErro: noLog,
-  });
-  // A gestão do serviço, que lembra os containers que alocou: o teste elimina só os dele, e não os do serviço, mesmo
-  // depois de o cenário fechar o banco.
-  const containersDoCenario = new Set<string>();
-  const gestao: GestaoDeAmbientes = {
-    listar: () => montada.listar(),
-    async alocar(ocupante, projeto) {
-      const ambiente = await montada.alocar(ocupante, projeto);
-      if (ambiente instanceof AmbienteContainer) containersDoCenario.add(ambiente.container_id);
-      return ambiente;
-    },
-    ambienteDo: (ocupante) => montada.ambienteDo(ocupante),
-    limpar: (id) => montada.limpar(id),
-    deletar: (id) => montada.deletar(id),
-    parar: () => montada.parar(),
-  };
-  // Montada no host_local, a gestão não confere o conjunto com o docker: no Docker de verdade, a conferência eliminaria
-  // como órfãos os containers do serviço que roda na máquina. O `container` só vale depois da montagem.
+  // A conferência da subida elimina como órfão o container que o banco do teste não conhece: o docker que cai só deixa
+  // a listagem mostrar os do cenário, e os do serviço que roda na máquina ficam de fora.
+  const dockerQueCai = instalarDockerQueCai(mkdtempSync(join(tmpdir(), "docker-que-cai-")));
   salvarConfiguracaoDoAmbiente(c.banco, {
     tipo: "container",
     memoria_maxima_mb: 1024,
@@ -139,15 +113,63 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
     capacidade_do_conjunto: null,
     minimo_do_conjunto: 0,
   });
+  const montadas: GestaoDeAmbientes[] = [];
+  // Os containers que o cenário criou: o teste elimina só os dele, e não os do serviço, mesmo depois de o cenário fechar o banco.
+  const containersDoCenario = new Set<string>();
+  const montarGestao = async (): Promise<GestaoDeAmbientes> => {
+    // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.
+    const montada = await montarGestaoDeAmbientes({
+      banco: c.banco,
+      configuracao: () => configuracaoDoAmbiente(c.banco),
+      servico: {
+        raiz: c.raiz,
+        porta_da_api: portaDaApi,
+        home_do_usuario: c.raiz,
+        pacote_do_harness: PACOTE,
+        instalacao_do_harness: () => instalacaoDoPi,
+        dir_do_harness_do_auditor: dirDoPiDoAuditor(),
+      },
+      registrarErro: noLog,
+    });
+    montadas.push(montada);
+    return {
+      listar: () => montada.listar(),
+      async alocar(ocupante, projeto) {
+        const ambiente = await montada.alocar(ocupante, projeto);
+        if (ambiente instanceof AmbienteContainer) {
+          containersDoCenario.add(ambiente.container_id);
+          dockerQueCai.incluir(ambiente.container_id);
+        }
+        return ambiente;
+      },
+      ambienteDo: (ocupante) => montada.ambienteDo(ocupante),
+      limpar: (id) => montada.limpar(id),
+      deletar: (id) => montada.deletar(id),
+      parar: () => montada.parar(),
+    };
+  };
+  let gestao = await montarGestao();
   ligarGestaoDeAmbientesNosModulos(gestao);
   const piDoContainer = levarPiFalsoParaOContainer(join(c.repo, ".git", "objects", "pi-falso"));
   t.after(async () => {
     ligarGestaoDeAmbientesNosModulos();
-    await montada.parar();
+    for (const montada of montadas) await montada.parar();
+    dockerQueCai.religar();
     for (const containerId of containersDoCenario)
       execFileSync("docker", ["rm", "--force", containerId], { stdio: "ignore" }); // NOSONAR
+    dockerQueCai.desinstalar();
   });
-  return { pi: piDoContainer, gestao };
+  return {
+    pi: piDoContainer,
+    gestao,
+    dockerQueCai,
+    subirDeNovo: async (): Promise<GestaoDeAmbientes> => {
+      await gestao.parar();
+      gestao = await montarGestao();
+      ligarGestaoDeAmbientesNosModulos(gestao);
+      return gestao;
+    },
+  };
 }
 
 /**

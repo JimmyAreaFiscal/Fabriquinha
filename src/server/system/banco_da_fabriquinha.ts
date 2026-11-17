@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { abrir, enfileirarDepoisDoHistorico, migrar } from "../../shared/armazenamento/banco.ts";
 import { VERSAO_LINHA_DE_BASE } from "../../shared/armazenamento/migracoes/migracoes.ts";
 import { MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE } from "../../shared/armazenamento/configuracao_do_ambiente.ts";
+import { MIGRACOES_DE_AMBIENTE } from "../../shared/armazenamento/migracoes/migracoes_de_ambiente.ts";
 import { MIGRACOES_DE_DEMANDAS } from "../../shared/armazenamento/migracoes/migracoes_de_demandas.ts";
 import { MIGRACOES_DE_SESSOES } from "../../shared/armazenamento/migracoes/migracoes_de_sessoes.ts";
 import { MIGRACOES_DO_CICLO_DE_VIDA } from "../../shared/armazenamento/migracoes/migracoes_do_ciclo_de_vida.ts";
@@ -78,6 +79,7 @@ const MIGRACOES_DOS_DOMINIOS = [
   MIGRACOES_DO_CICLO_DE_VIDA,
   MIGRACOES_DA_CONFIGURACAO_DO_AMBIENTE,
   MIGRACOES_DE_SESSOES,
+  MIGRACOES_DE_AMBIENTE,
 ];
 
 /**

@@ -30,6 +30,7 @@ import {
   descartarAlteracoes,
   espacoDaDemanda,
   type EspacoDeTrabalho,
+  ocupanteDoAmbiente,
   ocupanteDoDono,
   pendenciasDeLimpeza,
   removerWorktrees,
@@ -51,6 +52,9 @@ import { cicloDoEspaco } from "./ciclo_do_espaco.ts";
 
 /** O Projeto como o Espaço o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
 type ProjetoDoEspaco = ProjetoDoRepositorio & { arquivos_de_dependencias?: readonly string[] };
+
+/** O Projeto como o Ambiente do Espaço o lê para alocar: o nome, o clone e, se houver, os arquivos de dependências. */
+type ProjetoDoAmbienteDoEspaco = Pick<ProjetoDoEspaco, "nome" | "raiz_git" | "arquivos_de_dependencias">;
 
 /** O que o PR leva: título e corpo já no limite da hospedagem, os PRs já registrados e a marca que adota o perdido. */
 interface PedidoDePR {
@@ -127,13 +131,14 @@ export interface RepositorioDoProjeto {
   /**
    * Roda o git na pasta do Espaço, no Ambiente dele, e devolve a saída; o que falha lança `ErroDeRegra`. É o git do
    * Ambiente, que fica aqui dentro: as leituras da worktree (aula, Sonar, marco da sessão de ajustes, a marca do commit).
+   * O Espaço que devolveu o Ambiente aloca um só para isto, como todo git do Espaço abaixo.
    */
-  gitNoEspaco(espaco: EspacoDeTrabalho, ...argumentos: string[]): Promise<string>;
+  gitNoEspaco(projeto: ProjetoDoAmbienteDoEspaco, espaco: EspacoDeTrabalho, ...argumentos: string[]): Promise<string>;
   /** Volta a branch do Espaço ao `sha` e descarta o que ficou na worktree, na fila da pasta, sem commitar. */
-  voltarEspaco(espaco: EspacoDeTrabalho, sha: string, log: string): Promise<void>;
+  voltarEspaco(projeto: ProjetoDoAmbienteDoEspaco, espaco: EspacoDeTrabalho, sha: string, log: string): Promise<void>;
   /** Commita o ticket no Espaço (idempotente pela marca), grava o commit e os commits posteriores e o devolve. */
   commitar(
-    projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git">,
+    projeto: ProjetoDoAmbienteDoEspaco,
     espaco: EspacoDeTrabalho,
     pedido: PedidoDeCommit,
     limiteMs?: number,
@@ -173,7 +178,7 @@ export interface RepositorioDoProjeto {
    * reconhece na repetição.
    */
   pendenciasDeLimpeza(
-    projeto: Pick<ProjetoDoRepositorio, "nome" | "raiz_git" | "branch_base">,
+    projeto: ProjetoDoAmbienteDoEspaco & Pick<ProjetoDoRepositorio, "branch_base">,
     demanda: { demanda: { id: string }; rodadas: readonly { rodada_id: number }[] },
   ): Promise<string[]>;
   /** Remove as `pendentes` (ou o que o Espaço ainda deixa) e devolve o Ambiente ao conjunto quando nada fica. */
@@ -183,6 +188,11 @@ export interface RepositorioDoProjeto {
     log: string,
     pendentes?: readonly string[],
   ): Promise<LimpezaDoEspaco>;
+  /**
+   * Devolve ao conjunto o Ambiente do dono do Espaço (limpo, sem ocupante) sem limpar o Espaço: a worktree e a posse ficam
+   * no host. A próxima operação do Espaço (preparar, atualizar com a base, integrar, limpar) aloca de novo.
+   */
+  devolverAmbiente(projeto: ProjetoDoEspaco, espaco: EspacoDeTrabalho, log: string): Promise<void>;
   /** As alterações da base publicada nos 12 meses até `agora`, por arquivo. */
   heatmap(projeto: Pick<ProjetoDoRepositorio, "raiz_git" | "branch_base">, agora: Instante): Promise<Heatmap>;
   /** As métricas do Repositório das `demandas` no período, lidas em lote; quem agrupa por Etapa, mês ou demanda é quem pede. */
@@ -254,6 +264,27 @@ export function montarRepositorio({ banco, ambientes, varredura }: MontagemDoRep
     existe(ambientes, "o Repositório não tem a gestão de Ambientes", "monte-o com a gestão da composição");
   /** Onde roda o trabalho do Espaço: o Ambiente que a gestão alocou a ele ou, sem alocação, o do serviço. */
   const ambienteDoEspaco = (espaco: EspacoDeTrabalho): Ambiente => gestao().ambienteDo(ocupanteDoDono(espaco.dono));
+  /**
+   * Roda `trabalhoNoAmbiente` no Ambiente do Espaço. O Espaço que devolveu o seu (I-312) aloca um só para isto e o devolve
+   * ao fim: o git nunca roda no host sobre a worktree que o agente escreveu. No host local, ou sem arquivo de dependências, é o
+   * do serviço, como sempre.
+   */
+  const noAmbienteDoEspaco = async <T>(
+    projeto: ProjetoDoAmbienteDoEspaco,
+    espaco: EspacoDeTrabalho,
+    trabalhoNoAmbiente: (ambiente: Ambiente) => Promise<T>,
+  ): Promise<T> => {
+    const jaAlocado = ambienteDoEspaco(espaco);
+    if (jaAlocado.id !== gestao().ambienteDo().id) return trabalhoNoAmbiente(jaAlocado);
+    // ponytail: o empréstimo devolve o container mesmo se outra operação do mesmo dono o alocou no meio; hoje nenhuma roda
+    // junto com estas no Espaço devolvido. Se passar a rodar, contar os empréstimos por dono.
+    const emprestado = await gestao().alocar(ocupanteDoAmbiente(espaco, raiz, projeto.nome), projeto);
+    try {
+      return await trabalhoNoAmbiente(emprestado);
+    } finally {
+      await gestao().limpar(emprestado.id);
+    }
+  };
   const ciclo = (projeto: ProjetoDoEspaco, espaco: EspacoDeTrabalho, log: string) =>
     cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoEspaco(espaco), gestao());
   const varrerAnotandoAFalha = (projeto: ProjetoDoRepositorio, log: string) =>
@@ -275,14 +306,17 @@ export function montarRepositorio({ banco, ambientes, varredura }: MontagemDoRep
       if (buscouBase) await varrerAnotandoAFalha(projeto, log);
       return { pasta, ambiente: cicloDoEspacoPreparado.ambiente };
     },
-    gitNoEspaco: (espaco, ...argumentos) => exigirGitNoAmbiente(ambienteDoEspaco(espaco), espaco.pasta, ...argumentos),
-    async voltarEspaco(espaco, sha, log) {
-      const ambiente = ambienteDoEspaco(espaco);
-      await exigirGitNoAmbiente(ambiente, espaco.pasta, "update-ref", `refs/heads/${espaco.branch}`, sha);
-      await descartarAlteracoes(ambiente, espaco.pasta, log);
-    },
+    gitNoEspaco: (projeto, espaco, ...argumentos) =>
+      noAmbienteDoEspaco(projeto, espaco, (ambiente) => exigirGitNoAmbiente(ambiente, espaco.pasta, ...argumentos)),
+    voltarEspaco: (projeto, espaco, sha, log) =>
+      noAmbienteDoEspaco(projeto, espaco, async (ambiente) => {
+        await exigirGitNoAmbiente(ambiente, espaco.pasta, "update-ref", `refs/heads/${espaco.branch}`, sha);
+        await descartarAlteracoes(ambiente, espaco.pasta, log);
+      }),
     commitar: (projeto, espaco, pedido, limiteMs = LIMITE_COMANDO_MS) =>
-      commitarTicket(banco, ambienteDoEspaco(espaco), espaco.pasta, projeto, pedido, limiteMs),
+      noAmbienteDoEspaco(projeto, espaco, (ambiente) =>
+        commitarTicket(banco, ambiente, espaco.pasta, projeto, pedido, limiteMs),
+      ),
     async alteracoesDoEspaco(projeto, espaco) {
       const ponta = async (branch: string) =>
         (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();
@@ -321,13 +355,16 @@ export function montarRepositorio({ banco, ambientes, varredura }: MontagemDoRep
         : lerPR(projeto, numero, relogioOuEspera)) as RepositorioDoProjeto["situacaoDoPR"],
     integrarPR: (projeto, espaco, log) => ciclo(projeto, espaco, log).integrar(),
     pendenciasDeLimpeza: (projeto, demanda) =>
-      pendenciasDeLimpeza(ambienteDoEspaco(espacoDaDemanda(projeto, demanda.demanda.id, raiz)), raiz, projeto, demanda),
+      noAmbienteDoEspaco(projeto, espacoDaDemanda(projeto, demanda.demanda.id, raiz), (ambiente) =>
+        pendenciasDeLimpeza(ambiente, raiz, projeto, demanda),
+      ),
     async limparEspaco(projeto, espaco, log, pendentes) {
       const cicloDoEspacoLimpo = ciclo(projeto, espaco, log);
       const feito = await cicloDoEspacoLimpo.limpar(pendentes);
       const sobras = await sobrasDaDemanda(cicloDoEspacoLimpo.ambiente, projeto, feito.removidos);
       return { ...feito, sobras };
     },
+    devolverAmbiente: (projeto, espaco, log) => ciclo(projeto, espaco, log).devolverAmbiente(),
     heatmap: (projeto, agora) => heatmapDo(projeto, agora),
     metricas: (pedido) => metricasDosCommits(banco, pedido),
     esquecer(projeto, demandas) {

@@ -15,10 +15,12 @@ import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docke
 import { instalarPiFalso, type PassoPi } from "../../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
   AmbienteContainer,
+  AmbienteFalso,
   AmbienteHostLocal,
   gestaoQueSoUsa,
   gestaoLigadaNosModulos,
 } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import type { Ambiente } from "../../../../ambiente/publico.ts";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import type { executar } from "../../../../../shared/infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
@@ -142,6 +144,7 @@ function rodar(
   triarPergunta?: PedidoDeProcesso["triarPergunta"],
   silencioMaximoDoModeloMin?: number,
   relogio?: Relogio,
+  ambiente?: Ambiente,
 ) {
   const sessao = `s-${String(++n)}`;
   const dir = mkdtempSync(join(base, "exec-"));
@@ -169,6 +172,7 @@ function rodar(
       // Sem banco: o agente sem token.
       lancamento: lancamentoDeTeste(dir, sessao, modo),
       cwd: dir,
+      ambiente,
       log: join(dir, "log"),
       prompt: "trabalhe",
       limiteMin,
@@ -419,6 +423,27 @@ test("o modelo que para de responder no meio da resposta encerra a execução co
     motivo: "o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)",
   });
   assert.match(readFileSync(join(dir, "log"), "utf8"), /o modelo ficou 0\.005 min sem responder/);
+});
+
+/** O Ambiente de um sandbox que caiu: o pi roda no host, mas o Ambiente diz que o container se foi. */
+class AmbienteComSandboxCaido extends AmbienteFalso {
+  override sandboxCaiu = () => Promise.resolve(true);
+}
+
+test("com o sandbox caído, o silêncio do modelo e a saída do pi viram falha de infraestrutura do sandbox", async () => {
+  const caido = new AmbienteComSandboxCaido();
+  const silencio = rodar([{ mensagemAberta: true }], "autonomo", 1, undefined, 0.005, undefined, caido);
+  assert.deepEqual(await silencio.fim, {
+    tipo: "falha_infraestrutura",
+    causa: "sandbox_caiu",
+    motivo: "o sandbox caiu: o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)",
+  });
+  const saida = rodar([{ sai: { codigo: 7 } }], "autonomo", 1, undefined, undefined, undefined, caido);
+  assert.deepEqual(await saida.fim, {
+    tipo: "falha_infraestrutura",
+    causa: "sandbox_caiu",
+    motivo: `o sandbox caiu: o pi saiu antes de terminar a execução (código 7); veja o log em ${join(saida.dir, "log")}`,
+  });
 });
 
 test("ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {

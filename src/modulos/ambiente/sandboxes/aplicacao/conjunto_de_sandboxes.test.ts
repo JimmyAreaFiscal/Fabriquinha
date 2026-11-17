@@ -2,7 +2,7 @@
 // parado cede e a ociosidade que só o variável elimina, até o mínimo.
 import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,7 +13,7 @@ import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
-import { listarAmbientes } from "../armazenamento/ambientes.ts";
+import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../armazenamento/ambientes.ts";
 import { GeradorDeAmbientes } from "../infra/gerador_de_ambientes.ts";
 import { ConjuntoDeSandboxes } from "./conjunto_de_sandboxes.ts";
 
@@ -70,6 +70,7 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
   };
   return {
     docker,
+    banco,
     conjunto,
     liberar,
     criacoes,
@@ -180,4 +181,168 @@ test("o variável elimina os ociosos só até o mínimo, o sujo e o livre mais a
     ["alocado", "I-4", await imagemDe(doNode)],
   ]);
   assert.equal(docker.containers().length, 2);
+});
+
+test("o livre que parou e foi religado fora da Fabriquinha não é entregue: sai do conjunto e o ocupante recebe um container novo", async () => {
+  const { conjunto, docker, estados, liberar, imagemDe } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 2 });
+  const religado = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  docker.pararContainer(religado.container_id);
+  docker.religarContainer(religado.container_id);
+
+  const novo = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.notEqual(novo.container_id, religado.container_id);
+  assert.deepEqual(estados(), [["alocado", "I-2", await imagemDe(doNode)]]);
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [novo.container_id],
+  );
+});
+
+const nomesNoDocker = (docker: ReturnType<typeof instalarDockerFalso>) =>
+  docker
+    .containers()
+    .map(({ nome }) => nome)
+    .sort();
+
+test("cada container ocupa o menor slot livre: 1 no primeiro, 3 com 1 e 2 vivos, e o 2 volta depois de eliminado", async () => {
+  const { docker, banco, conjunto, liberar } = cenario({ conjunto: "variavel" });
+  const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
+  assert.equal(primeiro.slot, 1);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1"]);
+
+  const segundo = await conjunto.alocar(ocupante("I-2"), doNode);
+  const terceiro = await conjunto.alocar(ocupante("I-3"), doNode);
+  assert.deepEqual([segundo.slot, terceiro.slot], [2, 3]);
+
+  await liberar("I-2");
+  await conjunto.eliminar(segundo.id);
+  const novo = await conjunto.alocar(ocupante("I-4"), doNode);
+  assert.equal(novo.slot, 2);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1", "fabriquinha-slot-2", "fabriquinha-slot-3"]);
+  assert.deepEqual(
+    listarAmbientes(banco).map(({ slot }) => slot),
+    [1, 3, 2],
+  );
+});
+
+test("listar devolve o conjunto na ordem dos slots, mesmo com o slot reaproveitado criado depois", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "variavel" });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const segundo = await conjunto.alocar(ocupante("I-2"), doNode);
+  await conjunto.alocar(ocupante("I-3"), doNode);
+  await liberar("I-2");
+  await conjunto.eliminar(segundo.id);
+  await conjunto.alocar(ocupante("I-4"), doNode);
+
+  assert.deepEqual(
+    (await conjunto.listar()).map(({ slot }) => slot),
+    [1, 2, 3],
+  );
+});
+
+test("dois alocar ao mesmo tempo recebem slots diferentes", async () => {
+  const { docker, conjunto } = cenario({ conjunto: "variavel" });
+  const alocados = await Promise.all([
+    conjunto.alocar(ocupante("I-1"), doNode),
+    conjunto.alocar(ocupante("I-2"), doNode),
+  ]);
+  assert.deepEqual(alocados.map(({ slot }) => slot).sort(), [1, 2]);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1", "fabriquinha-slot-2"]);
+});
+
+test("na subida, o órfão fabriquinha-slot-1 de uma subida anterior é eliminado e a criação não falha por nome repetido", async () => {
+  const { docker, conjunto } = cenario({ conjunto: "variavel" });
+  docker.semearContainer({ nome: "fabriquinha-slot-1", rotulos: { "fabriquinha.ambiente": "sobra" } });
+
+  await conjunto.reconciliarNaSubida();
+  const criado = await conjunto.alocar(ocupante("I-1"), doNode);
+
+  assert.equal(criado.slot, 1);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1"]);
+});
+
+test("na subida, o container do banco sem slot (anterior ao slot) é eliminado com a linha, e o que tem slot fica", async () => {
+  const { docker, banco, conjunto, estados, liberar, imagemDe } = cenario({ conjunto: "variavel" });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  const antigo = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "antigo" } });
+  inserirAmbienteAlocado(banco, {
+    id: "antigo",
+    container_id: antigo.id,
+    imagem: "alpine",
+    criado_em: "2026-11-13T09:00:00.000Z",
+    alocado_para: "I-9",
+  });
+
+  await conjunto.reconciliarNaSubida();
+
+  assert.deepEqual(estados(), [["livre", null, await imagemDe(doNode)]]);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1"]);
+});
+
+test("o nome fabriquinha-slot-1 tomado no docker por um container de fora do banco conta como ocupado, e esse container fica", async () => {
+  const { docker, conjunto } = cenario({ conjunto: "variavel" });
+  const deOutraInstancia = docker.semearContainer({ nome: "fabriquinha-slot-1" });
+
+  const criado = await conjunto.alocar(ocupante("I-1"), doNode);
+
+  assert.equal(criado.slot, 2);
+  assert.ok(docker.containers().some(({ id }) => id === deOutraInstancia.id));
+});
+
+test("o container eliminado no banco que o rm não tirou do docker não tem o slot repetido pelo alocar seguinte", async () => {
+  const { docker, conjunto, liberar, pastaDoDocker } = cenario({ conjunto: "variavel" });
+  const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  docker.falharComando("rm", "daemon ocupado");
+  await assert.rejects(conjunto.eliminar(primeiro.id), /daemon ocupado/);
+  rmSync(join(pastaDoDocker, "falhas", "rm"));
+
+  const seguinte = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.equal(seguinte.slot, 2);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1", "fabriquinha-slot-2"]);
+});
+
+test("na capacidade, o novo container reusa o slot do parado que cedeu a vaga, já fora do docker", async () => {
+  const { docker, conjunto, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+
+  const novo = await conjunto.alocar(ocupante("I-2"), doPython);
+
+  assert.equal(novo.slot, 1);
+  assert.deepEqual(nomesNoDocker(docker), ["fabriquinha-slot-1"]);
+});
+
+test("na subida, o container alocado sem slot recolhe as sessões e execuções ao Espaço antes de ser eliminado", async () => {
+  const { docker, banco, conjunto } = cenario({ conjunto: "variavel" });
+  const semSlot = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "sem-slot-alocado" } });
+  inserirAmbienteAlocado(banco, {
+    id: "sem-slot-alocado",
+    container_id: semSlot.id,
+    imagem: "alpine",
+    criado_em: "2026-11-13T09:00:00.000Z",
+    alocado_para: "I-77",
+  });
+  const livreSemSlot = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "sem-slot-livre" } });
+  inserirAmbienteAlocado(banco, {
+    id: "sem-slot-livre",
+    container_id: livreSemSlot.id,
+    imagem: "alpine",
+    criado_em: "2026-11-13T09:00:00.000Z",
+    alocado_para: "I-78",
+  });
+  liberarAmbiente(banco, "sem-slot-livre", "livre", "2026-11-13T09:30:00.000Z");
+  const sessaoNoContainer = join(base, "ambientes", "sem-slot-alocado", "sessoes", "s-77");
+  mkdirSync(sessaoNoContainer, { recursive: true });
+  writeFileSync(join(sessaoNoContainer, "conversa.jsonl"), "{}");
+
+  await conjunto.reconciliarNaSubida();
+
+  assert.equal(readFileSync(join(base, "espacos", "I-77", "sessoes", "s-77", "conversa.jsonl"), "utf8"), "{}");
+  assert.deepEqual(docker.containers(), []);
+  assert.deepEqual(listarAmbientes(banco), []);
 });

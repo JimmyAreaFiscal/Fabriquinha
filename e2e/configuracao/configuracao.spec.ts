@@ -2,7 +2,7 @@
 // agendador; o cadastro grava o projeto sem colunas do fluxo legado, com a chave do SonarQube no nome dele.
 import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, realpathSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { inserirAmbienteAlocado, liberarAmbiente } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
@@ -44,7 +44,12 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByRole("heading", { name: "Novo projeto" })).toBeVisible();
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("deduzida do remoto ao salvar");
   const formulario = pagina.locator("form[data-projeto]");
-  await expect(formulario.locator("h3")).toHaveText(["Repositório", "Preparação", /^Modelo e effort por etapa/]);
+  await expect(formulario.locator("h3")).toHaveText([
+    "Repositório",
+    "Ambiente",
+    "Preparação",
+    /^Modelo e effort por etapa/,
+  ]);
   await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness/);
   await pagina.getByLabel("Nome", { exact: true }).fill("Loja X");
   await pagina.getByLabel("Caminho do repositório").fill(repo);
@@ -256,6 +261,7 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     id: "amb-livre",
     container_id: livre.id,
     imagem: "alpine",
+    slot: 1,
     alocado_para: "I-1",
     criado_em: "2026-11-09T10:00:00.000Z",
   });
@@ -264,6 +270,7 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
     id: "amb-alocado",
     container_id: alocado.id,
     imagem: "node:22",
+    slot: 2,
     alocado_para: "I-2",
     criado_em: "2026-11-09T12:00:00.000Z",
   });
@@ -281,19 +288,20 @@ test("Ambiente: mostra o tipo, os limites e o conjunto; Eliminar o container liv
   const linhaDoLivre = pagina.locator('tr[data-ambiente="amb-livre"]');
   const linhaDoAlocado = pagina.locator('tr[data-ambiente="amb-alocado"]');
   const data = /\d{2}\/\d{2}\/\d{4}/;
-  for (const [linha, id, imagem, estado, alocadoPara] of [
-    [linhaDoLivre, "amb-livre", "alpine", "livre", "—"],
-    [linhaDoAlocado, "amb-alocado", "node:22", "alocado", "I-2"],
+  for (const [linha, id, container, imagem, estado, alocadoPara] of [
+    [linhaDoLivre, "amb-livre", "Fabriquinha - Slot 1", "alpine", "livre", "—"],
+    [linhaDoAlocado, "amb-alocado", "Fabriquinha - Slot 2", "node:22", "alocado", "I-2"],
   ] as const) {
     const celulas = linha.locator("td");
     await expect(celulas.nth(0)).toHaveText(id);
-    await expect(celulas.nth(1)).toHaveText(imagem);
-    await expect(celulas.nth(2)).toHaveText(estado);
-    await expect(celulas.nth(3)).toHaveText(alocadoPara);
-    await expect(celulas.nth(4)).toHaveText(data);
+    await expect(celulas.nth(1)).toHaveText(container);
+    await expect(celulas.nth(2)).toHaveText(imagem);
+    await expect(celulas.nth(3)).toHaveText(estado);
+    await expect(celulas.nth(4)).toHaveText(alocadoPara);
+    await expect(celulas.nth(5)).toHaveText(data);
     // Com host_local, o docker não mede o uso.
-    await expect(celulas.nth(5)).toHaveText("—");
     await expect(celulas.nth(6)).toHaveText("—");
+    await expect(celulas.nth(7)).toHaveText("—");
   }
   await expect(linhaDoAlocado.getByRole("button", { name: "Eliminar" })).toBeDisabled();
   await expect(linhaDoLivre.getByRole("button", { name: "Eliminar" })).toBeEnabled();
@@ -353,6 +361,7 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
   await expect(pagina.getByLabel("Tipo de Ambiente")).toHaveValue("container");
   await expect(pagina.locator(".conjunto-ambiente thead th")).toHaveText([
     "Id",
+    "Container",
     "Imagem",
     "Estado",
     "Alocado para",
@@ -366,8 +375,8 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
     ["amb-ocioso", "0,00 CPUs", "1.536 MB"],
   ] as const) {
     const celulas = pagina.locator(`tr[data-ambiente="${id}"] td`);
-    await expect(celulas.nth(5)).toHaveText(cpu);
-    await expect(celulas.nth(6)).toHaveText(memoria);
+    await expect(celulas.nth(6)).toHaveText(cpu);
+    await expect(celulas.nth(7)).toHaveText(memoria);
   }
   expect(dockerFalso.registro().filter(([comando]) => comando === "stats")).toEqual([
     ["stats", "--no-stream", "--format", "{{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}", ocupado.id, ocioso.id],
@@ -378,7 +387,7 @@ test("Ambiente: no container, o conjunto traz a CPU e a memória que o docker me
     await fotografar(pagina, info, `configuracao-ambiente-medido-${String(largura)}`);
   }
   // No celular, a tabela rola de lado dentro do painel, como antes: rolada até o fim, a CPU e a memória aparecem.
-  const memoriaDoOcupado = pagina.locator('tr[data-ambiente="amb-ocupado"] td').nth(6);
+  const memoriaDoOcupado = pagina.locator('tr[data-ambiente="amb-ocupado"] td').nth(7);
   await memoriaDoOcupado.scrollIntoViewIfNeeded();
   await expect(memoriaDoOcupado).toBeInViewport();
   // De volta ao topo da página, a tabela continua rolada de lado: a foto inteira não repete o menu fixo no meio.
@@ -452,4 +461,43 @@ test("Ambiente: o tamanho do conjunto é variável sem limite por padrão; o fix
   await expect(capacidade).toHaveValue("");
   await expect(minimo).toHaveValue("4");
   expect(fabriquinha.dockerFalso.registro()).toEqual([]);
+});
+
+test("a raiz Git escolhida pelo navegador de pastas: entra, avisa a pasta sem leitura, volta e escolhe o repositório (I-309)", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  const repo = clone(fabriquinha.raiz);
+  const pastaSemLeitura = join(fabriquinha.raiz, "fechada");
+  mkdirSync(pastaSemLeitura);
+  chmodSync(pastaSemLeitura, 0o000);
+  try {
+    await pagina.goto(`${fabriquinha.base}/config?novo`);
+    const campoDaRaizGit = pagina.getByLabel("Caminho do repositório");
+    await campoDaRaizGit.fill(fabriquinha.raiz);
+    await pagina.getByRole("button", { name: "Escolher pasta…" }).click();
+
+    // CA-1 e CA-2: a caixa abre na pasta do campo, com o caminho atual e as subpastas marcadas.
+    const caixa = pagina.locator("[data-dialogo-pastas]");
+    await expect(caixa).toBeVisible();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(realpathSync(fabriquinha.raiz));
+    await expect(caixa.getByRole("button", { name: "loja git" })).toBeVisible();
+    await expect(caixa.getByRole("button", { name: "fechada inacessível" })).toBeVisible();
+    await fotografar(pagina, info, "navegador-de-pastas");
+
+    // CA-5: a pasta sem leitura avisa e a caixa segue usável pela pasta pai.
+    await caixa.getByRole("button", { name: "fechada inacessível" }).click();
+    await expect(caixa.getByRole("alert")).toHaveText("Pasta inacessível: sem permissão de leitura.");
+    await caixa.getByRole("button", { name: "↑ Pasta pai" }).click();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(realpathSync(fabriquinha.raiz));
+
+    // CA-3: entrar no repositório e escolher fecha a caixa e põe o caminho absoluto no campo.
+    await caixa.getByRole("button", { name: "loja git" }).click();
+    await expect(caixa.locator("[data-caminho-atual]")).toHaveText(repo);
+    await caixa.getByRole("button", { name: "Escolher esta pasta" }).click();
+    await expect(caixa).toBeHidden();
+    await expect(campoDaRaizGit).toHaveValue(repo);
+  } finally {
+    chmodSync(pastaSemLeitura, 0o755);
+  }
 });

@@ -10,10 +10,10 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { grupoDeProcessoVivo } from "../../../../../../apoio-testes/grupo_de_processo_vivo.ts";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
+import { grupoEstaVivo } from "../../../../../../apoio-testes/grupo_de_processo.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteContainer } from "./ambiente_container.ts";
 import { pastasDoAmbiente } from "../../../sandboxes/infra/pastas_do_ambiente.ts";
@@ -75,7 +75,7 @@ const arquivosDePid = (): string[] => {
  */
 async function grupoMorre(grupo: number): Promise<boolean> {
   const limite = Date.now() + 2000;
-  while (grupoDeProcessoVivo(grupo)) {
+  while (grupoEstaVivo(grupo)) {
     if (Date.now() > limite) return false;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
@@ -295,7 +295,7 @@ test("lancar: falha do stdin e do docker chegam a aoFalhar", async () => {
 test("sinalizar: o sinal chega ao grupo inteiro do processo, dentro do container", async () => {
   const processo = ambiente.lancar(comando("sh", ["-c", "sleep 30 & sleep 31"]));
   const grupo = await esperarOArquivoDePid(processo.identificador.grupo_processo);
-  assert.equal(grupoDeProcessoVivo(grupo), true);
+  assert.equal(grupoEstaVivo(grupo), true);
   await ambiente.sinalizar(processo.identificador, "SIGKILL");
   assert.equal(await processo.saiu, 137);
   assert.equal(await grupoMorre(grupo), true);
@@ -330,6 +330,43 @@ test("sinalizar: processo de outro ambiente é recusado com orientação", async
   await assert.rejects(
     ambiente.sinalizar({ ambiente_id: "host_local", grupo_processo: 1 }, "SIGTERM"),
     /é do ambiente host_local, não do amb-1.*sinalize pelo ambiente que lançou/s,
+  );
+});
+
+test("sandboxCaiu: só o container rodando e com o docker respondendo está de pé", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-2",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  assert.equal(await doContainer.sandboxCaiu(), false);
+  docker.pararDocker();
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    docker.religarDocker();
+  }
+  docker.pararContainer(id);
+  assert.equal(await doContainer.sandboxCaiu(), true);
+  const pathComDocker = process.env.PATH;
+  process.env.PATH = "/inexistente"; // o docker nem roda
+  try {
+    assert.equal(await doContainer.sandboxCaiu(), true);
+  } finally {
+    process.env.PATH = pathComDocker;
+  }
+  assert.equal(
+    await new AmbienteContainer({
+      id: "amb-3",
+      container_id: "sumido",
+      bin_do_pacote: binDoPacote,
+      raiz: base,
+      url_da_api: urlDaApi,
+    }).sandboxCaiu(),
+    true,
   );
 });
 

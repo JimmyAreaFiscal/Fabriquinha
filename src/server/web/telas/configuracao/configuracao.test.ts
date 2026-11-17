@@ -11,6 +11,8 @@ import {
   ambiente,
   confirmacaoDeEliminar,
   confirmacaoDeRemover,
+  conteudoDasPastas,
+  dialogoDePastas,
   errosDoZod,
   formularioDeProjeto,
   menu,
@@ -337,6 +339,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-livre",
       container_id: "c1",
+      slot: 1,
       imagem: "fabriquinha/loja:abc",
       estado: "livre",
       alocado_para: null,
@@ -347,6 +350,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-sujo",
       container_id: "c2",
+      slot: null,
       imagem: "alpine",
       estado: "sujo",
       alocado_para: null,
@@ -356,6 +360,7 @@ const AMBIENTE: EstadoDoAmbiente = {
     {
       id: "a-<x>",
       container_id: "c3",
+      slot: 3,
       imagem: "alpine",
       estado: "alocado",
       alocado_para: "I-1",
@@ -382,19 +387,19 @@ test("ambiente: tipo, limites e uma linha por container, com a CPU e a memória 
   assert.doesNotMatch(html, /data-so-no-variavel disabled/);
   assert.match(
     html,
-    /<thead><tr><th>Id<\/th><th>Imagem<\/th><th>Estado<\/th><th>Alocado para<\/th><th>Desde<\/th><th class="num">CPU<\/th><th class="num">Memória<\/th><th><\/th><\/tr><\/thead>/,
+    /<thead><tr><th>Id<\/th><th>Container<\/th><th>Imagem<\/th><th>Estado<\/th><th>Alocado para<\/th><th>Desde<\/th><th class="num">CPU<\/th><th class="num">Memória<\/th><th><\/th><\/tr><\/thead>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td class="num">0,00 CPUs<\/td><td class="num">2 MB<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
+    /<tr data-ambiente="a-livre"><td class="mono">a-livre<\/td><td>Fabriquinha - Slot 1<\/td><td class="mono">fabriquinha\/loja:abc<\/td><td>livre<\/td><td>—<\/td><td>09\/11\/2026,? 08:30<\/td><td class="num">0,00 CPUs<\/td><td class="num">2 MB<\/td><td><button type="button" class="btn btn-perigo" data-eliminar="a-livre" aria-label="Eliminar o container a-livre">Eliminar<\/button>/,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-sujo">.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td class="num">—<\/td><td class="num">—<\/td><td><button[^>]*>Eliminar</,
+    /<tr data-ambiente="a-sujo"><td class="mono">a-sujo<\/td><td>—<\/td>.*<td>sujo<\/td><td>—<\/td><td>09\/11\/2026,? 07:00<\/td><td class="num">—<\/td><td class="num">—<\/td><td><button[^>]*>Eliminar</,
   );
   assert.match(
     html,
-    /<tr data-ambiente="a-&#60;x&#62;">.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td class="num">1,38 CPUs<\/td><td class="num">1.536 MB<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
+    /<tr data-ambiente="a-&#60;x&#62;">.*<td>Fabriquinha - Slot 3<\/td>.*<td>alocado<\/td><td>I-1<\/td><td>09\/11\/2026,? 09:00<\/td><td class="num">1,38 CPUs<\/td><td class="num">1.536 MB<\/td><td><button[^>]*aria-label="Eliminar o container a-&#60;x&#62;" disabled>Eliminar</,
   );
   assert.equal(html.match(/ disabled>/g)?.length, 1);
 });
@@ -438,5 +443,57 @@ test("confirmação de eliminar: o id escapado e o botão que confirma", () => {
   assert.match(
     html,
     /<button type="button" class="btn btn-perigo-cheio" data-confirmar-eliminar>Eliminar container<\/button>/,
+  );
+});
+
+test("a raiz Git tem o botão de escolher pasta ao lado do campo, que segue editável", () => {
+  const html = formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() });
+  assert.match(
+    html,
+    /<label for="campo-raiz_git">Caminho do repositório<\/label><div class="campo-com-botao"><input class="mono" id="campo-raiz_git" name="raiz_git" value="" placeholder="\/home\/…\/meu-projeto"><button type="button" class="btn" data-abrir-pastas>Escolher pasta…<\/button><\/div>/,
+  );
+  assert.equal(html.match(/data-abrir-pastas/g)?.length, 1);
+});
+
+test("conteudoDasPastas: caminho atual, pasta pai, subpastas com a marca de Git e de inacessível", () => {
+  const html = conteudoDasPastas({
+    caminho: "/code",
+    pai: "/",
+    acessivel: true,
+    pastas: [
+      { nome: "loja", caminho: "/code/loja", repositorioGit: true, acessivel: true },
+      { nome: 'a"b', caminho: '/code/a"b', repositorioGit: false, acessivel: false },
+    ],
+  });
+  assert.match(
+    html,
+    /<code class="mono" data-caminho-atual>\/code<\/code><button type="button" class="btn" data-pasta="\/">↑ Pasta pai<\/button>/,
+  );
+  assert.match(html, /data-pasta="\/code\/loja">loja<span class="pill pill-ok">git<\/span><\/button>/);
+  assert.match(html, /data-pasta="\/code\/a&#34;b">a&#34;b<span class="pill pill-neutro">inacessível<\/span>/);
+});
+
+test("conteudoDasPastas: a raiz não tem pasta pai; pasta inacessível avisa e mantém a pasta pai; vazia avisa", () => {
+  const raiz = conteudoDasPastas({ caminho: "/", pai: null, acessivel: true, pastas: [] });
+  assert.doesNotMatch(raiz, /Pasta pai/);
+  assert.match(raiz, /Nenhuma subpasta/);
+  const bloqueada = conteudoDasPastas({ caminho: "/root", pai: "/", acessivel: false, pastas: [] });
+  assert.match(bloqueada, /role="alert">Pasta inacessível/);
+  assert.match(bloqueada, /data-pasta="\/">↑ Pasta pai/);
+  assert.doesNotMatch(bloqueada, /lista-pastas/);
+});
+
+test("dialogoDePastas: a caixa com o conteúdo, o erro e o Escolher", () => {
+  const html = dialogoDePastas();
+  assert.match(html, /^<dialog class="dialogo dialogo-pastas" data-dialogo-pastas/);
+  assert.match(html, /data-conteudo-pastas><\/div>.*data-erro-pastas hidden.*data-escolher-pasta>Escolher esta pasta/);
+});
+
+test("o aviso de que o projeto roda no host só aparece quando a tela manda rodaNoHost", () => {
+  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
+  assert.doesNotMatch(formularioDeProjeto(rascunhoDe(LOJA), opcoes), /data-aviso-host/);
+  assert.match(
+    formularioDeProjeto(rascunhoDe(LOJA), { ...opcoes, rodaNoHost: true }),
+    /<p class="msg-erro" role="status" data-aviso-host>[^<]*roda no host\.<\/p>/,
   );
 });
