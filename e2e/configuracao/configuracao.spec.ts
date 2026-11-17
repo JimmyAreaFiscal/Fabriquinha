@@ -44,7 +44,13 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByRole("heading", { name: "Novo projeto" })).toBeVisible();
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("deduzida do remoto ao salvar");
   const formulario = pagina.locator("form[data-projeto]");
-  await expect(formulario.locator("h3")).toHaveText(["Repositório", "Preparação", /^Modelo e effort por etapa/]);
+  await expect(formulario.locator("h3")).toHaveText([
+    "Repositório",
+    "Ambiente",
+    "Preparação",
+    /^Modelo e effort por etapa/,
+  ]);
+  await expect(pagina.getByLabel("Imagem do Ambiente")).toHaveValue("");
   await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness/);
   await pagina.getByLabel("Nome", { exact: true }).fill("Loja X");
   await pagina.getByLabel("Caminho do repositório").fill(repo);

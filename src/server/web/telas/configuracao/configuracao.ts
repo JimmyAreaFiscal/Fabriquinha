@@ -23,7 +23,7 @@ export type ProjetoListado = Projeto;
  * O projeto no formulário, só com o que o cadastro pede; o novo ainda não tem hospedagem (o F5 a deduz do remoto ao
  * salvar).
  */
-export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> &
+export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "imagem_do_ambiente"> &
   ConfiguracoesPorEtapa & { preparacao: string[]; hospedagem?: Hospedagem };
 
 /** O projeto cadastrado como o formulário o edita: a preparação da worktree solta das Verificações. */
@@ -32,6 +32,7 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
+  imagem_do_ambiente,
   verificacoes,
   configuracoes,
 }: ProjetoCadastrado): Rascunho => ({
@@ -39,6 +40,7 @@ export const rascunhoDe = ({
   raiz_git,
   branch_base,
   hospedagem,
+  ...(imagem_do_ambiente && { imagem_do_ambiente }),
   preparacao: verificacoes.preparacao,
   configuracoes,
 });
@@ -258,6 +260,8 @@ interface OpcoesDoProjeto {
   /** Os modelos que o pi lista (`GET /api/modelos`), para o seletor de cada etapa. */
   modelosDoPi: readonly Modelo[];
   erros: Erros;
+  /** O Ambiente está em container e o projeto salvo não tem imagem: o trabalho dele roda no host. */
+  rodaNoHost?: boolean;
   /** A mensagem do servidor que não é de um campo (502 do F5, 409), no rodapé. */
   falha?: string;
 }
@@ -324,7 +328,10 @@ function modelosEEffortsPorEtapa(erros: Erros, p: ConfiguracoesPorEtapa, modelos
 const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
 
 /** Projeto (F7 §4.4) nos três grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
-export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, falha }: OpcoesDoProjeto): string {
+export function formularioDeProjeto(
+  p: Rascunho,
+  { novo, modelosDoPi, erros, rodaNoHost, falha }: OpcoesDoProjeto,
+): string {
   const titulo = novo
     ? "Novo projeto"
     : `${escapar(p.nome)}<button type="button" class="btn btn-perigo remover-projeto" data-remover-projeto aria-label="Remover o projeto ${escapar(p.nome)}">Remover</button>`;
@@ -343,12 +350,16 @@ export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, fal
   const rodape =
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
     `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
+  const avisoDoHost = rodaNoHost
+    ? '<p class="msg-erro" role="status" data-aviso-host>O Ambiente está em container, mas este projeto não tem imagem: o trabalho dele roda no host.</p>'
+    : "";
   // Fora do h2: o título acessível do formulário continua o nome do projeto.
   const sdlc = novo
     ? ""
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
+<div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${texto(erros, "imagem_do_ambiente", "Imagem do Ambiente", p.imagem_do_ambiente ?? "", { classe: " largo", mono: true, extra: ' placeholder="Dockerfile"', ajuda: "caminho de um Dockerfile no repositório ou o nome de uma imagem; vazio mantém o projeto no host" })}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
