@@ -1,5 +1,5 @@
 // Preparação da worktree (F5 §3.2), descarte das alterações (F5 §3.3), poda e remoção das worktrees do projeto.
-import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../../../shared/nucleo/erros.ts";
@@ -46,9 +46,49 @@ const LIGAR_DEPENDENCIAS_DA_IMAGEM =
   "if [ -d /dependencias/node_modules ]; then ln -sfn /dependencias/node_modules node_modules; fi";
 
 /**
+ * Sai com 0 quando as dependências da imagem servem à worktree: a imagem não tem `node_modules` (nada a comparar) ou o
+ * `package.json` e o `package-lock.json` da raiz da worktree são iguais aos que a imagem guarda em `/dependencias`.
+ */
+const LOCKFILE_DA_WORKTREE_IGUAL_AO_DA_IMAGEM =
+  "[ ! -d /dependencias/node_modules ] || { cmp -s package.json /dependencias/package.json && cmp -s package-lock.json /dependencias/package-lock.json; }";
+
+/** Tira o symlink de uma preparação anterior: a instalação local não pode escrever no `node_modules` da imagem (do root). */
+const DESLIGAR_DEPENDENCIAS_DA_IMAGEM = "if [ -L node_modules ]; then rm node_modules; fi";
+
+const LINHA_DO_NODE_MODULES_NO_EXCLUDE = "/node_modules";
+
+/**
+ * O symlink `node_modules` não pode aparecer no status nem ir no `git add -A`, qualquer que seja o .gitignore do projeto
+ * (`node_modules/` com barra não casa com symlink). O core grava o `info/exclude`, que o container só lê.
+ * shortcut: o exclude é do clone e vale para todas as worktrees; duas preparações simultâneas podem duplicar a linha, sem efeito.
+ */
+async function ignorarNodeModulesNoGit(ambiente: Ambiente, caminho: string): Promise<void> {
+  const exclude = (
+    await exigirGitNoAmbiente(ambiente, caminho, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude")
+  ).trim();
+  mkdirSync(dirname(exclude), { recursive: true });
+  appendFileSync(exclude, ""); // cria o arquivo quando o clone não veio com o modelo do git
+  if (readFileSync(exclude, "utf8").split("\n").includes(LINHA_DO_NODE_MODULES_NO_EXCLUDE)) return;
+  appendFileSync(exclude, `\n${LINHA_DO_NODE_MODULES_NO_EXCLUDE}\n`);
+}
+
+async function lockfileDaWorktreeIgualAoDaImagem(ambiente: Ambiente, caminho: string): Promise<boolean> {
+  const r = await ambiente.executar({
+    programa: LOCKFILE_DA_WORKTREE_IGUAL_AO_DA_IMAGEM,
+    argumentos: [],
+    cwd: ambiente.caminhoNoAmbiente(caminho),
+    env: envCompletoDoServico(),
+    limiteMs: LIMITE_COMANDO_MS,
+    noShell: true,
+  });
+  return r.codigo === 0;
+}
+
+/**
  * F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git.
- * Antes da `preparacao`, a `instalacao` roda no Ambiente sem dependências prontas; no que as traz, ela é pulada e a
- * worktree só é ligada a elas.
+ * Antes da `preparacao`, a `instalacao` roda no Ambiente sem dependências prontas e também no que as traz quando o
+ * lockfile da worktree difere do da imagem (a worktree nasce da branch da demanda, a imagem da base); com o lockfile
+ * igual, ela é pulada e a worktree só é ligada às dependências da imagem.
  */
 export async function preparar(
   ambiente: Ambiente,
@@ -56,9 +96,12 @@ export async function preparar(
   verificacoes: Pick<ProjetoDoRepositorio["verificacoes"], "preparacao" | "instalacao">,
   log: string,
 ): Promise<void> {
-  const comandosDaInstalacao = ambiente.trazDependenciasInstaladas
+  const reusaDependenciasDaImagem =
+    ambiente.trazDependenciasInstaladas && (await lockfileDaWorktreeIgualAoDaImagem(ambiente, caminho));
+  if (reusaDependenciasDaImagem) await ignorarNodeModulesNoGit(ambiente, caminho);
+  const comandosDaInstalacao = reusaDependenciasDaImagem
     ? [LIGAR_DEPENDENCIAS_DA_IMAGEM]
-    : verificacoes.instalacao;
+    : [...(ambiente.trazDependenciasInstaladas ? [DESLIGAR_DEPENDENCIAS_DA_IMAGEM] : []), ...verificacoes.instalacao];
   for (const comando of [...comandosDaInstalacao, ...verificacoes.preparacao]) {
     anotar(log, `preparação: ${comando}`);
     // ponytail: o host local preserva o env completo da Preparação, credenciais inclusive; o container nasce sem elas.
