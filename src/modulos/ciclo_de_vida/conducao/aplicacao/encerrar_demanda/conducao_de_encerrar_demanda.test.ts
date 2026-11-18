@@ -410,6 +410,23 @@ test("CA-4: PR que a plataforma não decide no limite falha o ticket em check_fi
   assert.deepEqual(merges(), []);
 });
 
+test("PR final que o humano já integrou antes do check_final: sem esperar o conflito que a plataforma não decide mais, conclui", async () => {
+  const c = await cenario();
+  const aguardando = await conduzir(c.banco);
+  assert.equal(aguardando.encerramento?.aguardando_merge_humano, true);
+  // O ticket falhou e foi reaberto (o check_final volta a rodar) depois de o humano integrar o PR: no GitHub, o PR
+  // mergeado devolve `mergeable: UNKNOWN` para sempre.
+  execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
+  hospedagem.mudar(1, { conflito: "calculando" });
+  c.banco.prepare("UPDATE encerramento_demanda SET aguardando_merge_humano = 0 WHERE demanda_id = ?").run(D);
+
+  const ag = await conduzir(c.banco, { verificacao: { limiteMs: 0 } });
+
+  assert.equal(ag.encerramento?.falha, undefined);
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(merges().length, 1, "só o merge do humano: a Fabriquinha não integra o PR final");
+});
+
 test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvido, tenta de novo e reaproveita o PR", async () => {
   const c = await cenario();
   hospedagem.abrirPr({
