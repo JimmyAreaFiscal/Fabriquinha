@@ -28,7 +28,8 @@ const COM_DOCKER = {
 /**
  * As três credenciais: onde ficam no host (relativo à raiz do teste) e o caminho em que o agente as usa dentro do container
  * (uma expressão de shell, resolvida com o env que `executar` dá ao agente). Claude e Codex renovam por temporário + rename
- * na pasta da credencial, que o container monta; o pi grava no lugar, com o lock `auth.json.lock` ao lado, e o container monta a pasta do agente inteira, para o lock ser o mesmo do host.
+ * na pasta da credencial, que o container monta; o pi grava no lugar (seguindo o symlink do `auth.json`) e trava o caminho
+ * resolvido, então o lock `auth.json.lock` cai ao lado do alvo, na pasta da credencial que o container também monta.
  */
 const CREDENCIAIS = [
   {
@@ -39,7 +40,7 @@ const CREDENCIAIS = [
   },
   {
     agente: "pi",
-    noHost: "pi-do-auditor/auth.json",
+    noHost: "credenciais-pi/auth.json",
     noAgenteDoContainer: '"$PI_CODING_AGENT_DIR/auth.json"',
     renovaPorRename: false,
   },
@@ -58,7 +59,7 @@ const CODEX = CREDENCIAIS[2];
 
 /**
  * A gestão de Ambientes no Docker de verdade, com as três credenciais do host gravadas em `antigo`, cada uma como o operador
- * a prepara (`CLAUDE_SECURESTORAGE_CONFIG_DIR` na pasta do Claude, o `~/.codex/auth.json` um symlink para a pasta do Codex), e
+ * a prepara (`CLAUDE_SECURESTORAGE_CONFIG_DIR` na pasta do Claude, o `auth.json` do pi e o do Codex symlinks para a pasta de cada um), e
  * com o resto da configuração de cada agente ao lado, que o container não pode montar.
  */
 async function prepararGestaoComCredenciais(t: TestContext) {
@@ -80,6 +81,7 @@ async function prepararGestaoComCredenciais(t: TestContext) {
     writeFileSync(join(raiz, arquivo), conteudo);
   }
   symlinkSync(join(raiz, CODEX.noHost), join(raiz, ".codex", "auth.json"));
+  symlinkSync(join(raiz, PI.noHost), join(raiz, "pi-do-auditor", "auth.json"));
   const pastaDaCredencialDoClaude = dirname(join(raiz, CLAUDE.noHost));
   const variavelDaPastaDoClaude = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
   process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR = pastaDaCredencialDoClaude;
@@ -153,7 +155,7 @@ const comandoQueRenovaNoContainer = (
 ) =>
   renovaPorRename
     ? `alvo="$(readlink -f ${noAgenteDoContainer})"; printf '${conteudoDoPrintf}' > "$alvo.${sufixoDoTemporario}" && mv "$alvo.${sufixoDoTemporario}" "$alvo"`
-    : `until mkdir ${noAgenteDoContainer}.lock 2>/dev/null; do :; done; printf '${conteudoDoPrintf}' > ${noAgenteDoContainer}; rmdir ${noAgenteDoContainer}.lock`;
+    : `alvo="$(readlink -f ${noAgenteDoContainer})"; until mkdir "$alvo.lock" 2>/dev/null; do :; done; printf '${conteudoDoPrintf}' > "$alvo"; rmdir "$alvo.lock"`;
 
 for (const credencial of CREDENCIAIS) {
   const { agente, noHost, renovaPorRename } = credencial;
@@ -225,6 +227,8 @@ test(
           "/credenciais/claude/.credentials.json",
           "/credenciais/codex",
           "/credenciais/codex/auth.json",
+          "/credenciais/pi",
+          "/credenciais/pi/auth.json",
         ].join("\n"),
       );
 
@@ -240,8 +244,8 @@ test(
           `o container não monta a pasta ${pastaDoAgente} inteira`,
         );
       assert.ok(
-        origens.includes(join(raiz, "pi-do-auditor")),
-        "o pi monta a pasta do agente, para o lock ser o do host",
+        !origens.includes(join(raiz, "pi-do-auditor")),
+        "o container não monta a pasta do agente do pi: o pi do host executaria o que ele gravasse nela",
       );
     }
   },
@@ -305,11 +309,40 @@ async function armazenamentoDeCredenciaisDoPi(arquivo: string): Promise<Armazena
   return AuthStorage.create(arquivo);
 }
 
-// O lock do pi (`auth.json.lock`) fica ao lado do auth.json, sem seguir symlink: o host e o container só se excluem se a
-// pasta do agente for a mesma nos dois, e é por isso que o container a monta inteira. Sem o lock, um documento curto
-// escrito sobre um longo deixa a sobra do longo no fim. Por isso os documentos têm tamanhos diferentes (com o mesmo
+const ESPERA_DO_LOCK_SEGURADO_MS = 500;
+
+/**
+ * O pi instalado trava o caminho resolvido do `auth.json`: com o `auth.json.lock` seguro ao lado do alvo do symlink (como o
+ * container o segura), o `modify` pelo caminho do symlink espera. Um pi que trava o próprio symlink não esperaria, e o lock
+ * do host e o do container não se excluiriam.
+ */
+async function exigirQueOPiTraveOCaminhoResolvido(
+  armazenamento: ArmazenamentoDeCredenciaisDoPi,
+  pastaDaCredencial: string,
+): Promise<void> {
+  const lock = join(pastaDaCredencial, "auth.json.lock");
+  mkdirSync(lock);
+  let terminou = false;
+  const renovacao = armazenamento
+    .modify("anthropic", () => Promise.resolve({ type: "oauth", access: "lock", refresh: "r", expires: 1 }))
+    .finally(() => {
+      terminou = true;
+    });
+  await new Promise((resolver) => setTimeout(resolver, ESPERA_DO_LOCK_SEGURADO_MS));
+  const esperou = !terminou;
+  rmSync(lock, { recursive: true });
+  await renovacao;
+  assert.ok(
+    esperou,
+    "o pi instalado não trava o caminho resolvido do auth.json (o lock do host e o do container não se excluem): atualize o pi para 1.5.2 ou mais novo",
+  );
+}
+
+// O pi trava o caminho resolvido do auth.json (proper-lockfile com `realpath: true`): o `auth.json.lock` cai ao lado do
+// alvo dos symlinks do host e do container, na mesma pasta da credencial, e os dois se excluem. Sem o lock, um documento
+// curto escrito sobre um longo deixa a sobra do longo no fim. Por isso os documentos têm tamanhos diferentes (com o mesmo
 // tamanho, a corrupção some). Com o AuthStorage real do host e o lock do container em outra pasta, a corrupção aparece em
-// segundos: este teste cobra o lock compartilhado.
+// segundos: este teste cobra o lock compartilhado, e o pi instalado que não trava o caminho resolvido o reprova.
 test(
   "a renovação concorrente do pi no host (AuthStorage) e no container, com documentos de tamanhos diferentes, nunca corrompe o auth.json",
   COM_DOCKER,
@@ -317,7 +350,8 @@ test(
     const { raiz, alocar } = await prepararGestaoComCredenciais(t);
     const ambiente = await alocar("espaco-1");
     const arquivoNoHost = join(raiz, PI.noHost);
-    const armazenamentoDoHost = await armazenamentoDeCredenciaisDoPi(arquivoNoHost);
+    const armazenamentoDoHost = await armazenamentoDeCredenciaisDoPi(join(raiz, "pi-do-auditor", "auth.json"));
+    await exigirQueOPiTraveOCaminhoResolvido(armazenamentoDoHost, dirname(arquivoNoHost));
     const documentoLongoDoContainer = `{"anthropic":{"type":"oauth","access":"cont-%04d-${"c".repeat(600)}","refresh":"r","expires":1}}`;
     const doContainer = noContainer(
       ambiente,

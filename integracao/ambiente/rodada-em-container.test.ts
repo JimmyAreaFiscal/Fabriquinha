@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlink
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
+import { gravarCredencialDoPi } from "../../apoio-testes/credencial_do_pi.ts";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
 import { INSTALACAO_DO_PI_FALSO, type PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
@@ -556,6 +557,7 @@ test(
   async (t) => {
     const { c } = await cenarioEmContainer(t);
     // As credenciais do Claude e do Codex ficam em pastas só delas (o container monta essas pastas, nunca ~/.claude nem ~/.codex).
+    const pastaDaCredencialDoPi = gravarCredencialDoPi(dirDoPiDoAuditor());
     const pastaDaCredencialDoClaude = join(c.raiz, "credenciais-claude");
     const pastaDaCredencialDoCodex = join(c.raiz, "credenciais-codex");
     mkdirSync(pastaDaCredencialDoClaude);
@@ -610,24 +612,18 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // O pi monta a pasta do agente (o lock do auth.json é o mesmo do host); o Claude e o Codex montam a pasta só da
-    // credencial, no caminho dedicado (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O
-    // resto do .claude e do .codex é cópia.
+    // O pi, o Claude e o Codex montam a pasta só da credencial, no caminho dedicado (em leitura e escrita): o rename da
+    // credencial só chega ao outro lado pela pasta, e o lock do pi cai nela. O resto do ~/.pi/agent, do .claude e do .codex
+    // é cópia, e nenhum -v tem a pasta do agente do pi como origem.
     // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
-    const { saida: homeDoContainer } = await ambiente.executar({
-      programa: 'echo "$HOME"',
-      argumentos: [],
-      cwd: "/",
-      env: {},
-      noShell: true,
-    });
     const credenciais = [
-      `${dirDoPiDoAuditor()}:${homeDoContainer.trim()}/.pi/agent:rw`,
+      `${realpathSync(pastaDaCredencialDoPi)}:/credenciais/pi:rw`,
       `${realpathSync(pastaDaCredencialDoClaude)}:/credenciais/claude:rw`,
       `${realpathSync(pastaDaCredencialDoCodex)}:/credenciais/codex:rw`,
     ];
     const copiadas = [
       dirDoPiDoAuditor(),
+      pastaDaCredencialDoPi,
       join(c.raiz, ".claude"),
       join(c.raiz, ".codex"),
       pastaDaCredencialDoClaude,
