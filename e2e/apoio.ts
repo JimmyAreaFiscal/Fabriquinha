@@ -105,6 +105,8 @@ export const test = base.extend<{
             FABRIQUINHA_PI: pi,
             FALSO_PI_ROTEIRO: roteiroDoPi ? JSON.stringify(roteiroDoPi) : "",
             PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
+            // O serviço nunca lê o home do usuário: copiaria o `.claude` e o `.codex` dele e renovaria as credenciais do host.
+            HOME: raiz,
             GIT_CONFIG_GLOBAL: gitconfig,
             GIT_CONFIG_NOSYSTEM: "1",
             PATH: `${bin}:${process.env.PATH ?? ""}`,

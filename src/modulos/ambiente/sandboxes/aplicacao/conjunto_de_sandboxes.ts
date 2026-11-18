@@ -102,6 +102,13 @@ export class ConjuntoDeSandboxes {
     this.#servico = servico;
   }
 
+  /** Os containers alocados agora, que recebem a credencial do host quando ela muda. */
+  containersAlocados(): string[] {
+    return listarAmbientes(this.#banco)
+      .filter(({ estado }) => estado === "alocado")
+      .map(({ container_id }) => container_id);
+  }
+
   /** A alocação que o ocupante já tem, ou `undefined`. */
   alocacaoDe(ocupante: string): AmbienteGravado | undefined {
     return buscarAmbienteAlocadoPara(this.#banco, ocupante);

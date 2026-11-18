@@ -39,6 +39,8 @@ interface ContainerDoAmbiente {
   raiz: string;
   /** A API do agente vista de dentro do container; o `FABRIQUINHA_API` do core (127.0.0.1) não chega do container. */
   url_da_api: string;
+  /** Leva ao container a credencial dos agentes que mudou no host; roda antes de cada `executar`. */
+  levarCredenciais?: () => Promise<void>;
 }
 
 const entreAspas = (texto: string): string => `'${texto.replaceAll("'", `'\\''`)}'`;
@@ -63,9 +65,11 @@ export class AmbienteContainer implements Ambiente {
   readonly #binDoPacote: string;
   readonly #raiz: string;
   readonly #urlDaApi: string;
+  readonly #levarCredenciais: (() => Promise<void>) | undefined;
 
-  constructor({ id, container_id, bin_do_pacote, raiz, url_da_api }: ContainerDoAmbiente) {
+  constructor({ id, container_id, bin_do_pacote, raiz, url_da_api, levarCredenciais }: ContainerDoAmbiente) {
     this.id = id;
+    this.#levarCredenciais = levarCredenciais;
     this.container_id = container_id;
     this.#binDoPacote = bin_do_pacote;
     this.#raiz = raiz;
@@ -88,6 +92,7 @@ export class AmbienteContainer implements Ambiente {
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     const { limiteMs, ultimosBytes = Infinity, noShell } = comando;
+    await this.#levarCredenciais?.();
     const inicio = performance.now();
     const { argumentosDoDocker, identificador, apagarArquivoDeEnv } = this.#prepararDockerExec(comando, false);
     const limite: { estourou: boolean; matouOGrupo?: Promise<void> } = { estourou: false };

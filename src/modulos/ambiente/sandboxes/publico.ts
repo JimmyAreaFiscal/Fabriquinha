@@ -8,6 +8,7 @@ export {
   type ServicoDoConjunto,
   type SituacaoDoAmbiente,
 } from "./aplicacao/conjunto_de_sandboxes.ts";
+export { CredenciaisDosContainers } from "./aplicacao/credenciais_dos_containers.ts";
 export {
   DIR_DO_PI_NO_HOME,
   GeradorDeAmbientes,

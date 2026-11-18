@@ -8,6 +8,8 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -340,7 +342,7 @@ test("criar monta exatamente a pasta das worktrees do projeto, o .git, as pastas
   assert.ok(!existsSync(join(raiz, "ambientes", criado.id, "pi")), "o pi não é montado");
 });
 
-test("criar copia só a configuração do pi, do .claude e do .codex: sessões, históricos, logs e o resto ficam no host", async () => {
+test("criar copia só a configuração do pi, do .claude e do .codex: credenciais, sessões, históricos, logs e o resto ficam no host", async () => {
   const dirDoPi = join(base, "pi-com-sessoes");
   const home = join(base, "home-com-sessoes");
   const vivos = {
@@ -383,8 +385,9 @@ test("criar copia só a configuração do pi, do .claude e do .codex: sessões, 
   for (const [pasta, arquivos] of Object.entries(vivos))
     for (const arquivo of arquivos)
       assert.ok(!existsSync(join(homeDoContainer, destinos[pasta] ?? "", arquivo)), `${pasta}/${arquivo} foi copiado`);
-  assert.ok(existsSync(join(homeDoContainer, ".pi", "agent", "auth.json")));
-  assert.ok(existsSync(join(homeDoContainer, ".claude", ".credentials.json")));
+  // A credencial vai enxuta, por gravarCredencial, nunca na cópia da configuração.
+  assert.ok(!existsSync(join(homeDoContainer, ".pi", "agent", "auth.json")));
+  assert.ok(!existsSync(join(homeDoContainer, ".claude", ".credentials.json")));
   assert.ok(existsSync(join(homeDoContainer, ".claude", "skills", "s", "SKILL.md")));
   assert.ok(existsSync(join(homeDoContainer, ".codex", "config.toml")));
 });
@@ -405,10 +408,7 @@ test("criar copia o pi do Auditor, o .claude e o .codex para o home do container
     home_do_usuario: home,
   });
   const homeDoContainer = docker.homeDoContainer(criado.container_id);
-  assert.equal(
-    readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"),
-    '{"anthropic":{"access":"segredo"}}',
-  );
+  assert.ok(!existsSync(join(homeDoContainer, ".pi", "agent", "auth.json")));
   assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "trust.json"), "utf8"), "{}");
   assert.equal(readFileSync(join(homeDoContainer, ".claude", "CLAUDE.md"), "utf8"), "instruções");
   assert.equal(readFileSync(join(homeDoContainer, ".codex", "config.toml"), "utf8"), "modelo");
@@ -457,7 +457,6 @@ test("criar tira das cópias o token do GitHub, e o resto do arquivo continua ig
     readFileSync(join(homeDoContainer, ".claude", "skills", "arquivo com espaço.md"), "utf8"),
     "token [token-do-github-removido] e [token-do-github-removido]\noutra linha",
   );
-  assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
 });
 
 test("criar com cópia que falha mata o docker exec da cópia, elimina o container e diz o motivo", async () => {
@@ -466,6 +465,7 @@ test("criar com cópia que falha mata o docker exec da cópia, elimina o contain
   mkdirSync(dirDoPi);
   mkdirSync(home);
   writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  writeFileSync(join(dirDoPi, "trust.json"), "{}");
   // O `docker exec` da cópia guarda o pid e fica preso; o tar só falha depois disso, para encontrá-lo ainda vivo.
   const comExecDaCopiaPreso = join(base, "com-exec-da-copia-preso");
   const arquivoDoPidDoExecPreso = join(comExecDaCopiaPreso, "pid");
@@ -494,6 +494,26 @@ test("criar com cópia que falha mata o docker exec da cópia, elimina o contain
   }
   assert.throws(() => process.kill(Number(readFileSync(arquivoDoPidDoExecPreso, "utf8")), 0), { code: "ESRCH" });
   assert.equal(docker.containers().length, antes);
+});
+
+test("gravarCredencial grava pelo stdin, troca o arquivo inteiro e o que o container grava nele não chega ao host", async () => {
+  const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, proximoSlot());
+  const homeDoContainer = docker.homeDoContainer(criado.container_id);
+  const antes = docker.registro().length;
+  await gerador.gravarCredencial(criado.container_id, ".claude/.credentials.json", '{"token":"um"}');
+  // O agente do container troca a cópia dele por um symlink para outro lugar: a gravação seguinte troca o symlink, sem segui-lo.
+  const alvoDoSymlink = join(base, "alvo-do-symlink-do-container");
+  writeFileSync(alvoDoSymlink, "intocado");
+  rmSync(join(homeDoContainer, ".claude", ".credentials.json"));
+  symlinkSync(alvoDoSymlink, join(homeDoContainer, ".claude", ".credentials.json"));
+  await gerador.gravarCredencial(criado.container_id, ".claude/.credentials.json", '{"token":"dois"}');
+  assert.equal(readFileSync(join(homeDoContainer, ".claude", ".credentials.json"), "utf8"), '{"token":"dois"}');
+  assert.equal(readFileSync(alvoDoSymlink, "utf8"), "intocado");
+  assert.deepEqual(readdirSync(join(homeDoContainer, ".claude")), [".credentials.json"]);
+  assert.equal(statSync(join(homeDoContainer, ".claude", ".credentials.json")).mode & 0o777, 0o600);
+  // O token só passa pelo stdin: nem os argumentos do docker nem o registro o têm.
+  assert.ok(!JSON.stringify(docker.registro().slice(antes)).includes("token"));
+  await assert.rejects(gerador.gravarCredencial("nao-existe", ".codex/auth.json", "{}"), /docker exec falhou/);
 });
 
 test("criar com cópia sem o auth.json do pi falha antes de subir o container, com a orientação", async () => {

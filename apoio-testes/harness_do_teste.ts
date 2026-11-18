@@ -23,6 +23,15 @@ if (process.env.PI_CODING_AGENT_DIR === undefined) {
   });
 }
 
+// Nenhum teste lê o home do usuário: a composição copia para o container o `.claude` e o `.codex` dele e, de minuto em
+// minuto, renova no host a credencial que está para vencer, rodando o Claude Code e o Codex de verdade. Os testes têm um
+// home vazio; quem precisa de credencial grava a sua.
+const homeDosTestes = mkdtempSync(join(tmpdir(), "fabriquinha-home-"));
+process.env.HOME = homeDosTestes;
+process.on("exit", () => {
+  rmSync(homeDosTestes, { recursive: true, force: true });
+});
+
 // Os testes das telas leem o mês e o dia no fuso do navegador, fixado já na importação do módulo (antes de o teste poder
 // mudar `TZ`): sem fuso fixo aqui, a máquina em UTC os reprova.
 process.env.TZ ??= "America/Sao_Paulo";

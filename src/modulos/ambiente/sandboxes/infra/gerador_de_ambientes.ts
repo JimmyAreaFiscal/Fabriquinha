@@ -76,9 +76,12 @@ export interface Montagens {
   harness: InstalacaoDoHarness;
 }
 
-/** O que o container recebe por cópia (nunca por montagem), na criação: o pi do Auditor, `~/.claude` e `~/.codex`. */
+/**
+ * O que o container recebe por cópia (nunca por montagem): a configuração do pi do Auditor, de `~/.claude` e de
+ * `~/.codex`, na criação; as credenciais deles, enxutas, chegam depois por `gravarCredencial`.
+ */
 export interface Copias {
-  /** O `PI_CODING_AGENT_DIR` do Auditor (`auth.json`, `settings.json`, `trust.json`...): vira o `~/.pi/agent` do container. */
+  /** O `PI_CODING_AGENT_DIR` do Auditor (`settings.json`, `trust.json`...): a configuração vira o `~/.pi/agent` do container. */
   dir_do_pi: string;
   /** O home do usuário: o `.claude` e o `.codex` dele, se existem, vão para o home do container. */
   home_do_usuario: string;
@@ -235,8 +238,8 @@ async function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, 
   return nomesDosArquivosDeDependencias;
 }
 
-async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
-  const resultado = await executar("docker", args, { limiteMs });
+async function rodarDocker(args: string[], limiteMs: number, entrada?: string): Promise<string> {
+  const resultado = await executar("docker", args, { limiteMs, entrada });
   if (resultado.codigo === 0) return resultado.saida.trim();
   const motivo = resultado.limiteEstourado ? `passou do limite de ${String(limiteMs)} ms` : resultado.erro.trim();
   throw new ErroDeRegra(
@@ -273,14 +276,13 @@ function argumentosDasMontagens(montagens: Montagens, idDoAmbiente: string): str
 const COMANDO_QUE_TIRA_TOKEN_DO_GITHUB = `{ grep -rIlE '${PADRAO_DE_TOKEN_DO_GITHUB}' "$d" | while IFS= read -r arquivo; do sed -i -E 's/${PADRAO_DE_TOKEN_DO_GITHUB}/[token-do-github-removido]/g' "$arquivo"; done; }`;
 
 /**
- * O que vai de cada pasta para o container: só a configuração (credenciais, ajustes, instruções, skills, extensões e
- * pacotes do harness). Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
+ * O que vai de cada pasta para o container: só a configuração (ajustes, instruções, skills, extensões e pacotes do
+ * harness); a credencial vai enxuta, por `gravarCredencial`. Sessões, históricos, logs e bancos ficam no host: mudam enquanto o `tar` lê ("file changed as we
  * read it") e o agente do container não precisa deles. Caminhos relativos à raiz da pasta; o que não existe é pulado.
  */
 const CONFIGURACAO_POR_DESTINO = {
   // npm/ e git/ são os pacotes do `settings.json` (o pi-claude-bridge); bin/ tem o rg e o fd das ferramentas do pi.
   [DIR_DO_PI_NO_HOME]: [
-    "auth.json",
     "settings.json",
     "trust.json",
     "models.json",
@@ -294,8 +296,8 @@ const CONFIGURACAO_POR_DESTINO = {
     "git",
     "bin",
   ],
-  ".claude": [".credentials.json", "settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
-  ".codex": ["auth.json", "config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
+  ".claude": ["settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
+  ".codex": ["config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
 } as const;
 
 type DestinoNoHome = keyof typeof CONFIGURACAO_POR_DESTINO;
@@ -507,6 +509,21 @@ export class GeradorDeAmbientes {
       throw erro;
     }
     return { id, container_id: containerId, slot };
+  }
+
+  /**
+   * Grava `conteudo` em `caminhoNoHome` (relativo ao `HOME` do container) pelo stdin do `docker exec`, num temporário do
+   * `mktemp` trocado pelo final com `mv`: o agente nunca lê o arquivo pela metade, e o conteúdo não passa por argumento,
+   * registro nem arquivo do host. É cópia: o que o container grava nela não volta ao host.
+   */
+  async gravarCredencial(containerId: string, caminhoNoHome: string, conteudo: string): Promise<void> {
+    const pastaNoHome = posix.dirname(caminhoNoHome);
+    const roteiroDaGravacaoAtomica = `umask 077 && mkdir -p "$HOME/${pastaNoHome}" && temporario=$(mktemp "$HOME/${pastaNoHome}/.fabriquinha-XXXXXX") && cat > "$temporario" && mv -f "$temporario" "$HOME/${caminhoNoHome}"`;
+    await rodarDocker(
+      ["exec", "-i", containerId, "sh", "-c", roteiroDaGravacaoAtomica],
+      this.#limiteDoComandoMs,
+      conteudo,
+    );
   }
 
   /**

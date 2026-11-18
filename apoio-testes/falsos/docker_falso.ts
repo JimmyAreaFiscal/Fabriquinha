@@ -6,7 +6,7 @@
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
 //   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
-//   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
+//   `HOME` do container, e o `exec -i ... mktemp` (a gravação de uma credencial pelo stdin) grava de verdade nele (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
@@ -361,7 +361,7 @@ function executarDockerFalso(): void {
     if (
       shell === "sh" &&
       opcaoC === "-c" &&
-      [PASTA_DOS_PIDS_NO_CONTAINER, "tar -x"].some((marca) => roteiro.includes(marca))
+      [PASTA_DOS_PIDS_NO_CONTAINER, "tar -x", "mktemp"].some((marca) => roteiro.includes(marca))
     )
       simularProcessoDoContainer(dir, container, programa, opcoes, sair);
   } else if (comando === "rm") {

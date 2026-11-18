@@ -391,3 +391,30 @@ test("abrigarProcesso: a pasta do processo e a da sessão vão para as pastas do
   assert.equal(realpathSync(pastaDaExecucao), join(execucoes, "E-7"));
   assert.equal(realpathSync(join(base, "sessoes", "sessao-7")), join(sessoes, "sessao-7"));
 });
+
+test("executar leva ao container a credencial que mudou no host antes do comando, e a falha da cópia é a do comando", async () => {
+  const ordem: string[] = [];
+  const comCredenciais = new AmbienteContainer({
+    id: "amb-1",
+    container_id: containerId,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+    levarCredenciais: () => {
+      ordem.push("credenciais");
+      return Promise.resolve();
+    },
+  });
+  const saida = await comCredenciais.executar(comandoNoShell("echo comando"));
+  ordem.push(saida.saida.trim());
+  assert.deepEqual(ordem, ["credenciais", "comando"]);
+  const semDocker = new AmbienteContainer({
+    id: "amb-1",
+    container_id: containerId,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+    levarCredenciais: () => Promise.reject(new Error("docker fora do ar")),
+  });
+  await assert.rejects(semDocker.executar(comandoNoShell("echo nunca")), /docker fora do ar/);
+});
