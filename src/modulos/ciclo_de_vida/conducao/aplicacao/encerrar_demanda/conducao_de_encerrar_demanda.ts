@@ -139,7 +139,11 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
         conferencia_do_pr: () =>
           new ConferenciaDoPR(this.deps.repositorio, projeto, publicado.id, log, this.opcoes.verificacao),
       });
-      const problemas = await conferenciaDoPR.conferir();
+      // O PR que o humano já integrou (o check_final volta a rodar depois de o ticket falhar) não tem conflito a decidir,
+      // e o GitHub devolve `mergeable: UNKNOWN` dele para sempre: a conferência esperaria até o limite. A integração o lê.
+      const prJaIntegrado =
+        (await this.deps.repositorio.situacaoDoPR(projeto, publicado.id, relogio)).estado === "mergeado";
+      const problemas = prJaIntegrado ? { conflito: false, checksFalhos: [] } : await conferenciaDoPR.conferir();
       if (problemas.conflito) {
         registrarConflitoDoEncerramento(banco, demanda_id, { demanda_id }, FABRIQUINHA, relogio);
         return "parar";
