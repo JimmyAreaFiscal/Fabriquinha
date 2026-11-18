@@ -497,7 +497,7 @@ test("alocar devolve o Ambiente do container, que roda com a API do host e o pi 
     saida.saida.trim(),
     `http://host.docker.internal:4999 ${join(homeDoContainer, ".pi", "agent")} ${homeDoContainer}`,
   );
-  // O pi do container é a cópia do pi do Auditor, feita na criação.
+  // O pi do container é a pasta do agente do Auditor, montada na criação.
   assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
   assert.equal(comoContainer(gestao.ambienteDo("I-1")).container_id, ambiente.container_id);
   assert.ok(gestao.ambienteDo("I-1.R2") instanceof AmbienteHostLocal);

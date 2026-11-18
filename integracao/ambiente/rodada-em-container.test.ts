@@ -610,8 +610,9 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // Das pastas copiadas, o pi monta só o arquivo da credencial e o Claude e o Codex montam a pasta só da credencial, no
-    // caminho dedicado (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O resto é cópia.
+    // O pi monta a pasta do agente (o lock do auth.json é o mesmo do host); o Claude e o Codex montam a pasta só da
+    // credencial, no caminho dedicado (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O
+    // resto do .claude e do .codex é cópia.
     // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
     const { saida: homeDoContainer } = await ambiente.executar({
       programa: 'echo "$HOME"',
@@ -621,7 +622,7 @@ test(
       noShell: true,
     });
     const credenciais = [
-      `${join(dirDoPiDoAuditor(), "auth.json")}:${homeDoContainer.trim()}/.pi/agent/auth.json:rw`,
+      `${dirDoPiDoAuditor()}:${homeDoContainer.trim()}/.pi/agent:rw`,
       `${realpathSync(pastaDaCredencialDoClaude)}:/credenciais/claude:rw`,
       `${realpathSync(pastaDaCredencialDoCodex)}:/credenciais/codex:rw`,
     ];
@@ -978,7 +979,7 @@ function definirNoEnvDoCore(t: TestContext, variaveis: Record<string, string>): 
 }
 
 test(
-  "nenhum token do GitHub entra no container: nem no env, nem nas cópias do pi, do .claude e do .codex, nem nas montagens",
+  "nenhum token do GitHub entra no container: nem no env, nem nas cópias do .claude e do .codex, nem nas montagens",
   COM_DOCKER,
   async (t) => {
     const { c } = await cenarioEmContainer(t);
@@ -994,7 +995,6 @@ test(
       mkdirSync(join(c.raiz, pasta), { recursive: true });
       writeFileSync(join(c.raiz, pasta, arquivo), `token = "${TOKEN_DO_GITHUB}"`);
     }
-    writeFileSync(join(dirDoPiDoAuditor(), "settings.json"), `{"githubToken":"${TOKEN_DO_GITHUB}"}`);
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
     const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });

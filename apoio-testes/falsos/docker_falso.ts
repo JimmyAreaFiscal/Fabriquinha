@@ -5,10 +5,11 @@
 //   `create`, `start`, `ps`, `inspect`, `stats`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
-//   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
+//   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do `.claude` e do `.codex`) extrai de verdade no
 //   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); o `-v <arquivo do host>:/home/node/...`
 //   vira um hard link do arquivo do host nesse `HOME` (o bind mount de arquivo: mesmo inode, então a escrita no lugar vale
-//   para os dois lados e um `rename` de um deles não chega ao outro, como no docker de verdade); o `-v <pasta do host>:<destino>`
+//   para os dois lados e um `rename` de um deles não chega ao outro, como no docker de verdade); o `-v <pasta do host>:/home/node/...`
+//   vira um symlink nesse `HOME` (a pasta do agente do pi); o `-v <pasta do host>:<destino>`
 //   vale no `exec` simulado trocando `<destino>` pela pasta do host nos argumentos (o bind mount de pasta: o caminho é resolvido
 //   a cada acesso, então o `rename` de um lado é visto pelo outro; vale também para o `[ -d /credenciais/claude ]` e o
 //   `CLAUDE_SECURESTORAGE_CONFIG_DIR` do comando do agente), e `ln -sfn` também é executado, para ligar o `auth.json` do Codex do `HOME` a essa pasta; e
@@ -265,11 +266,11 @@ function executarDockerFalso(): void {
     writeFileSync(arquivoDoContainer(container.id), JSON.stringify(container));
     for (const montagem of container.montagens) {
       const [origem = "", destino = ""] = montagem.split(":");
-      if (!destino.startsWith(`${HOME_DA_IMAGEM_FALSA}/`) || !existsSync(origem) || !statSync(origem).isFile())
-        continue;
+      if (!destino.startsWith(`${HOME_DA_IMAGEM_FALSA}/`) || !existsSync(origem)) continue;
       const noHome = join(homeDoContainer(dir, container.id), destino.slice(HOME_DA_IMAGEM_FALSA.length + 1));
       mkdirSync(dirname(noHome), { recursive: true });
-      linkSync(origem, noHome);
+      if (statSync(origem).isFile()) linkSync(origem, noHome);
+      else symlinkSync(origem, noHome); // a pasta montada no HOME: o caminho é resolvido a cada acesso, como o bind mount de pasta
     }
     console.log(container.id);
   } else if (comando === "start") {

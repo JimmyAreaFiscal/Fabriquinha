@@ -28,7 +28,7 @@ const COM_DOCKER = {
 /**
  * As três credenciais: onde ficam no host (relativo à raiz do teste) e o caminho em que o agente as usa dentro do container
  * (uma expressão de shell, resolvida com o env que `executar` dá ao agente). Claude e Codex renovam por temporário + rename
- * na pasta da credencial, que o container monta; o pi grava no lugar, e o container monta o arquivo.
+ * na pasta da credencial, que o container monta; o pi grava no lugar, com o lock `auth.json.lock` ao lado, e o container monta a pasta do agente inteira, para o lock ser o mesmo do host.
  */
 const CREDENCIAIS = [
   {
@@ -142,7 +142,9 @@ function renovarNoHost(arquivo: string, conteudo: string, porRename: boolean): v
 
 /**
  * O container renova como o agente: temporário ao lado do alvo do caminho do agente (o Codex segue o symlink) + rename
- * (Claude e Codex), ou escrita no lugar (pi). `sufixoDoTemporario` separa o temporário do container do que o host usa.
+ * (Claude e Codex), ou escrita no lugar sob o lock do pi (pi): o mesmo `mkdir` de `auth.json.lock` que o proper-lockfile do
+ * pi faz, esperando enquanto o host (ou outro container) o segura. `sufixoDoTemporario` separa o temporário do container do
+ * que o host usa.
  */
 const comandoQueRenovaNoContainer = (
   { noAgenteDoContainer, renovaPorRename }: Credencial,
@@ -151,7 +153,7 @@ const comandoQueRenovaNoContainer = (
 ) =>
   renovaPorRename
     ? `alvo="$(readlink -f ${noAgenteDoContainer})"; printf '${conteudoDoPrintf}' > "$alvo.${sufixoDoTemporario}" && mv "$alvo.${sufixoDoTemporario}" "$alvo"`
-    : `printf '${conteudoDoPrintf}' > ${noAgenteDoContainer}`;
+    : `until mkdir ${noAgenteDoContainer}.lock 2>/dev/null; do :; done; printf '${conteudoDoPrintf}' > ${noAgenteDoContainer}; rmdir ${noAgenteDoContainer}.lock`;
 
 for (const credencial of CREDENCIAIS) {
   const { agente, noHost, renovaPorRename } = credencial;
@@ -186,15 +188,6 @@ for (const credencial of CREDENCIAIS) {
       assert.equal(readFileSync(join(raiz, noHost), "utf8"), '{"token":"renovado-no-container"}');
       assert.equal(await lerNoContainer(outro, credencial), '{"token":"renovado-no-container"}');
       assert.equal(await lerNoContainer(renovador, credencial), '{"token":"renovado-no-container"}');
-
-      if (renovaPorRename) return;
-      // O pi tem o arquivo montado: o rename sobre ele dá EBUSY, e a recusa não pode corromper nem trocar o arquivo.
-      const porRename = await noContainer(
-        renovador,
-        `printf '{"token":"por-rename"}' > "$PI_CODING_AGENT_DIR/temporario" && mv "$PI_CODING_AGENT_DIR/temporario" ${PI.noAgenteDoContainer}`,
-      );
-      assert.notEqual(porRename.codigo, 0, "o rename sobre o arquivo montado deveria falhar");
-      assert.equal(readFileSync(join(raiz, noHost), "utf8"), '{"token":"renovado-no-container"}');
     },
   );
 
@@ -241,12 +234,15 @@ test(
         HostConfig: { Binds: string[] };
       }[];
       const origens = (inspecao?.HostConfig.Binds ?? []).map((bind) => bind.split(":")[0]);
-      for (const pastaDoAgente of [".claude", ".codex", "pi-do-auditor"])
+      for (const pastaDoAgente of [".claude", ".codex"])
         assert.ok(
           !origens.includes(join(raiz, pastaDoAgente)),
           `o container não monta a pasta ${pastaDoAgente} inteira`,
         );
-      assert.ok(origens.includes(join(raiz, PI.noHost)), "o pi monta só o arquivo da credencial");
+      assert.ok(
+        origens.includes(join(raiz, "pi-do-auditor")),
+        "o pi monta a pasta do agente, para o lock ser o do host",
+      );
     }
   },
 );
@@ -309,10 +305,11 @@ async function armazenamentoDeCredenciaisDoPi(arquivo: string): Promise<Armazena
   return AuthStorage.create(arquivo);
 }
 
-// O lock do pi fica ao lado do auth.json, e o host e o container têm cada um o seu: o que protege o arquivo compartilhado
-// da escrita no lugar dos dois (truncar e gravar) tem que existir, senão um documento curto escrito sobre um longo deixa
-// a sobra do longo no fim. Por isso os documentos têm tamanhos diferentes (com o mesmo tamanho, a corrupção some).
-// Com o AuthStorage real e dois locks separados, a corrupção aparece em segundos: este teste cobra o lock compartilhado.
+// O lock do pi (`auth.json.lock`) fica ao lado do auth.json, sem seguir symlink: o host e o container só se excluem se a
+// pasta do agente for a mesma nos dois, e é por isso que o container a monta inteira. Sem o lock, um documento curto
+// escrito sobre um longo deixa a sobra do longo no fim. Por isso os documentos têm tamanhos diferentes (com o mesmo
+// tamanho, a corrupção some). Com o AuthStorage real do host e o lock do container em outra pasta, a corrupção aparece em
+// segundos: este teste cobra o lock compartilhado.
 test(
   "a renovação concorrente do pi no host (AuthStorage) e no container, com documentos de tamanhos diferentes, nunca corrompe o auth.json",
   COM_DOCKER,
