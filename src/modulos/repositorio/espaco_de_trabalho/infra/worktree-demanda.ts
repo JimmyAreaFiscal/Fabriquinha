@@ -225,7 +225,7 @@ export async function garantirWorktreeDemandaDizendoSeBuscouBase(
     return { buscouBase: !existe, marca };
   });
   if (!existsSync(marca)) {
-    await preparar(ambiente, caminho, projeto.verificacoes.preparacao, log);
+    await preparar(ambiente, caminho, projeto.verificacoes, log);
     writeFileSync(marca, "");
   }
   return { caminho, buscouBase };
@@ -279,7 +279,7 @@ async function prepararRodada(
   log: string,
   marca: string,
 ): Promise<void> {
-  await preparar(ambiente, caminho, projeto.verificacoes.preparacao, log);
+  await preparar(ambiente, caminho, projeto.verificacoes, log);
   writeFileSync(marca, "");
 }
 

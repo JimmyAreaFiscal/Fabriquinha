@@ -17,6 +17,7 @@ export class AmbienteHostLocal implements Ambiente {
   readonly processosMorremComOServico = true;
   readonly isolaAsVariaveisDoServico = false;
   readonly escreveEmTodoOGitDoClone = true;
+  readonly trazDependenciasInstaladas: boolean = false;
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     const { programa, argumentos, cwd, env, limiteMs, ultimosBytes = Infinity } = comando;
