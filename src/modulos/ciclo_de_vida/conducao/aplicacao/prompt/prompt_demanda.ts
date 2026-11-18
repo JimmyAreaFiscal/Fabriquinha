@@ -25,6 +25,19 @@ const SECAO_LEITURA_ECONOMICA = secao(
   ].join("\n"),
 );
 
+/**
+ * Kill por padrão de nome (`pkill -f "node ..."`) já derrubou duas vezes o serviço da Fabriquinha, que também é node, e
+ * falhou os tickets de todas as demandas em andamento (o último em 2026-11-08). No sandbox, o mesmo padrão ainda pega o
+ * próprio agente.
+ */
+const SECAO_ENCERRAR_PROCESSOS = secao(
+  "Encerrar processos",
+  [
+    "Nunca use `pkill`, `killall`, `pgrep -f` nem qualquer kill por padrão de nome: o padrão pega processos que você não iniciou, como o do próprio agente no sandbox, e derruba a demanda.",
+    "Para encerrar um processo que você iniciou, guarde o PID (`$!`) e use `kill <PID>`, ou rode o comando com `timeout`.",
+  ].join("\n"),
+);
+
 export function montarPromptDemanda(c: ContextoDoPrompt, secaoDaEtapa?: SecaoDoPrompt): string {
   const { ag, ticket, retomada } = c;
   const { demanda } = ag;
@@ -85,6 +98,7 @@ export function montarPromptDemanda(c: ContextoDoPrompt, secaoDaEtapa?: SecaoDoP
     ...(retomada ? [secao(retomada.titulo, retomada.texto)] : []),
     modo.trim() + "\n",
     SECAO_LEITURA_ECONOMICA,
+    SECAO_ENCERRAR_PROCESSOS,
     secao(
       "Evidências",
       [
