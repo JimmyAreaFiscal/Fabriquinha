@@ -1,6 +1,7 @@
 // A API dos Sandboxes (MELHORIAS §8), fronteira interna do Ambiente: o conjunto de containers, quem ocupa cada um, o uso
 // medido, a criação e a eliminação deles.
 export type { AmbienteGravado } from "./armazenamento/ambientes.ts";
+export { lerNomeDaInstancia } from "./armazenamento/ambientes.ts";
 export {
   ConjuntoDeSandboxes,
   type OcupanteDoAmbiente,

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
-import { VERSAO_DO_SLOT_DO_AMBIENTE } from "./migracoes_de_ambiente.ts";
+import { VERSAO_DA_INSTANCIA, VERSAO_DO_SLOT_DO_AMBIENTE } from "./migracoes_de_ambiente.ts";
 
 const CRIADO_EM_DOS_AMBIENTES = "2026-01-01T00:00:00.000Z";
 
@@ -52,6 +52,25 @@ test("o slot é único entre os Ambientes vivos: o do eliminado volta a servir, 
   inserirAmbiente(banco, "b5", "livre");
   assert.throws(() => {
     inserirAmbiente(banco, "b6", "livre", 0);
+  }, /CHECK/);
+  banco.close();
+});
+
+test("a migração da instância dá ao banco um nome fab- com 4 hexadecimais, que o CHECK protege e o reabrir não muda", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrarBancoDaFabriquinha(banco, VERSAO_DA_INSTANCIA - 1);
+  migrarBancoDaFabriquinha(banco);
+  const nome = () => (banco.prepare("SELECT nome FROM instancia_da_fabriquinha").get() as { nome: string }).nome;
+
+  const nomeDaPrimeiraSubida = nome();
+  assert.match(nomeDaPrimeiraSubida, /^fab-[0-9a-f]{4}$/);
+  migrarBancoDaFabriquinha(banco);
+  assert.equal(nome(), nomeDaPrimeiraSubida);
+  assert.throws(() => {
+    banco.exec("UPDATE instancia_da_fabriquinha SET nome = 'fab-3F9A'");
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec("INSERT INTO instancia_da_fabriquinha (id, nome) VALUES (2, 'fab-3f9a')");
   }, /CHECK/);
   banco.close();
 });
