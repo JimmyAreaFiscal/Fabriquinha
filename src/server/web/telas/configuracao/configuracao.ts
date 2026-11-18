@@ -25,7 +25,7 @@ export type ProjetoListado = Projeto;
  * salvar).
  */
 export type Rascunho = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "arquivos_de_dependencias"> &
-  ConfiguracoesPorEtapa & { preparacao: string[]; hospedagem?: Hospedagem };
+  ConfiguracoesPorEtapa & { preparacao: string[]; instalacao: string[]; hospedagem?: Hospedagem };
 
 /** O projeto cadastrado como o formulário o edita: a preparação da worktree solta das Verificações. */
 export const rascunhoDe = ({
@@ -43,6 +43,7 @@ export const rascunhoDe = ({
   ...(arquivos_de_dependencias && { arquivos_de_dependencias }),
   hospedagem,
   preparacao: verificacoes.preparacao,
+  instalacao: verificacoes.instalacao,
   configuracoes,
 });
 
@@ -62,6 +63,7 @@ export const NOVO: Rascunho = {
   raiz_git: "",
   branch_base: "main",
   preparacao: [],
+  instalacao: [],
   configuracoes: {},
 };
 
@@ -299,11 +301,17 @@ function htmlDoCampoDosArquivosDeDependencias(erros: Erros, caminhos: readonly s
 }
 
 /** Lista de comandos com adicionar e remover; os erros de cada item e da lista inteira. */
-function lista(erros: Erros, campo: "preparacao", rotulo: string, ajuda: string, itens: string[]): string {
+function lista(
+  erros: Erros,
+  campo: "preparacao" | "instalacao",
+  rotulo: string,
+  ajuda: string,
+  itens: string[],
+): string {
   const m = marca(erros, campo);
   const linhas = itens.map((valor, i) => {
     const mi = marca(erros, `${campo}[${String(i)}]`);
-    return `<div class="item-lista${mi.classe}"><input class="mono" value="${escapar(valor)}" placeholder="npm ci" aria-label="${rotulo}: comando ${String(i + 1)}"${mi.aria}>${remover}${mi.msg}</div>`;
+    return `<div class="item-lista${mi.classe}"><input class="mono" value="${escapar(valor)}" placeholder="${campo === "instalacao" ? "npm ci" : "npm run build"}" aria-label="${rotulo}: comando ${String(i + 1)}"${mi.aria}>${remover}${mi.msg}</div>`;
   });
   return `<div class="campo${m.classe}" data-lista="${campo}">${rotulo} <span class="ajuda">${ajuda}</span><div class="lista">${linhas.join("")}${m.msg}<button type="button" class="link" data-adicionar="${campo}">+ comando</button></div></div>`;
 }
@@ -378,6 +386,7 @@ export function formularioDeProjeto(
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', botaoAoLado: BOTAO_ESCOLHER_PASTA, ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
 <div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${htmlDoCampoDosArquivosDeDependencias(erros, p.arquivos_de_dependencias)}</div></div>
+<div class="grupo"><h3>Instalação</h3><div class="grade">${lista(erros, "instalacao", "Instalação das dependências", "opcional; roda uma vez por conjunto de dependências", p.instalacao)}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;

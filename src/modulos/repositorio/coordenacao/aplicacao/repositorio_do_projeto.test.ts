@@ -77,7 +77,7 @@ test("devolverAmbiente limpa só o Ambiente do dono do Espaço e deixa a worktre
     raiz_git: "/nao-existe",
     branch_base: "main",
     hospedagem: "github" as const,
-    verificacoes: { preparacao: [] },
+    verificacoes: { preparacao: [], instalacao: [] },
   };
   await repositorio.devolverAmbiente(projeto, espacoDaDemanda(projeto, "I-1", "/nao-existe"), "/nao-existe/log");
   assert.deepEqual(limpos, ["sandbox-1"]);
@@ -104,7 +104,7 @@ test("o git do Espaço que ainda tem o Ambiente alocado roda nele, sem alocar ou
     raiz_git: "/nao-existe",
     branch_base: "main",
     hospedagem: "github" as const,
-    verificacoes: { preparacao: [] },
+    verificacoes: { preparacao: [], instalacao: [] },
   };
   const espaco = { ...espacoDaDemanda(projeto, "I-1", "/nao-existe"), pasta: tmpdir() };
   assert.match(await repositorio.gitNoEspaco(projeto, espaco, "--version"), /^git version/);

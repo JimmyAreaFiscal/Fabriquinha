@@ -111,11 +111,11 @@ test("a 53 deixa a linha da demanda só com o pedido: guarda todas as linhas e v
   banco.close();
 });
 
-test("o banco aberto pela Fabriquinha registra a 51, a 53 e a 58 de Demandas, e o pedido novo nasce em rascunho", () => {
+test("o banco aberto pela Fabriquinha registra a 51, a 53, a 58 e a 59 de Demandas, e o pedido novo nasce em rascunho", () => {
   const { banco, fechar } = abrirBancoTemporario();
   assert.deepEqual(
     MIGRACOES_DE_DEMANDAS.migracoes.map(({ versao }) => versao),
-    [51, 53, 58],
+    [51, 53, 58, 59],
   );
   cadastrarProjetoLoja(banco);
   const autor = { tipo: "externo", ferramenta: "claude", sessao: "s1" } as const;

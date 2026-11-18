@@ -15,6 +15,7 @@ const TABELAS = [
   "projeto",
   "configuracao_etapa_projeto",
   "comando_preparacao_projeto",
+  "comando_instalacao_projeto",
   "fitness_function_projeto",
   "linguagem_projeto",
   "configuracao_e2e",
@@ -43,6 +44,7 @@ const completa = ProjetoConfigurado.parse({
   ],
   verificacoes: {
     preparacao: ["primeiro", "segundo"],
+    instalacao: ["npm ci", "npm rebuild"],
     fitness: [
       { nome: "z", comando: "c", descricao: "d" },
       { nome: "a", comando: "c", descricao: "d" },
@@ -267,7 +269,7 @@ test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", ()
   });
 });
 
-test("substituição SDLC remove listas opcionais e mantém etapas e preparação; gravação integral substitui todas", () => {
+test("substituição SDLC remove listas opcionais e mantém etapas, preparação e instalação; gravação integral substitui todas", () => {
   comBanco((banco) => {
     gravarCompleta(banco);
     const nova = ProjetoConfigurado.parse({
@@ -281,7 +283,11 @@ test("substituição SDLC remove listas opcionais e mantém etapas e preparaçã
     assert.deepEqual(buscarProjeto(banco, "a"), {
       ...nova,
       etapas: canonica.etapas,
-      verificacoes: { ...nova.verificacoes, preparacao: canonica.verificacoes.preparacao },
+      verificacoes: {
+        ...nova.verificacoes,
+        preparacao: canonica.verificacoes.preparacao,
+        instalacao: canonica.verificacoes.instalacao,
+      },
     });
     assert.equal(lida.raiz_git, "/novo");
     assert.deepEqual(lida.etapas, canonica.etapas);
@@ -431,11 +437,18 @@ test("raiz_git relativa é rejeitada pelo schema sem mutação; cadastro e SDLC 
   });
 });
 
-test("cadastro edita preparação sem substituir as demais verificações", () => {
+test("cadastro edita preparação e instalação sem substituir as demais verificações", () => {
   comBanco((banco) => {
     gravarCompleta(banco);
-    const editado = editarProjeto(banco, { ...completa, verificacoes: { preparacao: ["npm ci"] } });
-    assert.deepEqual(editado.verificacoes, { ...canonica.verificacoes, preparacao: ["npm ci"] });
+    const editado = editarProjeto(banco, {
+      ...completa,
+      verificacoes: { preparacao: ["npm ci"], instalacao: ["uv sync"] },
+    });
+    assert.deepEqual(editado.verificacoes, {
+      ...canonica.verificacoes,
+      preparacao: ["npm ci"],
+      instalacao: ["uv sync"],
+    });
   });
 });
 

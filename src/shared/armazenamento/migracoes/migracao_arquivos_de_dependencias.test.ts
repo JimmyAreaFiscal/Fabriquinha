@@ -15,7 +15,7 @@ test("a migração 58 converte Dockerfile em package.json, zera as outras imagen
   inserir.run("com-imagem", "/r2", "k2", "node:22");
   inserir.run("sem-imagem", "/r3", "k3", null);
 
-  migrarBancoDaFabriquinha(banco);
+  migrarBancoDaFabriquinha(banco, 58);
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, 58);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
