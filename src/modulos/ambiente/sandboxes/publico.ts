@@ -12,6 +12,8 @@ export {
   DIR_DO_PI_NO_HOME,
   GeradorDeAmbientes,
   PADRAO_DE_TOKEN_DO_GITHUB,
+  PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER,
   type Recursos,
+  VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE,
 } from "./infra/gerador_de_ambientes.ts";
 export { abrigarNoAmbiente } from "./infra/pastas_do_ambiente.ts";

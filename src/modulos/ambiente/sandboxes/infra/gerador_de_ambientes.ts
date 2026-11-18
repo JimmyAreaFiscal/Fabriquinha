@@ -3,10 +3,19 @@
 // só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type InstalacaoDoHarness,
@@ -30,7 +39,7 @@ const LIMITE_DO_DOCKER_MS = 2 * 60_000;
 /** A medição do uso, que a tela de Configuração espera: o docker travado só deixa o medido de fora, sem segurar a tela. */
 const LIMITE_DA_MEDICAO_MS = 10_000;
 
-/** Onde, em relação ao `HOME` do container, mora a cópia do pi do Auditor. */
+/** Onde, em relação ao `HOME` do container, a pasta do agente do pi do Auditor é montada. */
 export const DIR_DO_PI_NO_HOME = ".pi/agent";
 /** O token do GitHub, que sai das cópias para o container e do `.env` do projeto que o container recebe. */
 export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
@@ -67,11 +76,12 @@ export interface Montagens {
 }
 
 /**
- * O que o container recebe do pi do Auditor, de `~/.claude` e de `~/.codex`, na criação: a configuração por cópia; a
- * credencial (o `auth.json` do pi, o `.credentials.json` do Claude e o `auth.json` do Codex), montada do host.
+ * O que o container recebe do pi do Auditor, de `~/.claude` e de `~/.codex`: a pasta do agente do pi é montada; do
+ * `.claude` e do `.codex` vai a configuração, por cópia, na criação, e a credencial (o `.credentials.json` do Claude e o
+ * `auth.json` do Codex) é montada do host.
  */
 export interface Copias {
-  /** O `PI_CODING_AGENT_DIR` do Auditor (`auth.json`, `settings.json`, `trust.json`...): vira o `~/.pi/agent` do container. */
+  /** O `PI_CODING_AGENT_DIR` do Auditor (`auth.json`, `settings.json`, `trust.json`...): montada em `~/.pi/agent` do container. */
   dir_do_pi: string;
   /** O home do usuário: o `.claude` e o `.codex` dele, se existem, vão para o home do container. */
   home_do_usuario: string;
@@ -161,40 +171,34 @@ const comandoQueTiraTokenDoGithub = (credencialMontada: string | undefined) =>
  * read it") e o agente do container não precisa deles. Caminhos relativos à raiz da pasta; o que não existe é pulado.
  */
 const CONFIGURACAO_POR_DESTINO = {
-  // npm/ e git/ são os pacotes do `settings.json` (o pi-claude-bridge); bin/ tem o rg e o fd das ferramentas do pi.
-  [DIR_DO_PI_NO_HOME]: [
-    "settings.json",
-    "trust.json",
-    "models.json",
-    "claude-bridge.json",
-    "AGENTS.md",
-    "SYSTEM.md",
-    "skills",
-    "extensions",
-    "agents",
-    "npm",
-    "git",
-    "bin",
-  ],
   ".claude": ["settings.json", "CLAUDE.md", "skills", "agents", "commands", "hooks", "plugins"],
   ".codex": ["config.toml", "AGENTS.md", "hooks.json", "skills", "prompts", "rules"],
 } as const;
 
-type DestinoNoHome = keyof typeof CONFIGURACAO_POR_DESTINO;
+type DestinoCopiado = keyof typeof CONFIGURACAO_POR_DESTINO;
+type DestinoNoHome = typeof DIR_DO_PI_NO_HOME | DestinoCopiado;
 
 /** Onde o container monta as pastas do host que têm a credencial do Claude e a do Codex (`/credenciais/claude`). */
 const PASTA_DAS_CREDENCIAIS_NO_CONTAINER = "/credenciais";
+/** A pasta só da credencial do Claude no container: o agente a lê por `VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE`. */
+export const PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER = `${PASTA_DAS_CREDENCIAIS_NO_CONTAINER}/claude`;
+/** A variável com que o Claude Code lê e grava `.credentials.json` numa pasta só da credencial, no host e no container. */
+export const VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
 
 /**
  * A credencial de cada destino, que o container compartilha com o host em vez de copiar: o token de atualização do OAuth
- * é rotativo, e uma cópia deixa de valer quando o host ou outro container renova a dele. O Claude e o Codex gravam a
- * credencial por temporário + `rename`, que dá outro inode ao arquivo, e o bind mount de arquivo não vê isso; por isso
- * eles montam a pasta do host (`rw`, sob `PASTA_DAS_CREDENCIAIS_NO_CONTAINER`) e a credencial do `HOME` é um symlink
- * para lá. O pi grava no lugar, e o arquivo dele é montado direto. Compartilhar a pasta expõe ao container o resto de
- * `~/.claude` e de `~/.codex` do host (sessões, histórico).
- * shortcut: se o agente do container trocar o symlink por `rename` em vez de gravar no alvo, esse container passa a ter
- * credencial própria; apontar `CLAUDE_CONFIG_DIR`/`CODEX_HOME` para a pasta montada, se for o caso. Não foi conferido
- * com o Docker nem com os agentes reais (a máquina do ticket não os tem).
+ * é rotativo, e uma cópia deixa de valer quando o host ou outro container renova a dele. O container nunca monta
+ * `~/.claude` nem `~/.codex` (sessões, histórico e configuração que roda no host): monta só uma pasta do host que tem a
+ * credencial, `rw`, e o operador a prepara (a do pi é a pasta do agente, `dir_do_pi`):
+ * - Claude: o Claude Code lê e grava a credencial dentro de `CLAUDE_SECURESTORAGE_CONFIG_DIR`, exportada no host e,
+ *   no container, apontando para a pasta montada; ele renova por temporário + `rename`, que só vale na pasta, e não por symlink;
+ * - Codex: segue o symlink ao gravar, então `~/.codex/auth.json` do host é um symlink para a pasta, e o do container também;
+ * - pi: grava no lugar e trava com `auth.json.lock`, um diretório criado ao lado do `auth.json` sem seguir symlink, e o pi
+ *   só aceita o auth em `<PI_CODING_AGENT_DIR>/auth.json`; o lock só vale para o host e o container se os dois usam a
+ *   mesma pasta do agente, então ela é montada inteira.
+ * shortcut: montar a pasta do agente do pi inteira, `rw`, deixa o container gravar as extensões e a configuração que o pi
+ * do host executa, e o token do GitHub que houver nela não sai do container; trocar por uma pasta só do auth se o pi
+ * passar a aceitar o auth fora do agent dir.
  */
 const CREDENCIAL_POR_DESTINO: Record<DestinoNoHome, string> = {
   [DIR_DO_PI_NO_HOME]: "auth.json",
@@ -202,9 +206,9 @@ const CREDENCIAL_POR_DESTINO: Record<DestinoNoHome, string> = {
   ".codex": "auth.json",
 };
 
-/** As pastas do host que vão para o container, e para onde, relativo ao `HOME` do container. */
-function pastasParaOContainer({ dir_do_pi, home_do_usuario }: Copias): [string, DestinoNoHome][] {
-  const pastas: [string, DestinoNoHome][] = [[dir_do_pi, DIR_DO_PI_NO_HOME]];
+/** As pastas do host cuja configuração é copiada para o container, e para onde, relativo ao `HOME` do container. */
+function pastasParaOContainer({ home_do_usuario }: Copias): [string, DestinoCopiado][] {
+  const pastas: [string, DestinoCopiado][] = [];
   for (const pasta of [".claude", ".codex"] as const)
     if (existsSync(join(home_do_usuario, pasta))) pastas.push([join(home_do_usuario, pasta), pasta]);
   return pastas;
@@ -215,27 +219,84 @@ interface CredencialParaMontar {
   destinoNoHome: DestinoNoHome;
 }
 
-/** As credenciais que existem no host (a do Claude e a do Codex são opcionais). */
-function credenciaisParaMontar(copias: Copias): CredencialParaMontar[] {
-  return pastasParaOContainer(copias)
-    .map(([pastaNoHost, destinoNoHome]): CredencialParaMontar => ({ pastaNoHost, destinoNoHome }))
-    .filter(({ pastaNoHost, destinoNoHome }) => existsSync(join(pastaNoHost, CREDENCIAL_POR_DESTINO[destinoNoHome])));
+/** A pasta só da credencial não pode ser a do agente (`~/.claude`, `~/.codex`): o container leria e gravaria nela inteira. */
+function exigirPastaSoDaCredencial(pasta: string, pastaDoAgente: string, orientacao: string): void {
+  if (existsSync(pastaDoAgente) && realpathSync(pasta) === realpathSync(pastaDoAgente))
+    throw new ErroDeRegra(`a pasta da credencial é a própria ${pastaDoAgente}, com sessões e configuração`, orientacao);
 }
 
-/** O pi grava a credencial no lugar (`writeFileSync`), então o arquivo montado basta; Claude e Codex gravam por rename. */
-const credencialEhMontadaPorArquivo = (destinoNoHome: DestinoNoHome) => destinoNoHome === DIR_DO_PI_NO_HOME;
+/** A pasta do host só com a credencial do Claude (`CLAUDE_SECURESTORAGE_CONFIG_DIR`); sem login do Claude, não há o que montar. */
+function pastaDaCredencialDoClaude(homeDoUsuario: string): string | undefined {
+  const pastaDoAgente = join(homeDoUsuario, ".claude");
+  const credencialNaPastaDoAgente = join(pastaDoAgente, CREDENCIAL_POR_DESTINO[".claude"]);
+  const pasta = process.env[VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE];
+  const comoPrepararAPasta = `crie uma pasta só da credencial (mkdir -m 700 ~/.credenciais-claude), mova para ela o ${CREDENCIAL_POR_DESTINO[".claude"]} (mv ${credencialNaPastaDoAgente} ~/.credenciais-claude/) e exporte ${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE}=~/.credenciais-claude no shell do Claude e no serviço da Fabriquinha`;
+  if (!pasta) {
+    if (existsSync(credencialNaPastaDoAgente))
+      throw new ErroDeRegra(
+        `o container não pode montar ${pastaDoAgente} (sessões e hooks do host), e ${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE} não está definida`,
+        comoPrepararAPasta,
+      );
+    return undefined;
+  }
+  const credencial = join(pasta, CREDENCIAL_POR_DESTINO[".claude"]);
+  if (!existsSync(credencial))
+    throw new ErroDeRegra(
+      `não existe o ${credencial} (${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE}=${pasta})`,
+      `entre no Claude (login) com ${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE} exportada, ou mova o ${CREDENCIAL_POR_DESTINO[".claude"]} para essa pasta`,
+    );
+  exigirPastaSoDaCredencial(pasta, pastaDoAgente, comoPrepararAPasta);
+  return realpathSync(pasta);
+}
+
+/** A pasta do host só com a credencial do Codex: a que o symlink `~/.codex/auth.json` do host aponta; sem login do Codex, não há o que montar. */
+function pastaDaCredencialDoCodex(homeDoUsuario: string): string | undefined {
+  const pastaDoAgente = join(homeDoUsuario, ".codex");
+  const credencial = join(pastaDoAgente, CREDENCIAL_POR_DESTINO[".codex"]);
+  const informacao = lstatSync(credencial, { throwIfNoEntry: false });
+  if (!informacao) return undefined;
+  const comoPrepararAPasta = `crie uma pasta só da credencial (mkdir -m 700 ~/.credenciais-codex), mova o ${credencial} para ela (mv ${credencial} ~/.credenciais-codex/) e aponte o do host para lá (ln -s ~/.credenciais-codex/${CREDENCIAL_POR_DESTINO[".codex"]} ${credencial})`;
+  if (!informacao.isSymbolicLink())
+    throw new ErroDeRegra(
+      `o ${credencial} é um arquivo comum, e o container não pode montar ${pastaDoAgente} (sessões e configuração do host)`,
+      comoPrepararAPasta,
+    );
+  let alvo: string;
+  try {
+    alvo = realpathSync(credencial);
+  } catch {
+    throw new ErroDeRegra(`o symlink ${credencial} aponta para um arquivo que não existe`, comoPrepararAPasta);
+  }
+  if (basename(alvo) !== CREDENCIAL_POR_DESTINO[".codex"])
+    throw new ErroDeRegra(
+      `o symlink ${credencial} aponta para ${alvo}, que não se chama ${CREDENCIAL_POR_DESTINO[".codex"]}`,
+      comoPrepararAPasta,
+    );
+  exigirPastaSoDaCredencial(dirname(alvo), pastaDoAgente, comoPrepararAPasta);
+  return dirname(alvo);
+}
+
+/** As credenciais que o container monta: a do pi sempre (`exigirLoginDoPi`); a do Claude e a do Codex, se o host tem. */
+function credenciaisParaMontar({ dir_do_pi, home_do_usuario }: Copias): CredencialParaMontar[] {
+  const credenciais: CredencialParaMontar[] = [{ pastaNoHost: dir_do_pi, destinoNoHome: DIR_DO_PI_NO_HOME }];
+  const pastaDoClaude = pastaDaCredencialDoClaude(home_do_usuario);
+  if (pastaDoClaude) credenciais.push({ pastaNoHost: pastaDoClaude, destinoNoHome: ".claude" });
+  const pastaDoCodex = pastaDaCredencialDoCodex(home_do_usuario);
+  if (pastaDoCodex) credenciais.push({ pastaNoHost: pastaDoCodex, destinoNoHome: ".codex" });
+  return credenciais;
+}
 
 /** Onde fica, no container, a pasta do host que tem a credencial do Claude ou do Codex. */
-const pastaMontadaDaCredencial = (destinoNoHome: DestinoNoHome) =>
+const pastaMontadaDaCredencial = (destinoNoHome: DestinoCopiado) =>
   `${PASTA_DAS_CREDENCIAIS_NO_CONTAINER}/${destinoNoHome.slice(1)}`;
 
-/** O `-v` de uma credencial: o arquivo do pi no lugar dele, ou a pasta do Claude/Codex no caminho dedicado. */
+/** O `-v` de uma credencial: a pasta do agente do pi no lugar dela, ou a pasta só da credencial do Claude/Codex no caminho dedicado. */
 function montagemDaCredencial({ pastaNoHost, destinoNoHome }: CredencialParaMontar, homeDoContainer: string): string[] {
-  const credencial = CREDENCIAL_POR_DESTINO[destinoNoHome];
-  const origemEDestino = credencialEhMontadaPorArquivo(destinoNoHome)
-    ? `${join(pastaNoHost, credencial)}:${homeDoContainer}/${destinoNoHome}/${credencial}`
-    : `${pastaNoHost}:${pastaMontadaDaCredencial(destinoNoHome)}`;
-  return ["-v", `${origemEDestino}:rw`];
+  const destino =
+    destinoNoHome === DIR_DO_PI_NO_HOME
+      ? `${homeDoContainer}/${DIR_DO_PI_NO_HOME}`
+      : pastaMontadaDaCredencial(destinoNoHome);
+  return ["-v", `${pastaNoHost}:${destino}:rw`];
 }
 
 /**
@@ -245,7 +306,7 @@ function montagemDaCredencial({ pastaNoHost, destinoNoHome }: CredencialParaMont
 function copiarParaOHomeDoContainer(
   containerId: string,
   origem: string,
-  destinoNoHome: DestinoNoHome,
+  destinoNoHome: DestinoCopiado,
   limiteMs: number,
   credencialMontada: string | undefined,
 ): Promise<void> {
@@ -307,7 +368,7 @@ function exigirLoginDoPi({ dir_do_pi }: Copias): void {
     );
 }
 
-/** Copia para o container a configuração do pi do Auditor e, se existem, a do `.claude` e a do `.codex` do usuário. */
+/** Copia para o container, se existem, a configuração do `.claude` e a do `.codex` do usuário; a do pi é montada. */
 async function copiarParaOContainer(
   containerId: string,
   copias: Copias,
@@ -405,24 +466,17 @@ export class GeradorDeAmbientes {
     return homeSemBarraNoFim;
   }
 
-  /** O docker cria as pastas do arquivo montado do pi como root; o usuário do container (dono do HOME) precisa escrever nelas. */
+  /** O docker cria como root a pasta acima da pasta do agente do pi montada; o usuário do container (dono do HOME) precisa escrever nela. A montada não: o `chown` mudaria o dono da pasta do host. */
   async #devolverPastaDaCredencialDoPiAoUsuario(containerId: string, homeDoContainer: string): Promise<void> {
-    // sobe da pasta montada até o HOME (o `.pi/agent` e o `.pi`)
-    const roteiro = `dono=$(stat -c %u:%g '${homeDoContainer}') && p='${homeDoContainer}/${DIR_DO_PI_NO_HOME}'; while [ "$p" != '${homeDoContainer}' ]; do chown "$dono" "$p"; p=$(dirname "$p"); done`;
+    // sobe da pasta acima da montada (o `.pi`) até o HOME
+    const roteiro = `dono=$(stat -c %u:%g '${homeDoContainer}') && p=$(dirname '${homeDoContainer}/${DIR_DO_PI_NO_HOME}'); while [ "$p" != '${homeDoContainer}' ]; do chown "$dono" "$p"; p=$(dirname "$p"); done`;
     await rodarDocker(["exec", "-u", "0", containerId, "sh", "-c", roteiro], this.#limiteDoComandoMs);
   }
 
-  /** A credencial do Claude e a do Codex do `HOME` viram symlinks para a pasta do host montada; o rename dela, no host ou aqui, vale para todos. */
-  async #ligarCredenciaisAsPastasMontadas(
-    containerId: string,
-    destinosMontadosPorPasta: DestinoNoHome[],
-  ): Promise<void> {
-    const roteiro = destinosMontadosPorPasta
-      .map((destino) => {
-        const credencial = CREDENCIAL_POR_DESTINO[destino];
-        return `mkdir -p "$HOME/${destino}" && ln -sfn '${pastaMontadaDaCredencial(destino)}/${credencial}' "$HOME/${destino}/${credencial}"`;
-      })
-      .join(" && ");
+  /** O `auth.json` do Codex no `HOME` vira symlink para a pasta do host montada, como o do host; o Codex grava no alvo do symlink. O Claude não precisa: ele lê a pasta montada direto. */
+  async #ligarCredencialDoCodexAPastaMontada(containerId: string): Promise<void> {
+    const credencial = CREDENCIAL_POR_DESTINO[".codex"];
+    const roteiro = `mkdir -p "$HOME/.codex" && ln -sfn '${pastaMontadaDaCredencial(".codex")}/${credencial}' "$HOME/.codex/${credencial}"`;
     await rodarDocker(["exec", containerId, "sh", "-c", roteiro], this.#limiteDoComandoMs);
   }
 
@@ -470,11 +524,9 @@ export class GeradorDeAmbientes {
       if (montagens) await this.#instalarComandoDoHarness(containerId, montagens.harness);
       if (copias) {
         const destinosMontados = credenciais.map(({ destinoNoHome }) => destinoNoHome);
-        const destinosMontadosPorPasta = destinosMontados.filter((destino) => !credencialEhMontadaPorArquivo(destino));
-        // `exigirLoginDoPi` garante o `auth.json` do pi: ele sempre está entre as credenciais montadas.
+        // `exigirLoginDoPi` garante o `auth.json` do pi: a pasta dele sempre está entre as credenciais montadas.
         await this.#devolverPastaDaCredencialDoPiAoUsuario(containerId, homeDoContainer);
-        if (destinosMontadosPorPasta.length > 0)
-          await this.#ligarCredenciaisAsPastasMontadas(containerId, destinosMontadosPorPasta);
+        if (destinosMontados.includes(".codex")) await this.#ligarCredencialDoCodexAPastaMontada(containerId);
         await copiarParaOContainer(containerId, copias, destinosMontados);
       }
     } catch (erro) {

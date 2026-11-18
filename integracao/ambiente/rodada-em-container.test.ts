@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createServidorHttp } from "node:http";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -555,6 +555,14 @@ test(
   COM_DOCKER,
   async (t) => {
     const { c } = await cenarioEmContainer(t);
+    // As credenciais do Claude e do Codex ficam em pastas só delas (o container monta essas pastas, nunca ~/.claude nem ~/.codex).
+    const pastaDaCredencialDoClaude = join(c.raiz, "credenciais-claude");
+    const pastaDaCredencialDoCodex = join(c.raiz, "credenciais-codex");
+    mkdirSync(pastaDaCredencialDoClaude);
+    mkdirSync(pastaDaCredencialDoCodex);
+    writeFileSync(join(pastaDaCredencialDoClaude, ".credentials.json"), "{}");
+    writeFileSync(join(pastaDaCredencialDoCodex, "auth.json"), "{}");
+    definirNoEnvDoCore(t, { CLAUDE_SECURESTORAGE_CONFIG_DIR: pastaDaCredencialDoClaude });
     for (const [pasta, arquivo] of [
       [".claude", "CLAUDE.md"],
       [".codex", "config.toml"],
@@ -562,8 +570,7 @@ test(
       mkdirSync(join(c.raiz, pasta), { recursive: true });
       writeFileSync(join(c.raiz, pasta, arquivo), `copia de ${pasta}`);
     }
-    writeFileSync(join(c.raiz, ".claude", ".credentials.json"), "{}");
-    writeFileSync(join(c.raiz, ".codex", "auth.json"), "{}");
+    symlinkSync(join(pastaDaCredencialDoCodex, "auth.json"), join(c.raiz, ".codex", "auth.json"));
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const espaco = Endereco.daRodada(id, 1).toString();
     const ambiente = ambienteAlocadoPara(c, espaco);
@@ -574,7 +581,7 @@ test(
     ambiente.abrigarProcesso(join(c.raiz, "execucoes", "E-propria"), "sessao-propria");
 
     const { codigo, saida } = await ambiente.executar({
-      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in .pi/agent/auth.json .claude/.credentials.json .codex/auth.json; do test -f $HOME/$a && echo tem-$a; done`,
+      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in "$PI_CODING_AGENT_DIR/auth.json" "$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json" "$HOME/.codex/auth.json"; do test -f "$a" && echo "tem-$a"; done; ls -A /credenciais/claude /credenciais/codex`,
       argumentos: [],
       cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
       env: {},
@@ -587,8 +594,14 @@ test(
     assert.doesNotMatch(saida, /de-outro-espaco/);
     assert.match(saida, /copia de \.claude/);
     assert.match(saida, /copia de \.codex/);
-    for (const credencial of [".pi/agent/auth.json", ".claude/.credentials.json", ".codex/auth.json"])
-      assert.match(saida, new RegExp(`tem-${credencial.replaceAll(".", "\\.")}`));
+    // A credencial de cada agente, no caminho em que ele a usa; a pasta montada só tem a credencial (sem CLAUDE.md nem config.toml).
+    for (const credencial of [
+      "/\\.pi/agent/auth\\.json",
+      "/credenciais/claude/\\.credentials\\.json",
+      "/\\.codex/auth\\.json",
+    ])
+      assert.match(saida, new RegExp(`tem-\\S*${credencial}`));
+    assert.match(saida, /\/credenciais\/claude:\n\.credentials\.json\n\n\/credenciais\/codex:\nauth\.json\n$/);
     // As montagens do container são exatamente estas, e nenhuma delas é o home, o ~/.pi ou a pasta inteira de sessões.
     const binds = (
       JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
@@ -597,8 +610,9 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // Das pastas copiadas, o pi monta só o arquivo da credencial e o Claude e o Codex montam a pasta, no caminho dedicado
-    // (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O resto é cópia.
+    // O pi monta a pasta do agente (o lock do auth.json é o mesmo do host); o Claude e o Codex montam a pasta só da
+    // credencial, no caminho dedicado (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O
+    // resto do .claude e do .codex é cópia.
     // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
     const { saida: homeDoContainer } = await ambiente.executar({
       programa: 'echo "$HOME"',
@@ -608,11 +622,17 @@ test(
       noShell: true,
     });
     const credenciais = [
-      `${join(dirDoPiDoAuditor(), "auth.json")}:${homeDoContainer.trim()}/.pi/agent/auth.json:rw`,
-      `${join(c.raiz, ".claude")}:/credenciais/claude:rw`,
-      `${join(c.raiz, ".codex")}:/credenciais/codex:rw`,
+      `${dirDoPiDoAuditor()}:${homeDoContainer.trim()}/.pi/agent:rw`,
+      `${realpathSync(pastaDaCredencialDoClaude)}:/credenciais/claude:rw`,
+      `${realpathSync(pastaDaCredencialDoCodex)}:/credenciais/codex:rw`,
     ];
-    const copiadas = [dirDoPiDoAuditor(), join(c.raiz, ".claude"), join(c.raiz, ".codex")];
+    const copiadas = [
+      dirDoPiDoAuditor(),
+      join(c.raiz, ".claude"),
+      join(c.raiz, ".codex"),
+      pastaDaCredencialDoClaude,
+      pastaDaCredencialDoCodex,
+    ];
     assert.deepEqual(
       (binds ?? []).filter((bind) =>
         copiadas.some((copiada) => bind.startsWith(`${copiada}:`) || bind.startsWith(`${copiada}/`)),
@@ -959,7 +979,7 @@ function definirNoEnvDoCore(t: TestContext, variaveis: Record<string, string>): 
 }
 
 test(
-  "nenhum token do GitHub entra no container: nem no env, nem nas cópias do pi, do .claude e do .codex, nem nas montagens",
+  "nenhum token do GitHub entra no container: nem no env, nem nas cópias do .claude e do .codex, nem nas montagens",
   COM_DOCKER,
   async (t) => {
     const { c } = await cenarioEmContainer(t);
@@ -975,7 +995,6 @@ test(
       mkdirSync(join(c.raiz, pasta), { recursive: true });
       writeFileSync(join(c.raiz, pasta, arquivo), `token = "${TOKEN_DO_GITHUB}"`);
     }
-    writeFileSync(join(dirDoPiDoAuditor(), "settings.json"), `{"githubToken":"${TOKEN_DO_GITHUB}"}`);
     const id = await demandaEmExecucao(c, [{ tickets: 1 }], PLANEJAMENTO_QUE_SAI_SOZINHO);
     const ambiente = ambienteAlocadoPara(c, Endereco.daRodada(id, 1).toString());
     const cwd = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });

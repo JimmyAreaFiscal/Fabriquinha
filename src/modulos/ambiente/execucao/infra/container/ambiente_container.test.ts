@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { executar } from "../../../../../shared/infra/processo.ts";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
 import { AmbienteContainer } from "./ambiente_container.ts";
@@ -145,6 +146,30 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
     "ssh-do-host",
   ])
     assert.ok(!saida.saida.includes(segredo), segredo);
+});
+
+test("executar: com a pasta de credencial do Claude montada, o agente a recebe em CLAUDE_SECURESTORAGE_CONFIG_DIR", async () => {
+  const pastaDaCredencial = join(base, "credencial-do-claude");
+  mkdirSync(pastaDaCredencial);
+  docker.semearImagem("com-credencial");
+  const { saida: containerComCredencial } = await executar("docker", [
+    "run",
+    "-d",
+    "-v",
+    `${pastaDaCredencial}:/credenciais/claude:rw`,
+    "com-credencial",
+  ]);
+  const comCredencial = new AmbienteContainer({
+    id: "amb-2",
+    container_id: containerComCredencial.trim(),
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  const saida = await comCredencial.executar(comando("env", []));
+  assert.match(saida.saida, new RegExp(`^CLAUDE_SECURESTORAGE_CONFIG_DIR=${pastaDaCredencial}$`, "m"));
+  // Sem a pasta montada (o host sem login do Claude), a variável não existe: o Claude Code não aponta para o nada.
+  assert.doesNotMatch((await ambiente.executar(comando("env", []))).saida, /CLAUDE_SECURESTORAGE_CONFIG_DIR/);
 });
 
 test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as da Fabriquinha, e o resto do host continua fora", async () => {
