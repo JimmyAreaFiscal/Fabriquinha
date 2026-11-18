@@ -392,6 +392,12 @@ async function garantirImagemDasRegrasDeRede(limiteMs: number): Promise<void> {
 
 export class GeradorDeAmbientes {
   readonly #limiteDoComandoMs: number;
+  /**
+   * O build em andamento de cada imagem: os tickets que pedem a mesma imagem ao mesmo tempo (vários retomados depois de
+   * um deploy) esperam o mesmo build, porque dois `docker build` da mesma tag disputam o nome e um falha com "already
+   * exists". ponytail: só coordena dentro desta instância; outra Fabriquinha no mesmo Docker ainda pode disputar.
+   */
+  readonly #buildsEmAndamentoPorImagem = new Map<ImagemDoAmbiente, Promise<string>>();
 
   /** `limiteDoComandoMs` vale para os comandos rápidos; só o teste o troca. */
   constructor(limiteDoComandoMs = LIMITE_DO_DOCKER_MS) {
@@ -413,7 +419,15 @@ export class GeradorDeAmbientes {
         hashDoContexto.update(arquivo).update(readFileSync(join(contexto, arquivo)));
       const imagem = `fabriquinha/${projeto.nome}:${hashDoContexto.digest("hex")}`;
       const { codigo } = await executar("docker", ["image", "inspect", imagem], { limiteMs: this.#limiteDoComandoMs });
-      if (codigo !== 0) await rodarDocker(["build", "-t", imagem, contexto], LIMITE_COMANDO_MS);
+      if (codigo === 0) return imagem;
+      // Quem chegou antes (durante o inspect deste ou já no meio do build) abriu o build: espera o dele em vez de outro.
+      const build =
+        this.#buildsEmAndamentoPorImagem.get(imagem) ??
+        rodarDocker(["build", "-t", imagem, contexto], LIMITE_COMANDO_MS).finally(() => {
+          this.#buildsEmAndamentoPorImagem.delete(imagem);
+        });
+      this.#buildsEmAndamentoPorImagem.set(imagem, build);
+      await build;
       return imagem;
     } finally {
       rmSync(contexto, { recursive: true, force: true });

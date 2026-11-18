@@ -77,6 +77,15 @@ test("garantirImagem gera a imagem das dependências, com a tag do projeto e do 
   assert.deepEqual(builds[0]?.slice(0, 3), ["build", "-t", tag]);
 });
 
+test("garantirImagem pedida ao mesmo tempo por vários tickets faz um build só, e todos recebem a imagem", async () => {
+  commitarNaBranchBase({ "concorrente/requirements.txt": "six\n" });
+  const projeto = doProjeto("concorrente/requirements.txt");
+  const buildsAntes = docker.registro().filter(([comando]) => comando === "build").length;
+  const tags = await Promise.all([1, 2, 3].map(() => gerador.garantirImagem(projeto)));
+  assert.equal(new Set(tags).size, 1);
+  assert.equal(docker.registro().filter(([comando]) => comando === "build").length - buildsAntes, 1);
+});
+
 test("garantirImagem gera outra imagem quando o arquivo de dependências ou o lockfile muda", async () => {
   const antes = await gerador.garantirImagem(doProjeto("web/package.json"));
   commitarNaBranchBase({ "web/package.json": '{"name":"web","dependencies":{"zod":"^4"}}' });
