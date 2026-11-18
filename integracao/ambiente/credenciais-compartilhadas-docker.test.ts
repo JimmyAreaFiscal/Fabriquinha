@@ -1,10 +1,10 @@
-// I-314.R1, CA-1 a CA-4: a credencial do Claude, do pi e do Codex é a mesma do host em todo container do Ambiente, no
+// I-314.R2, CA-1 a CA-4: a credencial do Claude, do pi e do Codex é a mesma do host em todo container do Ambiente, no
 // Docker de verdade: a renovação de qualquer um vale para todos, e o container já criado a vê. Pulado sem
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e baixa a imagem na primeira vez.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { setImmediate as proximoCicloDoNode } from "node:timers/promises";
 import { test, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
@@ -23,12 +23,22 @@ const COM_DOCKER = {
     : "defina FABRIQUINHA_TESTE_DOCKER=1 para rodar com o Docker de verdade",
 };
 
-/** As três credenciais: onde ficam no host (relativo à raiz do teste) e no container (relativo ao `$HOME` dele). */
+/**
+ * As três credenciais: onde ficam no host (relativo à raiz do teste) e no container (relativo ao `$HOME` dele). Claude e
+ * Codex renovam por temporário + rename, e o container monta a pasta delas (`pastaMontada`); o pi grava no lugar, e o
+ * container monta o arquivo.
+ */
 const CREDENCIAIS = [
-  { agente: "Claude", noHost: ".claude/.credentials.json", noContainer: ".claude/.credentials.json" },
-  { agente: "pi", noHost: "pi-do-auditor/auth.json", noContainer: ".pi/agent/auth.json" },
-  { agente: "Codex", noHost: ".codex/auth.json", noContainer: ".codex/auth.json" },
+  {
+    agente: "Claude",
+    noHost: ".claude/.credentials.json",
+    noContainer: ".claude/.credentials.json",
+    pastaMontada: "/credenciais/claude",
+  },
+  { agente: "pi", noHost: "pi-do-auditor/auth.json", noContainer: ".pi/agent/auth.json", pastaMontada: undefined },
+  { agente: "Codex", noHost: ".codex/auth.json", noContainer: ".codex/auth.json", pastaMontada: "/credenciais/codex" },
 ] as const;
+type Credencial = (typeof CREDENCIAIS)[number];
 
 /** A gestão de Ambientes no Docker de verdade, com as três credenciais do host gravadas em `antigo`. */
 async function prepararGestaoComCredenciais(t: TestContext) {
@@ -86,22 +96,42 @@ async function lerNoContainer(ambiente: AmbienteContainer, arquivo: string): Pro
   return saida;
 }
 
-for (const { agente, noHost, noContainer: arquivoNoContainer } of CREDENCIAIS) {
+/** O host renova como o agente: temporário na mesma pasta + rename (Claude e Codex) ou no lugar (pi). */
+function renovarNoHost(arquivo: string, conteudo: string, porRename: boolean): void {
+  const gravado = porRename ? `${arquivo}.tmp` : arquivo;
+  writeFileSync(gravado, conteudo);
+  if (porRename) renameSync(gravado, arquivo);
+}
+
+/** O container renova como o agente: rename dentro da pasta montada (Claude e Codex) ou escrita no lugar (pi). */
+function renovarNoContainer(ambiente: AmbienteContainer, credencial: Credencial, conteudo: string) {
+  const { pastaMontada, noContainer: arquivoNoContainer } = credencial;
+  if (!pastaMontada) return noContainer(ambiente, `printf '${conteudo}' > "$HOME/${arquivoNoContainer}"`);
+  const nome = basename(arquivoNoContainer);
+  return noContainer(
+    ambiente,
+    `printf '${conteudo}' > "${pastaMontada}/${nome}.tmp" && mv "${pastaMontada}/${nome}.tmp" "${pastaMontada}/${nome}"`,
+  );
+}
+
+for (const credencial of CREDENCIAIS) {
+  const { agente, noHost, noContainer: arquivoNoContainer, pastaMontada } = credencial;
+  const comoRenova = pastaMontada ? "por temporário + rename" : "no lugar";
   test(
-    `CA-1/CA-4: o host renova a credencial do ${agente} e o container, já rodando, lê o conteúdo novo`,
+    `CA-1/CA-4: o host renova a credencial do ${agente} ${comoRenova} e o container, já rodando, lê o conteúdo novo`,
     COM_DOCKER,
     async (t) => {
       const { raiz, alocar } = await prepararGestaoComCredenciais(t);
       const ambiente = await alocar("espaco-1");
       assert.equal(await lerNoContainer(ambiente, arquivoNoContainer), '{"token":"antigo"}');
 
-      writeFileSync(join(raiz, noHost), '{"token":"renovado-no-host"}');
+      renovarNoHost(join(raiz, noHost), '{"token":"renovado-no-host"}', pastaMontada !== undefined);
       assert.equal(await lerNoContainer(ambiente, arquivoNoContainer), '{"token":"renovado-no-host"}');
     },
   );
 
   test(
-    `CA-2/CA-4: um container renova a credencial do ${agente} e o outro container e o host veem o valor novo`,
+    `CA-2/CA-4: um container renova a credencial do ${agente} ${comoRenova} e o outro container e o host veem o valor novo`,
     COM_DOCKER,
     async (t) => {
       const { raiz, alocar } = await prepararGestaoComCredenciais(t);
@@ -109,35 +139,32 @@ for (const { agente, noHost, noContainer: arquivoNoContainer } of CREDENCIAIS) {
       const outro = await alocar("espaco-2");
       assert.notEqual(renovador.container_id, outro.container_id);
 
-      const escrita = await noContainer(
-        renovador,
-        `printf '{"token":"renovado-no-container"}' > "$HOME/${arquivoNoContainer}"`,
-      );
+      const escrita = await renovarNoContainer(renovador, credencial, '{"token":"renovado-no-container"}');
       assert.equal(escrita.codigo, 0, escrita.saida);
       assert.equal(readFileSync(join(raiz, noHost), "utf8"), '{"token":"renovado-no-container"}');
       assert.equal(await lerNoContainer(outro, arquivoNoContainer), '{"token":"renovado-no-container"}');
+      assert.equal(await lerNoContainer(renovador, arquivoNoContainer), '{"token":"renovado-no-container"}');
 
-      // Gravar um temporário e trocar por `rename` não funciona sobre o arquivo montado (EBUSY); a recusa não pode
-      // corromper nem trocar o arquivo, e a escrita direta que o agente faz em seguida continua valendo para todos.
+      if (pastaMontada) return;
+      // O pi tem o arquivo montado: o rename sobre ele dá EBUSY, e a recusa não pode corromper nem trocar o arquivo.
       const porRename = await noContainer(
         renovador,
         `d="$(dirname "$HOME/${arquivoNoContainer}")"; printf '{"token":"por-rename"}' > "$d/temporario" && mv "$d/temporario" "$HOME/${arquivoNoContainer}"`,
       );
       assert.notEqual(porRename.codigo, 0, "o rename sobre o arquivo montado deveria falhar");
       assert.equal(readFileSync(join(raiz, noHost), "utf8"), '{"token":"renovado-no-container"}');
-      assert.equal(await lerNoContainer(outro, arquivoNoContainer), '{"token":"renovado-no-container"}');
     },
   );
 
   test(
-    `CA-3/CA-4: a credencial do ${agente} mudou no host depois de o container ser criado, e o ticket que começa nele depois usa a nova`,
+    `CA-3/CA-4: a credencial do ${agente} mudou no host (${comoRenova}) depois de o container ser criado, e o ticket que começa nele depois usa a nova`,
     COM_DOCKER,
     async (t) => {
       const { raiz, gestao, alocar } = await prepararGestaoComCredenciais(t);
       const criadoAntes = await alocar("espaco-1");
       await gestao.limpar(criadoAntes.id);
 
-      writeFileSync(join(raiz, noHost), '{"token":"novo-login-no-host"}');
+      renovarNoHost(join(raiz, noHost), '{"token":"novo-login-no-host"}', pastaMontada !== undefined);
 
       const reusado = await alocar("espaco-2");
       assert.equal(reusado.container_id, criadoAntes.container_id, "o container é o mesmo, sem recriar");
@@ -146,25 +173,93 @@ for (const { agente, noHost, noContainer: arquivoNoContainer } of CREDENCIAIS) {
   );
 }
 
-test("a escrita concorrente do host e de um container na credencial não a corrompe", COM_DOCKER, async (t) => {
-  const { raiz, alocar } = await prepararGestaoComCredenciais(t);
-  const ambiente = await alocar("espaco-1");
-  const arquivoNoHost = join(raiz, CREDENCIAIS[0].noHost);
-  const rodadas = 300;
-  // Os dois escrevem o documento inteiro, com o mesmo tamanho ("host" e "cont"): a escrita que trunca o arquivo
-  // e grava de novo não é atômica, e um documento mais curto escrito por cima de um mais longo deixaria sobra no fim.
-  const doContainer = noContainer(
-    ambiente,
-    `f="$HOME/${CREDENCIAIS[0].noContainer}"; i=1; while [ $i -le ${String(rodadas)} ]; do printf '{"quem":"cont","n":"%04d"}' $i > "$f"; i=$((i+1)); done`,
-  );
-  for (let n = 1; n <= rodadas; n++) {
-    writeFileSync(arquivoNoHost, `{"quem":"host","n":"${String(n).padStart(4, "0")}"}`);
-    await proximoCicloDoNode();
-  }
-  const { codigo, saida } = await doContainer;
-  assert.equal(codigo, 0, saida);
+// O estresse: host e container renovando ao mesmo tempo, e a credencial nunca sai corrompida.
+const CLAUDE = CREDENCIAIS[0];
+const PI = CREDENCIAIS[1];
+const CODEX = CREDENCIAIS[2];
+const RODADAS = 300;
 
-  const noFim = readFileSync(arquivoNoHost, "utf8");
-  assert.match((JSON.parse(noFim) as { quem: string }).quem, /^(host|cont)$/);
-  assert.equal(await lerNoContainer(ambiente, CREDENCIAIS[0].noContainer), noFim);
-});
+test(
+  "a renovação concorrente por rename do host e de um container (Claude) nunca deixa a credencial corrompida",
+  COM_DOCKER,
+  async (t) => {
+    const { raiz, alocar } = await prepararGestaoComCredenciais(t);
+    const ambiente = await alocar("espaco-1");
+    const arquivoNoHost = join(raiz, CLAUDE.noHost);
+    const nome = basename(CLAUDE.noHost);
+    const pasta = CLAUDE.pastaMontada;
+    const doContainer = noContainer(
+      ambiente,
+      `i=1; while [ $i -le ${String(RODADAS)} ]; do printf '{"quem":"cont","n":"%04d"}' $i > "${pasta}/${nome}.cont" && mv "${pasta}/${nome}.cont" "${pasta}/${nome}"; i=$((i+1)); done`,
+    );
+    for (let n = 1; n <= RODADAS; n++) {
+      renovarNoHost(arquivoNoHost, `{"quem":"host","n":"${String(n).padStart(4, "0")}"}`, true);
+      // O rename é atômico: quem lê no meio da briga vê sempre um documento inteiro.
+      assert.match((JSON.parse(readFileSync(arquivoNoHost, "utf8")) as { quem: string }).quem, /^(host|cont)$/);
+      await proximoCicloDoNode();
+    }
+    const { codigo, saida } = await doContainer;
+    assert.equal(codigo, 0, saida);
+
+    const noFim = readFileSync(arquivoNoHost, "utf8");
+    assert.match((JSON.parse(noFim) as { quem: string }).quem, /^(host|cont)$/);
+    assert.equal(await lerNoContainer(ambiente, CLAUDE.noContainer), noFim);
+  },
+);
+
+test(
+  "a escrita concorrente no lugar do host e de um container (pi) não corrompe a credencial",
+  COM_DOCKER,
+  async (t) => {
+    const { raiz, alocar } = await prepararGestaoComCredenciais(t);
+    const ambiente = await alocar("espaco-1");
+    const arquivoNoHost = join(raiz, PI.noHost);
+    // Os dois escrevem o documento inteiro, com o mesmo tamanho ("host" e "cont"): a escrita que trunca o arquivo
+    // e grava de novo não é atômica, e um documento mais curto escrito por cima de um mais longo deixaria sobra no fim.
+    const doContainer = noContainer(
+      ambiente,
+      `f="$HOME/${PI.noContainer}"; i=1; while [ $i -le ${String(RODADAS)} ]; do printf '{"quem":"cont","n":"%04d"}' $i > "$f"; i=$((i+1)); done`,
+    );
+    for (let n = 1; n <= RODADAS; n++) {
+      writeFileSync(arquivoNoHost, `{"quem":"host","n":"${String(n).padStart(4, "0")}"}`);
+      await proximoCicloDoNode();
+    }
+    const { codigo, saida } = await doContainer;
+    assert.equal(codigo, 0, saida);
+
+    const noFim = readFileSync(arquivoNoHost, "utf8");
+    assert.match((JSON.parse(noFim) as { quem: string }).quem, /^(host|cont)$/);
+    assert.equal(await lerNoContainer(ambiente, PI.noContainer), noFim);
+  },
+);
+
+// O binário real do Codex num container, com `CODEX_HOME` na pasta montada: antes de montar a pasta, o login falhava
+// com "Resource busy (os error 16)" ao trocar o `auth.json` montado por rename. Só roda com um binário do Codex que
+// execute dentro da imagem (um build linux estático, musl), apontado por `FABRIQUINHA_TESTE_CODEX_BIN`.
+test(
+  "CA-4: o `codex login --with-api-key` do container grava o auth.json por rename na pasta montada e o host o vê",
+  {
+    skip: !process.env.FABRIQUINHA_TESTE_DOCKER
+      ? COM_DOCKER.skip
+      : process.env.FABRIQUINHA_TESTE_CODEX_BIN
+        ? false
+        : "defina FABRIQUINHA_TESTE_CODEX_BIN com um binário linux estático do Codex",
+  },
+  async (t) => {
+    const { raiz, alocar } = await prepararGestaoComCredenciais(t);
+    const ambiente = await alocar("espaco-1");
+    execFileSync("docker", [
+      "cp",
+      process.env.FABRIQUINHA_TESTE_CODEX_BIN ?? "",
+      `${ambiente.container_id}:/bin/codex`,
+    ]);
+
+    const login = await noContainer(
+      ambiente,
+      `printf 'sk-teste-do-container' | CODEX_HOME=${CODEX.pastaMontada} codex login --with-api-key`,
+    );
+    assert.equal(login.codigo, 0, login.saida);
+    assert.match(readFileSync(join(raiz, CODEX.noHost), "utf8"), /sk-teste-do-container/);
+    assert.match(await lerNoContainer(ambiente, CODEX.noContainer), /sk-teste-do-container/);
+  },
+);

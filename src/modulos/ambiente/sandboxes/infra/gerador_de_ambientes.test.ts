@@ -8,6 +8,8 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -295,7 +297,7 @@ test("criar copia o pi do Auditor, o .claude e o .codex para o home do container
   assert.deepEqual(readdirSync(docker.homeDoContainer(outro.container_id)), [".pi"]);
 });
 
-test("criar monta a credencial do pi, do Claude e do Codex do host em vez de copiá-la, e o container vê a renovação", async () => {
+test("criar compartilha a credencial do pi (arquivo) e a do Claude e do Codex (pasta) em vez de copiá-la, e o container vê a renovação, inclusive por rename", async () => {
   const dirDoPi = join(base, "pi-com-credencial");
   const home = join(base, "home-com-credencial");
   mkdirSync(dirDoPi);
@@ -309,24 +311,34 @@ test("criar monta a credencial do pi, do Claude e do Codex do host em vez de cop
   const copias = { dir_do_pi: dirDoPi, home_do_usuario: home };
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, copias);
   const homeDoContainer = docker.homeDoContainer(criado.container_id);
-  const credenciais = [
-    [join(dirDoPi, "auth.json"), join(homeDoContainer, ".pi", "agent", "auth.json"), "/home/node/.pi/agent/auth.json"],
-    [
-      join(home, ".claude", ".credentials.json"),
-      join(homeDoContainer, ".claude", ".credentials.json"),
-      "/home/node/.claude/.credentials.json",
-    ],
-    [join(home, ".codex", "auth.json"), join(homeDoContainer, ".codex", "auth.json"), "/home/node/.codex/auth.json"],
-  ] as const;
   const montagens = docker.containers().find((container) => container.id === criado.container_id)?.montagens;
-  for (const [noHost, noContainer, destino] of credenciais) {
-    assert.ok(montagens?.includes(`${noHost}:${destino}:rw`), `${destino} não foi montado`);
-    assert.ok(lstatSync(noContainer).isSymbolicLink(), `${destino} foi copiado`);
-    // A renovação no host chega ao container já criado, e a do container chega ao host.
-    writeFileSync(noHost, "renovada-no-host");
+  // O pi grava no lugar: o arquivo montado basta, e a escrita de um lado vale para o outro.
+  const credencialDoPiNoHost = join(dirDoPi, "auth.json");
+  const credencialDoPiNoContainer = join(homeDoContainer, ".pi", "agent", "auth.json");
+  assert.ok(montagens?.includes(`${credencialDoPiNoHost}:/home/node/.pi/agent/auth.json:rw`));
+  writeFileSync(credencialDoPiNoHost, "pi-renovado-no-host");
+  assert.equal(readFileSync(credencialDoPiNoContainer, "utf8"), "pi-renovado-no-host");
+  writeFileSync(credencialDoPiNoContainer, "pi-renovado-no-container");
+  assert.equal(readFileSync(credencialDoPiNoHost, "utf8"), "pi-renovado-no-container");
+  // O Claude e o Codex gravam por temporário + rename: só a pasta montada deixa os dois lados verem a troca.
+  const credenciaisPorPasta = [
+    [join(home, ".claude"), ".credentials.json", "/credenciais/claude", ".claude"],
+    [join(home, ".codex"), "auth.json", "/credenciais/codex", ".codex"],
+  ] as const;
+  for (const [pastaNoHost, credencial, pastaNoContainer, destinoNoHome] of credenciaisPorPasta) {
+    assert.ok(montagens?.includes(`${pastaNoHost}:${pastaNoContainer}:rw`), `${pastaNoContainer} não foi montada`);
+    const noContainer = join(homeDoContainer, destinoNoHome, credencial);
+    assert.ok(lstatSync(noContainer).isSymbolicLink(), `${credencial} foi copiada`);
+    const trocarPorRename = (pasta: string, conteudo: string) => {
+      writeFileSync(join(pasta, `${credencial}.tmp`), conteudo);
+      renameSync(join(pasta, `${credencial}.tmp`), join(pasta, credencial));
+    };
+    // A renovação por rename no host chega ao container já criado.
+    trocarPorRename(pastaNoHost, "renovada-no-host");
     assert.equal(readFileSync(noContainer, "utf8"), "renovada-no-host");
-    writeFileSync(noContainer, "renovada-no-container");
-    assert.equal(readFileSync(noHost, "utf8"), "renovada-no-container");
+    // A do container (o agente resolve o symlink e grava na pasta montada, que é a do host) chega ao host.
+    trocarPorRename(dirname(realpathSync(noContainer)), "renovada-no-container");
+    assert.equal(readFileSync(join(pastaNoHost, credencial), "utf8"), "renovada-no-container");
   }
   assert.equal(readFileSync(join(homeDoContainer, ".claude", "CLAUDE.md"), "utf8"), "instruções");
   const chamadas = docker.registro().slice(antes);
@@ -341,6 +353,31 @@ test("criar monta a credencial do pi, do Claude e do Codex do host em vez de cop
   assert.deepEqual(docker.containers().find((container) => container.id === outro.container_id)?.montagens, [
     `${join(dirDoPi, "auth.json")}:/home/node/.pi/agent/auth.json:rw`,
   ]);
+});
+
+test("criar com o HOME da imagem com barra no fim monta a credencial do pi no lugar certo e termina o chown", async () => {
+  const dirDoPi = join(base, "pi-com-home-com-barra");
+  mkdirSync(dirDoPi);
+  writeFileSync(join(dirDoPi, "auth.json"), "{}");
+  const comHomeComBarra = join(base, "com-home-com-barra");
+  mkdirSync(comHomeComBarra);
+  writeFileSync(
+    join(comHomeComBarra, "docker"),
+    `#!/bin/sh\ncase "$*" in *'--entrypoint'*) echo /home/node/; exit 0;; esac\nexec '${join(base, "docker", "bin", "docker")}' "$@"\n`,
+  );
+  chmodSync(join(comHomeComBarra, "docker"), 0o755);
+  process.env.PATH = `${comHomeComBarra}:${caminhoOriginal ?? ""}`;
+  try {
+    const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, undefined, {
+      dir_do_pi: dirDoPi,
+      home_do_usuario: base,
+    });
+    assert.deepEqual(docker.containers().find((container) => container.id === criado.container_id)?.montagens, [
+      `${join(dirDoPi, "auth.json")}:/home/node/.pi/agent/auth.json:rw`,
+    ]);
+  } finally {
+    process.env.PATH = `${join(base, "docker", "bin")}:${caminhoOriginal ?? ""}`;
+  }
 });
 
 test("criar com a imagem sem HOME falha antes de subir o container, com a orientação", async () => {

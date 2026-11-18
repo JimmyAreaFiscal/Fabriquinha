@@ -597,23 +597,28 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // Das pastas copiadas só o arquivo da credencial é montado (em leitura e escrita), e não a pasta: o resto é cópia.
+    // Das pastas copiadas, o pi monta só o arquivo da credencial e o Claude e o Codex montam a pasta, no caminho dedicado
+    // (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O resto é cópia.
     // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
+    const { saida: homeDoContainer } = await ambiente.executar({
+      programa: 'echo "$HOME"',
+      argumentos: [],
+      cwd: "/",
+      env: {},
+      noShell: true,
+    });
     const credenciais = [
-      join(dirDoPiDoAuditor(), "auth.json"),
-      join(c.raiz, ".claude", ".credentials.json"),
-      join(c.raiz, ".codex", "auth.json"),
+      `${join(dirDoPiDoAuditor(), "auth.json")}:${homeDoContainer.trim()}/.pi/agent/auth.json:rw`,
+      `${join(c.raiz, ".claude")}:/credenciais/claude:rw`,
+      `${join(c.raiz, ".codex")}:/credenciais/codex:rw`,
     ];
     const copiadas = [dirDoPiDoAuditor(), join(c.raiz, ".claude"), join(c.raiz, ".codex")];
     assert.deepEqual(
-      origens.filter((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
+      (binds ?? []).filter((bind) =>
+        copiadas.some((copiada) => bind.startsWith(`${copiada}:`) || bind.startsWith(`${copiada}/`)),
+      ),
       credenciais,
     );
-    for (const credencial of credenciais)
-      assert.ok(
-        binds?.some((bind) => bind.startsWith(`${credencial}:`) && bind.endsWith(":rw")),
-        credencial,
-      );
     // A última é a instalação do pi, só em leitura.
     assert.ok(binds?.includes(`${INSTALACAO_DO_PI_FALSO.raiz}:${INSTALACAO_DO_PI_FALSO.raiz}:ro`));
     assert.equal(binds?.length, 13);
