@@ -38,11 +38,12 @@ const SERVICO = {
 writeFileSync(join(base, "package.json"), "{}");
 writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
-// A imagem lê as dependências da branch base: o clone de teste as commita nela.
+// A imagem lê as dependências de origin/main: o clone de teste as commita e as publica nessa ref.
 for (const argumentosDoGit of [
   ["init", "-q", "-b", "main"],
   ["add", "package.json", "package-lock.json", "requirements.txt"],
   ["-c", "user.name=Teste", "-c", "user.email=teste@exemplo.com", "commit", "-q", "-m", "dependências"],
+  ["update-ref", "refs/remotes/origin/main", "HEAD"],
 ])
   execFileSync("git", ["-C", base, ...argumentosDoGit], {
     env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },

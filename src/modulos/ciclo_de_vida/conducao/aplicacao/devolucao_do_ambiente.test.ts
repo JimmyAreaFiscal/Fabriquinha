@@ -29,7 +29,7 @@ import {
 } from "../../../../../apoio-testes/cenarios/cenario_de_planejamento.ts";
 import { ConducaoDePlanejar } from "./planejar/conducao_de_planejar.ts";
 import { reservadoPeloDespacho } from "../../../../../apoio-testes/reserva_do_despacho.ts";
-import { commitarArquivo } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { commitarArquivo, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { limitarTempoDoPi } from "../../../../../apoio-testes/falsos/limite_do_pi.ts";
 import { devolverAmbienteDoEspaco, devolverAmbienteSeOTicketEsperaOHumano } from "./devolucao_do_ambiente.ts";
 import { projetosCadastrados } from "./projetos_cadastrados.ts";
@@ -42,8 +42,9 @@ async function cenarioComConjunto(
 ) {
   const cenario = cenarioDePlanejamento(opcoes);
   const { c, banco } = cenario;
-  // A imagem lê as dependências da branch base do clone.
+  // A imagem lê as dependências de origin/<branch_base>: o clone as commita e as publica.
   commitarArquivo(c.repo, "requirements.txt", "requests\n");
+  rodarGit(c.repo, "push", "-q", "origin", c.projeto.branch_base);
   banco.prepare("UPDATE projeto SET arquivos_de_dependencias = '[\"requirements.txt\"]' WHERE nome = 'loja'").run();
   const docker = instalarDockerFalso(join(c.raiz, "docker"));
   const configuracao = ConfiguracaoDoAmbiente.parse({

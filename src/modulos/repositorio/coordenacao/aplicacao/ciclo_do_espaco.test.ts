@@ -260,9 +260,10 @@ async function cenarioComContainer() {
     await noHostLocal.parar();
   });
   const registro = { raiz: c.raiz, log: c.log };
-  // A imagem lê as dependências da branch base do clone.
+  // A imagem lê as dependências de origin/<branch_base>: o clone as commita e as publica.
   commitarArquivo(c.projeto.raiz_git, "package.json", "{}");
   commitarArquivo(c.projeto.raiz_git, "package-lock.json", "{}");
+  rodarGit(c.projeto.raiz_git, "push", "-q", "origin", c.projeto.branch_base);
   const projeto = { ...c.projeto, arquivos_de_dependencias: ["package.json"] };
   return {
     c,

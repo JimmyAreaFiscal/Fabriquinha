@@ -34,10 +34,11 @@ after(() => {
 writeFileSync(join(base, "package.json"), "{}");
 writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
-// A imagem lê as dependências da branch base: o clone de teste as commita nela.
+// A imagem lê as dependências de origin/main: o clone de teste as commita e as publica nessa ref.
 rodarGit(base, "init", "-q", "-b", "main");
 rodarGit(base, "add", "package.json", "package-lock.json", "requirements.txt");
 rodarGit(base, "commit", "-q", "-m", "dependências");
+rodarGit(base, "update-ref", "refs/remotes/origin/main", "HEAD");
 const projetoComDependencias = (arquivo?: string) =>
   Projeto.parse({
     nome: "loja",

@@ -21,11 +21,12 @@ import { raizCompartilhadaComODocker } from "../falsos.ts";
 /** A branch de onde a imagem lê os arquivos de dependências. */
 const BRANCH_BASE = "main";
 
-/** Commita na `BRANCH_BASE` tudo o que está no repositório (criando-o na primeira vez): é dela que a imagem lê. */
+/** Commita na `BRANCH_BASE` tudo o que está no repositório (criando-o na primeira vez) e publica em `origin/<BRANCH_BASE>`, de onde a imagem lê. */
 function commitarNaBranchBase(raizGit: string): void {
   if (!existsSync(join(raizGit, ".git"))) rodarGit(raizGit, "init", "-q", "-b", BRANCH_BASE);
   rodarGit(raizGit, "add", "-A");
   rodarGit(raizGit, "commit", "-q", "-m", "dependências");
+  rodarGit(raizGit, "update-ref", `refs/remotes/origin/${BRANCH_BASE}`, "HEAD");
 }
 
 /** Um repositório com um `package.json` sem dependências e o lockfile que o `npm ci` exige: a imagem sai só com Node e Git. */

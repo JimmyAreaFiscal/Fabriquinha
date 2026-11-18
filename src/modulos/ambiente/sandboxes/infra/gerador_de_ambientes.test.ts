@@ -31,7 +31,8 @@ const gitDoClone = (...args: string[]) =>
   execFileSync("git", ["-c", "user.name=Teste", "-c", "user.email=teste@exemplo.com", "-C", raizGit, ...args], {
     env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
   }).toString();
-/** Grava os arquivos no clone e os commita na branch base: é dela que a imagem lê as dependências. */
+const REF_REMOTA_DA_BASE = `refs/remotes/origin/${BRANCH_BASE}`;
+/** Grava os arquivos no clone, os commita na branch base e os publica na ref remota dela, de onde a imagem lê. */
 function commitarNaBranchBase(conteudoPorCaminho: Record<string, string>): void {
   for (const [caminho, conteudo] of Object.entries(conteudoPorCaminho)) {
     mkdirSync(dirname(join(raizGit, caminho)), { recursive: true });
@@ -39,6 +40,7 @@ function commitarNaBranchBase(conteudoPorCaminho: Record<string, string>): void 
   }
   gitDoClone("add", ...Object.keys(conteudoPorCaminho));
   gitDoClone("commit", "-q", "-m", Object.keys(conteudoPorCaminho).join(" "));
+  gitDoClone("update-ref", REF_REMOTA_DA_BASE, "HEAD");
 }
 mkdirSync(raizGit);
 gitDoClone("init", "-q", "-b", BRANCH_BASE);
@@ -93,19 +95,31 @@ test("garantirImagem recusa o arquivo que não entende, o repetido e o que não 
   await assert.rejects(gerador.garantirImagem(doProjeto("api/requirements.txt")), /api\/requirements.txt não existe/);
 });
 
-test("garantirImagem lê as dependências da branch base, não da cópia de trabalho do clone", async () => {
-  const daBase = await gerador.garantirImagem(doProjeto("requirements.txt"));
-  writeFileSync(join(raizGit, "requirements.txt"), "requests==9.9.9\n");
-  mkdirSync(join(raizGit, "so-na-copia"), { recursive: true });
-  writeFileSync(join(raizGit, "so-na-copia", "requirements.txt"), "six\n");
+test("garantirImagem lê as dependências de origin/<branch_base>: a cópia de trabalho e a branch local atrás ou à frente não mudam a imagem", async () => {
+  const daRefRemota = await gerador.garantirImagem(doProjeto("requirements.txt"));
+  const commitDaRefRemota = gitDoClone("rev-parse", REF_REMOTA_DA_BASE).trim();
   try {
-    assert.equal(await gerador.garantirImagem(doProjeto("requirements.txt")), daBase);
+    // A cópia de trabalho muda e ganha um arquivo que não está commitado: nada disso conta.
+    writeFileSync(join(raizGit, "requirements.txt"), "requests==9.9.9\n");
+    mkdirSync(join(raizGit, "so-na-copia"), { recursive: true });
+    writeFileSync(join(raizGit, "so-na-copia", "requirements.txt"), "six\n");
+    assert.equal(await gerador.garantirImagem(doProjeto("requirements.txt")), daRefRemota);
     await assert.rejects(
       gerador.garantirImagem(doProjeto("so-na-copia/requirements.txt")),
-      /so-na-copia\/requirements.txt não existe na branch principal/,
+      /so-na-copia\/requirements.txt não existe em origin\/principal/,
     );
+    // A branch local à frente da remota: a imagem segue a remota.
+    gitDoClone("commit", "-q", "-am", "só na branch local");
+    assert.equal(await gerador.garantirImagem(doProjeto("requirements.txt")), daRefRemota);
+    // A remota avança e a local fica atrás: a imagem segue a remota.
+    gitDoClone("update-ref", REF_REMOTA_DA_BASE, "HEAD");
+    gitDoClone("reset", "-q", "--hard", commitDaRefRemota);
+    const daRemotaNova = await gerador.garantirImagem(doProjeto("requirements.txt"));
+    assert.notEqual(daRemotaNova, daRefRemota);
+    assert.match(readFileSync(join(raizGit, "requirements.txt"), "utf8"), /2\.32\.0/);
   } finally {
-    gitDoClone("checkout", "-q", "--", "requirements.txt");
+    gitDoClone("update-ref", REF_REMOTA_DA_BASE, commitDaRefRemota);
+    gitDoClone("reset", "-q", "--hard", commitDaRefRemota);
     rmSync(join(raizGit, "so-na-copia"), { recursive: true, force: true });
   }
 });

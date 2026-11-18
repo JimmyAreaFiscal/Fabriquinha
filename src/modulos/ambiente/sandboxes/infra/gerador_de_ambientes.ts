@@ -126,7 +126,7 @@ interface ContainerCriadoNoSlot extends ContainerCriado {
 
 /**
  * O projeto que tem Ambiente em container: `arquivos_de_dependencias` são caminhos relativos à `raiz_git`, lidos da
- * `branch_base` (de onde nascem as worktrees), nunca da cópia de trabalho do clone.
+ * `origin/<branch_base>` do clone, a mesma ref de onde nascem as worktrees, nunca da branch local nem da cópia de trabalho.
  */
 interface ProjetoComDependencias {
   nome: string;
@@ -188,13 +188,17 @@ function dockerfileDasDependencias(nomesDosArquivosDeDependencias: readonly stri
   ].join("\n");
 }
 
-/** Grava em `destino` o `caminho` como ele está na `branch_base` do projeto; ausente lá, explica. */
+/**
+ * Grava em `destino` o `caminho` como ele está em `refs/remotes/origin/<branch_base>`, a ref de onde as worktrees nascem:
+ * a imagem nunca diverge da worktree, com a branch local atrás ou à frente. Ausente lá, explica.
+ */
 async function copiarDaBranchBase(projeto: ProjetoComDependencias, caminho: string, destino: string): Promise<void> {
-  const { codigo, saida, erro } = await git(projeto.raiz_git, "show", `${projeto.branch_base}:${caminho}`);
+  const refDaBranchBase = `refs/remotes/origin/${projeto.branch_base}`;
+  const { codigo, saida, erro } = await git(projeto.raiz_git, "show", `${refDaBranchBase}:${caminho}`);
   if (codigo !== 0)
     throw new ErroDeRegra(
-      `o arquivo de dependências ${caminho} não existe na branch ${projeto.branch_base} (${erro.trim()})`,
-      `confira o caminho na Configuração do projeto e se ele está commitado na ${projeto.branch_base}`,
+      `o arquivo de dependências ${caminho} não existe em origin/${projeto.branch_base} (${erro.trim()})`,
+      `confira o caminho na Configuração do projeto e se ele está publicado na ${projeto.branch_base} do origin`,
     );
   writeFileSync(destino, saida);
 }
@@ -223,7 +227,7 @@ async function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, 
     const caminhoDoLockfile = posix.join(posix.dirname(caminho), PACKAGE_LOCK);
     await copiarDaBranchBase(projeto, caminhoDoLockfile, join(contexto, PACKAGE_LOCK)).catch(() => {
       throw new ErroDeRegra(
-        `o ${PACKAGE_JSON} ${caminho} não tem ${PACKAGE_LOCK} ao lado na branch ${projeto.branch_base}, e o npm ci precisa dele`,
+        `o ${PACKAGE_JSON} ${caminho} não tem ${PACKAGE_LOCK} ao lado em origin/${projeto.branch_base}, e o npm ci precisa dele`,
         `gere o ${PACKAGE_LOCK} com npm install e o versione`,
       );
     });
