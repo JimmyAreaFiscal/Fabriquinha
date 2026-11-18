@@ -15,11 +15,10 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import type { ComandoNoAmbiente } from "../../../ambiente/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
 import { descartarAlteracoes, preparar, removerWorktrees } from "./worktree.ts";
-import { AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { AmbienteComDependencias, AmbienteHostLocal } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 
 const ambiente = new AmbienteHostLocal();
 
@@ -84,22 +83,6 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
   assert.equal(existsSync(segundo), true);
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
-
-/** Um Ambiente que já traz as dependências: `/dependencias` é, aqui, a pasta dada. */
-class AmbienteComDependencias extends AmbienteHostLocal {
-  readonly #pastaDasDependencias: string;
-  constructor(pastaDasDependencias: string) {
-    super();
-    Object.defineProperty(this, "trazDependenciasInstaladas", { value: true });
-    this.#pastaDasDependencias = pastaDasDependencias;
-  }
-  override executar(comando: ComandoNoAmbiente) {
-    return super.executar({
-      ...comando,
-      programa: comando.programa.replaceAll("/dependencias", this.#pastaDasDependencias),
-    });
-  }
-}
 
 test("no host local a instalação roda antes da preparação", async () => {
   const c = cenario();
@@ -173,6 +156,25 @@ test("com as dependências no Ambiente, imagem sem /dependencias/node_modules n�
   mkdirSync(semNodeModules);
   await preparar(new AmbienteComDependencias(semNodeModules), c.worktree, { instalacao: [], preparacao: [] }, c.log);
   assert.equal(existsSync(join(c.worktree, "node_modules")), false);
+});
+
+test("com as dependências Python no Ambiente, o requirements.txt igual pula a instalação e o que muda na branch a roda", async () => {
+  const c = cenario();
+  const dependenciasPython = join(base, `dependencias-python${String(n)}`);
+  mkdirSync(dependenciasPython);
+  writeFileSync(join(dependenciasPython, "requirements.txt"), "pacote==1.0\n");
+  const comDependenciasPython = new AmbienteComDependencias(dependenciasPython);
+  const verificacoes = { instalacao: ["echo instalou"], preparacao: ["echo preparou"] };
+  commitar(c.worktree, "requirements.txt", "pacote==1.0\n");
+
+  await preparar(comDependenciasPython, c.worktree, verificacoes, c.log);
+  assert.doesNotMatch(c.lerLog(), /instalou/);
+  assert.match(c.lerLog(), /preparou\n$/);
+
+  // A branch da demanda muda o requirements.txt: a imagem, da base, não tem a dependência nova.
+  commitar(c.worktree, "requirements.txt", "pacote==1.0\noutro==2.0\n");
+  await preparar(comDependenciasPython, c.worktree, verificacoes, c.log);
+  assert.match(c.lerLog(), /preparação: echo instalou\ninstalou\n.*preparação: echo preparou\npreparou\n$/);
 });
 
 test("erro de sintaxe na preparação vai para o log", async () => {

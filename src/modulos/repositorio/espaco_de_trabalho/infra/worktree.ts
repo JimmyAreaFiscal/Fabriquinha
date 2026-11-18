@@ -28,13 +28,13 @@ const LIMITE_LOG_PREPARACAO = 5 * 1024 * 1024;
  * da Fabriquinha cuja entrada (o link em `worktrees`) a poda levou.
  */
 export async function podarWorktreesNoCore(raiz_git: string): ReturnType<typeof git> {
-  const r = await git(raiz_git, "worktree", "prune", "--expire", "now");
+  const resultadoDoPrune = await git(raiz_git, "worktree", "prune", "--expire", "now");
   const pastaDasEntradas = join(raiz_git, ".git", PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA);
-  if (r.codigo === 0 && existsSync(pastaDasEntradas))
+  if (resultadoDoPrune.codigo === 0 && existsSync(pastaDasEntradas))
     for (const nome of readdirSync(pastaDasEntradas))
       if (!existsSync(join(raiz_git, ".git", "worktrees", nome)))
         rmSync(join(pastaDasEntradas, nome), { recursive: true, force: true });
-  return r;
+  return resultadoDoPrune;
 }
 
 /**
@@ -46,11 +46,13 @@ const LIGAR_DEPENDENCIAS_DA_IMAGEM =
   "if [ -d /dependencias/node_modules ]; then ln -sfn /dependencias/node_modules node_modules; fi";
 
 /**
- * Sai com 0 quando as dependências da imagem servem à worktree: a imagem não tem `node_modules` (nada a comparar) ou o
- * `package.json` e o `package-lock.json` da raiz da worktree são iguais aos que a imagem guarda em `/dependencias`.
+ * Sai com 0 quando as dependências da imagem servem à worktree: cada arquivo de dependências que a imagem guarda em
+ * `/dependencias` (o `package.json` e o `package-lock.json` do Node, o `requirements.txt` do Python) é igual ao da raiz da
+ * worktree. Ecossistema que a imagem não traz não é comparado.
+ * shortcut: compara a raiz da worktree; arquivo de dependências em subpasta nunca é igual e a instalação roda, sem reuso.
  */
-const LOCKFILE_DA_WORKTREE_IGUAL_AO_DA_IMAGEM =
-  "[ ! -d /dependencias/node_modules ] || { cmp -s package.json /dependencias/package.json && cmp -s package-lock.json /dependencias/package-lock.json; }";
+const DEPENDENCIAS_DA_WORKTREE_IGUAIS_AS_DA_IMAGEM =
+  'for arquivo in package.json package-lock.json requirements.txt; do [ ! -e "/dependencias/$arquivo" ] || cmp -s "$arquivo" "/dependencias/$arquivo" || exit 1; done';
 
 /** Tira o symlink de uma preparação anterior: a instalação local não pode escrever no `node_modules` da imagem (do root). */
 const DESLIGAR_DEPENDENCIAS_DA_IMAGEM = "if [ -L node_modules ]; then rm node_modules; fi";
@@ -72,23 +74,23 @@ async function ignorarNodeModulesNoGit(ambiente: Ambiente, caminho: string): Pro
   appendFileSync(exclude, `\n${LINHA_DO_NODE_MODULES_NO_EXCLUDE}\n`);
 }
 
-async function lockfileDaWorktreeIgualAoDaImagem(ambiente: Ambiente, caminho: string): Promise<boolean> {
-  const r = await ambiente.executar({
-    programa: LOCKFILE_DA_WORKTREE_IGUAL_AO_DA_IMAGEM,
+async function dependenciasDaWorktreeIguaisAsDaImagem(ambiente: Ambiente, caminho: string): Promise<boolean> {
+  const saidaDaComparacao = await ambiente.executar({
+    programa: DEPENDENCIAS_DA_WORKTREE_IGUAIS_AS_DA_IMAGEM,
     argumentos: [],
     cwd: ambiente.caminhoNoAmbiente(caminho),
     env: envCompletoDoServico(),
     limiteMs: LIMITE_COMANDO_MS,
     noShell: true,
   });
-  return r.codigo === 0;
+  return saidaDaComparacao.codigo === 0;
 }
 
 /**
  * F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git.
- * Antes da `preparacao`, a `instalacao` roda no Ambiente sem dependências prontas e também no que as traz quando o
- * lockfile da worktree difere do da imagem (a worktree nasce da branch da demanda, a imagem da base); com o lockfile
- * igual, ela é pulada e a worktree só é ligada às dependências da imagem.
+ * Antes da `preparacao`, a `instalacao` roda no Ambiente sem dependências prontas e também no que as traz quando os
+ * arquivos de dependências da worktree diferem dos da imagem (a worktree nasce da branch da demanda, a imagem da base);
+ * com eles iguais, ela é pulada e a worktree só é ligada às dependências da imagem.
  */
 export async function preparar(
   ambiente: Ambiente,
@@ -97,7 +99,7 @@ export async function preparar(
   log: string,
 ): Promise<void> {
   const reusaDependenciasDaImagem =
-    ambiente.trazDependenciasInstaladas && (await lockfileDaWorktreeIgualAoDaImagem(ambiente, caminho));
+    ambiente.trazDependenciasInstaladas && (await dependenciasDaWorktreeIguaisAsDaImagem(ambiente, caminho));
   if (reusaDependenciasDaImagem) await ignorarNodeModulesNoGit(ambiente, caminho);
   const comandosDaInstalacao = reusaDependenciasDaImagem
     ? [LIGAR_DEPENDENCIAS_DA_IMAGEM]
@@ -105,7 +107,7 @@ export async function preparar(
   for (const comando of [...comandosDaInstalacao, ...verificacoes.preparacao]) {
     anotar(log, `preparação: ${comando}`);
     // ponytail: o host local preserva o env completo da Preparação, credenciais inclusive; o container nasce sem elas.
-    const r = await ambiente.executar({
+    const saidaDoComando = await ambiente.executar({
       programa: comando,
       argumentos: [],
       cwd: ambiente.caminhoNoAmbiente(caminho),
@@ -114,11 +116,11 @@ export async function preparar(
       ultimosBytes: LIMITE_LOG_PREPARACAO,
       noShell: true,
     });
-    appendFileSync(log, r.saida);
-    if (r.codigo !== 0) {
-      const motivo = r.limiteEstourado
+    appendFileSync(log, saidaDoComando.saida);
+    if (saidaDoComando.codigo !== 0) {
+      const motivo = saidaDoComando.limiteEstourado
         ? `passou de ${String(LIMITE_COMANDO_MS / 60_000)} minutos`
-        : `saiu com código ${String(r.codigo)}`;
+        : `saiu com código ${String(saidaDoComando.codigo)}`;
       anotar(log, `preparação falhou: ${motivo}`);
       throw new ErroDeRegra(
         `a preparação da worktree falhou em "${comando}": ${motivo}`,
@@ -163,8 +165,9 @@ export function removerWorktrees(
     } catch (error_) {
       avisos.push(`não foi possível apagar ${pasta}: ${mensagem(error_)}`);
     }
-    const r = await podarWorktreesNoCore(projeto.raiz_git);
-    if (r.codigo !== 0) avisos.push(`git -C ${projeto.raiz_git} worktree prune falhou: ${r.erro.trim()}`);
+    const resultadoDoPrune = await podarWorktreesNoCore(projeto.raiz_git);
+    if (resultadoDoPrune.codigo !== 0)
+      avisos.push(`git -C ${projeto.raiz_git} worktree prune falhou: ${resultadoDoPrune.erro.trim()}`);
     return avisos;
   });
 }

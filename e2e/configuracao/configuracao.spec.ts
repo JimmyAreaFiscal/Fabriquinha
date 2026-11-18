@@ -47,6 +47,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(formulario.locator("h3")).toHaveText([
     "Repositório",
     "Ambiente",
+    "Instalação",
     "Preparação",
     /^Modelo e effort por etapa/,
   ]);
@@ -56,8 +57,8 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("");
   await expect(formulario).not.toContainText(/[Ii]magem/);
   await pagina.getByLabel("Arquivos de dependências").fill("requirements.txt\npackage.json\n");
-  await pagina.getByRole("button", { name: "+ comando" }).click();
-  await pagina.getByLabel("Preparação da worktree: comando 1").fill("npm ci");
+  await pagina.getByRole("button", { name: "+ comando de instalação" }).click();
+  await pagina.getByLabel("Instalação das dependências: comando 1").fill("npm ci");
   // O projeto novo já escolhe o modelo e o effort de uma etapa; as outras ficam no padrão do pi.
   const planejar = pagina.getByLabel("Planejar", { exact: true });
   await planejar.selectOption("anthropic/claude-opus-5-5");
@@ -70,7 +71,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     "use letras minúsculas, números e hífen, começando por letra ou número (até 64)",
   );
   await expect(pagina.locator(".rodape-form")).toContainText("1 campo com erro");
-  await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
+  await expect(pagina.getByLabel("Instalação das dependências: comando 1")).toHaveValue("npm ci");
   await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("requirements.txt\npackage.json");
   await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
 
@@ -83,7 +84,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Nome", { exact: true })).toHaveAttribute("readonly", "");
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
   await expect(pagina.getByLabel("Arquivos de dependências")).toHaveValue("requirements.txt\npackage.json");
-  await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
+  await expect(pagina.getByLabel("Instalação das dependências: comando 1")).toHaveValue("npm ci");
   await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
   await expect(pagina.getByLabel("Effort de Planejar")).toHaveValue("high");
   await expect(pagina.getByLabel("Effort de Implementar")).toHaveValue("");
@@ -98,8 +99,9 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     link_produto: null,
     arquivos_de_dependencias: JSON.stringify(["requirements.txt", "package.json"]),
   });
-  // A preparação vai para a tabela que o fluxo da demanda lê ao criar a worktree.
-  expect({ ...banco.prepare("SELECT * FROM comando_preparacao_projeto").get() }).toEqual({
+  // A instalação vai para a tabela própria, que o fluxo da demanda lê ao preparar a worktree; a preparação fica vazia.
+  expect(banco.prepare("SELECT * FROM comando_preparacao_projeto").all()).toEqual([]);
+  expect({ ...banco.prepare("SELECT * FROM comando_instalacao_projeto").get() }).toEqual({
     projeto: "loja",
     ordem: 1,
     comando: "npm ci",
