@@ -13,6 +13,7 @@ function ambienteQueResponde(saida: Partial<SaidaDoComando>) {
     processosMorremComOServico: true,
     isolaAsVariaveisDoServico: false,
     escreveEmTodoOGitDoClone: true,
+    trazDependenciasInstaladas: false,
     executar: (comando) => {
       comandos.push(comando);
       return Promise.resolve({ codigo: 0, saida: "", erro: "", limiteEstourado: false, duracaoMs: 0, ...saida });
@@ -63,7 +64,7 @@ test("git que passa do limite diz por quê no stderr, e exigir vira ErroDeRegra 
 test("a Preparação roda no shell do Ambiente com o env completo do serviço e guarda o fim do log", async () => {
   const { ambiente, comandos } = ambienteQueResponde({ saida: "saída\n" });
   const log = `${process.env.TMPDIR ?? "/tmp"}/preparacao-no-ambiente-${String(process.pid)}.log`;
-  await preparar(ambiente, "/worktree", ["npm ci"], log);
+  await preparar(ambiente, "/worktree", { preparacao: ["npm ci"], instalacao: [] }, log);
   const [comando] = comandos;
   assert.ok(comando);
   const { programa, argumentos, cwd, env, noShell, ultimosBytes } = comando;

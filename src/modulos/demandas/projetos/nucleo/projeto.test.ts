@@ -31,15 +31,26 @@ test("Projeto mínimo válido ganha etapas e verificações vazias", () => {
   assert.deepEqual(Projeto.parse(cadastro), {
     ...cadastro,
     etapas: [],
-    verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+    verificacoes: { preparacao: [], instalacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
   });
   assert.deepEqual(Projeto.parse({ ...cadastro, verificacoes: {} }).verificacoes, {
     preparacao: [],
+    instalacao: [],
     fitness: [],
     linguagens: [],
     e2e: [],
     globs: [],
   });
+});
+
+test("Projeto aceita a instalação das dependências, separada da preparação, e recusa comando em branco", () => {
+  const completo = Projeto.parse({
+    ...cadastro,
+    verificacoes: { instalacao: ["npm ci"], preparacao: ["npm run build"] },
+  });
+  assert.deepEqual(completo.verificacoes.instalacao, ["npm ci"]);
+  assert.deepEqual(completo.verificacoes.preparacao, ["npm run build"]);
+  assert.equal(Projeto.safeParse({ ...cadastro, verificacoes: { instalacao: ["  "] } }).success, false);
 });
 
 test("Projeto aceita preparação; os campos do fluxo legado são rejeitados", () => {

@@ -1,8 +1,10 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-04 a 06 (o planejamento): reprovação e retomada da mesma sessão,
-// falha ao preparar a aprovação e demandas com os mesmos números de rodada e ticket. O cenário é montado pelos serviços
+// falha ao preparar a aprovação e demandas com os mesmos números de rodada e ticket; e a aprovação que reusa as
+// dependências do Ambiente pronto (I-313 CA-4). O cenário é montado pelos serviços
 // e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
@@ -21,7 +23,12 @@ import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, pr
 import { instalarPiFalso } from "../../apoio-testes/falsos/pi_falso.ts";
 import { montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
-import { modulosDoCicloDeTeste } from "../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  AmbienteComDependencias,
+  gestaoQueSoUsa,
+  ligarGestaoDeAmbientesNosModulos,
+  modulosDoCicloDeTeste,
+} from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { carregarSessoesDoContexto } from "../../apoio-testes/sessoes_de_teste.ts";
 import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
@@ -307,4 +314,60 @@ test("o planejador recebe o desenho aprovado da demanda, com o HTML anexo num ar
   assert.match(prompt, /## Desenho aprovado[\s\S]*\nr\n[\s\S]*- `src\/a\.ts` \(criar\): porque/);
   const [, html] = /- `d\.html`: `([^`]+)`/.exec(prompt) ?? [];
   assert.equal(readFileSync(html ?? "", "utf8"), "<!doctype html><p>x</p>");
+});
+
+/** A instalação que, se rodasse na aprovação, a atrasaria por minutos e a faria falhar. */
+const INSTALACAO_DEMORADA_QUE_FALHA = "sleep 120; exit 1";
+const LIMITE_DA_APROVACAO_MS = 10_000;
+
+test("I-313 CA-4: aprovar o planejamento de duas rodadas com o Ambiente pronto não roda a instalação e termina em segundos", async (t) => {
+  const c = criarCenario(t);
+  pi.roteirizar();
+  const { banco, projeto, repo } = c;
+  // A branch base com o package.json e o lockfile que a imagem do Ambiente já instalou em `/dependencias`.
+  const dependenciasDaImagem = join(c.raiz, "dependencias");
+  mkdirSync(join(dependenciasDaImagem, "node_modules"), { recursive: true });
+  const arquivosDeDependenciasDaBase = { "package.json": "{}", "package-lock.json": "lock-da-base" };
+  for (const [arquivo, conteudo] of Object.entries(arquivosDeDependenciasDaBase)) {
+    writeFileSync(join(repo, arquivo), conteudo);
+    writeFileSync(join(dependenciasDaImagem, arquivo), conteudo);
+  }
+  execFileSync("git", ["add", "package.json", "package-lock.json"], { cwd: repo });
+  execFileSync("git", ["commit", "-q", "-m", "dependências"], { cwd: repo });
+  execFileSync("git", ["push", "-q", "origin", "main"], { cwd: repo });
+  ligarGestaoDeAmbientesNosModulos(gestaoQueSoUsa(new AmbienteComDependencias(dependenciasDaImagem)));
+  t.after(() => {
+    ligarGestaoDeAmbientesNosModulos();
+  });
+  const projetoDoCenario = montarDemandasDoBanco(banco).projeto(projeto);
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      ...projetoDoCenario,
+      verificacoes: { ...projetoDoCenario.verificacoes, instalacao: [INSTALACAO_DEMORADA_QUE_FALHA] },
+    }),
+  );
+  const id = await demandaAprovada(c);
+  await ciclaPlanejamentos(c, [id]);
+  proporPlanoDoAgente(banco, id, plano(id, "r", 2), agente(1));
+
+  const inicio = performance.now();
+  await decidirPlanejamento(banco, id, { resultado: "aprovado", nota: 4 });
+  const duracaoMs = performance.now() - inicio;
+
+  assert.ok(duracaoMs < LIMITE_DA_APROVACAO_MS, `a aprovação levou ${String(Math.round(duracaoMs))} ms`);
+  assert.deepEqual(
+    demanda(c, id).rodadas.map((r) => [r.rodada_id, r.estado]),
+    [
+      [1, "implementar"],
+      [2, "implementar"],
+    ],
+  );
+  const logDoPlanejamento = readFileSync(join(c.raiz, "execucoes", `planejamento-${id}.log`), "utf8");
+  assert.doesNotMatch(logDoPlanejamento, /sleep 120/);
+  for (const rodada of ["1", "2"])
+    assert.equal(
+      readlinkSync(join(c.raiz, "worktrees", projeto, id, "rodadas", rodada, "node_modules")),
+      join(dependenciasDaImagem, "node_modules"),
+    );
 });

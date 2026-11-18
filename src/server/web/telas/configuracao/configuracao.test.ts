@@ -37,19 +37,27 @@ const LOJA: ProjetoCadastrado = {
   hospedagem: "github",
   arquivos_de_dependencias: ["requirements.txt", "package.json"],
   etapas: [],
-  verificacoes: { preparacao: ["npm ci"], fitness: [], linguagens: [], e2e: [], globs: [] },
+  verificacoes: {
+    preparacao: ["npm run build"],
+    instalacao: ["npm ci"],
+    fitness: [],
+    linguagens: [],
+    e2e: [],
+    globs: [],
+  },
   chave_sonarqube: "loja",
   configuracoes: {},
 };
 
-test("rascunhoDe mantém os campos editáveis e solta apenas a preparação das verificações", () => {
+test("rascunhoDe mantém os campos editáveis e solta apenas a preparação e a instalação das verificações", () => {
   assert.deepEqual(rascunhoDe(LOJA), {
     nome: "loja",
     raiz_git: "/code/loja",
     branch_base: "main",
     arquivos_de_dependencias: ["requirements.txt", "package.json"],
     hospedagem: "github",
-    preparacao: ["npm ci"],
+    preparacao: ["npm run build"],
+    instalacao: ["npm ci"],
     configuracoes: {},
   });
   assert.equal("arquivos_de_dependencias" in rascunhoDe({ ...LOJA, arquivos_de_dependencias: undefined }), false);
@@ -148,7 +156,11 @@ test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem te
   assert.match(html, /<input id="campo-hospedagem" value="GitHub" readonly>/);
   assert.match(
     html,
-    /<h3>Preparação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
+    /<h3>Instalação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Instalação das dependências: comando 1">/,
+  );
+  assert.match(
+    html,
+    /<h3>Preparação<\/h3>.*<input class="mono" value="npm run build" placeholder="npm run build" aria-label="Preparação da worktree: comando 1">/,
   );
   assert.match(
     html,
@@ -281,7 +293,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
   assert.match(html, /<input id="campo-hospedagem" value="deduzida do remoto ao salvar" readonly>/);
   assert.match(
     html,
-    /<div class="item-lista erro"><input class="mono" value="" placeholder="npm ci" aria-label="Preparação da worktree: comando 1" aria-invalid="true" aria-describedby="campo-preparacao\[0\]-erro">/,
+    /<div class="item-lista erro"><input class="mono" value="" placeholder="npm run build" aria-label="Preparação da worktree: comando 1" aria-invalid="true" aria-describedby="campo-preparacao\[0\]-erro">/,
   );
   assert.match(
     html,
