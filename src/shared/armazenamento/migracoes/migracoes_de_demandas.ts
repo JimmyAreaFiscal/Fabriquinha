@@ -52,6 +52,21 @@ UPDATE projeto SET arquivos_de_dependencias = '["package.json"]' WHERE imagem_do
 ALTER TABLE projeto DROP COLUMN imagem_do_ambiente;
 `;
 
+// A migração 59, de Demandas: a instalação das dependências ganha lista própria, `comando_instalacao_projeto`, e o comando
+// `npm ci` (igualdade exata, depois do trim) sai da preparação para ela. Os demais comandos da preparação mantêm a ordem.
+const MIGRACAO_59_COMANDO_DE_INSTALACAO = `
+CREATE TABLE comando_instalacao_projeto (
+    projeto TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    ordem   INTEGER NOT NULL CHECK (typeof(ordem) = 'integer' AND ordem > 0),
+    comando TEXT NOT NULL CHECK (length(comando) > 0),
+    PRIMARY KEY (projeto, ordem)
+  );
+INSERT INTO comando_instalacao_projeto (projeto, ordem, comando)
+  SELECT projeto, ROW_NUMBER() OVER (PARTITION BY projeto ORDER BY ordem), 'npm ci'
+  FROM comando_preparacao_projeto WHERE trim(comando) = 'npm ci' ORDER BY projeto, ordem;
+DELETE FROM comando_preparacao_projeto WHERE trim(comando) = 'npm ci';
+`;
+
 /**
  * As migrações de Demandas, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. Moram
  * no histórico do esquema, e não na fachada de Demandas, que só expõe a GestaoDeDemandas.
@@ -62,5 +77,6 @@ export const MIGRACOES_DE_DEMANDAS = {
     { versao: 51, migracao: MIGRACAO_51_SITUACAO_DO_PEDIDO },
     { versao: 53, migracao: MIGRACAO_53_DEMANDA_SO_COM_O_PEDIDO },
     { versao: 58, migracao: MIGRACAO_58_ARQUIVOS_DE_DEPENDENCIAS },
+    { versao: 59, migracao: MIGRACAO_59_COMANDO_DE_INSTALACAO },
   ],
 };

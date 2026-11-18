@@ -15,6 +15,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import type { ComandoNoAmbiente } from "../../../ambiente/publico.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { exigirGit, naFilaDoProjeto } from "../../git/publico.ts";
 import { descartarAlteracoes, preparar, removerWorktrees } from "./worktree.ts";
@@ -56,7 +57,7 @@ function cenario() {
   git(base, "init", "-q", "--bare", bare);
   git(base, "clone", "-q", bare, repo);
   git(repo, "checkout", "-q", "-b", "main");
-  commitar(repo, ".gitignore", "node_modules/\n");
+  commitar(repo, ".gitignore", "node_modules\n");
   git(repo, "push", "-q", "origin", "main");
   git(repo, "worktree", "add", "-q", "-b", "fabriquinha/I-1", worktree);
   const log = join(raiz, "execucoes", "E-1", "log");
@@ -74,19 +75,68 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
       `a preparação da worktree falhou em "echo tentando; test -f ${sinal}": saiu com código 1 ` +
         `(veja o log em ${c.log}; ela roda de novo na próxima execução)`;
 
-  await assert.rejects(preparar(ambiente, c.worktree, comandos, c.log), falha);
+  await assert.rejects(preparar(ambiente, c.worktree, { preparacao: comandos, instalacao: [] }, c.log), falha);
   assert.equal(existsSync(segundo), false);
   assert.match(c.lerLog(), /tentando\n.*preparação falhou: saiu com código 1\n$/s);
 
   writeFileSync(sinal, "");
-  await preparar(ambiente, c.worktree, comandos, c.log);
+  await preparar(ambiente, c.worktree, { preparacao: comandos, instalacao: [] }, c.log);
   assert.equal(existsSync(segundo), true);
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
 
+/** Um Ambiente que já traz as dependências: `/dependencias` é, aqui, a pasta dada. */
+class AmbienteComDependencias extends AmbienteHostLocal {
+  readonly #pastaDasDependencias: string;
+  constructor(pastaDasDependencias: string) {
+    super();
+    Object.defineProperty(this, "trazDependenciasInstaladas", { value: true });
+    this.#pastaDasDependencias = pastaDasDependencias;
+  }
+  override executar(comando: ComandoNoAmbiente) {
+    return super.executar({
+      ...comando,
+      programa: comando.programa.replaceAll("/dependencias", this.#pastaDasDependencias),
+    });
+  }
+}
+
+test("no host local a instalação roda antes da preparação", async () => {
+  const c = cenario();
+  await preparar(ambiente, c.worktree, { instalacao: ["echo instalou"], preparacao: ["echo preparou"] }, c.log);
+  assert.match(c.lerLog(), /preparação: echo instalou\ninstalou\n.*preparação: echo preparou\npreparou\n$/);
+});
+
+test("com as dependências no Ambiente a instalação é pulada, a preparação roda e a worktree enxerga node_modules", async () => {
+  const c = cenario();
+  const dependencias = join(base, `dependencias${String(n)}`);
+  mkdirSync(join(dependencias, "node_modules"), { recursive: true });
+  writeFileSync(join(dependencias, "node_modules", "pacote.txt"), "ok");
+  const comDependencias = new AmbienteComDependencias(dependencias);
+  await preparar(comDependencias, c.worktree, { instalacao: ["echo instalou"], preparacao: ["echo preparou"] }, c.log);
+  assert.doesNotMatch(c.lerLog(), /instalou/);
+  assert.match(c.lerLog(), /preparou\n$/);
+  assert.equal(readFileSync(join(c.worktree, "node_modules", "pacote.txt"), "utf8"), "ok");
+  // O .gitignore ignora o symlink e o descarte (clean -fd sem -x) o mantém.
+  assert.equal(git(c.worktree, "status", "--short"), "");
+  await descartarAlteracoes(ambiente, c.worktree, c.log);
+  assert.equal(readFileSync(join(c.worktree, "node_modules", "pacote.txt"), "utf8"), "ok");
+});
+
+test("com as dependências no Ambiente, imagem sem /dependencias/node_modules não liga nada e não falha", async () => {
+  const c = cenario();
+  const semNodeModules = join(base, `sem-node-modules${String(n)}`);
+  mkdirSync(semNodeModules);
+  await preparar(new AmbienteComDependencias(semNodeModules), c.worktree, { instalacao: [], preparacao: [] }, c.log);
+  assert.equal(existsSync(join(c.worktree, "node_modules")), false);
+});
+
 test("erro de sintaxe na preparação vai para o log", async () => {
   const c = cenario();
-  await assert.rejects(preparar(ambiente, c.worktree, ["npm test ("], c.log), /saiu com código 2/);
+  await assert.rejects(
+    preparar(ambiente, c.worktree, { preparacao: ["npm test ("], instalacao: [] }, c.log),
+    /saiu com código 2/,
+  );
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
@@ -94,7 +144,9 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   const c = cenario();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = preparar(ambiente, c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
+  const pedido = preparar(ambiente, c.worktree, { preparacao: ["sleep 600"], instalacao: [] }, c.log).catch(
+    (erro: unknown) => (resultado = erro),
+  );
   // O relógio falso anda um minuto por volta do laço de eventos real, depois que o comando começou.
   let minutos = 0;
   while (resultado === undefined) {
@@ -226,7 +278,7 @@ test("descarte: reset --hard + clean -fd mantém ignorados, remove o novo e anot
   assert.deepEqual(await descartarAlteracoes(ambiente, caminho, c.log), ["pasta nova/", "rascunho-ç.md"]);
   assert.equal(existsSync(join(caminho, "node_modules", "pacote", "index.js")), true);
   assert.equal(existsSync(join(caminho, "rascunho-ç.md")), false);
-  assert.equal(readFileSync(join(caminho, ".gitignore"), "utf8"), "node_modules/\n");
+  assert.equal(readFileSync(join(caminho, ".gitignore"), "utf8"), "node_modules\n");
   assert.match(c.lerLog(), /descarte removeu: pasta nova\/, rascunho-ç\.md\n$/);
 
   const antes = c.lerLog();

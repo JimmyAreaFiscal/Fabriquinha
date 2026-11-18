@@ -96,6 +96,7 @@ export class AmbienteFalso implements Ambiente {
   readonly processosMorremComOServico = this.hostLocal.processosMorremComOServico;
   readonly isolaAsVariaveisDoServico = this.hostLocal.isolaAsVariaveisDoServico;
   readonly escreveEmTodoOGitDoClone = this.hostLocal.escreveEmTodoOGitDoClone;
+  readonly trazDependenciasInstaladas = this.hostLocal.trazDependenciasInstaladas;
 
   executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     this.registro.push({ via: "executar", comando });

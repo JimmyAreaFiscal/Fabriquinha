@@ -65,6 +65,11 @@ export interface Ambiente {
    * guarda a pasta administrativa dela em `PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA`.
    */
   readonly escreveEmTodoOGitDoClone: boolean;
+  /**
+   * Já traz as dependências do projeto instaladas em `/dependencias` (a imagem por hash do arquivo de dependências):
+   * a preparação do Espaço pula a instalação e só liga a worktree a elas.
+   */
+  readonly trazDependenciasInstaladas: boolean;
   /** Espera o comando terminar. Só lança se o programa nem chega a rodar (ex.: não está instalado). */
   executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando>;
   /** Lança o processo num grupo próprio e devolve sem esperar. */

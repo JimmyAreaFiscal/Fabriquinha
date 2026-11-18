@@ -59,6 +59,7 @@ export const FormularioDoProjeto = Projeto.pick({
 }).extend({
   hospedagem: Hospedagem.optional(),
   preparacao: ComandosDePreparacao,
+  instalacao: ComandosDePreparacao,
   configuracoes: ConfiguracoesPorEtapa,
 });
 

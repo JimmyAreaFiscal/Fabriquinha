@@ -109,6 +109,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", recusa?: MotivoD
     etapas: [],
     verificacoes: {
       preparacao: [],
+      instalacao: [],
       fitness: [{ nome: "f", comando: "true", descricao: "d" }],
       linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
       e2e: [],

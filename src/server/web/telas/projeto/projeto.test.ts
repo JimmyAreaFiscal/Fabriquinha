@@ -27,7 +27,7 @@ const projeto = (nome: string): ProjetoListado => ({
   branch_base: "main",
   hospedagem: "github",
   etapas: [],
-  verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+  verificacoes: { preparacao: [], instalacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
   chave_sonarqube: nome,
 });
 const DEMANDA_TERMINAL: readonly string[] = ["concluida", "arquivada", "cancelada"];

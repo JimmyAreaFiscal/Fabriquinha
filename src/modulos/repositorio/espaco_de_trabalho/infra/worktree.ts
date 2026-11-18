@@ -37,14 +37,29 @@ export async function podarWorktreesNoCore(raiz_git: string): ReturnType<typeof 
   return r;
 }
 
-/** F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git. */
+/**
+ * O Ambiente que já traz as dependências da imagem as enxerga pela worktree: o NODE_PATH não vale para ESM, então o
+ * symlink é obrigatório. Imagem sem `/dependencias/node_modules` (projeto sem Node) não liga nada.
+ * shortcut: só `node_modules` da raiz, a imagem monta tudo em `/dependencias`; subpastas de dependências, quando existirem.
+ */
+const LIGAR_DEPENDENCIAS_DA_IMAGEM =
+  "if [ -d /dependencias/node_modules ]; then ln -sfn /dependencias/node_modules node_modules; fi";
+
+/**
+ * F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git.
+ * Antes da `preparacao`, a `instalacao` roda no Ambiente sem dependências prontas; no que as traz, ela é pulada e a
+ * worktree só é ligada a elas.
+ */
 export async function preparar(
   ambiente: Ambiente,
   caminho: string,
-  preparacao: ProjetoDoRepositorio["verificacoes"]["preparacao"],
+  verificacoes: Pick<ProjetoDoRepositorio["verificacoes"], "preparacao" | "instalacao">,
   log: string,
 ): Promise<void> {
-  for (const comando of preparacao) {
+  const comandosDaInstalacao = ambiente.trazDependenciasInstaladas
+    ? [LIGAR_DEPENDENCIAS_DA_IMAGEM]
+    : verificacoes.instalacao;
+  for (const comando of [...comandosDaInstalacao, ...verificacoes.preparacao]) {
     anotar(log, `preparação: ${comando}`);
     // ponytail: o host local preserva o env completo da Preparação, credenciais inclusive; o container nasce sem elas.
     const r = await ambiente.executar({

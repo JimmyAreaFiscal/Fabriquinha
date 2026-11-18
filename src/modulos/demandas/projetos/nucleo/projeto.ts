@@ -64,6 +64,8 @@ const verificacoesComSdlc = (obrigatoria: boolean) =>
   z
     .strictObject({
       preparacao: ComandosDePreparacao,
+      // A instalação das dependências, separada da preparação: o ambiente pronto para o mesmo lockfile a dispensa.
+      instalacao: ComandosDePreparacao,
       fitness: lista(FitnessFunctionProjeto, obrigatoria),
       linguagens: lista(LinguagemProjeto, obrigatoria),
       e2e: z.array(ConfiguracaoE2E).default([]),
@@ -86,7 +88,7 @@ const verificacoesComSdlc = (obrigatoria: boolean) =>
         erro("e2e", "E2E exige ao menos um glob");
     });
 
-const SEM_VERIFICACOES = { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] };
+const SEM_VERIFICACOES = { preparacao: [], instalacao: [], fitness: [], linguagens: [], e2e: [], globs: [] };
 
 const CAMPOS_DO_PROJETO = {
   nome: Slug,

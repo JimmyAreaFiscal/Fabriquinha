@@ -51,6 +51,7 @@ export const DONO_DE_CADA_TABELA: Record<string, string> = {
   projeto: "demandas/projetos",
   linguagem_projeto: "demandas/projetos",
   comando_preparacao_projeto: "demandas/projetos",
+  comando_instalacao_projeto: "demandas/projetos",
   configuracao_e2e: "demandas/projetos",
   glob_e2e: "demandas/projetos",
   fitness_function_projeto: "demandas/projetos",

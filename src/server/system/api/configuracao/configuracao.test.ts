@@ -120,6 +120,7 @@ const formulario = (repo: string) => ({
   raiz_git: repo,
   branch_base: "main",
   preparacao: [],
+  instalacao: [],
   configuracoes: {},
 });
 
@@ -131,7 +132,7 @@ const gravado = (repo: string) => ({
   hospedagem: "github",
   chave_sonarqube: "loja",
   etapas: [],
-  verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+  verificacoes: { preparacao: [], instalacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
   configuracoes: {},
 });
 
@@ -283,6 +284,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     await chamar("POST", "/api/projetos/loja", {
       ...formulario(repo),
       preparacao: ["npm ci"],
+      instalacao: [],
       configuracoes: {
         ...escolhidos.configuracoes,
         entender_e_desenhar: { modelo: { provedor: "inexistente", nome: "xyz" } },
@@ -407,6 +409,7 @@ test("campo inválido dá 422 com o caminho, antes de conferir o repositório; n
     ...formulario("relativo"),
     nome: "Loja X",
     preparacao: [" "],
+    instalacao: [],
   })) as [number, string];
   assert.equal(status, 422);
   assert.match(

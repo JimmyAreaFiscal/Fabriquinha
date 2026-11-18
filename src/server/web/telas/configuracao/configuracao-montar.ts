@@ -80,6 +80,7 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     ...(arquivosDeDependencias.length > 0 && { arquivos_de_dependencias: arquivosDeDependencias }),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
+    instalacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="instalacao"] input')].map((i) => i.value),
     configuracoes,
   };
 }
@@ -272,9 +273,9 @@ function montarProjeto(
       const remover = alvo?.closest("[data-remover]")?.closest(".item-lista");
       if (alvo?.closest("[data-cancelar]")) {
         desenhar(inicial, new Map());
-      } else if (adicionar === "preparacao") {
+      } else if (adicionar === "preparacao" || adicionar === "instalacao") {
         const p = lerProjeto(form, inicial.hospedagem);
-        desenhar({ ...p, preparacao: [...p.preparacao, ""] }, erros);
+        desenhar({ ...p, [adicionar]: [...p[adicionar], ""] }, erros);
       } else if (remover) {
         // Remove a linha do DOM e redesenha: os índices dos erros mudariam, então eles somem até o próximo envio.
         remover.remove();

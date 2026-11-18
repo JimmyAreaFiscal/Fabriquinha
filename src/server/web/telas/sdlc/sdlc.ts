@@ -79,7 +79,7 @@ export const GRUPOS: readonly {
 export const linhaEmBranco = (chave: GrupoDeLista): Linha =>
   Object.fromEntries(GRUPOS.filter((g) => g.chave === chave).flatMap((g) => g.campos.map(([campo]) => [campo, ""])));
 
-/** O contrato em texto, sem as etapas e a preparação: o cadastro do projeto, na Configuração, as edita. */
+/** O contrato em texto, sem as etapas, a preparação e a instalação: o cadastro do projeto, na Configuração, as edita. */
 export function doProjeto(p: Projeto, cursor = ""): Estado {
   return {
     branch_base: p.branch_base,
@@ -100,7 +100,9 @@ type Verificacoes = Projeto["verificacoes"];
 export function paraProjeto(
   e: Estado,
   nome: string,
-): Omit<Projeto, "etapas" | "link_produto" | "verificacoes"> & { verificacoes: Omit<Verificacoes, "preparacao"> } {
+): Omit<Projeto, "etapas" | "link_produto" | "verificacoes"> & {
+  verificacoes: Omit<Verificacoes, "preparacao" | "instalacao">;
+} {
   return {
     nome,
     branch_base: e.branch_base,

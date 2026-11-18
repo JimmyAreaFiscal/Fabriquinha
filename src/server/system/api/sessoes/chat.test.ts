@@ -259,6 +259,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     etapas: [],
     verificacoes: {
       preparacao: [],
+      instalacao: [],
       fitness: [{ nome: "f", comando: "true", descricao: "d" }],
       linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
       e2e: [],
