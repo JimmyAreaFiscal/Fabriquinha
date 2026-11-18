@@ -106,14 +106,16 @@ const dialogos: NonNullable<PassoPi["eventos"]> = [
   { type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 150 },
   { type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a", "b"] },
 ];
-// O silêncio aceito no teste da ferramenta longa (0,02 min = 1,2 s) folga o bastante para os eventos seguidos do pi falso
-// chegarem sob a carga da suíte inteira (com 300 ms, o fim da resposta às vezes chegava depois do vigia); a ferramenta
-// fica calada o dobro dele.
-const SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN = 0.02;
+const inicioDaFerramentaLonga = {
+  type: "tool_execution_start",
+  toolCallId: "b1",
+  toolName: "bash",
+  args: { command: "docker build ." },
+};
 const ferramentaLonga: PassoPi = {
   eventos: [
-    { type: "tool_execution_start", toolCallId: "b1", toolName: "bash", args: { command: "docker build ." } },
-    { pausaMs: 2400 },
+    inicioDaFerramentaLonga,
+    { pausaMs: 600 },
     { type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: {}, isError: false },
     // O pi que fecha uma mensagem sem `message` não derruba o ouvinte do condutor.
     { type: "message_end" },
@@ -221,14 +223,15 @@ test("interativa: o prompt rejeitado porque o agente já trabalha não deixa a s
   assert.equal(await fim, undefined);
 });
 
-test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com tempo limite expira e o respondido segue", async () => {
-  // 0,02 min = 1,2 s: o diálogo fica pendente por mais tempo que isso sem a execução estourar o limite. Com 300 ms, a
-  // subida do pi falso sob a carga da suíte inteira já gastava o limite antes do primeiro diálogo.
-  const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.02);
+test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com tempo limite expira e o respondido segue", async (t) => {
+  // Relógio controlado: a subida e o fim do pi, lentos numa máquina carregada, não gastam os 300 ms (0,005 min) do limite.
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.005);
   await ate(() => (condutor.situacao(sessao)?.dialogos.length ?? 0) === 2, "os dois diálogos");
   assert.ok(condutor.situacao(sessao)?.dialogos.find((d) => d.id === "c1")?.expiraEm);
-  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1, "a expiração do confirm");
-  await dormir(1500);
+  t.mock.timers.tick(150);
+  assert.equal(condutor.situacao(sessao)?.dialogos.length, 1, "a expiração do confirm");
+  t.mock.timers.tick(400);
   assert.equal(condutor.situacao(sessao)?.dialogos[0]?.id, "s1", "sem estourar o limite com o diálogo pendente");
   condutor.responder(sessao, "s1", { value: "a" });
   assert.throws(() => {
@@ -446,27 +449,30 @@ test("com o sandbox caído, o silêncio do modelo e a saída do pi viram falha d
   });
 });
 
-test("ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {
-  assert.equal(
-    await rodar(
-      [{ ...ferramentaLonga, termina: "assenta" }],
-      "autonomo",
-      1,
-      undefined,
-      SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN,
-    ).fim,
-    undefined,
-  );
+test("o vigia do modelo pega o pi mudo desde a subida; ferramenta longa e sessão interativa ociosa não o disparam", async (t) => {
+  // Relógio controlado: só o `tick` passa os 300 ms (0,005 min) de silêncio, e a subida lenta do pi não conta.
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  // O `tick` síncrono logo depois do lançamento chega antes de qualquer evento: é o pi que trava na subida.
+  const muda = rodar([{}], "interativo", 1, undefined, 0.005);
+  t.mock.timers.tick(300);
+  // O vigia consulta o sandbox antes de encerrar: o fim chega depois do `tick`.
+  assert.deepEqual(await muda.fim, {
+    tipo: "falha_infraestrutura",
+    causa: "modelo_sem_resposta",
+    motivo: "o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)",
+  });
+  assert.equal(condutor.situacao(muda.sessao), undefined, "o vigia encerrou o pi mudo");
 
-  const ociosa = rodar(
-    [{ ...ferramentaLonga, termina: "assenta" }],
-    "interativo",
-    1,
-    undefined,
-    SILENCIO_ACEITO_NO_TESTE_DA_FERRAMENTA_MIN,
-  );
+  const ferramenta = rodar([{ eventos: [inicioDaFerramentaLonga] }], "autonomo", 1, undefined, 0.005);
+  await ate(() => condutor.situacao(ferramenta.sessao)?.atividade === "bash docker build .", "a ferramenta rodando");
+  t.mock.timers.tick(400);
+  assert.ok(condutor.situacao(ferramenta.sessao), "a ferramenta segue rodando além do silêncio aceito");
+  condutor.encerrar(ferramenta.sessao);
+  assert.equal(await ferramenta.fim, undefined);
+
+  const ociosa = rodar([{ ...ferramentaLonga, termina: "assenta" }], "interativo", 1, undefined, 0.005);
   await ate(() => condutor.situacao(ociosa.sessao)?.ocupado === false, "a sessão ociosa");
-  await dormir(1500);
+  t.mock.timers.tick(400);
   assert.ok(condutor.situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");
   condutor.encerrar(ociosa.sessao);
   assert.equal(await ociosa.fim, undefined);
