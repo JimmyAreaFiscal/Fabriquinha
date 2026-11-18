@@ -260,8 +260,9 @@ async function cenarioComContainer() {
     await noHostLocal.parar();
   });
   const registro = { raiz: c.raiz, log: c.log };
-  writeFileSync(join(c.projeto.raiz_git, "package.json"), "{}");
-  writeFileSync(join(c.projeto.raiz_git, "package-lock.json"), "{}");
+  // A imagem lê as dependências da branch base do clone.
+  commitarArquivo(c.projeto.raiz_git, "package.json", "{}");
+  commitarArquivo(c.projeto.raiz_git, "package-lock.json", "{}");
   const projeto = { ...c.projeto, arquivos_de_dependencias: ["package.json"] };
   return {
     c,

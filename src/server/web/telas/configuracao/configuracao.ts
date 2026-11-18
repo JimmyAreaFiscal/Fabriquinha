@@ -287,11 +287,15 @@ function texto(
 const remover = '<button type="button" class="x" data-remover title="Remover" aria-label="Remover">×</button>';
 
 /** Os caminhos dos arquivos de dependências, um por linha; o erro do campo e o de cada linha (`arquivos_de_dependencias[0]`) saem juntos. */
-function arquivosDeDependencias(erros: Erros, caminhos: readonly string[] = []): string {
+function htmlDoCampoDosArquivosDeDependencias(erros: Erros, caminhos: readonly string[] = []): string {
   const campo = "arquivos_de_dependencias";
-  const doCampoEDasLinhas = new Map([...erros].map(([c, ms]) => [c.startsWith(`${campo}[`) ? campo : c, ms] as const));
-  const m = marca(doCampoEDasLinhas, campo);
-  return `<div class="campo largo${m.classe}"><label for="${idDe(campo)}">Arquivos de dependências</label><textarea id="${idDe(campo)}" name="${campo}" rows="2" placeholder="requirements.txt"${m.aria}>${escapar(caminhos.join("\n"))}</textarea>${m.msg}<span class="ajuda">um caminho por linha, relativo ao repositório (<code>requirements.txt</code>, <code>package.json</code>); sem arquivo, o projeto roda no host</span></div>`;
+  const errosDoCampoEDasLinhas = new Map(
+    [...erros].map(
+      ([campoComErro, mensagens]) => [campoComErro.startsWith(`${campo}[`) ? campo : campoComErro, mensagens] as const,
+    ),
+  );
+  const marcacaoDoErro = marca(errosDoCampoEDasLinhas, campo);
+  return `<div class="campo largo${marcacaoDoErro.classe}"><label for="${idDe(campo)}">Arquivos de dependências</label><textarea id="${idDe(campo)}" name="${campo}" rows="2" placeholder="requirements.txt"${marcacaoDoErro.aria}>${escapar(caminhos.join("\n"))}</textarea>${marcacaoDoErro.msg}<span class="ajuda">um caminho por linha, relativo ao repositório (<code>requirements.txt</code>, <code>package.json</code>); sem arquivo, o projeto roda no host</span></div>`;
 }
 
 /** Lista de comandos com adicionar e remover; os erros de cada item e da lista inteira. */
@@ -373,7 +377,7 @@ export function formularioDeProjeto(
     : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branch_base", "Branch base", p.branch_base, { mono: true })}${texto(erros, "raiz_git", "Caminho do repositório", p.raiz_git, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', botaoAoLado: BOTAO_ESCOLHER_PASTA, ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div></div></div>
-<div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${arquivosDeDependencias(erros, p.arquivos_de_dependencias)}</div></div>
+<div class="grupo"><h3>Ambiente</h3>${avisoDoHost}<div class="grade">${htmlDoCampoDosArquivosDeDependencias(erros, p.arquivos_de_dependencias)}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
 ${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;

@@ -10,7 +10,7 @@ import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_f
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
-import { espacoDaRodada, ocupanteDoAmbiente } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { espacoDaRodada, ocupanteDoAmbiente, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { Projeto } from "../../../demandas/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
@@ -34,6 +34,10 @@ after(() => {
 writeFileSync(join(base, "package.json"), "{}");
 writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
+// A imagem lê as dependências da branch base: o clone de teste as commita nela.
+rodarGit(base, "init", "-q", "-b", "main");
+rodarGit(base, "add", "package.json", "package-lock.json", "requirements.txt");
+rodarGit(base, "commit", "-q", "-m", "dependências");
 const projetoComDependencias = (arquivo?: string) =>
   Projeto.parse({
     nome: "loja",

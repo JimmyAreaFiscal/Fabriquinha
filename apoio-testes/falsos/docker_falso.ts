@@ -61,6 +61,8 @@ export interface DockerFalso {
   containers: () => ContainerFalso[];
   /** As imagens que existem agora. */
   imagens: () => string[];
+  /** O Dockerfile do `build` que gerou `imagem` (vazio na semeada ou na baixada). */
+  dockerfileDaImagem: (imagem: string) => string;
   /** Cria um container já rodando, como o que outro programa subiu na máquina. */
   semearContainer: (semente: {
     id?: string;
@@ -153,6 +155,7 @@ export function instalarDockerFalso(dir: string): DockerFalso {
         .map((linha) => JSON.parse(linha) as string[]),
     containers: () => lerContainers(dir),
     imagens: () => readdirSync(imagens).map((arquivo) => Buffer.from(arquivo, "hex").toString()),
+    dockerfileDaImagem: (imagem) => readFileSync(join(imagens, codificar(imagem)), "utf8"),
     semearContainer,
     mudarUso: (id, uso) => {
       const container = lerContainers(dir).find((candidato) => candidato.id === id);
@@ -256,7 +259,8 @@ function executarDockerFalso(): void {
     const { opcoes, resto } = tirarOpcoes(args, ["-t", "-f"]);
     const dockerfile = opcoes["-f"]?.[0] ?? join(resto[0] ?? "", "Dockerfile");
     if (!existsSync(dockerfile)) sair(1, `failed to read dockerfile: ${dockerfile}`);
-    writeFileSync(join(imagens, codificar(opcoes["-t"]?.[0] ?? "")), "");
+    // A imagem guarda o Dockerfile de que nasceu, para o teste conferir o que ela teria.
+    writeFileSync(join(imagens, codificar(opcoes["-t"]?.[0] ?? "")), readFileSync(dockerfile));
   } else if (comando === "pull") {
     writeFileSync(join(imagens, codificar(args[0] ?? "")), "");
   } else if (comando === "run" || comando === "create") {

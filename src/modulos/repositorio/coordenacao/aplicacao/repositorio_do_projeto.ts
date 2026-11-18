@@ -54,7 +54,10 @@ import { cicloDoEspaco } from "./ciclo_do_espaco.ts";
 type ProjetoDoEspaco = ProjetoDoRepositorio & { arquivos_de_dependencias?: readonly string[] };
 
 /** O Projeto como o Ambiente do Espaço o lê para alocar: o nome, o clone e, se houver, os arquivos de dependências. */
-type ProjetoDoAmbienteDoEspaco = Pick<ProjetoDoEspaco, "nome" | "raiz_git" | "arquivos_de_dependencias">;
+type ProjetoDoAmbienteDoEspaco = Pick<
+  ProjetoDoEspaco,
+  "nome" | "raiz_git" | "branch_base" | "arquivos_de_dependencias"
+>;
 
 /** O que o PR leva: título e corpo já no limite da hospedagem, os PRs já registrados e a marca que adota o perdido. */
 interface PedidoDePR {

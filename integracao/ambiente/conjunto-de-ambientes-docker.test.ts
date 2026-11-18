@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
+import { rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { instalarDockerQueCai } from "../../apoio-testes/falsos/docker_que_cai.ts";
 import { type GestaoDeAmbientes, montarGestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
@@ -17,6 +18,16 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";
 
+/** A branch de onde a imagem lê os arquivos de dependências. */
+const BRANCH_BASE = "main";
+
+/** Commita na `BRANCH_BASE` tudo o que está no repositório (criando-o na primeira vez): é dela que a imagem lê. */
+function commitarNaBranchBase(raizGit: string): void {
+  if (!existsSync(join(raizGit, ".git"))) rodarGit(raizGit, "init", "-q", "-b", BRANCH_BASE);
+  rodarGit(raizGit, "add", "-A");
+  rodarGit(raizGit, "commit", "-q", "-m", "dependências");
+}
+
 /** Um repositório com um `package.json` sem dependências e o lockfile que o `npm ci` exige: a imagem sai só com Node e Git. */
 function repositorioSemDependencias(pasta: string): string {
   const raizGit = mkdtempSync(join(pasta, "repo-"));
@@ -25,6 +36,7 @@ function repositorioSemDependencias(pasta: string): string {
     join(raizGit, "package-lock.json"),
     '{"name":"minimo","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"minimo","version":"1.0.0"}}}',
   );
+  commitarNaBranchBase(raizGit);
   return raizGit;
 }
 
@@ -76,6 +88,7 @@ test(
     const projeto = {
       nome: "projeto",
       raiz_git: repositorioSemDependencias(raiz),
+      branch_base: BRANCH_BASE,
       arquivos_de_dependencias: ["package.json"],
     };
     const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") });
@@ -141,6 +154,7 @@ test(
     const projeto = {
       nome: "projeto",
       raiz_git: repositorioSemDependencias(raiz),
+      branch_base: BRANCH_BASE,
       arquivos_de_dependencias: ["package.json"],
     };
     const alocado = await gestao.alocar(
@@ -173,6 +187,7 @@ function repositorioComDependencias(pasta: string, arquivos: Record<string, stri
   const raizGit = mkdtempSync(join(pasta, "repo-"));
   for (const [nome, conteudo] of Object.entries(arquivos)) writeFileSync(join(raizGit, nome), conteudo);
   if ("package.json" in arquivos) gerarPackageLock(raizGit);
+  commitarNaBranchBase(raizGit);
   return raizGit;
 }
 
@@ -219,7 +234,7 @@ async function gestaoEmContainerQueGeraImagens(nomeDoProjeto: string) {
   async function alocarEmContainer(dono: string, projeto: { raiz_git: string; arquivos_de_dependencias: string[] }) {
     const ambiente = await gestao.alocar(
       { dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", nomeDoProjeto) },
-      { nome: nomeDoProjeto, ...projeto },
+      { nome: nomeDoProjeto, branch_base: BRANCH_BASE, ...projeto },
     );
     assert.ok(ambiente instanceof AmbienteContainer);
     containersCriados.push(ambiente.container_id);
@@ -292,6 +307,7 @@ test(
       '{"name":"reuso","version":"1.0.0","dependencies":{"left-pad":"1.3.0","is-odd":"3.0.1"}}',
     );
     gerarPackageLock(raizGit);
+    commitarNaBranchBase(raizGit);
     const terceiro = await alocarEmContainer("espaco-3", projeto);
     assert.notEqual(imagemDoContainer(terceiro), imagemDoPrimeiro);
     assert.equal(imagensDoProjeto(nomeDoProjeto).length, 2);
@@ -342,6 +358,7 @@ test(
     const projeto = {
       nome: "projeto",
       raiz_git: repositorioSemDependencias(raiz),
+      branch_base: BRANCH_BASE,
       arquivos_de_dependencias: ["package.json"],
     };
     const ocupante = { dono: "espaco-1", pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") };

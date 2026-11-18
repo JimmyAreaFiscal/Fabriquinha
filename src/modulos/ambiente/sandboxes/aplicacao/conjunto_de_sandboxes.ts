@@ -65,6 +65,8 @@ export interface OcupanteDoAmbiente {
 export interface ProjetoDoAmbiente {
   nome: string;
   raiz_git: string;
+  /** A branch de onde a imagem lê os arquivos de dependências. */
+  branch_base: string;
   arquivos_de_dependencias?: readonly string[];
 }
 

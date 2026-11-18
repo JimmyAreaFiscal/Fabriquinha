@@ -3,7 +3,7 @@
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -16,7 +16,7 @@ import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { gravarAgregadoPronto } from "../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { falhaPorServicoReiniciado, type ResultadoDaTentativa, Endereco } from "../../etapas/publico.ts";
 import { configuracao } from "../armazenamento/configuracao_do_servico.ts";
-import { criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { commitarArquivo, criarRepositorioDeTeste } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { conferirPromptComFoto } from "../../conducao/aplicacao/prompt/fotos_retorno/conferir_foto.ts";
 import {
@@ -344,9 +344,9 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
 
 test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
   const { c, banco, config } = await cenario(3);
-  writeFileSync(join(c.repo, "package.json"), "{}");
-  writeFileSync(join(c.repo, "package-lock.json"), "{}");
-  // O gerador lê o arquivo de dependências no repositório do projeto, que neste cenário não existe.
+  commitarArquivo(c.repo, "package.json", "{}");
+  commitarArquivo(c.repo, "package-lock.json", "{}");
+  // O gerador lê o arquivo de dependências da branch base do repositório do projeto, que neste cenário não existe.
   banco
     .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")
     .run(c.repo);
