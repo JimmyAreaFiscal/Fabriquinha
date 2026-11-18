@@ -121,3 +121,11 @@ export function listarAmbientes(banco: DatabaseSync): AmbienteGravado[] {
     .all()
     .map((linha) => ({ ...linha }) as unknown as AmbienteGravado);
 }
+
+/**
+ * O nome desta instância da Fabriquinha (`fab-3f9a`), gerado pela migração na primeira subida sobre o banco.
+ * @testes o conjunto de sandboxes a usa nos tickets seguintes da demanda I-317; hoje só o teste
+ */
+export function lerNomeDaInstancia(banco: DatabaseSync): string {
+  return (banco.prepare("SELECT nome FROM instancia_da_fabriquinha").get() as { nome: string }).nome;
+}
