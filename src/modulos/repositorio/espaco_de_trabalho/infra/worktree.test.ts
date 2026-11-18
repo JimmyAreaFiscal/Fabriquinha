@@ -132,6 +132,19 @@ test("com as dependências no Ambiente e o mesmo lockfile a instalação é pula
   assert.equal(readFileSync(join(c.worktree, "node_modules", "pacote.txt"), "utf8"), "ok");
 });
 
+test("com .gitignore `node_modules/` o symlink continua fora do status e do git add -A, sem duplicar o exclude", async () => {
+  const c = cenario();
+  commitar(c.worktree, ".gitignore", "node_modules/\n");
+  const comDependencias = dependenciasDaImagem(c.worktree, "lock-da-imagem");
+  await preparar(comDependencias, c.worktree, { instalacao: [], preparacao: [] }, c.log);
+  await preparar(comDependencias, c.worktree, { instalacao: [], preparacao: [] }, c.log);
+  assert.equal(git(c.worktree, "status", "--porcelain", "--untracked-files=all"), "");
+  git(c.worktree, "add", "-A");
+  assert.equal(git(c.worktree, "ls-files", "node_modules"), "");
+  const exclude = readFileSync(join(git(c.worktree, "rev-parse", "--git-common-dir"), "info", "exclude"), "utf8");
+  assert.equal(exclude.split("\n").filter((linha) => linha === "/node_modules").length, 1);
+});
+
 test("com as dependências no Ambiente e lockfile diferente a instalação roda na worktree e nada é ligado à imagem", async () => {
   const c = cenario();
   const comDependencias = dependenciasDaImagem(c.worktree, "lock-da-demanda");
