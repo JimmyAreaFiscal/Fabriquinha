@@ -84,7 +84,7 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
 
 /**
  * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
- * Configuração lida do banco), o `auth.json` do pi que o container monta do host e o pi falso na imagem, que devolve com a
+ * Configuração lida do banco), a credencial do pi, que o container monta do host numa pasta só dela, e o pi falso na imagem, que devolve com a
  * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
  * container alcança; só o teste da rede põe um servidor nela.
  */

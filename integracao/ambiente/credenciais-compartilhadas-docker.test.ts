@@ -4,7 +4,16 @@
 // Pulado sem `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e baixa a imagem na primeira vez.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { setImmediate as proximoCicloDoNode } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -53,6 +62,11 @@ const CREDENCIAIS = [
 ] as const;
 type Credencial = (typeof CREDENCIAIS)[number];
 
+// A configuração do pi do host que o container recebe por cópia; o token do GitHub (falso, montado aqui para o scanner de segredos não o ver) tem que sair dela.
+const TOKEN_DO_GITHUB = `ghp_${"a".repeat(36)}`;
+const SETTINGS_DO_PI_DO_HOST = `{"packages":[],"gh":"${TOKEN_DO_GITHUB}"}`;
+const EXTENSAO_DO_PI_DO_HOST = "export default () => {};";
+
 const CLAUDE = CREDENCIAIS[0];
 const PI = CREDENCIAIS[1];
 const CODEX = CREDENCIAIS[2];
@@ -74,7 +88,8 @@ async function prepararGestaoComCredenciais(t: TestContext) {
     [".claude/projects/p/sessao.jsonl", "{}"],
     [".claude/hooks/h.sh", "#!/bin/sh"],
     [".codex/config.toml", ""],
-    ["pi-do-auditor/settings.json", "{}"],
+    ["pi-do-auditor/settings.json", SETTINGS_DO_PI_DO_HOST],
+    ["pi-do-auditor/extensions/do-host.ts", EXTENSAO_DO_PI_DO_HOST],
   ];
   for (const [arquivo, conteudo] of configuracaoDoHost) {
     mkdirSync(dirname(join(raiz, arquivo)), { recursive: true });
@@ -248,6 +263,52 @@ test(
         "o container não monta a pasta do agente do pi: o pi do host executaria o que ele gravasse nela",
       );
     }
+  },
+);
+
+/** Lê `arquivo` da pasta do agente do pi no container, pelo `PI_CODING_AGENT_DIR` que `executar` dá ao agente. */
+async function lerDoAgenteDoPiNoContainer(ambiente: AmbienteContainer, arquivo: string): Promise<string> {
+  const { codigo, saida } = await noContainer(ambiente, `cat "$PI_CODING_AGENT_DIR/${arquivo}"`);
+  assert.equal(codigo, 0, saida);
+  return saida;
+}
+
+// I-314.R4, CA-4: o pi do host executa o que está na pasta do agente dele (extensions/, settings.json). O container monta só
+// a pasta da credencial, então o que o agente grava na pasta do agente do container fica nele, e a configuração do host
+// chega ao container por cópia.
+test(
+  "o container não grava no agente do pi do host: extensions/ e settings.json do container ficam nele, e a configuração do host chega por cópia, sem o token do GitHub",
+  COM_DOCKER,
+  async (t) => {
+    const { raiz, alocar } = await prepararGestaoComCredenciais(t);
+    const agenteDoPiNoHost = join(raiz, "pi-do-auditor");
+    const arquivosDoAgenteAntes = readdirSync(agenteDoPiNoHost).sort();
+    const ambiente = await alocar("espaco-1");
+
+    assert.equal(
+      await lerDoAgenteDoPiNoContainer(ambiente, "settings.json"),
+      SETTINGS_DO_PI_DO_HOST.replace(TOKEN_DO_GITHUB, "[token-do-github-removido]"),
+    );
+    assert.equal(await lerDoAgenteDoPiNoContainer(ambiente, "extensions/do-host.ts"), EXTENSAO_DO_PI_DO_HOST);
+    const symlink = await noContainer(ambiente, 'test -L "$PI_CODING_AGENT_DIR/auth.json"');
+    assert.equal(symlink.codigo, 0, "o auth.json do agente do pi no container é o symlink para a pasta montada");
+
+    const escrita = await noContainer(
+      ambiente,
+      `mkdir -p "$PI_CODING_AGENT_DIR/extensions" && printf 'do-container' > "$PI_CODING_AGENT_DIR/extensions/x.ts" && printf '{"do":"container"}' > "$PI_CODING_AGENT_DIR/settings.json"`,
+    );
+    assert.equal(escrita.codigo, 0, escrita.saida);
+    assert.equal(await lerDoAgenteDoPiNoContainer(ambiente, "extensions/x.ts"), "do-container");
+    assert.equal(await lerDoAgenteDoPiNoContainer(ambiente, "settings.json"), '{"do":"container"}');
+
+    assert.equal(existsSync(join(agenteDoPiNoHost, "extensions", "x.ts")), false);
+    assert.deepEqual(readdirSync(join(agenteDoPiNoHost, "extensions")), ["do-host.ts"]);
+    assert.equal(readFileSync(join(agenteDoPiNoHost, "settings.json"), "utf8"), SETTINGS_DO_PI_DO_HOST);
+    assert.deepEqual(readdirSync(agenteDoPiNoHost).sort(), arquivosDoAgenteAntes);
+    // Nem a pasta da credencial, que o container monta, recebe o que ele grava na pasta do agente.
+    assert.deepEqual(readdirSync(dirname(join(raiz, PI.noHost))), ["auth.json"]);
+    const naPastaMontada = await noContainer(ambiente, "ls -A /credenciais/pi");
+    assert.equal(naPastaMontada.saida.trim(), "auth.json");
   },
 );
 

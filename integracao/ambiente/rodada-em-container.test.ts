@@ -583,7 +583,7 @@ test(
     ambiente.abrigarProcesso(join(c.raiz, "execucoes", "E-propria"), "sessao-propria");
 
     const { codigo, saida } = await ambiente.executar({
-      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in "$PI_CODING_AGENT_DIR/auth.json" "$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json" "$HOME/.codex/auth.json"; do test -f "$a" && echo "tem-$a"; done; ls -A /credenciais/claude /credenciais/codex`,
+      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in "$PI_CODING_AGENT_DIR/auth.json" "$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json" "$HOME/.codex/auth.json"; do test -f "$a" && echo "tem-$a"; done; ls -A /credenciais/claude /credenciais/codex /credenciais/pi`,
       argumentos: [],
       cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
       env: {},
@@ -596,14 +596,17 @@ test(
     assert.doesNotMatch(saida, /de-outro-espaco/);
     assert.match(saida, /copia de \.claude/);
     assert.match(saida, /copia de \.codex/);
-    // A credencial de cada agente, no caminho em que ele a usa; a pasta montada só tem a credencial (sem CLAUDE.md nem config.toml).
+    // A credencial de cada agente, no caminho em que ele a usa; as pastas montadas só têm a credencial (sem CLAUDE.md, config.toml nem a configuração do pi).
     for (const credencial of [
       "/\\.pi/agent/auth\\.json",
       "/credenciais/claude/\\.credentials\\.json",
       "/\\.codex/auth\\.json",
     ])
       assert.match(saida, new RegExp(`tem-\\S*${credencial}`));
-    assert.match(saida, /\/credenciais\/claude:\n\.credentials\.json\n\n\/credenciais\/codex:\nauth\.json\n$/);
+    assert.match(
+      saida,
+      /\/credenciais\/claude:\n\.credentials\.json\n\n\/credenciais\/codex:\nauth\.json\n\n\/credenciais\/pi:\nauth\.json\n$/,
+    );
     // As montagens do container são exatamente estas, e nenhuma delas é o home, o ~/.pi ou a pasta inteira de sessões.
     const binds = (
       JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
