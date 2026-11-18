@@ -19,6 +19,7 @@ import { setImmediate as proximoCicloDoNode } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { test, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
+import { rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { montarGestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
 import { instalacaoDoPi, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
@@ -26,7 +27,22 @@ import { noLog } from "../../src/shared/infra/registro.ts";
 import { ConfiguracaoDoAmbiente } from "../../src/shared/nucleo/configuracao_do_ambiente.ts";
 import { raizCompartilhadaComODocker } from "../falsos.ts";
 
-const IMAGEM_MINIMA = "busybox:1";
+/** A branch de onde a imagem lê os arquivos de dependências. */
+const BRANCH_BASE = "main";
+
+/** Um repositório com um `package.json` sem dependências e o lockfile que o `npm ci` exige: a imagem sai só com Node e Git. */
+function repositorioSemDependencias(raizGit: string): void {
+  mkdirSync(raizGit);
+  writeFileSync(join(raizGit, "package.json"), '{"name":"minimo","version":"1.0.0"}');
+  writeFileSync(
+    join(raizGit, "package-lock.json"),
+    '{"name":"minimo","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"minimo","version":"1.0.0"}}}',
+  );
+  rodarGit(raizGit, "init", "-q", "-b", BRANCH_BASE);
+  rodarGit(raizGit, "add", "-A");
+  rodarGit(raizGit, "commit", "-q", "-m", "dependências");
+  rodarGit(raizGit, "update-ref", `refs/remotes/origin/${BRANCH_BASE}`, "HEAD");
+}
 
 const COM_DOCKER = {
   skip: process.env.FABRIQUINHA_TESTE_DOCKER
@@ -126,8 +142,13 @@ async function prepararGestaoComCredenciais(t: TestContext) {
     rmSync(raiz, { recursive: true, force: true });
     fechar();
   });
-  const projeto = { nome: "projeto", raiz_git: join(raiz, "repo"), imagem_do_ambiente: IMAGEM_MINIMA };
-  mkdirSync(projeto.raiz_git);
+  const projeto = {
+    nome: "projeto",
+    raiz_git: join(raiz, "repo"),
+    branch_base: BRANCH_BASE,
+    arquivos_de_dependencias: ["package.json"],
+  };
+  repositorioSemDependencias(projeto.raiz_git);
   const alocar = async (dono: string) => {
     const ambiente = await gestao.alocar(
       { dono, pasta_das_worktrees_do_projeto: join(raiz, "worktrees", "projeto") },

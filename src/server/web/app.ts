@@ -9,6 +9,7 @@ import { type Pagina, rotear } from "./caminhos.ts";
 import { definirEtapasDoSdlc } from "./apresentacao/etapas.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./apresentacao/render.ts";
+import { montarAmbientes } from "./telas/ambientes/ambientes-montar.ts";
 import { montarChat } from "./telas/chat/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao/configuracao-montar.ts";
 import { montarDemanda, montarDemandas } from "./telas/demandas/demandas-montar.ts";
@@ -35,6 +36,7 @@ const MONTAR: Record<Pagina, Montar> = {
   heatmap: montarHeatmap,
   metricas: montarMetricas,
   historico: montarHistorico,
+  ambientes: montarAmbientes,
   chat: montarChat,
   configuracao: montarConfiguracao,
   sdlc: montarSdlc,
@@ -134,7 +136,7 @@ caixa.addEventListener("click", (evento) => {
 });
 
 /** As páginas que se redesenham sozinhas (F7 §4.4). */
-const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "demandas", "projeto"]);
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "demandas", "projeto", "ambientes"]);
 
 /** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
 function atualizar(): void {

@@ -128,6 +128,47 @@ test("integrar da rodada integra o PR pela hospedagem e avança a demanda local 
   );
 });
 
+test("integrar avança a demanda mesmo quando o Ambiente ainda vê a ref remota de antes do fetch", async () => {
+  const { c, espacoDemanda, espacoRodada, daDemanda, daRodada } = cenario();
+  await daDemanda().criar();
+  const { pasta } = await daRodada().criar();
+  commitarArquivo(pasta, "a.txt", "a\n");
+  rodarGit(c.repo, "push", "-q", "origin", espacoDemanda.branch, espacoRodada.branch);
+  hospedagem.abrirPr({
+    head: espacoRodada.branch,
+    base: espacoDemanda.branch,
+    titulo: "t",
+    corpo: "c",
+    estado: "aberto",
+  });
+  // O container do Docker Desktop lê o `.git` do host pelo virtiofs, que guarda o arquivo da ref que o fetch do host
+  // trocou: dentro dele, a ref remota continua na ponta de antes do merge.
+  const refRemota = join(c.repo, ".git", "refs", "remotes", "origin", ...espacoDemanda.branch.split("/"));
+  const pontaAntesDoMerge = rodarGit(c.repo, "rev-parse", espacoDemanda.branch);
+  class AmbienteComARefRemotaEmCache extends AmbienteHostLocal {
+    override executar(comando: Parameters<AmbienteHostLocal["executar"]>[0]) {
+      writeFileSync(refRemota, `${pontaAntesDoMerge}\n`);
+      return super.executar(comando);
+    }
+  }
+  const ambienteComCache = new AmbienteComARefRemotaEmCache();
+  const espacoComPr = {
+    ...espacoRodada,
+    pr: { numero: 1, url: "https://github.com/org/loja/pull/1", head: "a", estado: "aberto" } as const,
+  };
+  await new CicloDoEspacoDaRodada(
+    espacoComPr,
+    c.projeto,
+    { raiz: c.raiz, log: c.log },
+    ambienteComCache,
+    gestaoQueSoUsa(ambienteComCache),
+  ).integrar();
+  assert.equal(
+    rodarGit(c.repo, "rev-parse", espacoDemanda.branch),
+    rodarGit(c.bare, "rev-parse", espacoDemanda.branch),
+  );
+});
+
 test("o ciclo da rodada recusa o Espaço sem PR e o que não é de rodada", async () => {
   const { c, espacoDemanda, daRodada } = cenario();
   await assert.rejects(daRodada().integrar(), /não tem PR publicado/);
@@ -223,12 +264,16 @@ async function cenarioComContainer() {
     await noHostLocal.parar();
   });
   const registro = { raiz: c.raiz, log: c.log };
-  const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };
+  // A imagem lê as dependências de origin/<branch_base>: o clone as commita e as publica.
+  commitarArquivo(c.projeto.raiz_git, "package.json", "{}");
+  commitarArquivo(c.projeto.raiz_git, "package-lock.json", "{}");
+  rodarGit(c.projeto.raiz_git, "push", "-q", "origin", c.projeto.branch_base);
+  const projeto = { ...c.projeto, arquivos_de_dependencias: ["package.json"] };
   return {
     c,
     docker,
     banco,
-    cicloDaDemanda: (projetoDoCiclo: typeof c.projeto & { imagem_do_ambiente?: string } = projeto) =>
+    cicloDaDemanda: (projetoDoCiclo: typeof c.projeto & { arquivos_de_dependencias?: string[] } = projeto) =>
       new CicloDoEspacoDaDemanda(espacoDemanda, projetoDoCiclo, registro, ambiente, emContainer),
     cicloDaDemandaNoHostLocal: () =>
       new CicloDoEspacoDaDemanda(espacoDemanda, projeto, registro, ambiente, noHostLocal),
@@ -294,4 +339,38 @@ test("sem conjunto (host local) ou sem imagem no Projeto o docker nunca é chama
   await hostLocal.limpar();
   assert.deepEqual(docker.registro().slice(chamadasDaSubida), []);
   assert.deepEqual(listarAmbientes(banco), []);
+});
+
+test("devolverAmbiente deixa o container livre sem ocupante, a worktree intacta, e uma nova alocação funciona", async () => {
+  const { banco, cicloDaDemanda } = await cenarioComContainer();
+  const { pasta } = await cicloDaDemanda().criar();
+  const ciclo = cicloDaDemanda();
+  await ciclo.devolverAmbiente();
+  const [devolvido] = listarAmbientes(banco);
+  assert.equal(devolvido?.estado, "livre");
+  assert.equal(devolvido.alocado_para, null);
+  assert.ok(existsSync(pasta));
+  assert.equal(ciclo.ambiente.id, "host_local"); // sem alocação, o ciclo volta ao Ambiente do serviço
+  await cicloDaDemanda().criar();
+  assert.equal(listarAmbientes(banco).length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.estado, "alocado");
+});
+
+test("devolver o Ambiente do Espaço da demanda não afeta o Ambiente da rodada em curso", async () => {
+  const { banco, cicloDaDemanda, cicloDaRodada } = await cenarioComContainer();
+  await cicloDaDemanda().criar();
+  await cicloDaRodada().criar();
+  await cicloDaDemanda().devolverAmbiente();
+  const porOcupante = new Map(listarAmbientes(banco).map((a) => [a.alocado_para, a.estado]));
+  assert.equal(porOcupante.get("I-1.R1"), "alocado");
+  assert.equal(porOcupante.get(null), "livre");
+});
+
+test("limpar aloca o Ambiente quando o Espaço devolveu o dele e o devolve de novo ao fim", async () => {
+  const { banco, cicloDaDemanda } = await cenarioComContainer();
+  await cicloDaDemanda().criar();
+  await cicloDaDemanda().devolverAmbiente();
+  await cicloDaDemanda().limpar();
+  assert.equal(listarAmbientes(banco).length, 1);
+  assert.equal(listarAmbientes(banco)[0]?.estado, "livre");
 });

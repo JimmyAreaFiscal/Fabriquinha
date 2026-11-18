@@ -7,7 +7,8 @@
 1. Leia a descrição do ticket {ticket} e veja quais arquivos conflitam.
 2. Incorpore a `branch_base` configurada do projeto na worktree da demanda.
 3. Resolva cada conflito preservando a intenção de ambos os lados e o que o plano e os critérios da demanda {demanda} pedem.
-4. Rode os testes e as verificações do projeto até passarem.
+4. Rode só os testes dos arquivos que o diff toca e dos módulos que os importam, mais a checagem de tipos, o lint e o formato inteiros, até passarem.
+   Não rode a suíte inteira com cobertura nem as fitness functions: a Fabriquinha roda depois de você. Se ela reprovar, corrija e rode de novo só o que falhou.
 
 **Entregas:** a worktree da demanda com os conflitos resolvidos e os testes passando.
 A Fabriquinha roda os testes, as fitness functions e o SonarQube depois de você; ela coleta o resultado e conclui o ticket, ou o devolve a você com o motivo.

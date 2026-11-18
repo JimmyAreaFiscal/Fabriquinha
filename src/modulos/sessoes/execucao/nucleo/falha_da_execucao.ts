@@ -2,10 +2,11 @@
 // significa para quem pediu a sessão (retomar, pedir o Auditor) é da política, que traduz esta falha para a dela.
 
 /** As causas técnicas que a execução reconhece, de quem não é culpa do agente. */
-type CausaDaFalhaDeInfraestrutura = "tempo_limite" | "cota" | "modelo_sem_resposta" | "servico_externo_inacessivel";
+type CausaDaFalhaDeInfraestrutura =
+  "tempo_limite" | "cota" | "modelo_sem_resposta" | "servico_externo_inacessivel" | "sandbox_caiu";
 
 export type FalhaDaExecucao =
-  /** O tempo, o provedor ou a rede falharam. */
+  /** O tempo, o provedor, a rede ou o sandbox falharam. */
   | { tipo: "falha_infraestrutura"; causa: CausaDaFalhaDeInfraestrutura; motivo: string }
   /** O processo morreu com o serviço: o reinício o interrompeu. */
   | { tipo: "servico_reiniciado" }

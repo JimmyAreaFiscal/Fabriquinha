@@ -61,11 +61,13 @@ export interface OcupanteDoAmbiente {
   pasta_das_worktrees_do_projeto: string;
 }
 
-/** O que o conjunto lê do Projeto: a imagem do Ambiente, e o clone de onde ela sai e o `.env` que o container recebe. */
+/** O que o conjunto lê do Projeto: os arquivos de dependências do Ambiente, e o clone de onde saem e o `.env` que o container recebe. */
 export interface ProjetoDoAmbiente {
   nome: string;
   raiz_git: string;
-  imagem_do_ambiente?: string;
+  /** A branch de onde a imagem lê os arquivos de dependências. */
+  branch_base: string;
+  arquivos_de_dependencias?: readonly string[];
 }
 
 /** Um container do conjunto como a lista o mostra: o gravado e, no Ambiente `container`, o uso medido agora pelo docker. */
@@ -83,6 +85,8 @@ export class ConjuntoDeSandboxes {
   readonly #servico: ServicoDoConjunto;
   /** Os containers que um `alocar` está criando e que o banco ainda não tem: ocupam vaga desde a decisão de criar. */
   #criacoesEmAndamento = 0;
+  /** Os slots desses containers: o banco ainda não os tem, mas já não estão livres para outro `alocar`. */
+  readonly #slotsEmCriacao = new Set<number>();
 
   constructor(
     banco: DatabaseSync,
@@ -104,11 +108,14 @@ export class ConjuntoDeSandboxes {
   }
 
   /**
-   * O conjunto vivo, do mais antigo ao mais novo, com o uso medido de cada container numa chamada só ao docker, no
-   * Ambiente `container`; no `host_local` o docker nunca é chamado. O docker que não responde só deixa o medido de fora.
+   * O conjunto vivo, na ordem dos slots (o sem slot por último, do mais antigo ao mais novo), com o uso medido de cada
+   * container numa chamada só ao docker, no Ambiente `container`; no `host_local` o docker nunca é chamado. O docker que
+   * não responde só deixa o medido de fora.
    */
   async listar(): Promise<SituacaoDoAmbiente[]> {
-    const gravados = listarAmbientes(this.#banco);
+    const gravados = listarAmbientes(this.#banco).sort(
+      (a, b) => (a.slot ?? Number.POSITIVE_INFINITY) - (b.slot ?? Number.POSITIVE_INFINITY),
+    );
     if (this.#configuracao().tipo === "host_local") return gravados;
     const medidos = await this.#gerador
       .medirUso(gravados.map(({ container_id }) => container_id))
@@ -122,7 +129,8 @@ export class ConjuntoDeSandboxes {
   /**
    * Dá ao ocupante um livre da mesma imagem ou, sem nenhum, um container novo; o que já tem um recebe o mesmo. Na
    * capacidade, o novo toma a vaga de um parado e, sem parado, lança `ErroExterno` de indisponibilidade: quem pede decide
-   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura).
+   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura). O container que parou, ou que foi religado
+   * fora da Fabriquinha e perdeu as regras de rede, nunca é entregue: é eliminado e o ocupante recebe outro.
    */
   async alocar(
     { dono: alocadoPara, pasta_das_worktrees_do_projeto }: OcupanteDoAmbiente,
@@ -130,11 +138,18 @@ export class ConjuntoDeSandboxes {
   ): Promise<AmbienteGravado> {
     const servico = this.#servico;
     const imagem = await this.#gerador.garantirImagem(projeto);
-    // Tudo daqui até o retorno é síncrono, então dois alocar ao mesmo tempo nunca pegam o mesmo livre.
+    // Pegar o livre é um UPDATE só, então dois alocar ao mesmo tempo nunca pegam o mesmo; a conferência vem depois.
     const jaAlocado = buscarAmbienteAlocadoPara(this.#banco, alocadoPara);
-    if (jaAlocado) return jaAlocado;
-    const livreReaproveitado = alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
-    if (livreReaproveitado) return livreReaproveitado;
+    if (jaAlocado) {
+      if (await this.#gerador.regrasDeRedeIntactas(jaAlocado)) return jaAlocado;
+      await this.#eliminarPerdido(jaAlocado); // parou ou foi religado sem as regras: o ocupante recebe um novo
+    }
+    // Cada livre é entregue só depois de conferido, porque o docker pode ter parado enquanto ele esperava.
+    const pegarLivre = () => alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
+    for (let livre = pegarLivre(); livre; livre = pegarLivre()) {
+      if (await this.#gerador.regrasDeRedeIntactas(livre)) return livre;
+      await this.#eliminarPerdido(livre);
+    }
     const montagens: Montagens = {
       pastaDasWorktreesDoProjeto: pasta_das_worktrees_do_projeto,
       raiz_git: projeto.raiz_git,
@@ -144,11 +159,16 @@ export class ConjuntoDeSandboxes {
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
+    let slot: number | undefined;
     try {
       if (paradoQueCedeAVaga) await this.#eliminarContainerReservado(paradoQueCedeAVaga);
-      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, montagens, copias);
+      // Lido depois do `rm` do parado, para o slot dele voltar a servir; do `await` à reserva não há outro.
+      const slotsTomadosNoDocker = await this.#gerador.listarSlotsTomadosNoDocker();
+      slot = this.#reservarMenorSlotLivre(slotsTomadosNoDocker);
+      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, slot, montagens, copias);
     } finally {
       this.#criacoesEmAndamento--;
+      if (slot !== undefined) this.#slotsEmCriacao.delete(slot);
     }
   }
 
@@ -173,6 +193,23 @@ export class ConjuntoDeSandboxes {
     }
     this.#criacoesEmAndamento++;
     return paradoQueCedeAVaga;
+  }
+
+  /**
+   * Reserva, sem `await`, o menor número >= 1 que nenhum container vivo do banco, em criação ou com o nome tomado no
+   * docker usa: o do eliminado volta a servir quando o `rm` o tira do docker. Contar o docker cobre o reservado para
+   * eliminar cujo `rm` não acabou ou falhou e o container de outra instância no mesmo daemon, que nunca é removido.
+   */
+  #reservarMenorSlotLivre(slotsTomadosNoDocker: ReadonlySet<number>): number {
+    const emUso = new Set<number | null>([
+      ...listarAmbientes(this.#banco).map(({ slot }) => slot),
+      ...this.#slotsEmCriacao,
+      ...slotsTomadosNoDocker,
+    ]);
+    let slot = 1;
+    while (emUso.has(slot)) slot++;
+    this.#slotsEmCriacao.add(slot);
+    return slot;
   }
 
   /** Limpa o container `id` alocado e o devolve ao conjunto: `livre` se a limpeza deu certo, `sujo` se não. O que não está alocado fica como está. */
@@ -226,10 +263,13 @@ export class ConjuntoDeSandboxes {
   }
 
   /**
-   * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado; linha
-   * do banco cujo container sumiu vira `eliminado`. O que não tem o rótulo nem aparece, porque a listagem só traz os da
-   * Fabriquinha. Todo container ainda `alocado` era de um ocupante da instância anterior, cujo processo morreu com o
-   * reinício: é limpo e volta `livre` (`sujo` se a limpeza falhar).
+   * Confere o banco com o docker na subida: container com o rótulo que o banco não conhece é órfão e é eliminado, o que
+   * libera o nome `fabriquinha-slot-<n>` que uma subida anterior deixou; linha do banco cujo container sumiu vira
+   * `eliminado`. O que parou está perdido (religado, ficaria sem as regras de rede) e o sem slot (de antes do slot
+   * existir) também: as sessões e execuções do ocupante vão para o Espaço e o container é eliminado. O que não tem o
+   * rótulo nem aparece, porque a listagem só traz os da Fabriquinha. Todo container ainda `alocado` e rodando era de um
+   * ocupante da instância anterior, cujo processo morreu com o reinício: é limpo e volta `livre` (`sujo` se a limpeza
+   * falhar).
    * ponytail: um `alocar` que chegue durante esta espera pode ter o container recém-alocado limpo; a subida é curta e o
    * agendador só liga depois dela.
    */
@@ -238,14 +278,17 @@ export class ConjuntoDeSandboxes {
     const noBanco = listarAmbientes(this.#banco);
     const containersDoBanco = new Set(noBanco.map(({ container_id }) => container_id));
     const containersDoDocker = new Set(noDocker.map(({ container_id }) => container_id));
+    const containersParados = new Set(
+      noDocker.filter(({ rodando }) => !rodando).map(({ container_id }) => container_id),
+    );
     for (const orfao of noDocker.filter(({ container_id }) => !containersDoBanco.has(container_id)))
       await this.#gerador.eliminar(orfao);
-    for (const sumido of noBanco.filter(({ container_id }) => !containersDoDocker.has(container_id)))
-      eliminarAmbiente(this.#banco, sumido.id);
-    for (const alocado of noBanco.filter(
-      ({ estado, container_id }) => estado === "alocado" && containersDoDocker.has(container_id),
-    ))
-      await this.#limparEDevolver(alocado);
+    for (const ambiente of noBanco) {
+      if (!containersDoDocker.has(ambiente.container_id)) eliminarAmbiente(this.#banco, ambiente.id);
+      else if (containersParados.has(ambiente.container_id) || ambiente.slot === null)
+        await this.#eliminarPerdido(ambiente);
+      else if (ambiente.estado === "alocado") await this.#limparEDevolver(ambiente);
+    }
   }
 
   /** O que o conjunto sabe do serviço: a raiz, a porta da API e o harness que o `AmbienteContainer` usa. */
@@ -257,10 +300,11 @@ export class ConjuntoDeSandboxes {
     imagem: string,
     alocadoPara: string,
     portaDaApi: number,
+    slot: number,
     montagens: Montagens,
     copias: Copias,
   ): Promise<AmbienteGravado> {
-    const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, montagens, copias);
+    const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, slot, montagens, copias);
     const alocado: AmbienteGravado = {
       ...criado,
       imagem,
@@ -276,6 +320,13 @@ export class ConjuntoDeSandboxes {
       throw erro;
     }
     return alocado;
+  }
+
+  /** Elimina o container que parou ou perdeu as regras de rede, depois de recolher para o Espaço o que o ocupante pôs nele. */
+  async #eliminarPerdido(perdido: AmbienteGravado): Promise<void> {
+    if (perdido.estado === "alocado") recolherParaOEspaco(this.#servico.raiz, perdido.id, String(perdido.alocado_para));
+    eliminarAmbiente(this.#banco, perdido.id);
+    await this.#gerador.eliminar(perdido);
   }
 
   // A linha já está `eliminado` (reservada). Se o docker falhar aqui, o container fica órfão com o rótulo e a

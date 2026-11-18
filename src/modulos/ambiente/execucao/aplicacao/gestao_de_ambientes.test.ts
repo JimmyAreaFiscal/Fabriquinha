@@ -5,13 +5,13 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { setImmediate } from "node:timers/promises";
+import { setImmediate, setTimeout } from "node:timers/promises";
 import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
-import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
-import { espacoDaRodada, ocupanteDoAmbiente } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { espacoDaRodada, ocupanteDoAmbiente, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { Projeto } from "../../../demandas/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
@@ -31,16 +31,24 @@ after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const projetoComImagem = (imagem_do_ambiente?: string) =>
+writeFileSync(join(base, "package.json"), "{}");
+writeFileSync(join(base, "package-lock.json"), "{}");
+writeFileSync(join(base, "requirements.txt"), "requests\n");
+// A imagem lê as dependências de origin/main: o clone de teste as commita e as publica nessa ref.
+rodarGit(base, "init", "-q", "-b", "main");
+rodarGit(base, "add", "package.json", "package-lock.json", "requirements.txt");
+rodarGit(base, "commit", "-q", "-m", "dependências");
+rodarGit(base, "update-ref", "refs/remotes/origin/main", "HEAD");
+const projetoComDependencias = (arquivo?: string) =>
   Projeto.parse({
     nome: "loja",
     raiz_git: base,
     branch_base: "main",
     hospedagem: "github",
     chave_sonarqube: "Loja",
-    ...(imagem_do_ambiente && { imagem_do_ambiente }),
+    ...(arquivo && { arquivos_de_dependencias: [arquivo] }),
   });
-const projeto = projetoComImagem("alpine");
+const projeto = projetoComDependencias("package.json");
 /** O Espaço como o conjunto o vê. */
 const noConjunto = (espaco: EspacoDeTrabalho) => ocupanteDoAmbiente(espaco, base, projeto.nome);
 const espacoA = noConjunto(espacoDaDemanda(projeto, "I-1", base));
@@ -59,6 +67,12 @@ const LIMITES = { tipo: "container", memoria_maxima_mb: 768, cpus: 1.5, ociosida
 function comoContainer(ambiente: unknown): AmbienteContainer {
   assert.ok(ambiente instanceof AmbienteContainer);
   return ambiente;
+}
+
+/** Espera a manutenção que o relógio do conjunto disparou, que roda o docker (falso) de verdade e que o teste não tem como aguardar. */
+async function esperarAManutencaoDoConjunto(manutencaoConcluida: () => boolean): Promise<void> {
+  for (let tentativa = 0; !manutencaoConcluida() && tentativa < 200; tentativa++) await setTimeout(25);
+  assert.ok(manutencaoConcluida());
 }
 
 let cenarios = 0;
@@ -108,7 +122,7 @@ test("alocar sem livre cria o container com os limites da configuração e grava
   const [gravado] = listarAmbientes(banco);
   assert.equal(gravado?.estado, "alocado");
   assert.equal(gravado.alocado_para, "I-1");
-  assert.equal(gravado.imagem, "alpine");
+  assert.match(gravado.imagem, /^fabriquinha\/loja:[0-9a-f]{64}$/);
   assert.equal(ambiente.id, gravado.id);
   const [container] = docker.containers();
   assert.equal(container?.id, ambiente.container_id);
@@ -201,9 +215,9 @@ test("alocar e limpar gravam o instante do relógio recebido", async () => {
   assert.equal(listarAmbientes(banco)[0]?.liberado_em, "2026-01-02T03:04:05.000Z");
 });
 
-test("no host_local, ou para o projeto sem imagem do Ambiente, alocar devolve o Ambiente do serviço sem tocar o docker", async () => {
+test("no host_local, ou para o projeto sem arquivos de dependências, alocar devolve o Ambiente do serviço sem tocar o docker", async () => {
   const { gestao, configuracao, chamadasDepoisDaMontagem } = await cenario();
-  const doServico = await gestao.alocar(espacoA, projetoComImagem());
+  const doServico = await gestao.alocar(espacoA, projetoComDependencias());
   assert.ok(doServico instanceof AmbienteHostLocal);
   configuracao.atual = { ...configuracao.atual, tipo: "host_local" };
   assert.equal(await gestao.alocar(espacoA, projeto), doServico);
@@ -284,16 +298,11 @@ test("no host_local, deletar ainda elimina o container que sobrou do tipo contai
 
 test("o livre de outra imagem não é reusado", async () => {
   const { banco, gestao, alocar, criacoes } = await cenario();
-  const daAlpine = await alocar();
-  await gestao.limpar(daAlpine.id);
-  const daBusybox = await alocar(espacoB, projetoComImagem("busybox"));
-  assert.notEqual(daBusybox.container_id, daAlpine.container_id);
-  assert.deepEqual(
-    listarAmbientes(banco)
-      .map(({ imagem }) => imagem)
-      .sort(),
-    ["alpine", "busybox"],
-  );
+  const doNode = await alocar();
+  await gestao.limpar(doNode.id);
+  const doPython = await alocar(espacoB, projetoComDependencias("requirements.txt"));
+  assert.notEqual(doPython.container_id, doNode.container_id);
+  assert.equal(new Set(listarAmbientes(banco).map(({ imagem }) => imagem)).size, 2);
   assert.equal(criacoes().length, 2);
 });
 
@@ -466,18 +475,105 @@ test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu 
     );
 });
 
-test("na subida do host_local o docker nunca é chamado; com o docker fora do ar, a falha vai para o registro e a gestão sobe", async () => {
+test("na subida do host_local o docker nunca é chamado", async () => {
   const { docker, banco, alocar } = await cenario();
   await alocar();
   const chamadasAntes = docker.registro().length;
   await subirDeNovo(banco, "host_local");
   assert.equal(docker.registro().length, chamadasAntes);
+});
 
-  docker.falharComando("ps", "Cannot connect to the Docker daemon");
-  const { gestao, erros } = await subirDeNovo(banco);
+test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele responde, a manutenção periódica confere o conjunto e libera a alocação", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { docker, banco, alocar } = await cenario();
+  const ambiente = await alocar();
+  docker.pararDocker();
+  const erros: unknown[] = [];
+  const gestao = await montarGestaoDeAmbientes({
+    banco,
+    configuracao: () => ConfiguracaoDoAmbiente.parse(LIMITES),
+    servico: SERVICO,
+    registrarErro: (erro) => erros.push(erro),
+  });
+  after(() => gestao.parar());
   assert.match(String(erros), /Cannot connect to the Docker daemon/);
-  assert.equal(listarAmbientes(banco)[0]?.estado, "alocado", "a conferência fica para a próxima subida");
+  assert.equal(listarAmbientes(banco)[0]?.estado, "alocado", "sem o docker, nada é conferido");
+  await assert.rejects(gestao.alocar(espacoB, projeto), (erro) => erro instanceof ErroExterno);
   assert.ok(gestao.ambienteDo("I-1") instanceof AmbienteContainer);
+
+  t.mock.timers.tick(60_000); // a manutenção periódica tenta e o docker continua fora
+  await esperarAManutencaoDoConjunto(() => erros.length === 2);
+  assert.equal(listarAmbientes(banco)[0]?.estado, "alocado");
+
+  docker.religarDocker();
+  t.mock.timers.tick(60_000);
+  await esperarAManutencaoDoConjunto(() => listarAmbientes(banco)[0]?.estado === "livre");
+  assert.equal(listarAmbientes(banco)[0]?.estado, "livre", "o docker respondeu: a conferência rodou sozinha");
+  assert.equal(comoContainer(await gestao.alocar(espacoB, projeto)).container_id, ambiente.container_id);
+
+  const chamadasAntes = docker.registro().length;
+  t.mock.timers.tick(60_000);
+  await gestao.parar();
+  assert.equal(
+    docker
+      .registro()
+      .slice(chamadasAntes)
+      .some(([comando]) => comando === "ps"),
+    false,
+    "conferido, a manutenção periódica só elimina ociosos",
+  );
+});
+
+test("na subida o container parado é eliminado: as sessões do ocupante vão para o Espaço e ele recebe um container novo", async () => {
+  const { docker, banco, gestao: gestaoDaAlocacao, alocar } = await cenario();
+  const ambiente = await alocar();
+  mkdirSync(join(base, "sessoes", "s-601"), { recursive: true });
+  ambiente.abrigarProcesso(join(base, "execucoes", "E-601"), "s-601");
+  writeFileSync(join(base, "sessoes", "s-601", "2026_s-601.jsonl"), "do espaço A\n");
+  const livre = await alocar(espacoB);
+  await gestaoDaAlocacao.limpar(livre.id);
+  docker.pararContainer(ambiente.container_id);
+  docker.pararContainer(livre.container_id);
+
+  const { gestao } = await subirDeNovo(banco);
+
+  assert.deepEqual(listarAmbientes(banco), [], "os dois parados saíram do inventário");
+  assert.deepEqual(docker.containers(), []);
+  assert.equal(readlinkSync(join(base, "sessoes", "s-601")), join(base, "espacos", "I-1", "sessoes", "s-601"));
+  assert.equal(readFileSync(join(base, "sessoes", "s-601", "2026_s-601.jsonl"), "utf8"), "do espaço A\n");
+  const novo = comoContainer(await gestao.alocar(espacoA, projeto));
+  assert.notEqual(novo.container_id, ambiente.container_id);
+});
+
+test("o container parado e religado fora da Fabriquinha não é entregue: o ocupante recebe um novo, com as regras de rede", async () => {
+  const { docker, banco, gestao, alocar } = await cenario();
+  const livreReligado = await alocar();
+  const alocadoReligado = await alocar(espacoB);
+  const outroLivre = await alocar({ ...espacoB, dono: "I-9" });
+  await gestao.limpar(livreReligado.id);
+  await gestao.limpar(outroLivre.id);
+  for (const { container_id } of [livreReligado, alocadoReligado]) {
+    docker.pararContainer(container_id);
+    docker.religarContainer(container_id);
+  }
+  docker.pararContainer(outroLivre.container_id);
+
+  const novoDoOcupante = await alocar(espacoB);
+  assert.notEqual(novoDoOcupante.container_id, alocadoReligado.container_id, "o alocado religado é trocado");
+  const novoDoOutro = await alocar({ ...espacoA, dono: "I-8" });
+  for (const antigo of [livreReligado, alocadoReligado, outroLivre])
+    assert.notEqual(novoDoOutro.container_id, antigo.container_id);
+  assert.deepEqual(
+    docker
+      .containers()
+      .map(({ id }) => id)
+      .sort(),
+    [novoDoOcupante.container_id, novoDoOutro.container_id].sort(),
+    "os que perderam as regras foram eliminados",
+  );
+  assert.equal(listarAmbientes(banco).length, 2);
+  const regrasAplicadas = docker.registro().filter(([comando, opcao]) => comando === "run" && opcao === "--rm");
+  assert.equal(regrasAplicadas.length, 5, "cada container novo recebe as regras: os 3 primeiros e os 2 novos");
 });
 
 test("alocar devolve o Ambiente do container, que roda com a API do host e o pi próprio, e ambienteDo o reencontra", async () => {

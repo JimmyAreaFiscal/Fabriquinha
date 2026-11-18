@@ -31,6 +31,7 @@ import { logDaOperacao } from "../../../../../shared/infra/registro.ts";
 import { ConferenciaDoPR, montarVerificacoesDaEtapa } from "../../../verificacoes/publico.ts";
 import { montarArvorePRs, montarDemonstracaoLimpeza } from "./encerramento_demanda.ts";
 import { publicarPRFinal } from "./publicacao_do_pr_final.ts";
+import { devolverAmbienteDoEspaco } from "../devolucao_do_ambiente.ts";
 import {
   ConducaoDeterministica,
   type DepsDaConducao,
@@ -138,7 +139,11 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
         conferencia_do_pr: () =>
           new ConferenciaDoPR(this.deps.repositorio, projeto, publicado.id, log, this.opcoes.verificacao),
       });
-      const problemas = await conferenciaDoPR.conferir();
+      // O PR que o humano já integrou (o check_final volta a rodar depois de o ticket falhar) não tem conflito a decidir,
+      // e o GitHub devolve `mergeable: UNKNOWN` dele para sempre: a conferência esperaria até o limite. A integração o lê.
+      const prJaIntegrado =
+        (await this.deps.repositorio.situacaoDoPR(projeto, publicado.id, relogio)).estado === "mergeado";
+      const problemas = prJaIntegrado ? { conflito: false, checksFalhos: [] } : await conferenciaDoPR.conferir();
       if (problemas.conflito) {
         registrarConflitoDoEncerramento(banco, demanda_id, { demanda_id }, FABRIQUINHA, relogio);
         return "parar";
@@ -157,6 +162,8 @@ export class ConducaoDeEncerrarDemanda extends ConducaoDeterministica {
       return "parar";
     }
 
+    // Daqui até o merge só o humano age: a demanda não segura sandbox, e a limpeza aloca de novo.
+    await devolverAmbienteDoEspaco(this.deps, { demanda_id });
     solicitarIntegracaoFinal(banco, demanda_id, { demanda_id }, FABRIQUINHA, relogio);
     return "seguir";
   }

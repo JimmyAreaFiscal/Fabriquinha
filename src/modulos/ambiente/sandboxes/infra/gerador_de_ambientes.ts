@@ -8,6 +8,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -15,13 +16,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, posix } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type InstalacaoDoHarness,
   PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
 } from "../../../../shared/infra/isolamento_do_ambiente.ts";
-import { executar } from "../../../../shared/infra/processo.ts";
+import { executar, git } from "../../../../shared/infra/processo.ts";
 import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import {
   DOCKERFILE_DAS_REGRAS_DE_REDE,
@@ -32,8 +33,18 @@ import {
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
+/** O começo do nome no docker do container do slot `n`: `fabriquinha-slot-<n>`. */
+const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
+/** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
+const TAMANHO_DO_SHM = "1g";
 const PASTA_DE_TRABALHO = "/trabalho";
+/**
+ * Onde o container tem o tmpfs que guarda o marcador das regras de rede: o docker esvazia o tmpfs quando o container
+ * para, e as regras (no namespace de rede) se perdem junto, então o marcador ausente diz que o container não as tem.
+ */
+const PASTA_DO_MARCADOR_DAS_REGRAS = "/run/fabriquinha";
+const MARCADOR_DAS_REGRAS_DE_REDE = `${PASTA_DO_MARCADOR_DAS_REGRAS}/regras-de-rede`;
 /** Cada comando do docker, menos build e pull, que baixam imagem e levam o limite dos comandos configurados. */
 const LIMITE_DO_DOCKER_MS = 2 * 60_000;
 /** A medição do uso, que a tela de Configuração espera: o docker travado só deixa o medido de fora, sem segurar a tela. */
@@ -44,7 +55,7 @@ export const DIR_DO_PI_NO_HOME = ".pi/agent";
 /** O token do GitHub, que sai das cópias para o container e do `.env` do projeto que o container recebe. */
 export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
 
-/** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile>` ou o nome da imagem do projeto. */
+/** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile gerado e dos arquivos de dependências>`. */
 type ImagemDoAmbiente = string;
 
 interface Limites {
@@ -116,11 +127,126 @@ interface ContainerCriado {
   container_id: string;
 }
 
-/** O projeto que tem imagem: `imagem_do_ambiente` é o caminho de um Dockerfile no repositório ou o nome de uma imagem. */
-interface ProjetoComImagem {
+/** Um container da Fabriquinha como o `docker ps` o lista. */
+interface ContainerListado extends ContainerCriado {
+  /** `false` para o que parou (ou nunca subiu). */
+  rodando: boolean;
+}
+
+/** O container que `criar` devolve: o slot que nomeou `fabriquinha-slot-<n>` no docker. */
+interface ContainerCriadoNoSlot extends ContainerCriado {
+  slot: number;
+}
+
+/**
+ * O projeto que tem Ambiente em container: `arquivos_de_dependencias` são caminhos relativos à `raiz_git`, lidos da
+ * `origin/<branch_base>` do clone, a mesma ref de onde nascem as worktrees, nunca da branch local nem da cópia de trabalho.
+ */
+interface ProjetoComDependencias {
   nome: string;
   raiz_git: string;
-  imagem_do_ambiente: string;
+  branch_base: string;
+  arquivos_de_dependencias: readonly string[];
+}
+
+const REQUIREMENTS = "requirements.txt";
+const PACKAGE_JSON = "package.json";
+const PACKAGE_LOCK = "package-lock.json";
+/**
+ * O fim de toda camada que roda como root: o que o root deixa no `/tmp` o `node` não apaga, e a limpeza do sandbox
+ * falha; os caches do apt, do npm e do pip só pesam na imagem.
+ */
+const LIMPEZA_DA_CAMADA_DE_ROOT = "rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache /tmp/*";
+
+// shortcut: base única Node com Git (o harness precisa de Node) e o Python do Debian; separar a base por ecossistema
+// quando a versão do Python importar.
+/**
+ * O Dockerfile do Ambiente: Git, o procps (o `ps` e o `pkill` que os testes usam), o Python com pip e venv (os agentes
+ * rodam código Python em qualquer projeto), o fuso do host, o usuário não-root e as dependências já instaladas em
+ * `/dependencias`; com o Playwright no `package.json`, também o Chromium dele.
+ */
+function dockerfileDasDependencias(nomesDosArquivosDeDependencias: readonly string[]): string {
+  const comRequirements = nomesDosArquivosDeDependencias.includes(REQUIREMENTS);
+  const comPackageJson = nomesDosArquivosDeDependencias.includes(PACKAGE_JSON);
+  return [
+    "FROM node:22-bookworm-slim",
+    "RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates procps python3 python3-pip python3-venv \\",
+    "    && git config --system --add safe.directory '*' \\",
+    '    && git config --system user.name "Fabriquinha" \\',
+    '    && git config --system user.email "fabriquinha@exemplo.com" \\',
+    "    && mkdir -p /fabriquinha/pids /dependencias \\",
+    "    && chown node:node /fabriquinha/pids \\",
+    `    && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+    "WORKDIR /dependencias",
+    ...(comRequirements
+      ? [
+          `COPY ${REQUIREMENTS} ./`,
+          `RUN pip install --no-cache-dir --break-system-packages -r ${REQUIREMENTS} && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+        ]
+      : []),
+    ...(comPackageJson
+      ? [
+          `COPY ${PACKAGE_JSON} ${PACKAGE_LOCK} ./`,
+          `RUN npm ci && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+          "ENV NODE_PATH=/dependencias/node_modules PATH=/dependencias/node_modules/.bin:$PATH",
+          // O navegador do Playwright e as bibliotecas de sistema dele, na versão do package.json, numa pasta que o node lê.
+          "ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+          "RUN if [ -x node_modules/.bin/playwright ]; then node_modules/.bin/playwright install --with-deps chromium \\",
+          `    && chmod -R a+rX /ms-playwright; fi && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+        ]
+      : []),
+    // O fuso do host: sem ele, os testes de data e hora falham no container.
+    "ENV TZ=America/Sao_Paulo",
+    "USER node",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Grava em `destino` o `caminho` como ele está em `refs/remotes/origin/<branch_base>`, a ref de onde as worktrees nascem:
+ * a imagem nunca diverge da worktree, com a branch local atrás ou à frente. Ausente lá, explica.
+ */
+async function copiarDaBranchBase(projeto: ProjetoComDependencias, caminho: string, destino: string): Promise<void> {
+  const refDaBranchBase = `refs/remotes/origin/${projeto.branch_base}`;
+  const { codigo, saida, erro } = await git(projeto.raiz_git, "show", `${refDaBranchBase}:${caminho}`);
+  if (codigo !== 0)
+    throw new ErroDeRegra(
+      `o arquivo de dependências ${caminho} não existe em origin/${projeto.branch_base} (${erro.trim()})`,
+      `confira o caminho na Configuração do projeto e se ele está publicado na ${projeto.branch_base} do origin`,
+    );
+  writeFileSync(destino, saida);
+}
+
+/**
+ * Copia da `branch_base` os arquivos de dependências (e o `package-lock.json`, que o `npm ci` exige) para `contexto` e
+ * devolve os nomes deles.
+ */
+async function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, contexto: string): Promise<string[]> {
+  const nomesDosArquivosDeDependencias = projeto.arquivos_de_dependencias.map((caminho) => posix.basename(caminho));
+  const nomeNaoSuportado = nomesDosArquivosDeDependencias.find(
+    (nome) => nome !== REQUIREMENTS && nome !== PACKAGE_JSON,
+  );
+  if (
+    nomeNaoSuportado !== undefined ||
+    new Set(nomesDosArquivosDeDependencias).size !== nomesDosArquivosDeDependencias.length
+  )
+    throw new ErroDeRegra(
+      `arquivos de dependências não suportados: ${nomesDosArquivosDeDependencias.join(", ")}`,
+      `aponte no máximo um ${REQUIREMENTS} e um ${PACKAGE_JSON}`,
+    );
+  for (const caminho of projeto.arquivos_de_dependencias) {
+    const nomeDoArquivo = posix.basename(caminho);
+    await copiarDaBranchBase(projeto, caminho, join(contexto, nomeDoArquivo));
+    if (nomeDoArquivo !== PACKAGE_JSON) continue;
+    const caminhoDoLockfile = posix.join(posix.dirname(caminho), PACKAGE_LOCK);
+    await copiarDaBranchBase(projeto, caminhoDoLockfile, join(contexto, PACKAGE_LOCK)).catch(() => {
+      throw new ErroDeRegra(
+        `o ${PACKAGE_JSON} ${caminho} não tem ${PACKAGE_LOCK} ao lado em origin/${projeto.branch_base}, e o npm ci precisa dele`,
+        `gere o ${PACKAGE_LOCK} com npm install e o versione`,
+      );
+    });
+  }
+  return nomesDosArquivosDeDependencias;
 }
 
 async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
@@ -418,24 +544,46 @@ async function garantirImagemDasRegrasDeRede(limiteMs: number): Promise<void> {
 
 export class GeradorDeAmbientes {
   readonly #limiteDoComandoMs: number;
+  /**
+   * O build em andamento de cada imagem: os tickets que pedem a mesma imagem ao mesmo tempo (vários retomados depois de
+   * um deploy) esperam o mesmo build, porque dois `docker build` da mesma tag disputam o nome e um falha com "already
+   * exists". ponytail: só coordena dentro desta instância; outra Fabriquinha no mesmo Docker ainda pode disputar.
+   */
+  readonly #buildsEmAndamentoPorImagem = new Map<ImagemDoAmbiente, Promise<string>>();
 
   /** `limiteDoComandoMs` vale para os comandos rápidos; só o teste o troca. */
   constructor(limiteDoComandoMs = LIMITE_DO_DOCKER_MS) {
     this.#limiteDoComandoMs = limiteDoComandoMs;
   }
 
-  /** Faz o build do Dockerfile ou o pull da imagem, se ela ainda não está na máquina. */
-  async garantirImagem(projeto: ProjetoComImagem): Promise<ImagemDoAmbiente> {
-    const dockerfile = join(projeto.raiz_git, projeto.imagem_do_ambiente);
-    const ehDockerfile = existsSync(dockerfile);
-    const imagem = ehDockerfile
-      ? `fabriquinha/${projeto.nome}:${createHash("sha256").update(readFileSync(dockerfile)).digest("hex")}`
-      : projeto.imagem_do_ambiente;
-    const { codigo } = await executar("docker", ["image", "inspect", imagem], { limiteMs: this.#limiteDoComandoMs });
-    if (codigo !== 0 && ehDockerfile)
-      await rodarDocker(["build", "-t", imagem, "-f", dockerfile, dirname(dockerfile)], LIMITE_COMANDO_MS);
-    else if (codigo !== 0) await rodarDocker(["pull", imagem], LIMITE_COMANDO_MS);
-    return imagem;
+  /**
+   * Gera a imagem com as dependências instaladas, se ela ainda não está na máquina. A tag leva o hash do Dockerfile e dos
+   * arquivos (e do lockfile do Node): sem mudança neles, reaproveita a imagem; com mudança, gera outra.
+   */
+  async garantirImagem(projeto: ProjetoComDependencias): Promise<ImagemDoAmbiente> {
+    const contexto = mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-"));
+    try {
+      const nomesDosArquivosDeDependencias = await copiarDependenciasParaOContexto(projeto, contexto);
+      const dockerfile = dockerfileDasDependencias(nomesDosArquivosDeDependencias);
+      writeFileSync(join(contexto, "Dockerfile"), dockerfile);
+      const hashDoContexto = createHash("sha256").update(dockerfile);
+      for (const arquivo of readdirSync(contexto).sort((a, b) => a.localeCompare(b)))
+        hashDoContexto.update(arquivo).update(readFileSync(join(contexto, arquivo)));
+      const imagem = `fabriquinha/${projeto.nome}:${hashDoContexto.digest("hex")}`;
+      const { codigo } = await executar("docker", ["image", "inspect", imagem], { limiteMs: this.#limiteDoComandoMs });
+      if (codigo === 0) return imagem;
+      // Quem chegou antes (durante o inspect deste ou já no meio do build) abriu o build: espera o dele em vez de outro.
+      const build =
+        this.#buildsEmAndamentoPorImagem.get(imagem) ??
+        rodarDocker(["build", "-t", imagem, contexto], LIMITE_COMANDO_MS).finally(() => {
+          this.#buildsEmAndamentoPorImagem.delete(imagem);
+        });
+      this.#buildsEmAndamentoPorImagem.set(imagem, build);
+      await build;
+      return imagem;
+    } finally {
+      rmSync(contexto, { recursive: true, force: true });
+    }
   }
 
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o
@@ -466,16 +614,18 @@ export class GeradorDeAmbientes {
 
   /**
    * Sobe o container parado em `tail`, para ficar vivo até alguém eliminá-lo. A saída é para a internet e, no host
-   * (`host-gateway`), só para a porta da API do agente. Sem `montagens`, o container nasce sem pasta do host; sem
+   * (`host-gateway`), só para a porta da API do agente. O nome no docker é `fabriquinha-slot-<slot>`: o docker não aceita
+   * espaço, e o nome repetido faz o `run` falhar. Sem `montagens`, o container nasce sem pasta do host; sem
    * `copias`, sem o pi, o `.claude` nem o `.codex`.
    */
   async criar(
     imagem: ImagemDoAmbiente,
     limites: Limites,
     portaDaApi: number,
+    slot: number,
     montagens?: Montagens,
     copias?: Copias,
-  ): Promise<ContainerCriado> {
+  ): Promise<ContainerCriadoNoSlot> {
     if (copias) exigirLoginDoPi(copias);
     const credenciais = copias ? credenciaisParaMontar(copias) : [];
     const id = randomUUID();
@@ -483,14 +633,21 @@ export class GeradorDeAmbientes {
       [
         "run",
         "-d",
+        "--name",
+        `${PREFIXO_DO_NOME_DO_SLOT}${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
         "--memory",
         `${String(limites.memoria_maxima_mb)}m`,
         "--cpus",
         String(limites.cpus),
+        // O Chromium do e2e cai ("Page crashed") com os 64 MB padrão do /dev/shm do container.
+        "--shm-size",
+        TAMANHO_DO_SHM,
         "--workdir",
         PASTA_DE_TRABALHO,
+        "--tmpfs",
+        PASTA_DO_MARCADOR_DAS_REGRAS,
         "--add-host",
         "host.docker.internal:host-gateway",
         ...(montagens ? argumentosDasMontagens(montagens, id) : []),
@@ -516,7 +673,7 @@ export class GeradorDeAmbientes {
       await this.eliminar({ id, container_id: containerId }); // sem a regra, o container alcançaria todas as portas do host
       throw erro;
     }
-    return { id, container_id: containerId };
+    return { id, container_id: containerId, slot };
   }
 
   /**
@@ -550,6 +707,24 @@ export class GeradorDeAmbientes {
       ],
       LIMITE_COMANDO_MS,
     );
+    await rodarDocker(["exec", "-u", "0", containerId, "touch", MARCADOR_DAS_REGRAS_DE_REDE], this.#limiteDoComandoMs);
+  }
+
+  /**
+   * O container está rodando com as regras de rede que a Fabriquinha pôs? O parado e o religado fora dela (que perdeu as
+   * regras) dizem que não; o docker que não responde lança, porque não diz nada do container.
+   */
+  async regrasDeRedeIntactas(container: ContainerCriado): Promise<boolean> {
+    try {
+      await rodarDocker(
+        ["exec", container.container_id, "test", "-e", MARCADOR_DAS_REGRAS_DE_REDE],
+        this.#limiteDoComandoMs,
+      );
+      return true;
+    } catch (erro) {
+      if (/Cannot connect to the Docker daemon|passou do limite/.test(String(erro))) throw erro;
+      return false;
+    }
   }
 
   /** Mata todos os processos do container (menos o primeiro, que o mantém vivo) e esvazia `/tmp` e a pasta de trabalho. */
@@ -580,7 +755,7 @@ export class GeradorDeAmbientes {
   }
 
   /** Só os containers com o rótulo `fabriquinha.ambiente`, parados ou não. */
-  async listarDaFabriquinha(): Promise<ContainerCriado[]> {
+  async listarDaFabriquinha(): Promise<ContainerListado[]> {
     const saida = await rodarDocker(
       [
         "ps",
@@ -589,7 +764,7 @@ export class GeradorDeAmbientes {
         "--filter",
         `label=${ROTULO_DO_AMBIENTE}`,
         "--format",
-        `{{.ID}}\t{{.Label "${ROTULO_DO_AMBIENTE}"}}`,
+        `{{.ID}}\t{{.Label "${ROTULO_DO_AMBIENTE}"}}\t{{.State}}`,
       ],
       this.#limiteDoComandoMs,
     );
@@ -597,8 +772,27 @@ export class GeradorDeAmbientes {
       .split("\n")
       .filter(Boolean)
       .map((linha) => {
-        const [containerId = "", id = ""] = linha.split("\t");
-        return { id, container_id: containerId };
+        const [containerId = "", id = "", estado = ""] = linha.split("\t");
+        return { id, container_id: containerId, rodando: estado === "running" };
       });
+  }
+
+  /**
+   * Os slots cujo nome `fabriquinha-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
+   * instância ou teste no mesmo daemon e o que um `rm` ainda não tirou. Criar com um deles falharia por nome repetido.
+   */
+  async listarSlotsTomadosNoDocker(): Promise<Set<number>> {
+    const saida = await rodarDocker(
+      ["ps", "--all", "--filter", `name=${PREFIXO_DO_NOME_DO_SLOT}`, "--format", "{{.Names}}"],
+      this.#limiteDoComandoMs,
+    );
+    const padraoDoNomeDoSlot = new RegExp(`^${PREFIXO_DO_NOME_DO_SLOT}(\\d+)$`);
+    return new Set(
+      saida
+        .split("\n")
+        .map((nome) => padraoDoNomeDoSlot.exec(nome)?.[1])
+        .filter((numero) => numero !== undefined)
+        .map(Number),
+    );
   }
 }

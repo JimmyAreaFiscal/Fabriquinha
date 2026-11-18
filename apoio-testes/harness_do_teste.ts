@@ -9,6 +9,9 @@ import "../src/server/system/banco_da_fabriquinha.ts";
 import { gravarCredencialDoPi } from "./credencial_do_pi.ts";
 import { ligarGestaoDeAmbientesNosModulos } from "./falsos/ambiente_falso.ts";
 
+// As telas formatam datas no fuso local, e os testes esperam o de São Paulo; sem isto, a máquina em UTC os reprova.
+process.env.TZ ??= "America/Sao_Paulo";
+
 // Nenhum teste lê o `~/.pi/agent` do Auditor: copiado para o container falso, ele mudava no meio da cópia pelo pi de
 // verdade (`tar: file changed as we read it`), levava as credenciais do Auditor e exigia o login dele na máquina. Os
 // testes têm um login vazio; quem precisa de outro aponta o seu.
@@ -21,6 +24,10 @@ if (process.env.PI_CODING_AGENT_DIR === undefined) {
     rmSync(raizDoPiDosTestes, { recursive: true, force: true });
   });
 }
+
+// Os testes das telas leem o mês e o dia no fuso do navegador, fixado já na importação do módulo (antes de o teste poder
+// mudar `TZ`): sem fuso fixo aqui, a máquina em UTC os reprova.
+process.env.TZ ??= "America/Sao_Paulo";
 
 // Nenhum teste roda o pi de verdade: sem `FABRIQUINHA_PI`, vale o pi falso sem roteiro, de quem o serviço que sobe lê o
 // catálogo de preços. Quem precisa de outro roteiro instala o seu (`instalarPiFalso`).

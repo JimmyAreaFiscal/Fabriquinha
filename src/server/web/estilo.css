@@ -664,6 +664,54 @@ span.mono {
   gap: var(--s-2);
 }
 
+.dialogo-pastas {
+  width: min(560px, 94vw);
+  max-width: none;
+}
+.caminho-atual {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+  overflow-wrap: anywhere;
+}
+.lista-pastas {
+  max-height: 40vh;
+  margin: 0 0 var(--s-6);
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.lista-pastas .pasta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: var(--s-1) var(--s-3);
+  color: var(--ink);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.lista-pastas .pasta:hover {
+  background: var(--surface-2);
+}
+.dialogo-pastas .msg-erro {
+  margin: 0 0 var(--s-6);
+}
+.campo-com-botao {
+  display: flex;
+  gap: var(--s-2);
+}
+.campo-com-botao input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* A caixa estreita, da altura do conteúdo. */
 .caixa.estreita {
   width: min(560px, 94vw);
@@ -1187,6 +1235,22 @@ input.erro {
   padding: 7px var(--s-2);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+}
+/* Ambientes: cada célula numa linha só, para as linhas terem a mesma altura em qualquer largura. */
+.tabela-dos-ambientes td {
+  white-space: nowrap;
+}
+/* Um valor longo sem espaço (a imagem com o hash inteiro na tag) corta com reticências; o inteiro fica no `title`. */
+.tabela td.corta {
+  max-width: 16ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 1280px) {
+  .tabela td.corta {
+    max-width: 32ch;
+  }
 }
 .tabela tr:last-child td {
   border-bottom: 0;
@@ -3768,4 +3832,7 @@ svg.barras :not(.hit) {
   .pista-cabeca {
     min-width: 1280px;
   }
+}
+.dialogo-pastas [hidden] {
+  display: none;
 }

@@ -115,6 +115,38 @@ test("rm tira o container; um que não existe falha", () => {
   assert.match(de_novo.stderr, /No such container/);
 });
 
+const dockerAssincrono = (...args: string[]): Promise<{ codigo: number | null; stderr: string }> => {
+  const processo = spawn("docker", args, { stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  processo.stderr.on("data", (pedaco: Buffer) => (stderr += pedaco.toString()));
+  return once(processo, "close").then(([codigo]) => ({ codigo: codigo as number | null, stderr }));
+};
+
+test("run com --name ao mesmo tempo que outros run, start e rm nunca lê um container pela metade nem um que acabou de sair", async () => {
+  docker("pull", "alpine");
+  const removiveis = Array.from({ length: 10 }, () => falso.semearContainer({}).id);
+  const parados = Array.from({ length: 10 }, () => falso.semearContainer({}).id);
+  const resultados = await Promise.all([
+    ...Array.from({ length: 20 }, (_, indice) =>
+      dockerAssincrono("run", "-d", "--name", `concorrente-${String(indice)}`, "alpine", "tail"),
+    ),
+    ...parados.map((id) => dockerAssincrono("start", id)),
+    ...removiveis.map((id) => dockerAssincrono("rm", "-f", id)),
+  ]);
+  assert.deepEqual(
+    resultados.filter(({ codigo }) => codigo !== 0),
+    [],
+  );
+});
+
+test("ps com --format {{.Names}} e o filtro de nome lista os nomes que contêm o pedaço", () => {
+  falso.semearContainer({ nome: "fabriquinha-slot-41" });
+  falso.semearContainer({ nome: "outro-41" });
+  const nomes = docker("ps", "--all", "--filter", "name=fabriquinha-slot-", "--format", "{{.Names}}").stdout;
+  assert.ok(nomes.split("\n").includes("fabriquinha-slot-41"));
+  assert.ok(!nomes.includes("outro-41"));
+});
+
 test("comando sem suporte sai com 2 e falharComando derruba o comando; tudo vai para o registro", () => {
   assert.equal(docker("volume", "ls").status, 2);
   falso.falharComando("pull", "sem rede");
@@ -225,4 +257,40 @@ test("exec do roteiro que morre por sinal sai com 128 + o sinal, e o kill no gru
 test("exec de outro comando só vai para o registro, sem rodar no host", () => {
   const { id } = falso.semearContainer({});
   assert.equal(docker("exec", id, "sh", "-c", "exit 9").status, 0);
+});
+
+test("pararDocker faz todo comando falhar como o docker desligado, e religarDocker o devolve", () => {
+  const { id } = falso.semearContainer({});
+  falso.pararDocker();
+  for (const args of [["ps"], ["exec", id, "true"], ["rm", id]]) {
+    const resposta = docker(...args);
+    assert.equal(resposta.status, 1);
+    assert.match(resposta.stderr, /Cannot connect to the Docker daemon/);
+  }
+  assert.equal(falso.containers().length > 0, true, "o que está nos containers não muda");
+  falso.religarDocker();
+  assert.equal(docker("ps").status, 0);
+});
+
+test("o container parado aparece como exited no ps, recusa exec e perde o marcador do tmpfs ao religar", () => {
+  const { id } = falso.semearContainer({ rotulos: { "fabriquinha.ambiente": "amb-parado" } });
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "sem o marcador");
+  assert.equal(docker("exec", "-u", "0", id, "touch", "/run/fabriquinha/regras").status, 0);
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 0);
+
+  falso.pararContainer(id);
+  falso.pararContainer("inexistente");
+  assert.match(docker("ps", "--filter", "label=fabriquinha.ambiente").stdout, new RegExp(`${id}\tamb-parado\texited`));
+  assert.match(docker("exec", id, "true").stderr, /is not running/);
+
+  falso.religarContainer(id);
+  falso.religarContainer("inexistente");
+  assert.match(docker("ps", "--filter", "label=fabriquinha.ambiente").stdout, new RegExp(`${id}\tamb-parado\trunning`));
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "o tmpfs voltou vazio");
+
+  docker("exec", id, "touch", "/run/fabriquinha/regras");
+  assert.equal(docker("stop", id).status, 0);
+  assert.equal(falso.containers().find((container) => container.id === id)?.estado, "exited");
+  assert.equal(docker("start", id).status, 0);
+  assert.equal(docker("exec", id, "test", "-e", "/run/fabriquinha/regras").status, 1, "o start também esvazia o tmpfs");
 });

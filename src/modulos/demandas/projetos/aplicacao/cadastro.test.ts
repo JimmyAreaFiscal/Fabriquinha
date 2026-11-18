@@ -120,10 +120,11 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   banco.close();
 });
 
-test("gravarConfiguracaoSdlc grava as verificações e preserva etapas e preparação do cadastro", () => {
+test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, preparação e arquivos de dependências do cadastro", () => {
   const banco = novoBanco();
   const cadastrado = registrarProjeto(banco, {
     ...exemplo,
+    arquivos_de_dependencias: ["package.json"],
     etapas: [{ etapa: "implementar", configuracao_agente: { effort: "high" } }],
   });
   const configurado = Projeto.parse({
@@ -146,6 +147,7 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas e prepara
   const esperado = {
     ...configurado,
     etapas: cadastrado.etapas,
+    arquivos_de_dependencias: ["package.json"],
     verificacoes: { ...configurado.verificacoes, preparacao: cadastrado.verificacoes.preparacao },
   };
   assert.deepEqual(gravarConfiguracaoSdlc(banco, configurado), esperado);
@@ -837,5 +839,27 @@ test("o cadastro pelo formulário recusa o repositório que a conferência repro
       erro.message === `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
   );
   assert.deepEqual(listarProjetos(banco), []);
+  banco.close();
+});
+
+test("o formulário grava os arquivos de dependências, os troca e os apaga quando vêm ausentes", async () => {
+  piFalso.roteirizar([modelosDoPi]);
+  const banco = novoBanco();
+  const repo = clonePublicado();
+  const cadastrado = await cadastrarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), arquivos_de_dependencias: ["package.json"] },
+    conferenciasDo(banco),
+  );
+  assert.deepEqual(cadastrado.arquivos_de_dependencias, ["package.json"]);
+  assert.deepEqual(buscarProjeto(banco, "loja")?.arquivos_de_dependencias, ["package.json"]);
+  const trocado = await editarProjetoDoFormulario(
+    banco,
+    { ...formularioDeLoja(repo), arquivos_de_dependencias: ["requirements.txt"] },
+    conferenciasDo(banco),
+  );
+  assert.deepEqual(trocado.arquivos_de_dependencias, ["requirements.txt"]);
+  await editarProjetoDoFormulario(banco, formularioDeLoja(repo), conferenciasDo(banco));
+  assert.equal(Object.hasOwn(buscarProjeto(banco, "loja") ?? {}, "arquivos_de_dependencias"), false);
   banco.close();
 });

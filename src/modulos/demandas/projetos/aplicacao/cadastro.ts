@@ -74,14 +74,19 @@ export function editarProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
 
 /**
  * Grava a configuração SDLC do projeto que existe (a chave do SonarQube e as Verificações, menos a preparação); as
- * etapas e a preparação ficam como o cadastro os deixou.
+ * etapas, a preparação e os arquivos de dependências ficam como o cadastro os deixou.
  */
 export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto): Projeto {
   return escrever(banco, () => {
-    const { etapas, verificacoes } = projetoExistente(banco, configurado.nome, "cadastre o projeto antes");
+    const { etapas, verificacoes, arquivos_de_dependencias } = projetoExistente(
+      banco,
+      configurado.nome,
+      "cadastre o projeto antes",
+    );
     const gravado = {
       ...configurado,
       etapas,
+      ...(arquivos_de_dependencias && { arquivos_de_dependencias }),
       verificacoes: { ...configurado.verificacoes, preparacao: verificacoes.preparacao },
     };
     gravarProjeto(banco, gravado);
@@ -90,7 +95,7 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
 }
 
 /** O projeto como o formulário o manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base"> & {
+export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "arquivos_de_dependencias"> & {
   hospedagem?: Hospedagem;
   preparacao: Projeto["verificacoes"]["preparacao"];
   configuracoes: ConfiguracoesDasEtapas;

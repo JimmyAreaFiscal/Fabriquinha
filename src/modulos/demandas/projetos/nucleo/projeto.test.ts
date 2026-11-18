@@ -148,8 +148,13 @@ test("CA-9: recusa E2E órfão, glob órfão, glob inválido, código fora de 1�
   assert.ok(aceitaVerificacoes({ e2e: [{ ...configuracaoE2e, codigo_falha: 255 }], globs: [globE2e] }));
 });
 
-test("imagem_do_ambiente é opcional e não pode ser vazia", () => {
-  assert.equal(Object.hasOwn(Projeto.parse(cadastro), "imagem_do_ambiente"), false);
-  assert.equal(Projeto.parse({ ...cadastro, imagem_do_ambiente: "Dockerfile" }).imagem_do_ambiente, "Dockerfile");
-  assert.equal(Projeto.safeParse({ ...cadastro, imagem_do_ambiente: "" }).success, false);
+test("arquivos_de_dependencias é opcional, de caminhos relativos, e a imagem do Ambiente não existe mais", () => {
+  assert.equal(Object.hasOwn(Projeto.parse(cadastro), "arquivos_de_dependencias"), false);
+  assert.deepEqual(
+    Projeto.parse({ ...cadastro, arquivos_de_dependencias: ["package.json"] }).arquivos_de_dependencias,
+    ["package.json"],
+  );
+  for (const arquivos_de_dependencias of [[], [""], ["/package.json"], ["../requirements.txt"]])
+    assert.equal(Projeto.safeParse({ ...cadastro, arquivos_de_dependencias }).success, false);
+  assert.equal(Projeto.safeParse({ ...cadastro, imagem_do_ambiente: "Dockerfile" }).success, false);
 });
