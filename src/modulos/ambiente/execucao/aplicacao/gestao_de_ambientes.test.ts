@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
+import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
@@ -24,8 +25,7 @@ import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fab
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
 // O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
 const dirDoPiDoAuditorDoTeste = join(base, "pi-do-auditor");
-mkdirSync(dirDoPiDoAuditorDoTeste);
-writeFileSync(join(dirDoPiDoAuditorDoTeste, "auth.json"), "{}");
+gravarCredencialDoPi(dirDoPiDoAuditorDoTeste);
 process.env.PI_CODING_AGENT_DIR = dirDoPiDoAuditorDoTeste;
 after(() => {
   rmSync(base, { recursive: true, force: true });

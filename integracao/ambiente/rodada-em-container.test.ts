@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlink
 import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
+import { gravarCredencialDoPi } from "../../apoio-testes/credencial_do_pi.ts";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
 import { INSTALACAO_DO_PI_FALSO, type PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
@@ -556,6 +557,7 @@ test(
   async (t) => {
     const { c } = await cenarioEmContainer(t);
     // As credenciais do Claude e do Codex ficam em pastas só delas (o container monta essas pastas, nunca ~/.claude nem ~/.codex).
+    const pastaDaCredencialDoPi = gravarCredencialDoPi(dirDoPiDoAuditor());
     const pastaDaCredencialDoClaude = join(c.raiz, "credenciais-claude");
     const pastaDaCredencialDoCodex = join(c.raiz, "credenciais-codex");
     mkdirSync(pastaDaCredencialDoClaude);
@@ -581,7 +583,7 @@ test(
     ambiente.abrigarProcesso(join(c.raiz, "execucoes", "E-propria"), "sessao-propria");
 
     const { codigo, saida } = await ambiente.executar({
-      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in "$PI_CODING_AGENT_DIR/auth.json" "$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json" "$HOME/.codex/auth.json"; do test -f "$a" && echo "tem-$a"; done; ls -A /credenciais/claude /credenciais/codex`,
+      programa: `ls ${join(c.raiz, "sessoes")} ${join(c.raiz, "execucoes")}; cat $HOME/.claude/CLAUDE.md $HOME/.codex/config.toml; for a in "$PI_CODING_AGENT_DIR/auth.json" "$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json" "$HOME/.codex/auth.json"; do test -f "$a" && echo "tem-$a"; done; ls -A /credenciais/claude /credenciais/codex /credenciais/pi`,
       argumentos: [],
       cwd: caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 }),
       env: {},
@@ -594,14 +596,17 @@ test(
     assert.doesNotMatch(saida, /de-outro-espaco/);
     assert.match(saida, /copia de \.claude/);
     assert.match(saida, /copia de \.codex/);
-    // A credencial de cada agente, no caminho em que ele a usa; a pasta montada só tem a credencial (sem CLAUDE.md nem config.toml).
+    // A credencial de cada agente, no caminho em que ele a usa; as pastas montadas só têm a credencial (sem CLAUDE.md, config.toml nem a configuração do pi).
     for (const credencial of [
       "/\\.pi/agent/auth\\.json",
       "/credenciais/claude/\\.credentials\\.json",
       "/\\.codex/auth\\.json",
     ])
       assert.match(saida, new RegExp(`tem-\\S*${credencial}`));
-    assert.match(saida, /\/credenciais\/claude:\n\.credentials\.json\n\n\/credenciais\/codex:\nauth\.json\n$/);
+    assert.match(
+      saida,
+      /\/credenciais\/claude:\n\.credentials\.json\n\n\/credenciais\/codex:\nauth\.json\n\n\/credenciais\/pi:\nauth\.json\n$/,
+    );
     // As montagens do container são exatamente estas, e nenhuma delas é o home, o ~/.pi ou a pasta inteira de sessões.
     const binds = (
       JSON.parse(execFileSync("docker", ["inspect", ambiente.container_id], { encoding: "utf8" })) as {
@@ -610,24 +615,18 @@ test(
     )[0]?.HostConfig.Binds;
     const origens = (binds ?? []).map((bind) => bind.split(":")[0]);
     assert.ok(!origens.includes(join(c.raiz, "sessoes")) && !origens.includes(join(c.raiz, "execucoes")));
-    // O pi monta a pasta do agente (o lock do auth.json é o mesmo do host); o Claude e o Codex montam a pasta só da
-    // credencial, no caminho dedicado (em leitura e escrita): o rename da credencial só chega ao outro lado pela pasta. O
-    // resto do .claude e do .codex é cópia.
+    // O pi, o Claude e o Codex montam a pasta só da credencial, no caminho dedicado (em leitura e escrita): o rename da
+    // credencial só chega ao outro lado pela pasta, e o lock do pi cai nela. O resto do ~/.pi/agent, do .claude e do .codex
+    // é cópia, e nenhum -v tem a pasta do agente do pi como origem.
     // Pelo caminho das pastas, e não por `.claude` no nome: o checkout pode morar dentro de um `.claude/`.
-    const { saida: homeDoContainer } = await ambiente.executar({
-      programa: 'echo "$HOME"',
-      argumentos: [],
-      cwd: "/",
-      env: {},
-      noShell: true,
-    });
     const credenciais = [
-      `${dirDoPiDoAuditor()}:${homeDoContainer.trim()}/.pi/agent:rw`,
+      `${realpathSync(pastaDaCredencialDoPi)}:/credenciais/pi:rw`,
       `${realpathSync(pastaDaCredencialDoClaude)}:/credenciais/claude:rw`,
       `${realpathSync(pastaDaCredencialDoCodex)}:/credenciais/codex:rw`,
     ];
     const copiadas = [
       dirDoPiDoAuditor(),
+      pastaDaCredencialDoPi,
       join(c.raiz, ".claude"),
       join(c.raiz, ".codex"),
       pastaDaCredencialDoClaude,

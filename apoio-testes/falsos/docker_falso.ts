@@ -9,10 +9,10 @@
 //   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); o `-v <arquivo do host>:/home/node/...`
 //   vira um hard link do arquivo do host nesse `HOME` (o bind mount de arquivo: mesmo inode, então a escrita no lugar vale
 //   para os dois lados e um `rename` de um deles não chega ao outro, como no docker de verdade); o `-v <pasta do host>:/home/node/...`
-//   vira um symlink nesse `HOME` (a pasta do agente do pi); o `-v <pasta do host>:<destino>`
+//   vira um symlink nesse `HOME`; o `-v <pasta do host>:<destino>`
 //   vale no `exec` simulado trocando `<destino>` pela pasta do host nos argumentos (o bind mount de pasta: o caminho é resolvido
 //   a cada acesso, então o `rename` de um lado é visto pelo outro; vale também para o `[ -d /credenciais/claude ]` e o
-//   `CLAUDE_SECURESTORAGE_CONFIG_DIR` do comando do agente), e `ln -sfn` também é executado, para ligar o `auth.json` do Codex do `HOME` a essa pasta; e
+//   `CLAUDE_SECURESTORAGE_CONFIG_DIR` do comando do agente; `/credenciais/pi` e `/credenciais/codex` também), e `ln -sfn` também é executado, para ligar o `auth.json` do pi e o do Codex do `HOME` a essa pasta; e
 //   `run --rm --entrypoint sh <imagem> -c 'echo "$HOME"'` responde `/home/node`; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do

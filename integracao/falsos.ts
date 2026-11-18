@@ -22,6 +22,7 @@ import { dirDoPiDoAuditor, PACOTE } from "../src/shared/infra/isolamento_do_ambi
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
+import { gravarCredencialDoPi } from "../apoio-testes/credencial_do_pi.ts";
 import { montarDemandasDoBanco } from "../src/server/system/banco_da_fabriquinha.ts";
 
 /** O `gh` falso (a hospedagem já testada em `apoio-testes/falsos/hospedagem_falsa.ts`) com os cenários da seção 12 nomeados. */
@@ -83,12 +84,12 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
 
 /**
  * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
- * Configuração lida do banco), o `auth.json` do pi que o container monta do host e o pi falso na imagem, que devolve com a
+ * Configuração lida do banco), a credencial do pi, que o container monta do host numa pasta só dela, e o pi falso na imagem, que devolve com a
  * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
  * container alcança; só o teste da rede põe um servidor nela.
  */
 export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
-  writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
+  gravarCredencialDoPi(dirDoPiDoAuditor());
   // A API do agente não sobe nestes testes: o agente falso fala com o core pelo que o teste faz por ele.
   const montada = await montarGestaoDeAmbientes({
     banco: c.banco,

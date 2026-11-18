@@ -3,10 +3,11 @@
 // a imagem na primeira vez.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco/banco_temporario.ts";
+import { gravarCredencialDoPi } from "../../apoio-testes/credencial_do_pi.ts";
 import { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { montarGestaoDeAmbientes } from "../../src/modulos/ambiente/publico.ts";
 import { instalacaoDoPi, PACOTE } from "../../src/shared/infra/isolamento_do_ambiente.ts";
@@ -29,8 +30,7 @@ test(
     const { banco, fechar } = abrirBancoTemporario();
     const raiz = raizCompartilhadaComODocker();
     const dirDoPi = join(raiz, "pi-do-auditor");
-    mkdirSync(dirDoPi);
-    writeFileSync(join(dirDoPi, "auth.json"), "{}");
+    gravarCredencialDoPi(dirDoPi);
     // Montada no host_local, a gestão não confere o conjunto com o docker da máquina, que pode ter os do serviço.
     const configuracao = { atual: ConfiguracaoDoAmbiente.parse({}) };
     const gestao = await montarGestaoDeAmbientes({
@@ -101,8 +101,7 @@ test(
     const { banco, fechar } = abrirBancoTemporario();
     const raiz = raizCompartilhadaComODocker();
     const dirDoPi = join(raiz, "pi-do-auditor");
-    mkdirSync(dirDoPi);
-    writeFileSync(join(dirDoPi, "auth.json"), "{}");
+    gravarCredencialDoPi(dirDoPi);
     const gestao = await montarGestaoDeAmbientes({
       banco,
       configuracao: () => ConfiguracaoDoAmbiente.parse({ tipo: "container" }),
