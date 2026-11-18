@@ -74,11 +74,13 @@ test("run grava rótulo, memória e CPUs; sem a imagem, falha", () => {
 });
 
 test("ps com label=chave=valor lista só os containers com o rótulo naquele valor", () => {
-  const minha = falso.semearContainer({ rotulos: { "fabriquinha.instancia": "fab-3f9a" } });
+  const minha = falso.semearContainer({
+    rotulos: { "fabriquinha.ambiente": "amb-9", "fabriquinha.instancia": "fab-3f9a" },
+  });
   const alheia = falso.semearContainer({ rotulos: { "fabriquinha.instancia": "fab-bbbb" } });
   const antiga = falso.semearContainer({ rotulos: { "fabriquinha.ambiente": "amb-1" } });
   const filtrado = docker("ps", "-a", "--no-trunc", "--filter", "label=fabriquinha.instancia=fab-3f9a").stdout;
-  assert.ok(filtrado.includes(`${minha.id}\tfab-3f9a`));
+  assert.ok(filtrado.includes(`${minha.id}\tamb-9`));
   assert.ok(!filtrado.includes(alheia.id) && !filtrado.includes(antiga.id));
 });
 

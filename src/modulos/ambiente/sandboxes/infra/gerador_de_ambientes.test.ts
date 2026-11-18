@@ -54,7 +54,8 @@ commitarNaBranchBase({
 const limites = { memoria_maxima_mb: 512, cpus: 1.5 };
 const PORTA_DA_API = 4999;
 docker.semearImagem("node:22-alpine");
-const gerador = new GeradorDeAmbientes();
+const INSTANCIA = "fab-3f9a";
+const gerador = new GeradorDeAmbientes(INSTANCIA);
 
 after(() => {
   rmSync(base, { recursive: true, force: true });
@@ -192,20 +193,27 @@ test("garantirImagem explica a falha do build", async () => {
   rmSync(join(base, "docker", "falhas", "build"));
 });
 
-test("criar sobe o container com nome do slot, rótulo, memória e CPUs, e o ambiente volta com o id do rótulo e o slot", async () => {
+test("criar sobe o container com nome do slot da instância, rótulos, memória e CPUs, e o ambiente volta com o id do rótulo e o slot", async () => {
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, 7);
   const [container] = docker.containers();
   assert.deepEqual(criado, { id: criado.id, container_id: container?.id, slot: 7 });
   assert.deepEqual(
     [container?.nome, container?.rotulos, container?.memoria, container?.cpus, container?.imagem, container?.estado],
-    ["fabriquinha-slot-7", { "fabriquinha.ambiente": criado.id }, 512 * 1048576, 1.5, "node:22-alpine", "running"],
+    [
+      "fab-3f9a-slot-7",
+      { "fabriquinha.ambiente": criado.id, "fabriquinha.instancia": INSTANCIA },
+      512 * 1048576,
+      1.5,
+      "node:22-alpine",
+      "running",
+    ],
   );
   const run = docker.registro().findLast(([comando, opcao]) => comando === "run" && opcao === "-d") ?? [];
   assert.equal(run[run.indexOf("--shm-size") + 1], "1g");
 });
 
 test("criar com o nome do slot já tomado no docker falha por nome repetido", async () => {
-  docker.semearContainer({ nome: "fabriquinha-slot-9" });
+  docker.semearContainer({ nome: "fab-3f9a-slot-9" });
   await assert.rejects(gerador.criar("node:22-alpine", limites, PORTA_DA_API, 9), /already in use/);
 });
 
@@ -222,6 +230,8 @@ test("criar liga o container ao host pelo host-gateway, mesmo sem montagens, e t
     "--rm",
     "--label",
     `fabriquinha.ambiente=${criado.id}-regras-de-rede`,
+    "--label",
+    `fabriquinha.instancia=${INSTANCIA}`,
     "--memory",
     "64m",
     "--cpus",
@@ -535,19 +545,23 @@ test("criar sem a imagem falha com a orientação", async () => {
   );
 });
 
-test("listarSlotsTomadosNoDocker traz o número de cada fabriquinha-slot-<n>, com o rótulo ou sem, e ignora outro nome", async () => {
-  docker.semearContainer({ nome: "fabriquinha-slot-12" });
-  docker.semearContainer({ nome: "fabriquinha-slot-abc" });
-  docker.semearContainer({ nome: "antes-fabriquinha-slot-13" });
+test("listarSlotsTomadosNoDocker traz o número de cada <instância>-slot-<n>, com o rótulo ou sem, e ignora outro nome", async () => {
+  docker.semearContainer({ nome: "fab-3f9a-slot-12" });
+  docker.semearContainer({ nome: "fab-3f9a-slot-abc" });
+  docker.semearContainer({ nome: "antes-fab-3f9a-slot-13" });
+  docker.semearContainer({ nome: "fab-bbbb-slot-14" });
+  docker.semearContainer({ nome: "fabriquinha-slot-15" });
   const tomados = await gerador.listarSlotsTomadosNoDocker();
   assert.ok(tomados.has(12));
-  assert.ok(![13, Number.NaN].some((numero) => tomados.has(numero)));
+  assert.ok(![13, 14, 15, Number.NaN].some((numero) => tomados.has(numero)));
 });
 
-test("listarDaFabriquinha devolve só os containers com o rótulo, parados ou não", async () => {
+test("listarDaFabriquinha devolve só os containers com o rótulo da própria instância, parados ou não", async () => {
   const antes = (await gerador.listarDaFabriquinha()).length;
   docker.semearContainer({ rotulos: { "com.docker.compose.project": "sonarqube" } });
   docker.semearContainer({});
+  docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "antigo" } });
+  docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "x", "fabriquinha.instancia": "fab-bbbb" } });
   const doUsuario = docker.containers().length;
   const criado = await gerador.criar("node:22-alpine", limites, PORTA_DA_API, proximoSlot());
   assert.equal(docker.containers().length, doUsuario + 1);
@@ -640,7 +654,7 @@ test("comando que passa do limite é morto e a falha diz o limite", async () => 
   process.env.PATH = `${travado}:${caminhoOriginal ?? ""}`;
   try {
     await assert.rejects(
-      new GeradorDeAmbientes(100).listarDaFabriquinha(),
+      new GeradorDeAmbientes(INSTANCIA, 100).listarDaFabriquinha(),
       /docker ps falhou: passou do limite de 100 ms/,
     );
   } finally {

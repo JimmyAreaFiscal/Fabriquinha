@@ -16,6 +16,7 @@ import { salvarConfiguracaoDoAmbiente } from "../../shared/armazenamento/configu
 import { ConfiguracaoDoAmbiente } from "../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
   inserirAmbienteAlocado,
+  lerNomeDaInstancia,
   liberarAmbiente,
   listarAmbientes,
 } from "../../../apoio-testes/falsos/ambiente_falso.ts";
@@ -545,11 +546,13 @@ test("com tipo host_local, o padrão, subir, bater o relógio e parar não chama
   assert.deepEqual(docker.registro(), []);
 });
 
-test("com tipo container, a subida elimina o órfão com rótulo e nunca toca o container sem rótulo", async () => {
+test("com tipo container, a subida elimina o órfão da própria instância e nunca toca o container sem o rótulo dela", async () => {
   const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-reconciliar-")));
-  const orfao = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "orfao" } });
   const sonar = docker.semearContainer({ imagem: "sonarqube" });
   const { raiz, banco } = abrirBancoTemporario();
+  const orfao = docker.semearContainer({
+    rotulos: { "fabriquinha.ambiente": "orfao", "fabriquinha.instancia": lerNomeDaInstancia(banco) },
+  });
   salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   banco.close();
   const s = await subir(raiz);
@@ -571,7 +574,9 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
     ["ocioso", "I-1", 1],
     ["em-uso", "I-2", 2],
   ] as const) {
-    const container = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": id } });
+    const container = docker.semearContainer({
+      rotulos: { "fabriquinha.ambiente": id, "fabriquinha.instancia": lerNomeDaInstancia(banco) },
+    });
     inserirAmbienteAlocado(banco, {
       id,
       container_id: container.id,

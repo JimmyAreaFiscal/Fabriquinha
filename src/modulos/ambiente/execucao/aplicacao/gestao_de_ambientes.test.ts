@@ -7,7 +7,11 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { setImmediate, setTimeout } from "node:timers/promises";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
-import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
+import {
+  inserirAmbienteAlocado,
+  lerNomeDaInstancia,
+  listarAmbientes,
+} from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
 import { espacoDaRodada, ocupanteDoAmbiente, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
@@ -447,11 +451,17 @@ test("deletar com o docker falhando deixa a linha eliminado e o container órfã
   assert.deepEqual(docker.containers(), []);
 });
 
-test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu e nunca toca o que não tem rótulo", async () => {
+test("na subida elimina o órfão da própria instância, dá baixa no que o docker perdeu e nunca toca o que não tem o rótulo dela", async () => {
   const { docker, banco, alocar, pastaDoDocker } = await cenario();
   const mantido = await alocar();
   const perdido = await alocar(espacoB);
-  const orfao = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "orfao" } });
+  const orfao = docker.semearContainer({
+    rotulos: { "fabriquinha.ambiente": "orfao", "fabriquinha.instancia": lerNomeDaInstancia(banco) },
+  });
+  const deOutraInstancia = docker.semearContainer({
+    rotulos: { "fabriquinha.ambiente": "x", "fabriquinha.instancia": "fab-bbbb" },
+  });
+  const antigo = docker.semearContainer({ rotulos: { "fabriquinha.ambiente": "antigo" } });
   const sonar = docker.semearContainer({ imagem: "sonarqube" });
   const doUsuario = docker.semearContainer({ imagem: "postgres", rotulos: { dono: "usuario" } });
   rmSync(join(pastaDoDocker, "containers", perdido.container_id)); // o container some por fora da Fabriquinha
@@ -464,7 +474,7 @@ test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu 
       .containers()
       .map(({ id }) => id)
       .sort(),
-    [mantido.container_id, sonar.id, doUsuario.id].sort(),
+    [mantido.container_id, sonar.id, doUsuario.id, deOutraInstancia.id, antigo.id].sort(),
   );
   assert.deepEqual(
     listarAmbientes(banco).map(({ container_id }) => container_id),
@@ -472,7 +482,7 @@ test("na subida elimina o órfão com rótulo, dá baixa no que o docker perdeu 
   );
   const chamadas = docker.registro().slice(chamadasAntes);
   assert.ok(chamadas.some((argumentos) => argumentos.includes(orfao.id)));
-  for (const intocavel of [sonar.id, doUsuario.id])
+  for (const intocavel of [sonar.id, doUsuario.id, deOutraInstancia.id, antigo.id])
     assert.equal(
       chamadas.some((argumentos) => argumentos.includes(intocavel)),
       false,
