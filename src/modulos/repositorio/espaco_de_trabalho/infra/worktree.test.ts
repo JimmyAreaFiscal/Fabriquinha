@@ -107,12 +107,21 @@ test("no host local a instalação roda antes da preparação", async () => {
   assert.match(c.lerLog(), /preparação: echo instalou\ninstalou\n.*preparação: echo preparou\npreparou\n$/);
 });
 
-test("com as dependências no Ambiente a instalação é pulada, a preparação roda e a worktree enxerga node_modules", async () => {
-  const c = cenario();
+/** A pasta que faz de `/dependencias` com `node_modules`, `package.json` e `package-lock.json`; o lockfile da worktree vem de `lockfileDaWorktree`. */
+function dependenciasDaImagem(worktree: string, lockfileDaWorktree: string) {
   const dependencias = join(base, `dependencias${String(n)}`);
   mkdirSync(join(dependencias, "node_modules"), { recursive: true });
   writeFileSync(join(dependencias, "node_modules", "pacote.txt"), "ok");
-  const comDependencias = new AmbienteComDependencias(dependencias);
+  writeFileSync(join(dependencias, "package.json"), "{}");
+  writeFileSync(join(dependencias, "package-lock.json"), "lock-da-imagem");
+  commitar(worktree, "package.json", "{}");
+  commitar(worktree, "package-lock.json", lockfileDaWorktree);
+  return new AmbienteComDependencias(dependencias);
+}
+
+test("com as dependências no Ambiente e o mesmo lockfile a instalação é pulada, a preparação roda e a worktree enxerga node_modules", async () => {
+  const c = cenario();
+  const comDependencias = dependenciasDaImagem(c.worktree, "lock-da-imagem");
   await preparar(comDependencias, c.worktree, { instalacao: ["echo instalou"], preparacao: ["echo preparou"] }, c.log);
   assert.doesNotMatch(c.lerLog(), /instalou/);
   assert.match(c.lerLog(), /preparou\n$/);
@@ -121,6 +130,28 @@ test("com as dependências no Ambiente a instalação é pulada, a preparação 
   assert.equal(git(c.worktree, "status", "--short"), "");
   await descartarAlteracoes(ambiente, c.worktree, c.log);
   assert.equal(readFileSync(join(c.worktree, "node_modules", "pacote.txt"), "utf8"), "ok");
+});
+
+test("com as dependências no Ambiente e lockfile diferente a instalação roda na worktree e nada é ligado à imagem", async () => {
+  const c = cenario();
+  const comDependencias = dependenciasDaImagem(c.worktree, "lock-da-demanda");
+  await preparar(comDependencias, c.worktree, { instalacao: ["echo instalou"], preparacao: ["echo preparou"] }, c.log);
+  assert.match(c.lerLog(), /preparação: echo instalou\ninstalou\n.*preparação: echo preparou\npreparou\n$/);
+  assert.equal(existsSync(join(c.worktree, "node_modules")), false);
+});
+
+test("o symlink de uma preparação anterior é trocado pela instalação local quando o lockfile muda", async () => {
+  const c = cenario();
+  const comDependencias = dependenciasDaImagem(c.worktree, "lock-da-imagem");
+  const verificacoes = { instalacao: ["mkdir node_modules && touch node_modules/local.txt"], preparacao: [] };
+  await preparar(comDependencias, c.worktree, verificacoes, c.log);
+  assert.equal(existsSync(join(c.worktree, "node_modules", "pacote.txt")), true);
+  assert.equal(existsSync(join(c.worktree, "node_modules", "local.txt")), false);
+
+  commitar(c.worktree, "package-lock.json", "lock-novo");
+  await preparar(comDependencias, c.worktree, verificacoes, c.log);
+  assert.equal(existsSync(join(c.worktree, "node_modules", "local.txt")), true);
+  assert.equal(existsSync(join(c.worktree, "node_modules", "pacote.txt")), false);
 });
 
 test("com as dependências no Ambiente, imagem sem /dependencias/node_modules não liga nada e não falha", async () => {

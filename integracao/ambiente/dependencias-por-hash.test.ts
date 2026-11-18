@@ -2,7 +2,7 @@
 // reinstalar, no Docker de verdade. O projeto é ESM (`"type": "module"`): o `import` da dependência só acha o `node_modules`
 // ligado na worktree, o NODE_PATH da imagem não vale para ele. Pulado sem `FABRIQUINHA_TESTE_DOCKER`.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { AmbienteContainer } from "../../apoio-testes/falsos/ambiente_falso.ts";
@@ -17,8 +17,10 @@ import {
   repositorioComDependencias,
 } from "./apoio-de-docker.ts";
 
-/** A instalação que marca e falha se rodar: no Ambiente que já traz as dependências, ela é pulada. */
+/** A instalação que marca e falha se rodar: no Ambiente que já traz as dependências com o mesmo lockfile, ela é pulada. */
 const INSTALACAO_QUE_NAO_PODE_RODAR = "touch instalou && exit 1";
+/** A instalação de verdade, que marca que rodou. */
+const INSTALACAO_LOCAL = "touch instalou && npm ci";
 /** Um comando de preparação que não instala dependências: roda em cada Espaço mesmo com o Ambiente pronto. */
 const PREPARACAO_DO_ESPACO = "touch preparou";
 const LIMITE_DA_PREPARACAO_PRONTA_MS = 15_000;
@@ -36,11 +38,19 @@ async function cenarioEsm(nomeDoProjeto: string, dependenciasIniciais: Record<st
   const raizGit = repositorioComDependencias(raiz, { "package.json": packageJsonEsm(dependenciasIniciais) });
   const log = join(raiz, "preparacao.log");
 
-  /** Uma pasta de rodada cujo teste importa `dependencia` com `import`, ainda sem `node_modules`. */
-  function criarRodada(numero: number, dependencia: string): string {
+  /**
+   * Uma pasta de rodada cujo teste importa `dependencia` com `import`, ainda sem `node_modules`. Sem `dependenciasDaRodada`,
+   * o `package.json` e o lockfile são os da branch base (os da imagem); com elas, a rodada tem as suas (a branch da demanda).
+   */
+  function criarRodada(numero: number, dependencia: string, dependenciasDaRodada?: Record<string, string>): string {
     const pasta = join(raiz, "worktrees", nomeDoProjetoNoDocker, `rodada-${String(numero)}`);
     mkdirSync(pasta, { recursive: true });
-    writeFileSync(join(pasta, "package.json"), '{"type":"module"}');
+    if (dependenciasDaRodada) {
+      writeFileSync(join(pasta, "package.json"), packageJsonEsm(dependenciasDaRodada));
+      gerarPackageLock(pasta);
+    } else
+      for (const arquivo of ["package.json", "package-lock.json"])
+        copyFileSync(join(raizGit, arquivo), join(pasta, arquivo));
     writeFileSync(
       join(pasta, "dependencia.test.js"),
       `import assert from "node:assert/strict";\nimport { test } from "node:test";\n` +
@@ -61,14 +71,13 @@ async function cenarioEsm(nomeDoProjeto: string, dependenciasIniciais: Record<st
       commitarNaBranchBase(raizGit);
     },
     /** Prepara a rodada como o Espaço faz e confere que a instalação foi pulada e a preparação rodou. */
-    async prepararRodada(ambiente: AmbienteContainer, pasta: string): Promise<void> {
-      await preparar(
-        ambiente,
-        pasta,
-        { instalacao: [INSTALACAO_QUE_NAO_PODE_RODAR], preparacao: [PREPARACAO_DO_ESPACO] },
-        log,
-      );
-      assert.equal(existsSync(join(pasta, "instalou")), false);
+    async prepararRodada(
+      ambiente: AmbienteContainer,
+      pasta: string,
+      instalacao = INSTALACAO_QUE_NAO_PODE_RODAR,
+    ): Promise<void> {
+      await preparar(ambiente, pasta, { instalacao: [instalacao], preparacao: [PREPARACAO_DO_ESPACO] }, log);
+      assert.equal(existsSync(join(pasta, "instalou")), instalacao !== INSTALACAO_QUE_NAO_PODE_RODAR);
       assert.equal(existsSync(join(pasta, "preparou")), true);
     },
     /** O `node --test` da rodada, rodado no container dela. */
@@ -132,6 +141,25 @@ test(
     await cenario.prepararRodada(terceiro, rodadaDoTerceiro);
     const testeDoTerceiro = await cenario.testarRodada(terceiro, rodadaDoTerceiro);
     assert.equal(testeDoTerceiro.codigo, 0, testeDoTerceiro.saida);
+  },
+);
+
+test(
+  "CA-2: a rodada com lockfile diferente do da imagem instala na worktree e o import da dependência nova funciona",
+  COM_DOCKER,
+  async () => {
+    const cenario = await cenarioEsm("projeto-esm-lockfile-da-rodada", { "left-pad": "1.3.0" });
+    const ambiente = await cenario.alocar("espaco-1");
+    // A rodada anterior acrescentou `is-odd` na branch da demanda; a imagem, da base, não a tem.
+    const rodada = cenario.criarRodada(1, "is-odd", { "left-pad": "1.3.0", "is-odd": "3.0.1" });
+    // A preparação anterior deixou o symlink da imagem: a instalação local o troca por um node_modules próprio.
+    symlinkSync("/dependencias/node_modules", join(rodada, "node_modules"));
+
+    await cenario.prepararRodada(ambiente, rodada, INSTALACAO_LOCAL);
+
+    assert.equal(lstatSync(join(rodada, "node_modules")).isSymbolicLink(), false);
+    const teste = await cenario.testarRodada(ambiente, rodada);
+    assert.equal(teste.codigo, 0, teste.saida);
   },
 );
 
