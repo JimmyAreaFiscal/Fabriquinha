@@ -8,7 +8,6 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
@@ -21,7 +20,8 @@ import { ConjuntoDeSandboxes } from "./conjunto_de_sandboxes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-capacidade-"));
 const dirDoPiDoAuditorDoTeste = join(base, "pi-do-auditor");
-gravarCredencialDoPi(dirDoPiDoAuditorDoTeste);
+mkdirSync(dirDoPiDoAuditorDoTeste);
+writeFileSync(join(dirDoPiDoAuditorDoTeste, "auth.json"), "{}");
 process.env.PI_CODING_AGENT_DIR = dirDoPiDoAuditorDoTeste;
 after(() => {
   rmSync(base, { recursive: true, force: true });

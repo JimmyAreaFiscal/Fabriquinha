@@ -2,11 +2,10 @@
 // composição, e o `npm test` e o `npm run integracao` carregam este módulo antes de cada arquivo (`--import`). O harness
 // das Sessões é o pi (o falso, quando o teste aponta `FABRIQUINHA_PI` para ele); quem precisa de outro monta o seu. Carrega também a
 // abertura do banco da composição, que liga ao Ciclo de Vida a leitura de Demandas, para o teste que abre o banco sozinho.
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import "../src/server/system/banco_da_fabriquinha.ts";
-import { gravarCredencialDoPi } from "./credencial_do_pi.ts";
 import { ligarGestaoDeAmbientesNosModulos } from "./falsos/ambiente_falso.ts";
 
 // As telas formatam datas no fuso local, e os testes esperam o de São Paulo; sem isto, a máquina em UTC os reprova.
@@ -16,12 +15,11 @@ process.env.TZ ??= "America/Sao_Paulo";
 // verdade (`tar: file changed as we read it`), levava as credenciais do Auditor e exigia o login dele na máquina. Os
 // testes têm um login vazio; quem precisa de outro aponta o seu.
 if (process.env.PI_CODING_AGENT_DIR === undefined) {
-  const raizDoPiDosTestes = mkdtempSync(join(tmpdir(), "fabriquinha-pi-"));
-  const dirDoPiDosTestes = join(raizDoPiDosTestes, "agent");
-  gravarCredencialDoPi(dirDoPiDosTestes);
+  const dirDoPiDosTestes = mkdtempSync(join(tmpdir(), "fabriquinha-pi-agent-"));
+  writeFileSync(join(dirDoPiDosTestes, "auth.json"), "{}");
   process.env.PI_CODING_AGENT_DIR = dirDoPiDosTestes;
   process.on("exit", () => {
-    rmSync(raizDoPiDosTestes, { recursive: true, force: true });
+    rmSync(dirDoPiDosTestes, { recursive: true, force: true });
   });
 }
 

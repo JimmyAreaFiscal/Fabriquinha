@@ -5,15 +5,8 @@
 //   `create`, `start`, `ps`, `inspect`, `stats`, `exec` e `rm`. O `run --rm` só confere a imagem; o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1. O `exec` com `-i`, `-w` e `--env-file` roda de verdade, no host, o
 //   roteiro do `AmbienteContainer` (`sh -c '... /fabriquinha/pids/<n> ...'`, que grava o grupo de processos e dá `exec`
 //   no programa), com só o env do arquivo (mais `PATH`, `HOME` e `HOSTNAME`, como o docker põe) e `/fabriquinha/pids`
-//   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do `.claude` e do `.codex`) extrai de verdade no
-//   `HOME` do container (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); o `-v <arquivo do host>:/home/node/...`
-//   vira um hard link do arquivo do host nesse `HOME` (o bind mount de arquivo: mesmo inode, então a escrita no lugar vale
-//   para os dois lados e um `rename` de um deles não chega ao outro, como no docker de verdade); o `-v <pasta do host>:/home/node/...`
-//   vira um symlink nesse `HOME`; o `-v <pasta do host>:<destino>`
-//   vale no `exec` simulado trocando `<destino>` pela pasta do host nos argumentos (o bind mount de pasta: o caminho é resolvido
-//   a cada acesso, então o `rename` de um lado é visto pelo outro; vale também para o `[ -d /credenciais/claude ]` e o
-//   `CLAUDE_SECURESTORAGE_CONFIG_DIR` do comando do agente; `/credenciais/pi` e `/credenciais/codex` também), e `ln -sfn` também é executado, para ligar o `auth.json` do pi e o do Codex do `HOME` a essa pasta; e
-//   `run --rm --entrypoint sh <imagem> -c 'echo "$HOME"'` responde `/home/node`; outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
+//   trocada por uma pasta do estado; o `exec -i ... tar -x` (a cópia do pi, do `.claude` e do `.codex`) extrai de verdade no
+//   `HOME` do container, e o `exec -i ... mktemp` (a gravação de uma credencial pelo stdin) grava de verdade nele (`homes/<id>` do estado, o `HOME` de todo `exec` simulado); outro `exec` só vai para o registro, porque rodar no host um `kill -9 -1` seria
 //   um desastre. O `run --rm` só confere a imagem, e o `exec cat /etc/hosts` mostra o `host-gateway` como 172.17.0.1.
 // Cada container é um arquivo e cada imagem também, então vários docker falsos ao mesmo tempo não perdem escrita um do
 // outro. Toda chamada vai para o registro (JSONL), inclusive as que falham.
@@ -27,22 +20,18 @@ import { randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
-  linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { constants } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 const PASTA_DOS_PIDS_NO_CONTAINER = "/fabriquinha/pids";
-/** O `HOME` que a imagem falsa diz ter; o `-v` de arquivo para baixo dele vira um hard link no `homes/<id>` do container. */
-const HOME_DA_IMAGEM_FALSA = "/home/node";
 
 /** Um container do docker falso. `memoria` em bytes, como o `HostConfig.Memory` do docker de verdade. */
 export interface ContainerFalso {
@@ -233,14 +222,8 @@ function simularProcessoDoContainer(
       doArquivo.map((linha): [string, string] => [linha.split("=")[0] ?? "", linha.split("=").slice(1).join("=")]),
     ),
   };
-  const pastasMontadas = container.montagens
-    .map((montagem) => montagem.split(":"))
-    .filter(([origem = ""]) => existsSync(origem) && statSync(origem).isDirectory());
   const [executavel = "", ...argumentos] = programa.map((arg) =>
-    pastasMontadas.reduce(
-      (caminho, [origem = "", destino = ""]) => caminho.replaceAll(destino, origem),
-      arg.replaceAll(PASTA_DOS_PIDS_NO_CONTAINER, pastaDosPids),
-    ),
+    arg.replaceAll(PASTA_DOS_PIDS_NO_CONTAINER, pastaDosPids),
   );
   const filho = spawn(executavel, argumentos, {
     cwd,
@@ -292,7 +275,6 @@ function executarDockerFalso(): void {
       "--add-host",
       "--net",
       "--cap-add",
-      "--entrypoint",
       "--tmpfs",
     ]);
     const [imagem = "", ...programa] = resto;
@@ -300,11 +282,7 @@ function executarDockerFalso(): void {
     const nome = opcoes["--name"]?.[0];
     if (nome && lerContainers(dir).some((existente) => existente.nome === nome))
       sair(125, `Conflict. The container name "/${nome}" is already in use`);
-    // roda e some, como o que aplica regras no namespace de rede de outro container
-    if (opcoes["--rm"]) {
-      if (opcoes["--entrypoint"]) console.log(HOME_DA_IMAGEM_FALSA);
-      return;
-    }
+    if (opcoes["--rm"]) return; // roda e some, como o que aplica regras no namespace de rede de outro container
     const rotulos = Object.fromEntries(
       (opcoes["--label"] ?? []).map((rotulo) => [rotulo.split("=")[0] ?? "", rotulo.split("=").slice(1).join("=")]),
     );
@@ -322,14 +300,6 @@ function executarDockerFalso(): void {
       hospedeiros: opcoes["--add-host"] ?? [],
     };
     gravarContainer(dir, container);
-    for (const montagem of container.montagens) {
-      const [origem = "", destino = ""] = montagem.split(":");
-      if (!destino.startsWith(`${HOME_DA_IMAGEM_FALSA}/`) || !existsSync(origem)) continue;
-      const noHome = join(homeDoContainer(dir, container.id), destino.slice(HOME_DA_IMAGEM_FALSA.length + 1));
-      mkdirSync(dirname(noHome), { recursive: true });
-      if (statSync(origem).isFile()) linkSync(origem, noHome);
-      else symlinkSync(origem, noHome); // a pasta montada no HOME: o caminho é resolvido a cada acesso, como o bind mount de pasta
-    }
     console.log(container.id);
   } else if (comando === "start") {
     const container = achar(args[0] ?? "");
@@ -391,7 +361,7 @@ function executarDockerFalso(): void {
     if (
       shell === "sh" &&
       opcaoC === "-c" &&
-      [PASTA_DOS_PIDS_NO_CONTAINER, "tar -x", "ln -sfn"].some((marca) => roteiro.includes(marca))
+      [PASTA_DOS_PIDS_NO_CONTAINER, "tar -x", "mktemp"].some((marca) => roteiro.includes(marca))
     )
       simularProcessoDoContainer(dir, container, programa, opcoes, sair);
   } else if (comando === "rm") {

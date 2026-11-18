@@ -6,7 +6,6 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import {
   commitarArquivo,
@@ -27,7 +26,7 @@ import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../espaco_de_trabalho/publico.ts";
 import { naFilaDoProjeto } from "../../git/publico.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
-import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { dirDoPiDoAuditor, PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
 
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ciclo-")));
@@ -240,9 +239,6 @@ async function cenarioComContainer() {
   const docker = instalarDockerFalso(join(temporario, `docker-${String(Math.random())}`));
   const banco = new DatabaseSync(":memory:");
   migrarBancoDaFabriquinha(banco);
-  // O container monta a credencial do pi do teste (symlink para uma pasta só dela), e não a do Auditor da máquina.
-  const dirDoPiDoTeste = join(c.raiz, "pi-do-auditor");
-  gravarCredencialDoPi(dirDoPiDoTeste);
   const montar = (tipo: string) =>
     montarGestaoDeAmbientes({
       banco,
@@ -254,7 +250,7 @@ async function cenarioComContainer() {
         home_do_usuario: c.raiz,
         pacote_do_harness: PACOTE,
         instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
-        dir_do_harness_do_auditor: dirDoPiDoTeste,
+        dir_do_harness_do_auditor: dirDoPiDoAuditor(),
       },
       registrarErro: noLog,
     });

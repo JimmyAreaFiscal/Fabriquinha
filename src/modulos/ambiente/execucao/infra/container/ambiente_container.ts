@@ -9,13 +9,7 @@ import { basename, dirname, join } from "node:path";
 import { parseEnv } from "node:util";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
-import {
-  abrigarNoAmbiente,
-  DIR_DO_PI_NO_HOME,
-  PADRAO_DE_TOKEN_DO_GITHUB,
-  PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER,
-  VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE,
-} from "../../../sandboxes/publico.ts";
+import { abrigarNoAmbiente, DIR_DO_PI_NO_HOME, PADRAO_DE_TOKEN_DO_GITHUB } from "../../../sandboxes/publico.ts";
 import {
   chavesDeProvedorDoLlm,
   CREDENCIAL_QUE_NUNCA_ENTRA_NO_AMBIENTE_ISOLADO,
@@ -45,6 +39,8 @@ interface ContainerDoAmbiente {
   raiz: string;
   /** A API do agente vista de dentro do container; o `FABRIQUINHA_API` do core (127.0.0.1) não chega do container. */
   url_da_api: string;
+  /** Leva ao container a credencial dos agentes que mudou no host; roda antes de cada `executar`. */
+  levarCredenciais?: () => Promise<void>;
 }
 
 const entreAspas = (texto: string): string => `'${texto.replaceAll("'", `'\\''`)}'`;
@@ -69,9 +65,11 @@ export class AmbienteContainer implements Ambiente {
   readonly #binDoPacote: string;
   readonly #raiz: string;
   readonly #urlDaApi: string;
+  readonly #levarCredenciais: (() => Promise<void>) | undefined;
 
-  constructor({ id, container_id, bin_do_pacote, raiz, url_da_api }: ContainerDoAmbiente) {
+  constructor({ id, container_id, bin_do_pacote, raiz, url_da_api, levarCredenciais }: ContainerDoAmbiente) {
     this.id = id;
+    this.#levarCredenciais = levarCredenciais;
     this.container_id = container_id;
     this.#binDoPacote = bin_do_pacote;
     this.#raiz = raiz;
@@ -94,6 +92,7 @@ export class AmbienteContainer implements Ambiente {
 
   async executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     const { limiteMs, ultimosBytes = Infinity, noShell } = comando;
+    await this.#levarCredenciais?.();
     const inicio = performance.now();
     const { argumentosDoDocker, identificador, apagarArquivoDeEnv } = this.#prepararDockerExec(comando, false);
     const limite: { estourou: boolean; matouOGrupo?: Promise<void> } = { estourou: false };
@@ -230,9 +229,7 @@ export class AmbienteContainer implements Ambiente {
       `mkdir -p ${PASTA_DOS_PIDS}`,
       `echo $$ > ${PASTA_DOS_PIDS}/${String(identificador.grupo_processo)}`,
       `export PATH=${entreAspas(this.#binDoPacote)}:"$PATH"`,
-      `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // o pi do Auditor no container: a configuração copiada na criação; o auth.json é um symlink para a pasta da credencial montada, que o lock do pi compartilha com o host
-      // O Claude Code (o do pi-claude-bridge também, que herda o env) lê e grava a credencial direto na pasta montada do host: o rename da renovação não a troca por um arquivo só do container. Sem a pasta, o Claude fica sem login.
-      `if [ -d ${PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER} ]; then export ${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE}=${PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER}; fi`,
+      `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // a cópia do pi do Auditor, feita na criação do container
       `exec ${programaEArgumentos.map(entreAspas).join(" ")}`,
     ].join("; ");
     return {

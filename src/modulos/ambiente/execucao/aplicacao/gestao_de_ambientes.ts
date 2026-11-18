@@ -1,6 +1,6 @@
 // A gestão dos Ambientes (CONCEITOS.md §7), a única entrada do domínio: quem monta entrega a Configuração do Ambiente, o
 // banco do inventário e o que o serviço sabe de si; a montagem confere o conjunto com o docker na subida (e, sem o docker,
-// de novo a cada minuto, até ele responder) e liga a eliminação dos ociosos, que `parar` desliga. Quem pede um Ambiente recebe o do host local ou o container alocado do
+// de novo a cada minuto, até ele responder) e liga a eliminação dos ociosos e a manutenção das credenciais dos agentes (renovadas só no host e copiadas, enxutas, aos containers), que `parar` desliga. Quem pede um Ambiente recebe o do host local ou o container alocado do
 // conjunto, que executa, lança e sinaliza nele. Ambiente não conhece demandas, tickets nem etapas: o ocupante é opaco.
 import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogi
 import {
   type AmbienteGravado,
   ConjuntoDeSandboxes,
+  CredenciaisDosContainers,
   GeradorDeAmbientes,
   type OcupanteDoAmbiente,
   type ProjetoDoAmbiente,
@@ -76,6 +77,8 @@ export async function montarGestaoDeAmbientes(montagem: MontagemDaGestaoDeAmbien
 
 class GestaoDoConjunto implements GestaoDeAmbientes {
   readonly #sandboxes: ConjuntoDeSandboxes;
+  /** As credenciais dos agentes que os containers recebem do host, que só o host renova. */
+  readonly #credenciais: CredenciaisDosContainers;
   readonly #configuracao: () => ConfiguracaoDoAmbiente;
   readonly #relogio: Relogio;
   readonly #registrarErro: (erro: unknown) => void;
@@ -93,7 +96,16 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     relogio = relogioDoSistema,
     registrarErro,
   }: MontagemDaGestaoDeAmbientes) {
-    this.#sandboxes = new ConjuntoDeSandboxes(banco, new GeradorDeAmbientes(), configuracao, servico, relogio);
+    const gerador = new GeradorDeAmbientes();
+    this.#sandboxes = new ConjuntoDeSandboxes(banco, gerador, configuracao, servico, relogio);
+    this.#credenciais = new CredenciaisDosContainers(
+      gerador,
+      {
+        copias: { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario },
+        instalacaoDoPi: servico.instalacao_do_harness,
+      },
+      relogio,
+    );
     this.#configuracao = configuracao;
     this.#relogio = relogio;
     this.#registrarErro = registrarErro;
@@ -115,9 +127,10 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
         "o conjunto de sandboxes ainda não foi conferido com o docker",
         "o trabalho volta a tentar quando o Docker responder; confira se o Docker está rodando",
       );
-    const container = this.#comoAmbienteContainer(
-      await this.#sandboxes.alocar(ocupante, { ...projeto, arquivos_de_dependencias }),
-    );
+    this.#credenciais.exigirCredenciaisValidas();
+    const alocado = await this.#sandboxes.alocar(ocupante, { ...projeto, arquivos_de_dependencias });
+    await this.#credenciais.levarAoContainer(alocado.container_id);
+    const container = this.#comoAmbienteContainer(alocado);
     container.levarEnvDoProjeto(projeto.raiz_git);
     return container;
   }
@@ -154,8 +167,12 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     this.#relogioDaManutencaoDoConjunto = setInterval(() => {
       try {
         if (!this.#ehContainer || this.#manutencaoDoConjuntoEmAndamento) return;
+        // Depois dos ociosos, as credenciais: a renovação no host e a cópia do que mudou aos containers alocados.
         const reconciliacaoOuEliminacaoDeOciosos = this.#conjuntoConferido
-          ? this.#sandboxes.eliminarOciosos(this.#relogio.agora()).catch(this.#registrarErro)
+          ? this.#sandboxes
+              .eliminarOciosos(this.#relogio.agora())
+              .catch(this.#registrarErro)
+              .then(() => this.#credenciais.manter(this.#sandboxes.containersAlocados(), this.#registrarErro))
           : this.reconciliarNaSubida();
         this.#manutencaoDoConjuntoEmAndamento = reconciliacaoOuEliminacaoDeOciosos.finally(() => {
           this.#manutencaoDoConjuntoEmAndamento = undefined;
@@ -176,6 +193,7 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
       bin_do_pacote: join(pacote_do_harness, "bin"),
       raiz,
       url_da_api: `http://host.docker.internal:${String(porta_da_api)}`,
+      levarCredenciais: () => this.#credenciais.levarAoContainer(container_id),
     });
   }
 }

@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setImmediate, setTimeout } from "node:timers/promises";
-import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
@@ -25,7 +24,8 @@ import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fab
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-conjunto-"));
 // O container recebe o `auth.json` do pi do Auditor: o do teste, e não o da máquina.
 const dirDoPiDoAuditorDoTeste = join(base, "pi-do-auditor");
-gravarCredencialDoPi(dirDoPiDoAuditorDoTeste);
+mkdirSync(dirDoPiDoAuditorDoTeste);
+writeFileSync(join(dirDoPiDoAuditorDoTeste, "auth.json"), "{}");
 process.env.PI_CODING_AGENT_DIR = dirDoPiDoAuditorDoTeste;
 after(() => {
   rmSync(base, { recursive: true, force: true });
@@ -76,7 +76,11 @@ async function esperarAManutencaoDoConjunto(manutencaoConcluida: () => boolean):
 }
 
 let cenarios = 0;
-async function cenario({ relogio = relogioFixo("2026-11-13T10:00:00.000Z"), tipo = "container" } = {}) {
+async function cenario({
+  relogio = relogioFixo("2026-11-13T10:00:00.000Z"),
+  tipo = "container",
+  servico = SERVICO,
+} = {}) {
   const pastaDoDocker = join(base, `docker-${String(++cenarios)}`);
   const docker = instalarDockerFalso(pastaDoDocker);
   const banco = new DatabaseSync(":memory:");
@@ -87,7 +91,7 @@ async function cenario({ relogio = relogioFixo("2026-11-13T10:00:00.000Z"), tipo
   const gestao = await montarGestaoDeAmbientes({
     banco,
     configuracao: () => configuracao.atual,
-    servico: SERVICO,
+    servico,
     relogio,
     registrarErro: (erro) => erros.push(erro),
   });
@@ -593,7 +597,7 @@ test("alocar devolve o Ambiente do container, que roda com a API do host e o pi 
     saida.saida.trim(),
     `http://host.docker.internal:4999 ${join(homeDoContainer, ".pi", "agent")} ${homeDoContainer}`,
   );
-  // O pi do container é a pasta do agente do Auditor, montada na criação.
+  // O pi do container é a cópia do pi do Auditor, feita na criação.
   assert.equal(readFileSync(join(homeDoContainer, ".pi", "agent", "auth.json"), "utf8"), "{}");
   assert.equal(comoContainer(gestao.ambienteDo("I-1")).container_id, ambiente.container_id);
   assert.ok(gestao.ambienteDo("I-1.R2") instanceof AmbienteHostLocal);
@@ -685,4 +689,56 @@ test("listar o conjunto vazio não chama o docker, e o container gravado vem com
   });
   const [gravado] = listarAmbientes(banco);
   assert.deepEqual(await gestao.listar(), [{ ...gravado, medido: { cpus: 0.1, memoria_mb: 1024 } }]);
+});
+
+/** Um home do usuário com a credencial do Claude Code que vence em `venceEm`, que o teste reescreve como o host renova. */
+function homeComCredencialDoClaude(nome: string) {
+  const home = join(base, nome);
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const gravar = (accessToken: string, venceEm: string) => {
+    writeFileSync(
+      join(home, ".claude", ".credentials.json"),
+      JSON.stringify({
+        claudeAiOauth: { accessToken, refreshToken: "renovacao-do-host", expiresAt: Date.parse(venceEm) },
+      }),
+    );
+  };
+  return { servico: { ...SERVICO, home_do_usuario: home }, gravar };
+}
+
+test("alocar leva ao container a credencial enxuta do host, sem o token de renovação, e recusa a vencida como falha externa", async () => {
+  const { servico, gravar } = homeComCredencialDoClaude("home-com-claude");
+  gravar("acesso-1", "2026-11-13T18:00:00.000Z");
+  const { docker, alocar, criacoes } = await cenario({ servico });
+  const ambiente = await alocar();
+  const credencialNoContainer = readFileSync(
+    join(docker.homeDoContainer(ambiente.container_id), ".claude", ".credentials.json"),
+    "utf8",
+  );
+  assert.match(credencialNoContainer, /acesso-1/);
+  assert.doesNotMatch(credencialNoContainer, /renovacao-do-host/);
+  gravar("acesso-velho", "2026-11-13T09:00:00.000Z");
+  await assert.rejects(alocar(espacoB), (erro: unknown) => {
+    assert.ok(erro instanceof ErroExterno);
+    assert.match(erro.message, /credencial do Claude no host venceu.*claude auth login/s);
+    assert.doesNotMatch(erro.message, /acesso-velho/);
+    return true;
+  });
+  assert.equal(criacoes().length, 1, "o vencido não cria container");
+});
+
+test("de minuto em minuto, a credencial renovada no host chega ao container alocado, e antes de cada comando também", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { servico, gravar } = homeComCredencialDoClaude("home-que-renova");
+  gravar("acesso-1", "2026-11-13T18:00:00.000Z");
+  const { docker, alocar } = await cenario({ servico });
+  const ambiente = await alocar();
+  const credencialNoContainer = () =>
+    readFileSync(join(docker.homeDoContainer(ambiente.container_id), ".claude", ".credentials.json"), "utf8");
+  gravar("acesso-2", "2026-11-13T19:00:00.000Z");
+  t.mock.timers.tick(60_000);
+  await esperarAManutencaoDoConjunto(() => credencialNoContainer().includes("acesso-2"));
+  gravar("acesso-3", "2026-11-13T20:00:00.000Z");
+  await ambiente.executar({ programa: "true", argumentos: [], cwd: base, env: {}, noShell: true });
+  assert.match(credencialNoContainer(), /acesso-3/);
 });

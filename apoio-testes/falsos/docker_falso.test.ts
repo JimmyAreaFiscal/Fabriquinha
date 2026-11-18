@@ -1,15 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -176,37 +167,6 @@ test("run grava os -v e os --add-host, e o inspect os mostra", () => {
     Binds: ["/a:/a:rw", "/b:/b:ro"],
     ExtraHosts: ["host.docker.internal:host-gateway"],
   });
-});
-
-test("run com -v de arquivo do host sob o /home/node liga o arquivo ao HOME do container pelo inode, e a imagem diz o HOME", () => {
-  assert.equal(docker("run", "--rm", "--entrypoint", "sh", "alpine", "-c", 'echo "$HOME"').stdout.trim(), "/home/node");
-  const credencial = join(base, "credencial.json");
-  writeFileSync(credencial, "{}");
-  const id = docker("run", "-d", "-v", `${credencial}:/home/node/.claude/.credentials.json:rw`, "alpine").stdout.trim();
-  const noContainer = join(falso.homeDoContainer(id), ".claude", ".credentials.json");
-  assert.ok(!lstatSync(noContainer).isSymbolicLink());
-  writeFileSync(credencial, '{"novo":true}');
-  assert.equal(readFileSync(noContainer, "utf8"), '{"novo":true}');
-  // Como no docker de verdade, o rename no host dá outro inode ao arquivo, e o container fica com o velho.
-  writeFileSync(`${credencial}.tmp`, '{"renomeado":true}');
-  renameSync(`${credencial}.tmp`, credencial);
-  assert.equal(readFileSync(noContainer, "utf8"), '{"novo":true}');
-});
-
-test("run com -v de pasta do host vale no exec: o symlink do HOME segue o rename feito no host", () => {
-  const pasta = join(base, "pasta-montada");
-  mkdirSync(pasta);
-  writeFileSync(join(pasta, "auth.json"), "antes");
-  const id = docker("run", "-d", "-v", `${pasta}:/credenciais/x:rw`, "alpine").stdout.trim();
-  const ligar = docker(
-    ...["exec", id, "sh", "-c", 'mkdir -p "$HOME/.x" && ln -sfn \'/credenciais/x/auth.json\' "$HOME/.x/auth.json"'],
-  );
-  assert.equal(ligar.status, 0, ligar.stderr);
-  const noContainer = join(falso.homeDoContainer(id), ".x", "auth.json");
-  assert.ok(lstatSync(noContainer).isSymbolicLink());
-  writeFileSync(join(pasta, "auth.json.tmp"), "depois");
-  renameSync(join(pasta, "auth.json.tmp"), join(pasta, "auth.json"));
-  assert.equal(readFileSync(noContainer, "utf8"), "depois");
 });
 
 test("exec com -w e --env-file roda o roteiro no host só com o env do arquivo, e o código de saída volta", () => {

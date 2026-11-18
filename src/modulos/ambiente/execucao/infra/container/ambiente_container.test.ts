@@ -12,7 +12,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { executar } from "../../../../../shared/infra/processo.ts";
 import { instalarDockerFalso } from "../../../../../../apoio-testes/falsos/docker_falso.ts";
 import { grupoEstaVivo } from "../../../../../../apoio-testes/grupo_de_processo.ts";
 import type { ComandoNoAmbiente } from "../ambiente.ts";
@@ -134,30 +133,6 @@ test("executar: o env do container tem só a lista permitida, nada do host", asy
     "ssh-do-host",
   ])
     assert.ok(!saida.saida.includes(segredo), segredo);
-});
-
-test("executar: com a pasta de credencial do Claude montada, o agente a recebe em CLAUDE_SECURESTORAGE_CONFIG_DIR", async () => {
-  const pastaDaCredencial = join(base, "credencial-do-claude");
-  mkdirSync(pastaDaCredencial);
-  docker.semearImagem("com-credencial");
-  const { saida: containerComCredencial } = await executar("docker", [
-    "run",
-    "-d",
-    "-v",
-    `${pastaDaCredencial}:/credenciais/claude:rw`,
-    "com-credencial",
-  ]);
-  const comCredencial = new AmbienteContainer({
-    id: "amb-2",
-    container_id: containerComCredencial.trim(),
-    bin_do_pacote: binDoPacote,
-    raiz: base,
-    url_da_api: urlDaApi,
-  });
-  const saida = await comCredencial.executar(comando("env", []));
-  assert.match(saida.saida, new RegExp(`^CLAUDE_SECURESTORAGE_CONFIG_DIR=${pastaDaCredencial}$`, "m"));
-  // Sem a pasta montada (o host sem login do Claude), a variável não existe: o Claude Code não aponta para o nada.
-  assert.doesNotMatch((await ambiente.executar(comando("env", []))).saida, /CLAUDE_SECURESTORAGE_CONFIG_DIR/);
 });
 
 test("executar: as variáveis do .env do projeto entram no env, sem sobrepor as da Fabriquinha, e o resto do host continua fora", async () => {
@@ -415,4 +390,31 @@ test("abrigarProcesso: a pasta do processo e a da sessão vão para as pastas do
   assert.ok(existsSync(join(execucoes, "E-7", "saida")), "a execução está na pasta do container");
   assert.equal(realpathSync(pastaDaExecucao), join(execucoes, "E-7"));
   assert.equal(realpathSync(join(base, "sessoes", "sessao-7")), join(sessoes, "sessao-7"));
+});
+
+test("executar leva ao container a credencial que mudou no host antes do comando, e a falha da cópia é a do comando", async () => {
+  const ordem: string[] = [];
+  const comCredenciais = new AmbienteContainer({
+    id: "amb-1",
+    container_id: containerId,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+    levarCredenciais: () => {
+      ordem.push("credenciais");
+      return Promise.resolve();
+    },
+  });
+  const saida = await comCredenciais.executar(comandoNoShell("echo comando"));
+  ordem.push(saida.saida.trim());
+  assert.deepEqual(ordem, ["credenciais", "comando"]);
+  const semDocker = new AmbienteContainer({
+    id: "amb-1",
+    container_id: containerId,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+    levarCredenciais: () => Promise.reject(new Error("docker fora do ar")),
+  });
+  await assert.rejects(semDocker.executar(comandoNoShell("echo nunca")), /docker fora do ar/);
 });

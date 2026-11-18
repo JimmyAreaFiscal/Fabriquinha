@@ -1,7 +1,7 @@
 // A devolução do Ambiente ocioso (I-312): o gate parado, o Espaço recém-preparado e o ticket falho não seguram sandbox do
 // conjunto, e a retomada aloca de novo na mesma worktree. Banco real, git real, docker falso e conjunto fixo.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { type TestContext, test } from "node:test";
@@ -13,7 +13,6 @@ import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_d
 import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
-import { gravarCredencialDoPi } from "../../../../../apoio-testes/credencial_do_pi.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
@@ -54,7 +53,8 @@ async function cenarioComConjunto(
     capacidade_do_conjunto: capacidade,
   });
   const piDoAuditor = join(c.raiz, "pi-do-auditor"); // o container recebe o auth.json do pi do Auditor
-  gravarCredencialDoPi(piDoAuditor);
+  mkdirSync(piDoAuditor);
+  writeFileSync(join(piDoAuditor, "auth.json"), "{}");
   const servico = {
     raiz: c.raiz,
     porta_da_api: 4999,
