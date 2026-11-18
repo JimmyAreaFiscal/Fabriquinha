@@ -53,7 +53,7 @@ function rodarEmpacotado(env: NodeJS.ProcessEnv, args: string[]) {
 }
 
 const FOTO_PROJETO_VER =
-  '{"nome":"loja","raiz_git":"/repos/loja","branch_base":"main","hospedagem":"github","chave_sonarqube":"k","etapas":[],"verificacoes":{"preparacao":[],"fitness":[],"linguagens":[],"e2e":[],"globs":[]}}\n';
+  '{"nome":"loja","raiz_git":"/repos/loja","branch_base":"main","hospedagem":"github","chave_sonarqube":"k","etapas":[],"verificacoes":{"preparacao":[],"instalacao":[],"fitness":[],"linguagens":[],"e2e":[],"globs":[]}}\n';
 
 const tokenDoAgente = tokenDoTicket(TICKETS_DA_API_DO_AGENTE.revisao);
 

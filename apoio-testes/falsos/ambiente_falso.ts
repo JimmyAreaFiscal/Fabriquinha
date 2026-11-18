@@ -96,6 +96,7 @@ export class AmbienteFalso implements Ambiente {
   readonly processosMorremComOServico = this.hostLocal.processosMorremComOServico;
   readonly isolaAsVariaveisDoServico = this.hostLocal.isolaAsVariaveisDoServico;
   readonly escreveEmTodoOGitDoClone = this.hostLocal.escreveEmTodoOGitDoClone;
+  readonly trazDependenciasInstaladas = this.hostLocal.trazDependenciasInstaladas;
 
   executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
     this.registro.push({ via: "executar", comando });
@@ -121,6 +122,25 @@ export class AmbienteFalso implements Ambiente {
 
   abrigarProcesso(): void {
     this.hostLocal.abrigarProcesso();
+  }
+}
+
+/**
+ * O host local fazendo de Ambiente que já traz as dependências instaladas (o container da imagem por hash): o
+ * `/dependencias` dos comandos é, aqui, a pasta dada.
+ */
+export class AmbienteComDependencias extends AmbienteHostLocal {
+  override readonly trazDependenciasInstaladas = true;
+  readonly #pastaDasDependencias: string;
+  constructor(pastaDasDependencias: string) {
+    super();
+    this.#pastaDasDependencias = pastaDasDependencias;
+  }
+  override executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando> {
+    return super.executar({
+      ...comando,
+      programa: comando.programa.replaceAll("/dependencias", this.#pastaDasDependencias),
+    });
   }
 }
 

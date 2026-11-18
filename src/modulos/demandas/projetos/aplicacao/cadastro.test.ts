@@ -120,7 +120,7 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   banco.close();
 });
 
-test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, preparação e arquivos de dependências do cadastro", () => {
+test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, preparação, instalação e arquivos de dependências do cadastro", () => {
   const banco = novoBanco();
   const cadastrado = registrarProjeto(banco, {
     ...exemplo,
@@ -136,6 +136,7 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, prepara�
     etapas: [{ etapa: "planejar" }],
     verificacoes: {
       preparacao: ["ignorado"],
+      instalacao: ["ignorado"],
       fitness: [{ nome: "fitness", comando: "npm run fitness", descricao: "Arquitetura" }],
       linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
       e2e: [
@@ -148,7 +149,11 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, prepara�
     ...configurado,
     etapas: cadastrado.etapas,
     arquivos_de_dependencias: ["package.json"],
-    verificacoes: { ...configurado.verificacoes, preparacao: cadastrado.verificacoes.preparacao },
+    verificacoes: {
+      ...configurado.verificacoes,
+      preparacao: cadastrado.verificacoes.preparacao,
+      instalacao: cadastrado.verificacoes.instalacao,
+    },
   };
   assert.deepEqual(gravarConfiguracaoSdlc(banco, configurado), esperado);
   assert.deepEqual(buscarProjeto(banco, exemplo.nome), esperado);
@@ -162,7 +167,7 @@ test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, prepara�
     ...exemplo,
     chave_sonarqube: configurado.chave_sonarqube,
     etapas: [{ etapa: "revisar_rodada" }],
-    verificacoes: { ...configurado.verificacoes, preparacao: ["npm install"] },
+    verificacoes: { ...configurado.verificacoes, preparacao: ["npm install"], instalacao: [] },
   };
   assert.deepEqual(editado, cadastroEditado);
   assert.deepEqual(buscarProjeto(banco, exemplo.nome), cadastroEditado);
@@ -178,6 +183,22 @@ test("gravarConfiguracaoSdlc recusa projeto inexistente com orientação para ca
       erro.message === "o projeto fabriquinha não existe (cadastre o projeto antes)",
   );
   assert.deepEqual(listarProjetos(banco), []);
+  banco.close();
+});
+
+test("a instalação do cadastro é gravada em comando_instalacao_projeto, separada da preparação, e a edição a substitui", () => {
+  const banco = novoBanco();
+  const instalacaoGravada = () =>
+    banco
+      .prepare("SELECT ordem, comando FROM comando_instalacao_projeto WHERE projeto = 'fabriquinha' ORDER BY ordem")
+      .all()
+      .map((l) => ({ ...l }));
+  registrarProjeto(banco, { ...exemplo, verificacoes: { preparacao: ["npm run build"], instalacao: ["npm ci"] } });
+  assert.deepEqual(instalacaoGravada(), [{ ordem: 1, comando: "npm ci" }]);
+  assert.deepEqual(buscarProjeto(banco, "fabriquinha")?.verificacoes.preparacao, ["npm run build"]);
+  editarProjeto(banco, { ...exemplo, verificacoes: { preparacao: [], instalacao: ["uv sync"] } });
+  assert.deepEqual(instalacaoGravada(), [{ ordem: 1, comando: "uv sync" }]);
+  assert.deepEqual(buscarProjeto(banco, "fabriquinha")?.verificacoes.preparacao, []);
   banco.close();
 });
 
@@ -713,6 +734,7 @@ const formularioDeLoja = (repo: string) => ({
   raiz_git: repo,
   branch_base: "main",
   preparacao: [],
+  instalacao: [],
   configuracoes: {},
 });
 
@@ -783,6 +805,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
       {
         ...formularioDeLoja(repo),
         preparacao: ["npm ci"],
+        instalacao: [],
         configuracoes: {
           planejar: { modelo: opus },
           implementar: { modelo: { provedor: "inexistente", nome: "xyz" } },
@@ -809,6 +832,7 @@ test("editarProjetoDoFormulario confere só o modelo novo ou trocado no pi e nã
     {
       ...formularioDeLoja(repo),
       preparacao: ["npm ci"],
+      instalacao: [],
       configuracoes: { planejar: { modelo: opus, effort: "low" } },
     },
     conferenciasDo(banco),

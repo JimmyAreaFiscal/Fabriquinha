@@ -63,6 +63,7 @@ export class AmbienteContainer implements Ambiente {
   readonly isolaAsVariaveisDoServico = true;
   /** O container monta o `.git` do clone só para leitura, menos as pastas que o `GeradorDeAmbientes` libera. */
   readonly escreveEmTodoOGitDoClone = false;
+  readonly trazDependenciasInstaladas = true;
   /** O id do container no docker; o teste o confere com o do conjunto. */
   readonly container_id: string;
   readonly #binDoPacote: string;

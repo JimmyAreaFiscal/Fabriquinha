@@ -121,7 +121,7 @@ test("foto projeto ver: devolve o projeto da demanda; execução que não existe
   const { env } = await naRodada("revisar_rodada", "revisar_rodada");
   foto(await cli(env, ["projeto", "ver"]), {
     codigo: 0,
-    out: '{"nome":"loja","raiz_git":"/repos/loja","branch_base":"main","hospedagem":"github","chave_sonarqube":"k","etapas":[],"verificacoes":{"preparacao":[],"fitness":[],"linguagens":[],"e2e":[],"globs":[]}}\n',
+    out: '{"nome":"loja","raiz_git":"/repos/loja","branch_base":"main","hospedagem":"github","chave_sonarqube":"k","etapas":[],"verificacoes":{"preparacao":[],"instalacao":[],"fitness":[],"linguagens":[],"e2e":[],"globs":[]}}\n',
     err: "",
   });
   foto(await cli({ ...env, FABRIQUINHA_TOKEN: "token-x" }, ["projeto", "ver"]), {

@@ -65,7 +65,7 @@ export function editarProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
     const editado = {
       ...p,
       chave_sonarqube,
-      verificacoes: { ...verificacoes, preparacao: p.verificacoes.preparacao },
+      verificacoes: { ...verificacoes, preparacao: p.verificacoes.preparacao, instalacao: p.verificacoes.instalacao },
     };
     gravarProjeto(banco, editado);
     return editado;
@@ -87,7 +87,11 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
       ...configurado,
       etapas,
       ...(arquivos_de_dependencias && { arquivos_de_dependencias }),
-      verificacoes: { ...configurado.verificacoes, preparacao: verificacoes.preparacao },
+      verificacoes: {
+        ...configurado.verificacoes,
+        preparacao: verificacoes.preparacao,
+        instalacao: verificacoes.instalacao,
+      },
     };
     gravarProjeto(banco, gravado);
     return gravado;
@@ -98,6 +102,7 @@ export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto
 export type FormularioDoProjeto = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "arquivos_de_dependencias"> & {
   hospedagem?: Hospedagem;
   preparacao: Projeto["verificacoes"]["preparacao"];
+  instalacao: Projeto["verificacoes"]["instalacao"];
   configuracoes: ConfiguracoesDasEtapas;
 };
 
@@ -154,7 +159,7 @@ async function conferirEGravar(
   gravar: typeof registrarProjeto,
   { conferirModeloNoHarness, repositorio }: ConferenciasDoCadastro,
 ) {
-  const { configuracoes, preparacao, ...cadastro } = formulario;
+  const { configuracoes, preparacao, instalacao, ...cadastro } = formulario;
   const { hospedagem } = await repositorio.conferir(cadastro).catch((error_: unknown) => {
     throw new ErroExterno(mensagem(error_));
   });
@@ -165,7 +170,7 @@ async function conferirEGravar(
     hospedagem,
     chave_sonarqube: formulario.nome,
     etapas: etapasComModeloOuEffort(configuracoes),
-    verificacoes: { preparacao },
+    verificacoes: { preparacao, instalacao },
   });
 }
 

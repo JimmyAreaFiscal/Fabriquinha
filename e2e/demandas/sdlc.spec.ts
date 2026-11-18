@@ -263,9 +263,9 @@ test("a preparação salva no cadastro do projeto é a que o fluxo da demanda ro
   };
 
   await pagina.goto(`${fabriquinha.base}/config?projeto=loja`);
-  await pagina.getByRole("button", { name: "+ comando" }).click();
+  await pagina.getByRole("button", { name: "+ comando de preparação" }).click();
   await pagina.getByLabel("Preparação da worktree: comando 1").fill("uv venv .venv");
-  await pagina.getByRole("button", { name: "+ comando" }).click();
+  await pagina.getByRole("button", { name: "+ comando de preparação" }).click();
   await pagina.getByLabel("Preparação da worktree: comando 2").fill("uv sync");
   await Promise.all([
     pagina.waitForResponse((r) => r.url().endsWith("/api/projetos/loja") && r.request().method() === "POST"),

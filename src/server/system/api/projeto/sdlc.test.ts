@@ -68,6 +68,7 @@ const valida = () => ({
   ],
   verificacoes: {
     preparacao: ["npm ci"],
+    instalacao: [],
     fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura." }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
     e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
@@ -82,6 +83,7 @@ async function recusa(corpo: unknown, ...trechos: string[]): Promise<void> {
   for (const t of trechos) assert.ok(texto.includes(t), `${t} em ${texto}`);
   assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes, {
     preparacao: [],
+    instalacao: [],
     fitness: [],
     linguagens: [],
     e2e: [],
@@ -99,7 +101,7 @@ test("GET sem configuração devolve o Projeto do banco com verificações vazia
       raiz_git: "/repo/loja",
       hospedagem: "github",
       etapas: [],
-      verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+      verificacoes: { preparacao: [], instalacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
     },
   });
 });
@@ -118,6 +120,7 @@ test("POST mantém etapas e preparação gravadas no cadastro", async () => {
     verificacoes: {
       ...montarDemandasDoBanco(banco).projeto("loja").verificacoes,
       preparacao: ["echo cadastro", "npm ci"],
+      instalacao: [],
     },
   };
   gravarProjeto(banco, cadastrado);

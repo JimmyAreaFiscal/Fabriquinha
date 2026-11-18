@@ -41,6 +41,11 @@ function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
         "SELECT comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem",
         nome,
       ).map((l) => l.comando),
+      instalacao: listar(
+        banco,
+        "SELECT comando FROM comando_instalacao_projeto WHERE projeto = ? ORDER BY ordem",
+        nome,
+      ).map((l) => l.comando),
       fitness: listar(
         banco,
         "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
@@ -106,7 +111,7 @@ function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: str
 
 /**
  * Grava o projeto inteiro numa transação só: a linha e, no lugar das que havia, cada lista da configuração. Qualquer
- * falha reverte tudo. Sem coluna de posição: a ordem das listas vem das chaves (e a da preparação, do índice).
+ * falha reverte tudo. Sem coluna de posição: a ordem das listas vem das chaves (e a da preparação e da instalação, do índice).
  */
 export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
   const { nome, verificacoes } = projeto;
@@ -132,6 +137,7 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
       "linguagem_projeto",
       "fitness_function_projeto",
       "comando_preparacao_projeto",
+      "comando_instalacao_projeto",
       "configuracao_etapa_projeto",
     ])
       banco.prepare(`DELETE FROM ${tabela} WHERE projeto = ?`).run(nome);
@@ -151,6 +157,13 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
       nome,
       ["ordem", "comando"],
       verificacoes.preparacao.map((comando, indice) => ({ ordem: indice + 1, comando })),
+    );
+    inserir(
+      banco,
+      "comando_instalacao_projeto",
+      nome,
+      ["ordem", "comando"],
+      verificacoes.instalacao.map((comando, indice) => ({ ordem: indice + 1, comando })),
     );
     inserir(banco, "fitness_function_projeto", nome, ["nome", "comando", "descricao"], verificacoes.fitness);
     inserir(banco, "linguagem_projeto", nome, ["caminho", "linguagem", "comando_teste"], verificacoes.linguagens);

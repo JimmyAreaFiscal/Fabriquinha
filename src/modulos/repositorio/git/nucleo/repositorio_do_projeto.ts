@@ -12,5 +12,5 @@ export interface ProjetoDoRepositorio {
   branch_base: string;
   hospedagem: Hospedagem;
   /** Os comandos que rodam, em ordem, ao criar a worktree. */
-  verificacoes: { preparacao: string[] };
+  verificacoes: { preparacao: string[]; instalacao: string[] };
 }

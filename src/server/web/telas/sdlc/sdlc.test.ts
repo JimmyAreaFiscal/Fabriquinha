@@ -26,6 +26,7 @@ const FABRIQUINHA: Projeto = {
   ],
   verificacoes: {
     preparacao: ["npm ci"],
+    instalacao: [],
     fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura <mínima>." }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
     e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
@@ -33,14 +34,14 @@ const FABRIQUINHA: Projeto = {
   },
 };
 
-test("doProjeto e paraProjeto: a conversão de ida e volta devolve o contrato sem as etapas e a preparação, que são do cadastro", () => {
+test("doProjeto e paraProjeto: a conversão de ida e volta devolve o contrato sem as etapas, a preparação e a instalação, que são do cadastro", () => {
   const estado = doProjeto(FABRIQUINHA, "abc123");
   assert.equal(estado.cursor, "abc123");
   assert.equal("etapas" in estado, false);
   assert.equal("preparacao" in estado, false);
   assert.deepEqual(estado.e2e[0]?.codigo_falha, "1");
   const { etapas: _, verificacoes, ...doCadastroDaSdlc } = FABRIQUINHA;
-  const { preparacao: __, ...verificacoesDaSdlc } = verificacoes;
+  const { preparacao: __, instalacao: ___, ...verificacoesDaSdlc } = verificacoes;
   assert.deepEqual(paraProjeto(estado, "fabriquinha"), { ...doCadastroDaSdlc, verificacoes: verificacoesDaSdlc });
 });
 
@@ -82,7 +83,10 @@ test("vazio diz que não há configuração e o estado inicial abre uma fitness 
   assert.match(html, /data-criar>Criar configuração/);
   assert.doesNotMatch(html, /data-grupo/);
   const inicial = estadoInicial(
-    doProjeto({ ...FABRIQUINHA, verificacoes: { fitness: [], linguagens: [], e2e: [], globs: [], preparacao: [] } }),
+    doProjeto({
+      ...FABRIQUINHA,
+      verificacoes: { fitness: [], linguagens: [], e2e: [], globs: [], preparacao: [], instalacao: [] },
+    }),
   );
   assert.equal(inicial.fitness.length, 1);
   assert.equal(inicial.linguagens.length, 1);
