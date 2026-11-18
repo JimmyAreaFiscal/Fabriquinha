@@ -9,7 +9,13 @@ import { basename, dirname, join } from "node:path";
 import { parseEnv } from "node:util";
 import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { executar } from "../../../../../shared/infra/processo.ts";
-import { abrigarNoAmbiente, DIR_DO_PI_NO_HOME, PADRAO_DE_TOKEN_DO_GITHUB } from "../../../sandboxes/publico.ts";
+import {
+  abrigarNoAmbiente,
+  DIR_DO_PI_NO_HOME,
+  PADRAO_DE_TOKEN_DO_GITHUB,
+  PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER,
+  VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE,
+} from "../../../sandboxes/publico.ts";
 import {
   chavesDeProvedorDoLlm,
   CREDENCIAL_QUE_NUNCA_ENTRA_NO_AMBIENTE_ISOLADO,
@@ -213,6 +219,8 @@ export class AmbienteContainer implements Ambiente {
       `echo $$ > ${PASTA_DOS_PIDS}/${String(identificador.grupo_processo)}`,
       `export PATH=${entreAspas(this.#binDoPacote)}:"$PATH"`,
       `export PI_CODING_AGENT_DIR="$HOME/${DIR_DO_PI_NO_HOME}"`, // o pi do Auditor no container: a configuração copiada e o auth.json montado do host, na criação
+      // O Claude Code (o do pi-claude-bridge também, que herda o env) lê e grava a credencial direto na pasta montada do host: o rename da renovação não a troca por um arquivo só do container. Sem a pasta, o Claude fica sem login.
+      `if [ -d ${PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER} ]; then export ${VARIAVEL_DA_PASTA_DA_CREDENCIAL_DO_CLAUDE}=${PASTA_DA_CREDENCIAL_DO_CLAUDE_NO_CONTAINER}; fi`,
       `exec ${programaEArgumentos.map(entreAspas).join(" ")}`,
     ].join("; ");
     return {
