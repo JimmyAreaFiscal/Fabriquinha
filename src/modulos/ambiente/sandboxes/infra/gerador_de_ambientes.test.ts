@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -25,43 +25,157 @@ const docker = instalarDockerFalso(join(base, "docker"));
 let ultimoSlot = 100;
 const proximoSlot = () => ++ultimoSlot;
 const raizGit = join(base, "repo");
-mkdirSync(join(raizGit, "ambiente"), { recursive: true });
-writeFileSync(join(raizGit, "ambiente", "Dockerfile"), "FROM alpine\n");
-const sha256DoDockerfile = createHash("sha256").update("FROM alpine\n").digest("hex");
+const BRANCH_BASE = "principal";
+/** O git do clone de teste, sem o gitconfig do operador e com uma identidade própria. */
+const gitDoClone = (...args: string[]) =>
+  execFileSync("git", ["-c", "user.name=Teste", "-c", "user.email=teste@exemplo.com", "-C", raizGit, ...args], {
+    env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+  }).toString();
+const REF_REMOTA_DA_BASE = `refs/remotes/origin/${BRANCH_BASE}`;
+/** Grava os arquivos no clone, os commita na branch base e os publica na ref remota dela, de onde a imagem lê. */
+function commitarNaBranchBase(conteudoPorCaminho: Record<string, string>): void {
+  for (const [caminho, conteudo] of Object.entries(conteudoPorCaminho)) {
+    mkdirSync(dirname(join(raizGit, caminho)), { recursive: true });
+    writeFileSync(join(raizGit, caminho), conteudo);
+  }
+  gitDoClone("add", ...Object.keys(conteudoPorCaminho));
+  gitDoClone("commit", "-q", "-m", Object.keys(conteudoPorCaminho).join(" "));
+  gitDoClone("update-ref", REF_REMOTA_DA_BASE, "HEAD");
+}
+mkdirSync(raizGit);
+gitDoClone("init", "-q", "-b", BRANCH_BASE);
+commitarNaBranchBase({
+  "web/package.json": '{"name":"web"}',
+  "web/package-lock.json": "{}",
+  "requirements.txt": "requests==2.32.0\n",
+});
 const limites = { memoria_maxima_mb: 512, cpus: 1.5 };
 const PORTA_DA_API = 4999;
+docker.semearImagem("node:22-alpine");
 const gerador = new GeradorDeAmbientes();
 
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("garantirImagem faz o build do Dockerfile com a tag do projeto e do sha256, e não repete o build", async () => {
-  const projeto = { nome: "meu-projeto", raiz_git: raizGit, imagem_do_ambiente: "ambiente/Dockerfile" };
-  const tag = `fabriquinha/meu-projeto:${sha256DoDockerfile}`;
-  assert.equal(await gerador.garantirImagem(projeto), tag);
-  assert.equal(await gerador.garantirImagem(projeto), tag);
-  assert.deepEqual(docker.imagens(), [tag]);
-  const builds = docker.registro().filter(([comando]) => comando === "build");
-  assert.deepEqual(builds, [
-    ["build", "-t", tag, "-f", join(raizGit, "ambiente", "Dockerfile"), join(raizGit, "ambiente")],
-  ]);
+const TAG_DO_PROJETO = /^fabriquinha\/meu-projeto:[0-9a-f]{64}$/;
+const doProjeto = (...arquivos_de_dependencias: string[]) => ({
+  nome: "meu-projeto",
+  raiz_git: raizGit,
+  branch_base: BRANCH_BASE,
+  arquivos_de_dependencias,
 });
 
-test("garantirImagem faz o pull do nome de imagem que não está na máquina, uma vez só", async () => {
-  const projeto = { nome: "outro", raiz_git: raizGit, imagem_do_ambiente: "node:22-alpine" };
-  assert.equal(await gerador.garantirImagem(projeto), "node:22-alpine");
-  assert.equal(await gerador.garantirImagem(projeto), "node:22-alpine");
-  assert.deepEqual(
-    docker.registro().filter(([comando]) => comando === "pull"),
-    [["pull", "node:22-alpine"]],
+test("garantirImagem gera a imagem das dependências, com a tag do projeto e do hash, e não repete o build", async () => {
+  const projeto = doProjeto("requirements.txt", "web/package.json");
+  const tag = await gerador.garantirImagem(projeto);
+  assert.match(tag, TAG_DO_PROJETO);
+  assert.equal(await gerador.garantirImagem(projeto), tag);
+  assert.ok(docker.imagens().includes(tag));
+  const builds = docker.registro().filter(([comando]) => comando === "build");
+  assert.equal(builds.length, 1);
+  assert.deepEqual(builds[0]?.slice(0, 3), ["build", "-t", tag]);
+});
+
+test("garantirImagem gera outra imagem quando o arquivo de dependências ou o lockfile muda", async () => {
+  const antes = await gerador.garantirImagem(doProjeto("web/package.json"));
+  commitarNaBranchBase({ "web/package.json": '{"name":"web","dependencies":{"zod":"^4"}}' });
+  const comOutroArquivo = await gerador.garantirImagem(doProjeto("web/package.json"));
+  commitarNaBranchBase({ "web/package-lock.json": '{"lockfileVersion":3}' });
+  const comLockfile = await gerador.garantirImagem(doProjeto("web/package.json"));
+  assert.equal(new Set([antes, comOutroArquivo, comLockfile]).size, 3);
+});
+
+test("garantirImagem recusa o arquivo que não entende, o repetido e o que não existe", async () => {
+  await assert.rejects(gerador.garantirImagem(doProjeto("Dockerfile")), /não suportados/);
+  await assert.rejects(
+    gerador.garantirImagem(doProjeto("requirements.txt", "outra/requirements.txt")),
+    /não suportados/,
   );
+  await assert.rejects(gerador.garantirImagem(doProjeto("api/requirements.txt")), /api\/requirements.txt não existe/);
+});
+
+test("garantirImagem lê as dependências de origin/<branch_base>: a cópia de trabalho e a branch local atrás ou à frente não mudam a imagem", async () => {
+  const daRefRemota = await gerador.garantirImagem(doProjeto("requirements.txt"));
+  const commitDaRefRemota = gitDoClone("rev-parse", REF_REMOTA_DA_BASE).trim();
+  try {
+    // A cópia de trabalho muda e ganha um arquivo que não está commitado: nada disso conta.
+    writeFileSync(join(raizGit, "requirements.txt"), "requests==9.9.9\n");
+    mkdirSync(join(raizGit, "so-na-copia"), { recursive: true });
+    writeFileSync(join(raizGit, "so-na-copia", "requirements.txt"), "six\n");
+    assert.equal(await gerador.garantirImagem(doProjeto("requirements.txt")), daRefRemota);
+    await assert.rejects(
+      gerador.garantirImagem(doProjeto("so-na-copia/requirements.txt")),
+      /so-na-copia\/requirements.txt não existe em origin\/principal/,
+    );
+    // A branch local à frente da remota: a imagem segue a remota.
+    gitDoClone("commit", "-q", "-am", "só na branch local");
+    assert.equal(await gerador.garantirImagem(doProjeto("requirements.txt")), daRefRemota);
+    // A remota avança e a local fica atrás: a imagem segue a remota.
+    gitDoClone("update-ref", REF_REMOTA_DA_BASE, "HEAD");
+    gitDoClone("reset", "-q", "--hard", commitDaRefRemota);
+    const daRemotaNova = await gerador.garantirImagem(doProjeto("requirements.txt"));
+    assert.notEqual(daRemotaNova, daRefRemota);
+    assert.match(readFileSync(join(raizGit, "requirements.txt"), "utf8"), /2\.32\.0/);
+  } finally {
+    gitDoClone("update-ref", REF_REMOTA_DA_BASE, commitDaRefRemota);
+    gitDoClone("reset", "-q", "--hard", commitDaRefRemota);
+    rmSync(join(raizGit, "so-na-copia"), { recursive: true, force: true });
+  }
+});
+
+/** As instruções do Dockerfile, com as linhas continuadas (`\` no fim) juntas numa só. */
+const instrucoesDoDockerfile = (dockerfile: string) =>
+  dockerfile
+    .replaceAll(/\\\n\s*/g, "")
+    .split("\n")
+    .filter(Boolean);
+
+for (const [arquivoDeDependencias, comPlaywright] of [
+  ["web/package.json", true],
+  ["requirements.txt", false],
+] as const)
+  test(`a imagem do ${arquivoDeDependencias} traz a base do sandbox: não-root, git de sistema, pids, Python, fuso, procps e /tmp limpo`, async () => {
+    const imagem = await gerador.garantirImagem(doProjeto(arquivoDeDependencias));
+    const instrucoes = instrucoesDoDockerfile(docker.dockerfileDaImagem(imagem));
+    // O Claude Code recusa rodar como root: o node é o último usuário, e nada roda como root depois dele.
+    assert.equal(instrucoes.at(-1), "USER node");
+    assert.ok(instrucoes.includes("ENV TZ=America/Sao_Paulo"), instrucoes.join("\n"));
+    const camadasDeRoot = instrucoes.filter((instrucao) => instrucao.startsWith("RUN "));
+    const [camadaDaBase = ""] = camadasDeRoot;
+    const pacotesDoApt = /apt-get install -y --no-install-recommends ([^&]+)/
+      .exec(camadaDaBase)?.[1]
+      ?.trim()
+      .split(" ");
+    for (const pacote of ["git", "ca-certificates", "procps", "python3", "python3-pip", "python3-venv"])
+      assert.ok(pacotesDoApt?.includes(pacote), `falta o pacote ${pacote} em: ${camadaDaBase}`);
+    for (const trecho of [
+      "git config --system --add safe.directory '*'",
+      'git config --system user.name "Fabriquinha"',
+      'git config --system user.email "fabriquinha@exemplo.com"',
+      "mkdir -p /fabriquinha/pids",
+      "chown node:node /fabriquinha/pids",
+    ])
+      assert.ok(camadaDaBase.includes(trecho), `falta ${trecho} em: ${camadaDaBase}`);
+    // O que o root deixa no /tmp o node não apaga, e a limpeza do sandbox falha: toda camada de root termina limpando.
+    for (const camada of camadasDeRoot) assert.match(camada, /rm -rf [^&;]* \/tmp\/\*$/);
+    const comChromium = camadasDeRoot.filter((camada) => camada.includes("playwright install --with-deps chromium"));
+    assert.equal(instrucoes.includes("ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright"), comPlaywright);
+    assert.equal(comChromium.length, comPlaywright ? 1 : 0);
+    if (comPlaywright) assert.ok(comChromium[0]?.includes("chmod -R a+rX /ms-playwright"));
+  });
+
+test("garantirImagem recusa o package.json sem package-lock.json ao lado, que o npm ci exige", async () => {
+  commitarNaBranchBase({ "sem-lock/package.json": '{"name":"sem-lock"}' });
+  await assert.rejects(gerador.garantirImagem(doProjeto("sem-lock/package.json")), /não tem package-lock.json/);
 });
 
 test("garantirImagem explica a falha do build", async () => {
+  // Um arquivo que nenhum teste construiu: sem a imagem pronta, o build roda e falha.
+  commitarNaBranchBase({ "build-que-falha/requirements.txt": "requests==2.31.0\n" });
   docker.falharComando("build", "sem espaço em disco");
   await assert.rejects(
-    gerador.garantirImagem({ nome: "x", raiz_git: raizGit, imagem_do_ambiente: "ambiente/Dockerfile" }),
+    gerador.garantirImagem(doProjeto("build-que-falha/requirements.txt")),
     /docker build falhou: sem espaço em disco/,
   );
   rmSync(join(base, "docker", "falhas", "build"));

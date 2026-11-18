@@ -35,6 +35,7 @@ const LOJA: ProjetoCadastrado = {
   raiz_git: "/code/loja",
   branch_base: "main",
   hospedagem: "github",
+  arquivos_de_dependencias: ["requirements.txt", "package.json"],
   etapas: [],
   verificacoes: { preparacao: ["npm ci"], fitness: [], linguagens: [], e2e: [], globs: [] },
   chave_sonarqube: "loja",
@@ -46,10 +47,12 @@ test("rascunhoDe mantém os campos editáveis e solta apenas a preparação das 
     nome: "loja",
     raiz_git: "/code/loja",
     branch_base: "main",
+    arquivos_de_dependencias: ["requirements.txt", "package.json"],
     hospedagem: "github",
     preparacao: ["npm ci"],
     configuracoes: {},
   });
+  assert.equal("arquivos_de_dependencias" in rascunhoDe({ ...LOJA, arquivos_de_dependencias: undefined }), false);
 });
 
 const MODELOS = [
@@ -147,7 +150,11 @@ test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem te
     html,
     /<h3>Preparação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
   );
-  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|[i]ssue/);
+  assert.match(
+    html,
+    /<label for="campo-arquivos_de_dependencias">Arquivos de dependências<\/label><textarea id="campo-arquivos_de_dependencias" name="arquivos_de_dependencias" rows="2" placeholder="requirements.txt">requirements.txt\npackage.json<\/textarea>/,
+  );
+  assert.doesNotMatch(html, /[Ii]magem|[Tt]estes|SonarQube|sonar|[Ff]itness|[i]ssue/);
   assert.match(
     html,
     /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><button/,
@@ -261,6 +268,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
       "✖ use letras minúsculas\n  → at nome",
       "✖ caminho absoluto\n  → at raiz_git",
       "✖ Pequeno demais\n  → at preparacao[0]",
+      "✖ use caminho relativo à raiz git\n  → at arquivos_de_dependencias[1]",
     ].join("\n"),
   );
   const html = formularioDeProjeto({ ...NOVO, preparacao: [""] }, { novo: true, modelosDoPi: MODELOS, erros });
@@ -277,7 +285,11 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
   );
   assert.match(
     html,
-    /<span class="msg-erro">3 campos com erro<\/span><button type="button" class="btn" data-cancelar>Cancelar<\/button><button type="submit" class="btn btn-primario">Cadastrar projeto/,
+    /<textarea id="campo-arquivos_de_dependencias"[^>]* aria-invalid="true" aria-describedby="campo-arquivos_de_dependencias-erro"><\/textarea><span class="msg-erro" id="campo-arquivos_de_dependencias-erro">use caminho relativo à raiz git<\/span>/,
+  );
+  assert.match(
+    html,
+    /<span class="msg-erro">4 campos com erro<\/span><button type="button" class="btn" data-cancelar>Cancelar<\/button><button type="submit" class="btn btn-primario">Cadastrar projeto/,
   );
   assert.match(
     formularioDeProjeto(NOVO, {
@@ -475,20 +487,6 @@ test("dialogoDePastas: a caixa com o conteúdo, o erro e o Escolher", () => {
   const html = dialogoDePastas();
   assert.match(html, /^<dialog class="dialogo dialogo-pastas" data-dialogo-pastas/);
   assert.match(html, /data-conteudo-pastas><\/div>.*data-erro-pastas hidden.*data-escolher-pasta>Escolher esta pasta/);
-});
-
-test("imagem do Ambiente: o campo traz o valor atual ou vazio, com a ajuda; rascunhoDe só a leva quando existe", () => {
-  assert.equal(Object.hasOwn(rascunhoDe(LOJA), "imagem_do_ambiente"), false);
-  assert.equal(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }).imagem_do_ambiente, "Dockerfile");
-  const opcoes = { novo: false, modelosDoPi: MODELOS, erros: new Map() };
-  assert.match(
-    formularioDeProjeto(rascunhoDe(LOJA), opcoes),
-    /<label for="campo-imagem_do_ambiente">Imagem do Ambiente<\/label><input class="mono" id="campo-imagem_do_ambiente" name="imagem_do_ambiente" value=""[^>]*>.*caminho de um Dockerfile no repositório ou o nome de uma imagem; vazio mantém o projeto no host/,
-  );
-  assert.match(
-    formularioDeProjeto(rascunhoDe({ ...LOJA, imagem_do_ambiente: "Dockerfile" }), opcoes),
-    /name="imagem_do_ambiente" value="Dockerfile"/,
-  );
 });
 
 test("o aviso de que o projeto roda no host só aparece quando a tela manda rodaNoHost", () => {

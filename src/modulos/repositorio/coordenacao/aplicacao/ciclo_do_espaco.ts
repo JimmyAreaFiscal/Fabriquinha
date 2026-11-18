@@ -20,7 +20,7 @@ import { integrarPR } from "../../hospedagem/publico.ts";
 import { anotar } from "../../../../shared/infra/registro.ts";
 
 /** O Projeto como o ciclo o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
-type ProjetoDoCiclo = ProjetoDoRepositorio & { imagem_do_ambiente?: string };
+type ProjetoDoCiclo = ProjetoDoRepositorio & { arquivos_de_dependencias?: readonly string[] };
 
 /** Onde o ciclo grava: a raiz da Fabriquinha (worktrees e fila git) e o log da operação. */
 interface RegistroDoCiclo {

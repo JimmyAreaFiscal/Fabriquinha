@@ -1,8 +1,7 @@
 // Falso da suíte de integração do SDLC: a hospedagem (`gh` na frente do PATH, com o estado dos PRs num JSON). O pi falso
 // é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
-import { INSTALACAO_DO_PI_FALSO } from "../apoio-testes/falsos/pi_falso.ts";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { once } from "node:events";
 import { createServer } from "node:http";
@@ -19,7 +18,7 @@ import {
 } from "../src/shared/armazenamento/configuracao_do_ambiente.ts";
 import { AmbienteContainer, ligarGestaoDeAmbientesNosModulos } from "../apoio-testes/falsos/ambiente_falso.ts";
 import { Projeto } from "../src/modulos/demandas/publico.ts";
-import { dirDoPiDoAuditor, PACOTE } from "../src/shared/infra/isolamento_do_ambiente.ts";
+import { dirDoPiDoAuditor, type InstalacaoDoHarness, PACOTE } from "../src/shared/infra/isolamento_do_ambiente.ts";
 import { levarPiFalsoParaOContainer } from "./apoio-execucao.ts";
 import { type Cenario, git } from "./apoio.ts";
 import { gravarProjeto } from "../apoio-testes/demandas_de_teste.ts";
@@ -43,26 +42,36 @@ export function ghFalso(dir: string) {
   };
 }
 
-/** O pi falso da imagem: roteiro e registro ficam em `.git/objects/pi-falso`, a única parte gravável do `.git` que o container monta. */
-const PI_DA_IMAGEM = `#!/bin/sh
-pasta=$(git rev-parse --path-format=absolute --git-common-dir)/objects/pi-falso || exit 1
-FALSO_PI_ROTEIRO="$pasta/pi-roteiro.json" FALSO_PI_REGISTRO="$pasta/pi-registro.jsonl" exec node /opt/pi-falso/pi_falso.ts "$@"
-`;
+/** Onde, na raiz do cenário, mora a instalação do harness do container: o pi falso, que a Fabriquinha monta em leitura. */
+export const pastaDoPiFalsoNoContainer = (raiz: string) => join(raiz, "pi-falso");
 
 /**
- * Faz do repositório do cenário o projeto de teste de `integracao/projeto-container/` (Dockerfile, teste, e2e e hook de
- * commit), com o pi falso na imagem, e o configura com a imagem do Ambiente. O commit já sai pelo hook do projeto.
+ * A instalação do harness do container de teste: um `pi` que roda o pi falso, já que a imagem gerada só traz Node e Git.
+ * Roteiro e registro ficam em `.git/objects/pi-falso`, a única parte gravável do `.git` que o container monta.
+ */
+function instalarPiFalsoNoContainer(raiz: string): InstalacaoDoHarness {
+  const pasta = pastaDoPiFalsoNoContainer(raiz);
+  mkdirSync(pasta, { recursive: true });
+  copyFileSync(join(import.meta.dirname, "..", "apoio-testes", "falsos", "pi_falso.ts"), join(pasta, "pi_falso.ts"));
+  const executavel = join(pasta, "pi");
+  writeFileSync(
+    executavel,
+    `#!/bin/sh
+pasta=$(git rev-parse --path-format=absolute --git-common-dir)/objects/pi-falso || exit 1
+FALSO_PI_ROTEIRO="$pasta/pi-roteiro.json" FALSO_PI_REGISTRO="$pasta/pi-registro.jsonl" exec node ${pasta}/pi_falso.ts "$@"
+`,
+    { mode: 0o755 },
+  );
+  return { comando: "pi", executavel, raiz: pasta };
+}
+
+/**
+ * Faz do repositório do cenário o projeto de teste de `integracao/projeto-container/` (package.json, teste, e2e e hook
+ * de commit) e o configura com esse arquivo de dependências, de onde a Fabriquinha gera a imagem. O commit já sai pelo
+ * hook do projeto.
  */
 export function projetoDeTesteEmContainer(c: Cenario): void {
   cpSync(join(import.meta.dirname, "projeto-container"), c.repo, { recursive: true });
-  const pastaDoPi = join(c.repo, "pi-falso");
-  mkdirSync(pastaDoPi);
-  copyFileSync(
-    join(import.meta.dirname, "..", "apoio-testes", "falsos", "pi_falso.ts"),
-    join(pastaDoPi, "pi_falso.ts"),
-  );
-  writeFileSync(join(pastaDoPi, "pi"), PI_DA_IMAGEM, { mode: 0o755 });
-  appendFileSync(join(c.repo, "Dockerfile"), "COPY --chmod=755 pi-falso /opt/pi-falso\nENV PATH=/opt/pi-falso:$PATH\n");
   git(c.repo, "add", "-A");
   git(c.repo, "commit", "-q", "-m", "projeto de teste em container");
   git(c.repo, "push", "-q", "origin", "main");
@@ -72,7 +81,7 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
     c.banco,
     Projeto.parse({
       ...projeto,
-      imagem_do_ambiente: "Dockerfile",
+      arquivos_de_dependencias: ["package.json"],
       verificacoes: {
         preparacao: ["node --version"],
         fitness: [{ nome: "e2e", comando: "npm run e2e", descricao: "o programa imprime a soma" }],
@@ -84,13 +93,14 @@ export function projetoDeTesteEmContainer(c: Cenario): void {
 
 /**
  * Liga o Ambiente `container` do serviço: a gestão de Ambientes do cenário, montada como a composição a monta (com a
- * Configuração lida do banco), o `auth.json` do pi que o container recebe e o pi falso na imagem, que devolve com a
+ * Configuração lida do banco), o `auth.json` do pi que o container recebe e o pi falso do harness, que devolve com a
  * gestão. Ao fim do teste, elimina os containers que o cenário criou. `portaDaApi` é a única porta do host que o
  * container alcança; só o teste da rede põe um servidor nela. O docker que o serviço chama é o `dockerQueCai`, que o
  * teste derruba e religa; `subirDeNovo` para a gestão e monta outra sobre o mesmo banco, como o serviço que sobe depois.
  */
 export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaDaApi = 1) {
   writeFileSync(join(dirDoPiDoAuditor(), "auth.json"), "{}");
+  const instalacaoDoPi = instalarPiFalsoNoContainer(c.raiz);
   // A conferência da subida elimina como órfão o container que o banco do teste não conhece: o docker que cai só deixa
   // a listagem mostrar os do cenário, e os do serviço que roda na máquina ficam de fora.
   const dockerQueCai = instalarDockerQueCai(mkdtempSync(join(tmpdir(), "docker-que-cai-")));
@@ -116,7 +126,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
         porta_da_api: portaDaApi,
         home_do_usuario: c.raiz,
         pacote_do_harness: PACOTE,
-        instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
+        instalacao_do_harness: () => instalacaoDoPi,
         dir_do_harness_do_auditor: dirDoPiDoAuditor(),
       },
       registrarErro: noLog,

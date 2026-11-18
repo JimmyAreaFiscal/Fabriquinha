@@ -3,16 +3,16 @@
 // só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pipeline } from "node:stream/promises";
-import { dirname, join } from "node:path";
+import { join, posix } from "node:path";
 import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import {
   type InstalacaoDoHarness,
   PASTA_DAS_ENTRADAS_DE_WORKTREE_DA_FABRIQUINHA,
 } from "../../../../shared/infra/isolamento_do_ambiente.ts";
-import { executar } from "../../../../shared/infra/processo.ts";
+import { executar, git } from "../../../../shared/infra/processo.ts";
 import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import {
   DOCKERFILE_DAS_REGRAS_DE_REDE,
@@ -45,7 +45,7 @@ export const DIR_DO_PI_NO_HOME = ".pi/agent";
 /** O token do GitHub, que sai das cópias para o container e do `.env` do projeto que o container recebe. */
 export const PADRAO_DE_TOKEN_DO_GITHUB = "gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}";
 
-/** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile>` ou o nome da imagem do projeto. */
+/** O nome da imagem pronta no docker: `fabriquinha/<projeto>:<sha256 do Dockerfile gerado e dos arquivos de dependências>`. */
 type ImagemDoAmbiente = string;
 
 interface Limites {
@@ -124,11 +124,115 @@ interface ContainerCriadoNoSlot extends ContainerCriado {
   slot: number;
 }
 
-/** O projeto que tem imagem: `imagem_do_ambiente` é o caminho de um Dockerfile no repositório ou o nome de uma imagem. */
-interface ProjetoComImagem {
+/**
+ * O projeto que tem Ambiente em container: `arquivos_de_dependencias` são caminhos relativos à `raiz_git`, lidos da
+ * `origin/<branch_base>` do clone, a mesma ref de onde nascem as worktrees, nunca da branch local nem da cópia de trabalho.
+ */
+interface ProjetoComDependencias {
   nome: string;
   raiz_git: string;
-  imagem_do_ambiente: string;
+  branch_base: string;
+  arquivos_de_dependencias: readonly string[];
+}
+
+const REQUIREMENTS = "requirements.txt";
+const PACKAGE_JSON = "package.json";
+const PACKAGE_LOCK = "package-lock.json";
+/**
+ * O fim de toda camada que roda como root: o que o root deixa no `/tmp` o `node` não apaga, e a limpeza do sandbox
+ * falha; os caches do apt, do npm e do pip só pesam na imagem.
+ */
+const LIMPEZA_DA_CAMADA_DE_ROOT = "rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache /tmp/*";
+
+// shortcut: base única Node com Git (o harness precisa de Node) e o Python do Debian; separar a base por ecossistema
+// quando a versão do Python importar.
+/**
+ * O Dockerfile do Ambiente: Git, o procps (o `ps` e o `pkill` que os testes usam), o Python com pip e venv (os agentes
+ * rodam código Python em qualquer projeto), o fuso do host, o usuário não-root e as dependências já instaladas em
+ * `/dependencias`; com o Playwright no `package.json`, também o Chromium dele.
+ */
+function dockerfileDasDependencias(nomesDosArquivosDeDependencias: readonly string[]): string {
+  const comRequirements = nomesDosArquivosDeDependencias.includes(REQUIREMENTS);
+  const comPackageJson = nomesDosArquivosDeDependencias.includes(PACKAGE_JSON);
+  return [
+    "FROM node:22-bookworm-slim",
+    "RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates procps python3 python3-pip python3-venv \\",
+    "    && git config --system --add safe.directory '*' \\",
+    '    && git config --system user.name "Fabriquinha" \\',
+    '    && git config --system user.email "fabriquinha@exemplo.com" \\',
+    "    && mkdir -p /fabriquinha/pids /dependencias \\",
+    "    && chown node:node /fabriquinha/pids \\",
+    `    && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+    "WORKDIR /dependencias",
+    ...(comRequirements
+      ? [
+          `COPY ${REQUIREMENTS} ./`,
+          `RUN pip install --no-cache-dir --break-system-packages -r ${REQUIREMENTS} && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+        ]
+      : []),
+    ...(comPackageJson
+      ? [
+          `COPY ${PACKAGE_JSON} ${PACKAGE_LOCK} ./`,
+          `RUN npm ci && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+          "ENV NODE_PATH=/dependencias/node_modules PATH=/dependencias/node_modules/.bin:$PATH",
+          // O navegador do Playwright e as bibliotecas de sistema dele, na versão do package.json, numa pasta que o node lê.
+          "ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+          "RUN if [ -x node_modules/.bin/playwright ]; then node_modules/.bin/playwright install --with-deps chromium \\",
+          `    && chmod -R a+rX /ms-playwright; fi && ${LIMPEZA_DA_CAMADA_DE_ROOT}`,
+        ]
+      : []),
+    // O fuso do host: sem ele, os testes de data e hora falham no container.
+    "ENV TZ=America/Sao_Paulo",
+    "USER node",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Grava em `destino` o `caminho` como ele está em `refs/remotes/origin/<branch_base>`, a ref de onde as worktrees nascem:
+ * a imagem nunca diverge da worktree, com a branch local atrás ou à frente. Ausente lá, explica.
+ */
+async function copiarDaBranchBase(projeto: ProjetoComDependencias, caminho: string, destino: string): Promise<void> {
+  const refDaBranchBase = `refs/remotes/origin/${projeto.branch_base}`;
+  const { codigo, saida, erro } = await git(projeto.raiz_git, "show", `${refDaBranchBase}:${caminho}`);
+  if (codigo !== 0)
+    throw new ErroDeRegra(
+      `o arquivo de dependências ${caminho} não existe em origin/${projeto.branch_base} (${erro.trim()})`,
+      `confira o caminho na Configuração do projeto e se ele está publicado na ${projeto.branch_base} do origin`,
+    );
+  writeFileSync(destino, saida);
+}
+
+/**
+ * Copia da `branch_base` os arquivos de dependências (e o `package-lock.json`, que o `npm ci` exige) para `contexto` e
+ * devolve os nomes deles.
+ */
+async function copiarDependenciasParaOContexto(projeto: ProjetoComDependencias, contexto: string): Promise<string[]> {
+  const nomesDosArquivosDeDependencias = projeto.arquivos_de_dependencias.map((caminho) => posix.basename(caminho));
+  const nomeNaoSuportado = nomesDosArquivosDeDependencias.find(
+    (nome) => nome !== REQUIREMENTS && nome !== PACKAGE_JSON,
+  );
+  if (
+    nomeNaoSuportado !== undefined ||
+    new Set(nomesDosArquivosDeDependencias).size !== nomesDosArquivosDeDependencias.length
+  )
+    throw new ErroDeRegra(
+      `arquivos de dependências não suportados: ${nomesDosArquivosDeDependencias.join(", ")}`,
+      `aponte no máximo um ${REQUIREMENTS} e um ${PACKAGE_JSON}`,
+    );
+  for (const caminho of projeto.arquivos_de_dependencias) {
+    const nomeDoArquivo = posix.basename(caminho);
+    await copiarDaBranchBase(projeto, caminho, join(contexto, nomeDoArquivo));
+    if (nomeDoArquivo !== PACKAGE_JSON) continue;
+    const caminhoDoLockfile = posix.join(posix.dirname(caminho), PACKAGE_LOCK);
+    await copiarDaBranchBase(projeto, caminhoDoLockfile, join(contexto, PACKAGE_LOCK)).catch(() => {
+      throw new ErroDeRegra(
+        `o ${PACKAGE_JSON} ${caminho} não tem ${PACKAGE_LOCK} ao lado em origin/${projeto.branch_base}, e o npm ci precisa dele`,
+        `gere o ${PACKAGE_LOCK} com npm install e o versione`,
+      );
+    });
+  }
+  return nomesDosArquivosDeDependencias;
 }
 
 async function rodarDocker(args: string[], limiteMs: number): Promise<string> {
@@ -294,18 +398,26 @@ export class GeradorDeAmbientes {
     this.#limiteDoComandoMs = limiteDoComandoMs;
   }
 
-  /** Faz o build do Dockerfile ou o pull da imagem, se ela ainda não está na máquina. */
-  async garantirImagem(projeto: ProjetoComImagem): Promise<ImagemDoAmbiente> {
-    const dockerfile = join(projeto.raiz_git, projeto.imagem_do_ambiente);
-    const ehDockerfile = existsSync(dockerfile);
-    const imagem = ehDockerfile
-      ? `fabriquinha/${projeto.nome}:${createHash("sha256").update(readFileSync(dockerfile)).digest("hex")}`
-      : projeto.imagem_do_ambiente;
-    const { codigo } = await executar("docker", ["image", "inspect", imagem], { limiteMs: this.#limiteDoComandoMs });
-    if (codigo !== 0 && ehDockerfile)
-      await rodarDocker(["build", "-t", imagem, "-f", dockerfile, dirname(dockerfile)], LIMITE_COMANDO_MS);
-    else if (codigo !== 0) await rodarDocker(["pull", imagem], LIMITE_COMANDO_MS);
-    return imagem;
+  /**
+   * Gera a imagem com as dependências instaladas, se ela ainda não está na máquina. A tag leva o hash do Dockerfile e dos
+   * arquivos (e do lockfile do Node): sem mudança neles, reaproveita a imagem; com mudança, gera outra.
+   */
+  async garantirImagem(projeto: ProjetoComDependencias): Promise<ImagemDoAmbiente> {
+    const contexto = mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-"));
+    try {
+      const nomesDosArquivosDeDependencias = await copiarDependenciasParaOContexto(projeto, contexto);
+      const dockerfile = dockerfileDasDependencias(nomesDosArquivosDeDependencias);
+      writeFileSync(join(contexto, "Dockerfile"), dockerfile);
+      const hashDoContexto = createHash("sha256").update(dockerfile);
+      for (const arquivo of readdirSync(contexto).sort((a, b) => a.localeCompare(b)))
+        hashDoContexto.update(arquivo).update(readFileSync(join(contexto, arquivo)));
+      const imagem = `fabriquinha/${projeto.nome}:${hashDoContexto.digest("hex")}`;
+      const { codigo } = await executar("docker", ["image", "inspect", imagem], { limiteMs: this.#limiteDoComandoMs });
+      if (codigo !== 0) await rodarDocker(["build", "-t", imagem, contexto], LIMITE_COMANDO_MS);
+      return imagem;
+    } finally {
+      rmSync(contexto, { recursive: true, force: true });
+    }
   }
 
   // shortcut: o `tail` não colhe processos mortos, que ficam zumbis até eliminar o container; `--init` não serve, porque o

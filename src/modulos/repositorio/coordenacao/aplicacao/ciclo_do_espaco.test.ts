@@ -260,12 +260,16 @@ async function cenarioComContainer() {
     await noHostLocal.parar();
   });
   const registro = { raiz: c.raiz, log: c.log };
-  const projeto = { ...c.projeto, imagem_do_ambiente: "alpine" };
+  // A imagem lê as dependências de origin/<branch_base>: o clone as commita e as publica.
+  commitarArquivo(c.projeto.raiz_git, "package.json", "{}");
+  commitarArquivo(c.projeto.raiz_git, "package-lock.json", "{}");
+  rodarGit(c.projeto.raiz_git, "push", "-q", "origin", c.projeto.branch_base);
+  const projeto = { ...c.projeto, arquivos_de_dependencias: ["package.json"] };
   return {
     c,
     docker,
     banco,
-    cicloDaDemanda: (projetoDoCiclo: typeof c.projeto & { imagem_do_ambiente?: string } = projeto) =>
+    cicloDaDemanda: (projetoDoCiclo: typeof c.projeto & { arquivos_de_dependencias?: string[] } = projeto) =>
       new CicloDoEspacoDaDemanda(espacoDemanda, projetoDoCiclo, registro, ambiente, emContainer),
     cicloDaDemandaNoHostLocal: () =>
       new CicloDoEspacoDaDemanda(espacoDemanda, projeto, registro, ambiente, noHostLocal),

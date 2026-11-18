@@ -10,7 +10,7 @@ import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_f
 import { inserirAmbienteAlocado, listarAmbientes } from "../../sandboxes/armazenamento/ambientes.ts";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
-import { espacoDaRodada, ocupanteDoAmbiente } from "../../../../../apoio-testes/repositorio_de_teste.ts";
+import { espacoDaRodada, ocupanteDoAmbiente, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { Projeto } from "../../../demandas/publico.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
@@ -31,16 +31,24 @@ after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const projetoComImagem = (imagem_do_ambiente?: string) =>
+writeFileSync(join(base, "package.json"), "{}");
+writeFileSync(join(base, "package-lock.json"), "{}");
+writeFileSync(join(base, "requirements.txt"), "requests\n");
+// A imagem lê as dependências de origin/main: o clone de teste as commita e as publica nessa ref.
+rodarGit(base, "init", "-q", "-b", "main");
+rodarGit(base, "add", "package.json", "package-lock.json", "requirements.txt");
+rodarGit(base, "commit", "-q", "-m", "dependências");
+rodarGit(base, "update-ref", "refs/remotes/origin/main", "HEAD");
+const projetoComDependencias = (arquivo?: string) =>
   Projeto.parse({
     nome: "loja",
     raiz_git: base,
     branch_base: "main",
     hospedagem: "github",
     chave_sonarqube: "Loja",
-    ...(imagem_do_ambiente && { imagem_do_ambiente }),
+    ...(arquivo && { arquivos_de_dependencias: [arquivo] }),
   });
-const projeto = projetoComImagem("alpine");
+const projeto = projetoComDependencias("package.json");
 /** O Espaço como o conjunto o vê. */
 const noConjunto = (espaco: EspacoDeTrabalho) => ocupanteDoAmbiente(espaco, base, projeto.nome);
 const espacoA = noConjunto(espacoDaDemanda(projeto, "I-1", base));
@@ -114,7 +122,7 @@ test("alocar sem livre cria o container com os limites da configuração e grava
   const [gravado] = listarAmbientes(banco);
   assert.equal(gravado?.estado, "alocado");
   assert.equal(gravado.alocado_para, "I-1");
-  assert.equal(gravado.imagem, "alpine");
+  assert.match(gravado.imagem, /^fabriquinha\/loja:[0-9a-f]{64}$/);
   assert.equal(ambiente.id, gravado.id);
   const [container] = docker.containers();
   assert.equal(container?.id, ambiente.container_id);
@@ -207,9 +215,9 @@ test("alocar e limpar gravam o instante do relógio recebido", async () => {
   assert.equal(listarAmbientes(banco)[0]?.liberado_em, "2026-01-02T03:04:05.000Z");
 });
 
-test("no host_local, ou para o projeto sem imagem do Ambiente, alocar devolve o Ambiente do serviço sem tocar o docker", async () => {
+test("no host_local, ou para o projeto sem arquivos de dependências, alocar devolve o Ambiente do serviço sem tocar o docker", async () => {
   const { gestao, configuracao, chamadasDepoisDaMontagem } = await cenario();
-  const doServico = await gestao.alocar(espacoA, projetoComImagem());
+  const doServico = await gestao.alocar(espacoA, projetoComDependencias());
   assert.ok(doServico instanceof AmbienteHostLocal);
   configuracao.atual = { ...configuracao.atual, tipo: "host_local" };
   assert.equal(await gestao.alocar(espacoA, projeto), doServico);
@@ -290,16 +298,11 @@ test("no host_local, deletar ainda elimina o container que sobrou do tipo contai
 
 test("o livre de outra imagem não é reusado", async () => {
   const { banco, gestao, alocar, criacoes } = await cenario();
-  const daAlpine = await alocar();
-  await gestao.limpar(daAlpine.id);
-  const daBusybox = await alocar(espacoB, projetoComImagem("busybox"));
-  assert.notEqual(daBusybox.container_id, daAlpine.container_id);
-  assert.deepEqual(
-    listarAmbientes(banco)
-      .map(({ imagem }) => imagem)
-      .sort(),
-    ["alpine", "busybox"],
-  );
+  const doNode = await alocar();
+  await gestao.limpar(doNode.id);
+  const doPython = await alocar(espacoB, projetoComDependencias("requirements.txt"));
+  assert.notEqual(doPython.container_id, doNode.container_id);
+  assert.equal(new Set(listarAmbientes(banco).map(({ imagem }) => imagem)).size, 2);
   assert.equal(criacoes().length, 2);
 });
 

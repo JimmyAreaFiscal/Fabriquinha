@@ -51,10 +51,13 @@ import {
 import { cicloDoEspaco } from "./ciclo_do_espaco.ts";
 
 /** O Projeto como o Espaço o lê: o repositório e, se houver, a imagem do Ambiente que o conjunto aloca ao Espaço. */
-type ProjetoDoEspaco = ProjetoDoRepositorio & { imagem_do_ambiente?: string };
+type ProjetoDoEspaco = ProjetoDoRepositorio & { arquivos_de_dependencias?: readonly string[] };
 
-/** O Projeto como o Ambiente do Espaço o lê para alocar: o nome, o clone e, se houver, a imagem do Ambiente. */
-type ProjetoDoAmbienteDoEspaco = Pick<ProjetoDoEspaco, "nome" | "raiz_git" | "imagem_do_ambiente">;
+/** O Projeto como o Ambiente do Espaço o lê para alocar: o nome, o clone e, se houver, os arquivos de dependências. */
+type ProjetoDoAmbienteDoEspaco = Pick<
+  ProjetoDoEspaco,
+  "nome" | "raiz_git" | "branch_base" | "arquivos_de_dependencias"
+>;
 
 /** O que o PR leva: título e corpo já no limite da hospedagem, os PRs já registrados e a marca que adota o perdido. */
 interface PedidoDePR {
@@ -266,7 +269,7 @@ export function montarRepositorio({ banco, ambientes, varredura }: MontagemDoRep
   const ambienteDoEspaco = (espaco: EspacoDeTrabalho): Ambiente => gestao().ambienteDo(ocupanteDoDono(espaco.dono));
   /**
    * Roda `trabalhoNoAmbiente` no Ambiente do Espaço. O Espaço que devolveu o seu (I-312) aloca um só para isto e o devolve
-   * ao fim: o git nunca roda no host sobre a worktree que o agente escreveu. No host local, ou sem imagem do Ambiente, é o
+   * ao fim: o git nunca roda no host sobre a worktree que o agente escreveu. No host local, ou sem arquivo de dependências, é o
    * do serviço, como sempre.
    */
   const noAmbienteDoEspaco = async <T>(

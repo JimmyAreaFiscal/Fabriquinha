@@ -95,8 +95,8 @@ const CAMPOS_DO_PROJETO = {
   hospedagem: Hospedagem,
   chave_sonarqube: Texto,
   etapas: Etapas,
-  // Dockerfile no repositório ou nome de imagem; sem ela o projeto continua no host local.
-  imagem_do_ambiente: Texto.optional(),
+  // Os arquivos de dependências do repositório (`requirements.txt`, `package.json`); sem eles o projeto continua no host local.
+  arquivos_de_dependencias: z.array(CaminhoRelativo).min(1).optional(),
 };
 
 export const Projeto = z.strictObject({

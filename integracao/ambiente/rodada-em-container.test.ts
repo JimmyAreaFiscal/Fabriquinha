@@ -1,5 +1,5 @@
 // I-288.R3: o trabalho de um Espaço no container de verdade (CONCEITOS.md §7). O projeto de teste é o de
-// `projeto-container/` (imagem com node e git, teste, e2e e hook de commit) e o pi é o falso da imagem. Pulado sem
+// `projeto-container/` (package.json, teste, e2e e hook de commit; a imagem sai dele) e o pi é o falso do harness. Pulado sem
 // `FABRIQUINHA_TESTE_DOCKER`, porque exige o Docker rodando e constrói a imagem na primeira vez.
 import { montarCicloDeVidaDoBanco, montarDemandasDoBanco } from "../../src/server/system/banco_da_fabriquinha.ts";
 import assert from "node:assert/strict";
@@ -11,7 +11,7 @@ import { type AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { servir } from "../../apoio-testes/servidor_web_de_teste.ts";
-import { INSTALACAO_DO_PI_FALSO, type PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
+import type { PassoPi } from "../../apoio-testes/falsos/pi_falso.ts";
 import {
   despachoDasEtapas,
   ConducaoDePlanejar,
@@ -55,6 +55,7 @@ import {
   ghFalso,
   instalarSonarFalso,
   ligarContainerAoCenario,
+  pastaDoPiFalsoNoContainer,
   projetoDeTesteEmContainer,
   raizCompartilhadaComODocker,
 } from "../falsos.ts";
@@ -79,7 +80,7 @@ const despachoComVerificacoesReais = despachoDasEtapas({ implementacao: implemen
 /** O pi do planejamento sai sozinho ao receber o prompt: interrompê-lo por sinal pede o Ambiente do processo. */
 const PLANEJAMENTO_QUE_SAI_SOZINHO: PassoPi = { uso: null, sai: { codigo: 0 } };
 
-/** O cenário com o projeto de teste e o Ambiente `container` ligado, e o pi falso da imagem dele. */
+/** O cenário com o projeto de teste e o Ambiente `container` ligado, e o pi falso do harness dele. */
 /** A gestão de Ambientes do cenário em andamento: os testes deste arquivo rodam um por vez. */
 let gestaoDoCenario: GestaoDeAmbientes | undefined;
 
@@ -120,7 +121,7 @@ function amostrarProcessosDoHost(t: TestContext): { linhas: () => string[] } {
 }
 
 // O que só deve existir dentro do container: o pi, os comandos de teste do projeto de teste e o hook de commit dele.
-const SO_NO_CONTAINER = /pi_falso|\/opt\/pi-falso|--mode rpc|node --test src\/|npm (test|run e2e)|hooks\/pre-commit/;
+const SO_NO_CONTAINER = /pi_falso|--mode rpc|node --test src\/|npm (test|run e2e)|hooks\/pre-commit/;
 
 test(
   "CA-1: a Rodada inteira (implementar, revisar_rodada e encerrar_rodada) roda no container e o PR é aberto pelo core",
@@ -605,7 +606,8 @@ test(
       !origens.some((origem) => copiadas.some((copiada) => origem === copiada || origem?.startsWith(`${copiada}/`))),
     );
     // A décima é a instalação do pi, só em leitura.
-    assert.ok(binds?.includes(`${INSTALACAO_DO_PI_FALSO.raiz}:${INSTALACAO_DO_PI_FALSO.raiz}:ro`));
+    const pastaDoPi = pastaDoPiFalsoNoContainer(c.raiz);
+    assert.ok(binds?.includes(`${pastaDoPi}:${pastaDoPi}:ro`));
     assert.equal(binds?.length, 10);
   },
 );

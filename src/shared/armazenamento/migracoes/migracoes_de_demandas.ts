@@ -43,6 +43,15 @@ DROP TABLE demanda;
 ALTER TABLE demanda_nova RENAME TO demanda;
 `;
 
+// A migração 58, de Demandas: o projeto aponta os arquivos de dependências (lista em JSON) no lugar da imagem do Ambiente.
+// O `Dockerfile` do repositório passa a `package.json`, o arquivo equivalente; o nome de imagem publicada não tem
+// equivalente, e esse projeto volta a rodar no host local.
+const MIGRACAO_58_ARQUIVOS_DE_DEPENDENCIAS = `
+ALTER TABLE projeto ADD COLUMN arquivos_de_dependencias TEXT CHECK (arquivos_de_dependencias IS NULL OR json_valid(arquivos_de_dependencias));
+UPDATE projeto SET arquivos_de_dependencias = '["package.json"]' WHERE imagem_do_ambiente = 'Dockerfile';
+ALTER TABLE projeto DROP COLUMN imagem_do_ambiente;
+`;
+
 /**
  * As migrações de Demandas, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. Moram
  * no histórico do esquema, e não na fachada de Demandas, que só expõe a GestaoDeDemandas.
@@ -52,5 +61,6 @@ export const MIGRACOES_DE_DEMANDAS = {
   migracoes: [
     { versao: 51, migracao: MIGRACAO_51_SITUACAO_DO_PEDIDO },
     { versao: 53, migracao: MIGRACAO_53_DEMANDA_SO_COM_O_PEDIDO },
+    { versao: 58, migracao: MIGRACAO_58_ARQUIVOS_DE_DEPENDENCIAS },
   ],
 };

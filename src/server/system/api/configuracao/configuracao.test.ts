@@ -428,6 +428,22 @@ test("o formulário do projeto não tem mais o link do produto da Simulação (t
   assert.equal(buscarProjeto(banco, "loja"), undefined);
 });
 
+test("arquivos_de_dependencias: o formulário os grava e devolve, e a imagem do Ambiente não existe mais (CA-5)", async () => {
+  const repo = clone();
+  const arquivos_de_dependencias = ["package.json", "api/requirements.txt"];
+  assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), arquivos_de_dependencias }), {
+    ...gravado(repo),
+    arquivos_de_dependencias,
+  });
+  assert.deepEqual(buscarProjeto(banco, "loja")?.arquivos_de_dependencias, arquivos_de_dependencias);
+  const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
+    ...formulario(repo),
+    imagem_do_ambiente: "Dockerfile",
+  })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(erro, /imagem_do_ambiente/);
+});
+
 test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", async () => {
   const pasta = mkdtempSync(join(base, "nao-git-"));
   assert.deepEqual(await chamar("POST", "/api/projetos", formulario(pasta)), [
@@ -575,21 +591,4 @@ test("ambiente: a lista traz só o conjunto da Fabriquinha; eliminar remove o li
   );
   const idsMexidos = docker.registro().flat();
   assert.ok(!idsMexidos.includes(sonarqube.id) && !idsMexidos.includes(doUsuario.id));
-});
-
-test("imagem do Ambiente: cadastrar e editar a gravam, o GET a devolve e editar sem o campo a apaga", async () => {
-  const repo = clone();
-  const comImagem = { ...gravado(repo), imagem_do_ambiente: "Dockerfile" };
-  assert.deepEqual(
-    await chamar("POST", "/api/projetos", { ...formulario(repo), imagem_do_ambiente: "Dockerfile" }),
-    comImagem,
-  );
-  assert.equal(buscarProjeto(banco, "loja")?.imagem_do_ambiente, "Dockerfile");
-  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), comImagem);
-  assert.deepEqual(await chamar("POST", "/api/projetos/loja", { ...formulario(repo), imagem_do_ambiente: "node:22" }), {
-    ...comImagem,
-    imagem_do_ambiente: "node:22",
-  });
-  assert.deepEqual(await chamar("POST", "/api/projetos/loja", formulario(repo)), gravado(repo));
-  assert.equal(Object.hasOwn(buscarProjeto(banco, "loja") ?? {}, "imagem_do_ambiente"), false);
 });

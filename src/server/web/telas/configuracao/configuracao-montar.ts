@@ -45,7 +45,7 @@ function errosDe(erro: unknown): Erros {
 }
 
 const valor = (raiz: ParentNode, seletor: string): string =>
-  raiz.querySelector<HTMLInputElement | HTMLSelectElement>(seletor)?.value ?? "";
+  raiz.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(seletor)?.value ?? "";
 
 /** O que o formulário do agendador tem agora, no formato do F4 §3. */
 const lerAgendador = (form: HTMLFormElement) => ({
@@ -68,12 +68,16 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       configuracoes[etapa] = { ...(modelo && { modelo }), ...(effort && { effort: effort as Effort }) };
     }
   }
-  const imagem = valor(form, '[name="imagem_do_ambiente"]').trim();
+  const arquivosDeDependencias = valor(form, '[name="arquivos_de_dependencias"]')
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
   return {
     nome: valor(form, '[name="nome"]'),
     raiz_git: valor(form, '[name="raiz_git"]'),
     branch_base: valor(form, '[name="branch_base"]'),
-    ...(imagem && { imagem_do_ambiente: imagem }),
+    // Sem linha, o campo fica de fora: o projeto sem arquivo de dependências roda no host.
+    ...(arquivosDeDependencias.length > 0 && { arquivos_de_dependencias: arquivosDeDependencias }),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     configuracoes,
@@ -250,7 +254,7 @@ function montarProjeto(
   modelosDoPi: readonly Modelo[],
   ambienteEmContainer: boolean,
 ): void {
-  const rodaNoHost = ambienteEmContainer && salvo !== undefined && salvo.imagem_do_ambiente === undefined;
+  const rodaNoHost = ambienteEmContainer && salvo !== undefined && !salvo.arquivos_de_dependencias?.length;
   const inicial: Rascunho = salvo ? rascunhoDe(salvo) : NOVO;
   const desenhar = (p: Rascunho, erros: Erros, falha?: string): void => {
     main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, rodaNoHost, falha }));
