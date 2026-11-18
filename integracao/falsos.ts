@@ -2,7 +2,7 @@
 // é o de `apoio-testes/falsos/pi_falso.ts`. Combinado com a I-244: quem precisa de mais, acrescenta aqui.
 import { execFileSync } from "node:child_process";
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -174,10 +174,11 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
 
 /**
  * Uma raiz nova para o cenário, na home: o Docker Desktop só compartilha com o container as pastas dela, e o cenário
- * monta a worktree, o `.git` e as sessões. `criarCenario` a apaga ao fim do teste.
+ * monta a worktree, o `.git` e as sessões. `criarCenario` a apaga ao fim do teste. O home vem do sistema, e não do
+ * `HOME`, que o harness dos testes troca por uma pasta temporária.
  */
 export function raizCompartilhadaComODocker(): string {
-  const pasta = join(homedir(), ".cache");
+  const pasta = join(userInfo().homedir, ".cache");
   mkdirSync(pasta, { recursive: true });
   return mkdtempSync(join(pasta, "teste-com-docker-"));
 }
