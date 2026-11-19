@@ -369,6 +369,16 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
   assert.match(revisar, /- \*\*camadas\*\* \(camadas\): `npm run fitness` saiu com código 1; log `camadas\.log`/);
   assert.match(revisar, /- \*\*ciclos\*\* \(camadas\): `npm run fitness` estourou o tempo; log `ciclos\.log`/);
   assert.ok(revisar.includes("- `camadas.log`: `/raiz/arquivos/camadas.log`") && !revisar.includes("outro.log"));
+  // I-322 CA-2: o revisar_demanda lê a matriz do próprio ticket, sem o diff da rodada.
+  const revisarDemanda = montarCom(comEvidencias, "revisar_demanda");
+  assert.match(
+    revisarDemanda,
+    /## Matriz de fitness functions\n[\s\S]*- \*\*camadas\*\* \(camadas\): `npm run fitness` saiu com código 1; log `camadas\.log`/,
+  );
+  assert.ok(
+    revisarDemanda.includes("- `camadas.log`: `/raiz/arquivos/camadas.log`") && !revisarDemanda.includes("outro.log"),
+  );
+  assert.ok(!revisarDemanda.includes("## Arquivos alterados"));
   assert.match(revisar, /- `src\/a\.ts` \(M, \+2 −1\): src\/\*\*\n- `logo\.png` \(A, binário\): não previsto/);
   assert.match(revisar, /não tocou:\n\n- `src\/c\.ts`/);
   assert.match(montar("revisar_rodada"), /execução:\n\n\(nenhuma\)[\s\S]*você lê:\n\n\(nenhum\)/);

@@ -26,6 +26,7 @@ const TABELA = [
   ["encerrar_rodada", "relatorio_produtividade", F, true, "ticket", null],
   ["encerrar_rodada", "pr_aberto", F, true, "ticket", null],
   ["encerrar_rodada", "video_demonstracao", A, false, "ticket", null],
+  ["revisar_demanda", "matriz_fitness", F, true, "ticket", null],
   ["revisar_demanda", "comprovacao_criterios", A, true, "ticket", "criterios_demanda_atendidos"],
   ["revisar_demanda", "testes_estresse", A, true, "ticket", null],
   ["revisar_demanda", "analise_seguranca", A, true, "ticket", null],
@@ -44,7 +45,7 @@ const linha = (i: (typeof CATALOGO_ETAPAS)[number]) => [
   i.regraAprovacao,
 ];
 
-test("catálogo bate com a tabela fixa: 27 itens, 22 tipos, 10 regras", () => {
+test("catálogo bate com a tabela fixa: 28 itens, 22 tipos, 10 regras", () => {
   assert.deepEqual(
     CATALOGO_ETAPAS.map(linha),
     TABELA.map((l) => [...l]),

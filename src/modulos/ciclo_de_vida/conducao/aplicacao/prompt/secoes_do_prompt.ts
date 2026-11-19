@@ -27,6 +27,30 @@ export const arquivosAlteradosDoRevisor = (ag: AgregadoDemanda, revisor: number)
   ag.evidencias.find((e) => e.tipo === "arquivos_alterados" && e.ticket_id === revisor)?.dados as
     ArquivosAlterados | undefined;
 
+type LinhaFitness = Record<"nome" | "descricao" | "comando" | "log", string> & {
+  codigoSaida: number | null;
+  estourou: boolean;
+};
+
+/** Revisões: a matriz que a Fabriquinha coletou antes do pi, com o arquivo de cada log; o revisor a explica. */
+export function secaoMatrizFitness({ ag, ticket, anexos }: ContextoDoPrompt): string {
+  const ehMatrizDoTicket = (e: { tipo: string; ticket_id?: number }) =>
+    e.tipo === "matriz_fitness" && e.ticket_id === ticket.ticket_id;
+  const linhasDaMatriz =
+    (ag.evidencias.find(ehMatrizDoTicket)?.dados as { linhas: LinhaFitness[] } | undefined)?.linhas ?? [];
+  const resultadoDoComando = (l: LinhaFitness) =>
+    l.estourou ? "estourou o tempo" : `saiu com código ${String(l.codigoSaida)}`;
+  return secao(
+    "Matriz de fitness functions",
+    "A Fabriquinha rodou cada fitness function na worktree antes desta execução:\n\n" +
+      (linhasDaMatriz
+        .map((l) => `- **${l.nome}** (${l.descricao}): \`${l.comando}\` ${resultadoDoComando(l)}; log \`${l.log}\``)
+        .join("\n") || "(nenhuma)") +
+      "\n\nOs logs, em arquivos que você lê:\n\n" +
+      (anexos.filter(ehMatrizDoTicket).map(linhaDoAnexo).join("\n") || "(nenhum)"),
+  );
+}
+
 const VERIFICACOES_DO_COMMIT = ["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const;
 
 /**

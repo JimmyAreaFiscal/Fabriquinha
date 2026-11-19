@@ -350,22 +350,65 @@ export async function revisaoIntegral(
         agenteDoTicket,
       );
     } else {
-      const plano = {
-        demanda_id: id,
-        criterios: ["CA-1"],
-        rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
-        tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
-      };
       await decidirGate(
         modulosDoCicloDeTeste(c.banco),
         "gate_revisao_demanda",
         Endereco.daDemanda(id),
-        { resultado: "reprovado", motivo: decisao.motivo, correcoes: plano },
+        { resultado: "reprovado", motivo: decisao.motivo, correcoes: planoCorretivo(id) },
         agenteDoTicket,
       );
     }
   });
   return revisor;
+}
+
+/** O plano de uma rodada corretiva para o critério CA-1. */
+const planoCorretivo = (id: string) => ({
+  demanda_id: id,
+  criterios: ["CA-1"],
+  rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
+  tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
+});
+
+/**
+ * Revisão integral em que a fitness `integracao` quebra só no branch da demanda: a Fabriquinha grava a matriz do ticket com a
+ * linha falhando, a aprovação é recusada e o agente reprova com a rodada corretiva. Devolve o ticket revisor e a mensagem da recusa.
+ */
+export async function revisaoIntegralComFitnessQuebrada(
+  c: Cenario,
+  id: string,
+): Promise<{ revisor: number; recusa: string }> {
+  let revisor = 0;
+  let recusa = "";
+  await despacharComAgente(c, despachoComEsperaCurta(), async () => {
+    const ticket = ultimoDaEtapa(c, id, "revisar_demanda");
+    assert.equal(ticket?.estado, "em_execucao", "a revisão integral espera a decisão do agente");
+    revisor = ticket.ticket_id;
+    const agenteDoTicket = agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id: revisor });
+    comoAgente(c, id, revisor, [
+      ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
+      ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
+      ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
+    ]);
+    const decidir = (decisao: object) =>
+      decidirGate(
+        modulosDoCicloDeTeste(c.banco),
+        "gate_revisao_demanda",
+        Endereco.daDemanda(id),
+        decisao,
+        agenteDoTicket,
+      );
+    await assert.rejects(decidir({ resultado: "aprovado" }), (erro: Error) => {
+      recusa = erro.message;
+      return true;
+    });
+    await decidir({
+      resultado: "reprovado",
+      motivo: "a fitness integracao quebra com as rodadas juntas",
+      correcoes: planoCorretivo(id),
+    });
+  });
+  return { revisor, recusa };
 }
 
 /** Aprova o PR que o encerramento da rodada publicou, como o Auditor, e integra a rodada na demanda. */

@@ -45,6 +45,30 @@ test("o ticket global roda na worktree da demanda e, sem decisão, falha", async
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
 
+test("CA-1, CA-2: a matriz do ticket é gravada antes do pi e o prompt dele a traz com o log", async () => {
+  const { banco, piFalso } = await cenarioRevisao({ integral: true });
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
+  const matriz = carregarDemanda(banco, "I-1").evidencias.filter(
+    (e) => e.ticket_id === 3 && e.tipo === "matriz_fitness",
+  );
+  assert.equal(matriz.length, 1);
+  const prompt = piFalso.prompts()[0]?.prompt ?? "";
+  assert.match(
+    prompt,
+    /## Matriz de fitness functions\n[\s\S]*- \*\*f\*\* \(d\): `true` saiu com código 0; log `f\.log`/,
+  );
+  assert.match(prompt, /- `f\.log`: `/);
+});
+
+test("CA-7: preparação que lança falha o ticket sem matriz e sem rodar o pi", async () => {
+  const { banco, pastas } = await cenarioRevisao({ integral: true });
+  banco.exec("DELETE FROM linguagem_projeto");
+  await conducao(banco).conduzir(reservadoPeloDespacho(banco, REVISOR));
+  assert.match(estado(banco).motivo ?? "", /não tem configuração/);
+  assert.deepEqual(pastas(), []);
+  assert.equal(carregarDemanda(banco, "I-1").evidencias.filter((e) => e.tipo === "matriz_fitness").length, 0);
+});
+
 test("pi com falha deixa o ticket falhou e a demanda em revisar_demanda", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);

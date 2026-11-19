@@ -50,6 +50,7 @@ const EVIDENCIAS_RODADA: [string, object][] = [
   ["comprovacao_criterios", COMPROVACAO],
 ];
 const EVIDENCIAS_INTEGRAL: [string, object][] = [
+  ["matriz_fitness", { linhas: [{ nome: "f", comando: "c", codigoSaida: 0, log: "f.log" }] }],
   ["comprovacao_criterios", COMPROVACAO],
   [
     "testes_estresse",
@@ -118,7 +119,7 @@ test("aprovar sem as evidências lista as ausentes e a rodada segue em revisão"
   assert.deepEqual(decisoes(banco), []);
 });
 
-test("a revisão integral exige as três evidências e, com elas, vai a encerramento", async () => {
+test("a revisão integral exige a matriz de fitness e as três evidências e, com elas, vai a encerramento", async () => {
   const { banco, processo } = cenario("revisar_demanda", "concluida", "revisar_demanda", false);
   const pedido = { ticket: "I-206.T9", veredito: "aprovar" };
   await assert.rejects(decidirRevisao(modulosDoCicloDeTeste(banco), processo, pedido, lerJson), (erro: Error) =>
