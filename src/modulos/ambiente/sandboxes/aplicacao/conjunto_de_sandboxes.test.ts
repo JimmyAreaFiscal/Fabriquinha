@@ -15,6 +15,7 @@ import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fab
 import { identidadeDaInstalacaoDoHarness, PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
+  alocarAmbienteLivreDaImagem,
   inserirAmbienteAlocado,
   lerNomeDaInstancia,
   liberarAmbiente,
@@ -228,6 +229,99 @@ test("os ocupantes na fila recebem o sandbox na ordem de chegada, um a cada libe
   }
   await Promise.all(esperas);
   assert.deepEqual(recebidos, ["I-2", "I-3", "I-4"]);
+});
+
+/** Um conjunto cujo próximo `garantirImagem` de um projeto fica preso numa promessa até o teste soltá-lo. */
+async function cenarioComImagemPresa(capacidade: number) {
+  const { banco, pi, nomeDaInstancia, imagemDe } = cenario({ conjunto: "fixo", capacidade_do_conjunto: capacidade });
+  let preso: { projeto: object; chegou: () => void; soltura: Promise<void> } | undefined;
+  class GeradorComImagemPresa extends GeradorDeAmbientes {
+    override async garantirImagem(projeto: Parameters<GeradorDeAmbientes["garantirImagem"]>[0]) {
+      const atual = preso;
+      if (atual?.projeto === projeto) {
+        preso = undefined;
+        atual.chegou();
+        await atual.soltura;
+      }
+      return super.garantirImagem(projeto);
+    }
+  }
+  const conjunto = new ConjuntoDeSandboxes(
+    banco,
+    new GeradorComImagemPresa(nomeDaInstancia),
+    () => ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: capacidade }),
+    { ...SERVICO, instalacao_do_harness: pi.instalacao },
+  );
+  /** Prende o próximo `garantirImagem` do projeto: `chegou` resolve quando ele pára ali; `soltar` o deixa seguir. */
+  const prenderProximaImagemDe = (projeto: object) => {
+    let soltar: () => void = () => undefined;
+    let chegou: () => void = () => undefined;
+    const soltura = new Promise<void>((resolver) => (soltar = resolver));
+    const naPrisao = new Promise<void>((resolver) => (chegou = resolver));
+    preso = { projeto, chegou, soltura };
+    return { naPrisao, soltar };
+  };
+  const liberarDe = async (dono: string) => {
+    const alocado = conjunto.alocacaoDe(dono);
+    assert.ok(alocado);
+    await conjunto.limpar(alocado.id);
+  };
+  return { conjunto, banco, imagem: await imagemDe(doNode), prenderProximaImagemDe, liberarDe };
+}
+
+test("a vaga liberada vai ao primeiro da fila mesmo se ele está refazendo a alocação: o segundo não o pula", async () => {
+  const { conjunto, prenderProximaImagemDe, liberarDe } = await cenarioComImagemPresa(1);
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const projetoDoB = { ...doNode };
+  const esperaDoA = conjunto.alocar(ocupante("I-2"), doNode);
+  await esperarNaFila(conjunto, 1);
+  const esperaDoB = conjunto.alocar(ocupante("I-3"), projetoDoB);
+  await esperarNaFila(conjunto, 2);
+  const esperaDoC = conjunto.alocar(ocupante("I-4"), doNode);
+  await esperarNaFila(conjunto, 3);
+
+  // A recebe a vaga e, ao sair da fila, acorda B, que fica preso no garantirImagem da retentativa.
+  const { naPrisao, soltar } = prenderProximaImagemDe(projetoDoB);
+  await liberarDe("I-1");
+  assert.equal((await esperaDoA).alocado_para, "I-2");
+  await naPrisao;
+
+  // A liberação real chega com B refazendo: C não pode tomá-la.
+  await liberarDe("I-2");
+  await new Promise((resolver) => setTimeout(resolver, 50));
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-3", "I-4"]);
+  soltar();
+  assert.equal((await esperaDoB).alocado_para, "I-3");
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-4"]);
+
+  await liberarDe("I-3");
+  assert.equal((await esperaDoC).alocado_para, "I-4");
+});
+
+test("a cabeça da fila que refaz a alocação, sozinha na fila, não perde a liberação que cai na retentativa", async () => {
+  const { conjunto, banco, imagem, prenderProximaImagemDe, liberarDe } = await cenarioComImagemPresa(1);
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const projetoDoA = { ...doNode };
+  const esperaDoA = conjunto.alocar(ocupante("I-2"), projetoDoA);
+  await esperarNaFila(conjunto, 1);
+
+  // A acorda com a primeira liberação e fica presa; um ladrão leva o sandbox, que é devolvido (liberação no meio da
+  // retentativa) e levado de novo antes de A seguir: A volta sem vaga, mas com a marca, e refaz em vez de dormir.
+  const { naPrisao, soltar } = prenderProximaImagemDe(projetoDoA);
+  await liberarDe("I-1");
+  await naPrisao;
+  const ladraoLevaOSandbox = () => alocarAmbienteLivreDaImagem(banco, imagem, "ladrao");
+  const sandbox = ladraoLevaOSandbox();
+  assert.ok(sandbox);
+  await conjunto.limpar(sandbox.id);
+  assert.ok(ladraoLevaOSandbox());
+  soltar();
+  await new Promise((resolver) => setTimeout(resolver, 50));
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-2"]);
+
+  await conjunto.limpar(sandbox.id);
+  assert.equal((await esperaDoA).alocado_para, "I-2");
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
 });
 
 test("quem chega depois que o sandbox foi liberado entra atrás de quem já espera", async () => {
