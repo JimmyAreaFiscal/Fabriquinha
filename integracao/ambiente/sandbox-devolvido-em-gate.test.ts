@@ -9,6 +9,7 @@ import {
   AUDITOR,
   ConducaoDePlanejar,
   decidirGate,
+  esperarPreparacoesDaAprovacao,
   despachoDasEtapas,
   Endereco,
   enviarDemanda,
@@ -145,6 +146,7 @@ test(
       { resultado: "aprovado" },
       AUDITOR,
     );
+    await esperarPreparacoesDaAprovacao();
     assert.equal(demanda(c, terceira).demanda.estado, "em_execucao");
     assert.deepEqual(ocupantesDoConjunto(c), []);
     const worktreeDaRodada = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: terceira, rodada_id: 1 });

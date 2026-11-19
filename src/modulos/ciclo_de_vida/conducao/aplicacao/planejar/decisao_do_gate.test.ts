@@ -1,14 +1,19 @@
 // Os efeitos do gate do planejamento com banco real, git real em repositório temporário e pi falso mínimo (CA-2 a CA-5,
 // CA-8 a CA-13 da I-205): o plano vai ao gate, a aprovação prepara as worktrees e a recusa nada grava.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ErroDeRegra } from "../../../../../shared/nucleo/erros.ts";
 import { carregarDemanda } from "../../../processo/publico.ts";
 import { rodarGit } from "../../../../../../apoio-testes/repositorio_de_teste.ts";
 import {
+  gestaoQueSoUsa,
+  AmbienteHostLocal,
+  ligarGestaoDeAmbientesNosModulos,
+} from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
   aprovarGateDoPlanejamento,
+  aprovarGateDoPlanejamentoSemEsperar,
   cenarioDePlanejamento,
   CRITERIOS,
   plano,
@@ -83,44 +88,36 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
   assert.equal(rodarGit(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
 });
 
-test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corrigida, a aprovação conclui", async () => {
-  const { c, banco, status } = aprovacao();
+test("preparação que falha na rodada 1 não impede a aprovação e vai ao log; o gate já está decidido", async () => {
+  const { c, banco } = aprovacao();
   writeFileSync(join(c.raiz, "quebra"), "");
-  const caminho = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "1");
-  await assert.rejects(
-    aprovarGateDoPlanejamento(banco),
-    (e: Error) =>
-      e instanceof ErroDeRegra &&
-      e.message.includes("a preparação da worktree falhou") &&
-      e.message.endsWith(`(worktree ${caminho})`),
-  );
-  let ag = carregarDemanda(banco, "I-1");
-  assert.deepEqual([ag.demanda.estado, ag.rodadas.length, ag.tickets.length], ["gate_planejamento", 0, 1]);
-  assert.match(
-    readFileSync(join(c.raiz, "execucoes", "planejamento-I-1.log"), "utf8"),
-    /preparação falhou em .*rodadas\/1/,
-  );
-
-  rmSync(join(c.raiz, "quebra"));
-  await aprovarGateDoPlanejamento(banco, { resultado: "aprovado", nota: 4 });
-  ag = carregarDemanda(banco, "I-1");
+  await aprovarGateDoPlanejamento(banco);
+  const ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.estado, "em_execucao");
-  assert.deepEqual(
-    ag.rodadas.map((r) => [r.rodada_id, r.estado]),
-    [
-      [1, "implementar"],
-      [2, "implementar"],
-    ],
-  );
-  assert.deepEqual(
-    ag.tickets.map((t) => [t.etapa, t.estado]),
-    [
-      ["planejar", "concluido"],
-      ["implementar", "aberto"],
-      ["implementar", "aberto"],
-    ],
-  );
-  assert.equal(status(), "concluido");
+  assert.equal(ag.tickets[0]?.estado, "concluido");
+  const log = join(c.raiz, "execucoes", "planejamento-I-1.log");
+  assert.match(readFileSync(log, "utf8"), /preparação falhou em .*rodadas\/1/);
+});
+
+test("CA-11: aprovar com o conjunto cheio responde sem erro e o Espaço entra na fila", async () => {
+  const { banco } = aprovacao();
+  const naFila: string[] = [];
+  ligarGestaoDeAmbientesNosModulos({
+    ...gestaoQueSoUsa(new AmbienteHostLocal()),
+    alocar: (ocupante) => {
+      naFila.push(ocupante.dono);
+      return new Promise(() => undefined); // nenhum sandbox é liberado
+    },
+    ocupantesNaFilaDeEspera: () => naFila,
+  });
+  try {
+    await aprovarGateDoPlanejamentoSemEsperar(banco);
+    assert.equal(carregarDemanda(banco, "I-1").demanda.estado, "em_execucao");
+    await new Promise((r) => setImmediate(r)); // a preparação solta chega ao alocar
+    assert.ok(naFila.length > 0);
+  } finally {
+    ligarGestaoDeAmbientesNosModulos();
+  }
 });
 
 test("CA-12: falha de gravação depois da primeira rodada desfaz tudo", async () => {
