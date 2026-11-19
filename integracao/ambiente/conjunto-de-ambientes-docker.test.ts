@@ -130,6 +130,21 @@ test(
     const dirDoPi = join(raiz, "pi-do-auditor");
     mkdirSync(dirDoPi);
     writeFileSync(join(dirDoPi, "auth.json"), "{}");
+    // CA-12: o container da produção (outra instância), criado pelo teste; a gestão, sem o filtro do docker_que_cai, não pode eliminá-lo.
+    const containerDaProducao = dockerDeVerdade(
+      "run",
+      "--detach",
+      "--label",
+      "fabriquinha.ambiente=producao",
+      "--label",
+      "fabriquinha.instancia=fab-prod",
+      "node:22-bookworm-slim",
+      "sleep",
+      "infinity",
+    );
+    after(() => {
+      execFileSync("docker", ["rm", "--force", containerDaProducao], { stdio: "ignore" });
+    });
     const gestao = await montarGestaoDeAmbientes({
       banco,
       configuracao: () => ConfiguracaoDoAmbiente.parse({ tipo: "container" }),
@@ -171,6 +186,13 @@ test(
     assert.equal(cli.saida.trim(), join(PACOTE, "bin", "fabriquinha"));
     const outros = await noContainer("for c in gh az docker claude codex; do command -v $c; done; true");
     assert.equal(outros.saida.trim(), "");
+
+    await gestao.limpar(alocado.id);
+    await gestao.deletar(alocado.id);
+    assert.equal(
+      dockerDeVerdade("inspect", "-f", "{{.Id}} {{.State.Running}}", containerDaProducao),
+      `${containerDaProducao} true`,
+    );
   },
 );
 

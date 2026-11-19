@@ -12,6 +12,7 @@ import {
   ConjuntoDeSandboxes,
   CredenciaisDosContainers,
   GeradorDeAmbientes,
+  lerNomeDaInstancia,
   type OcupanteDoAmbiente,
   type ProjetoDoAmbiente,
   type ServicoDoConjunto,
@@ -96,7 +97,7 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     relogio = relogioDoSistema,
     registrarErro,
   }: MontagemDaGestaoDeAmbientes) {
-    const gerador = new GeradorDeAmbientes();
+    const gerador = new GeradorDeAmbientes(lerNomeDaInstancia(banco));
     this.#sandboxes = new ConjuntoDeSandboxes(banco, gerador, configuracao, servico, relogio);
     this.#credenciais = new CredenciaisDosContainers(
       gerador,

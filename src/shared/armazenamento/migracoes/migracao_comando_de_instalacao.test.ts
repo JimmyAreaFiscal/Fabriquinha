@@ -28,7 +28,7 @@ test("a migração 59 move o npm ci da preparação para a instalação e manté
   ] as const)
     inserirComando.run("sem-npm-ci", ordem, comando);
 
-  migrarBancoDaFabriquinha(banco);
+  migrarBancoDaFabriquinha(banco, 59);
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, 59);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);

@@ -1,6 +1,7 @@
 // O único lugar da Fabriquinha que chama o `docker` (fitness `sem-docker`): cria, limpa, lista e elimina os containers
-// que servem de Ambiente. Todo container nasce com o rótulo `fabriquinha.ambiente` e com limite de memória e de CPU, e
-// só os que têm o rótulo são da Fabriquinha: o SonarQube e os containers do usuário nunca aparecem aqui.
+// que servem de Ambiente. Todo container nasce com os rótulos `fabriquinha.ambiente` e `fabriquinha.instancia` e com
+// limite de memória e de CPU, e só os que têm o rótulo da própria instância são listados: o SonarQube, os containers do
+// usuário e os de outra Fabriquinha no mesmo Docker nunca aparecem aqui.
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,8 +24,7 @@ import {
 import { pastasDoAmbiente } from "./pastas_do_ambiente.ts";
 
 const ROTULO_DO_AMBIENTE = "fabriquinha.ambiente";
-/** O começo do nome no docker do container do slot `n`: `fabriquinha-slot-<n>`. */
-const PREFIXO_DO_NOME_DO_SLOT = "fabriquinha-slot-";
+const ROTULO_DA_INSTANCIA = "fabriquinha.instancia";
 /** A pasta de trabalho do container; `limpar` a esvazia. */
 /** O `/dev/shm` de cada container: o bastante para o Chromium do Playwright, que usa a memória compartilhada. */
 const TAMANHO_DO_SHM = "1g";
@@ -393,6 +393,7 @@ async function garantirImagemDasRegrasDeRede(limiteMs: number): Promise<void> {
 }
 
 export class GeradorDeAmbientes {
+  readonly #nomeDaInstancia: string;
   readonly #limiteDoComandoMs: number;
   /**
    * O build em andamento de cada imagem: os tickets que pedem a mesma imagem ao mesmo tempo (vários retomados depois de
@@ -401,9 +402,15 @@ export class GeradorDeAmbientes {
    */
   readonly #buildsEmAndamentoPorImagem = new Map<ImagemDoAmbiente, Promise<string>>();
 
-  /** `limiteDoComandoMs` vale para os comandos rápidos; só o teste o troca. */
-  constructor(limiteDoComandoMs = LIMITE_DO_DOCKER_MS) {
+  /** `nomeDaInstancia` (do banco) rotula e nomeia os containers; `limiteDoComandoMs` vale para os comandos rápidos e só o teste o troca. */
+  constructor(nomeDaInstancia: string, limiteDoComandoMs = LIMITE_DO_DOCKER_MS) {
+    this.#nomeDaInstancia = nomeDaInstancia;
     this.#limiteDoComandoMs = limiteDoComandoMs;
+  }
+
+  /** O começo do nome no docker do container do slot `n`: `<instância>-slot-<n>`. */
+  get #prefixoDoNomeDoSlot(): string {
+    return `${this.#nomeDaInstancia}-slot-`;
   }
 
   /**
@@ -476,9 +483,11 @@ export class GeradorDeAmbientes {
         "run",
         "-d",
         "--name",
-        `${PREFIXO_DO_NOME_DO_SLOT}${String(slot)}`,
+        `${this.#prefixoDoNomeDoSlot}${String(slot)}`,
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}`,
+        "--label",
+        `${ROTULO_DA_INSTANCIA}=${this.#nomeDaInstancia}`,
         "--memory",
         `${String(limites.memoria_maxima_mb)}m`,
         "--cpus",
@@ -542,6 +551,8 @@ export class GeradorDeAmbientes {
         "--rm",
         "--label",
         `${ROTULO_DO_AMBIENTE}=${id}-regras-de-rede`,
+        "--label",
+        `${ROTULO_DA_INSTANCIA}=${this.#nomeDaInstancia}`,
         "--memory",
         "64m",
         "--cpus",
@@ -604,7 +615,7 @@ export class GeradorDeAmbientes {
     return new Map(saida.split("\n").filter(Boolean).map(usoDaLinhaDoStats));
   }
 
-  /** Só os containers com o rótulo `fabriquinha.ambiente`, parados ou não. */
+  /** Só os containers com o rótulo `fabriquinha.instancia` desta instância, parados ou não: os de outra instância e os antigos, sem o rótulo, não aparecem. */
   async listarDaFabriquinha(): Promise<ContainerListado[]> {
     const saida = await rodarDocker(
       [
@@ -612,7 +623,7 @@ export class GeradorDeAmbientes {
         "--all",
         "--no-trunc",
         "--filter",
-        `label=${ROTULO_DO_AMBIENTE}`,
+        `label=${ROTULO_DA_INSTANCIA}=${this.#nomeDaInstancia}`,
         "--format",
         `{{.ID}}\t{{.Label "${ROTULO_DO_AMBIENTE}"}}\t{{.State}}`,
       ],
@@ -628,15 +639,15 @@ export class GeradorDeAmbientes {
   }
 
   /**
-   * Os slots cujo nome `fabriquinha-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
+   * Os slots cujo nome `<instância>-slot-<n>` já existe no docker, parado ou não, com o rótulo ou sem: o de outra
    * instância ou teste no mesmo daemon e o que um `rm` ainda não tirou. Criar com um deles falharia por nome repetido.
    */
   async listarSlotsTomadosNoDocker(): Promise<Set<number>> {
     const saida = await rodarDocker(
-      ["ps", "--all", "--filter", `name=${PREFIXO_DO_NOME_DO_SLOT}`, "--format", "{{.Names}}"],
+      ["ps", "--all", "--filter", `name=${this.#prefixoDoNomeDoSlot}`, "--format", "{{.Names}}"],
       this.#limiteDoComandoMs,
     );
-    const padraoDoNomeDoSlot = new RegExp(`^${PREFIXO_DO_NOME_DO_SLOT}(\\d+)$`);
+    const padraoDoNomeDoSlot = new RegExp(`^${this.#prefixoDoNomeDoSlot}(\\d+)$`);
     return new Set(
       saida
         .split("\n")

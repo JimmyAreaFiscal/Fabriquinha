@@ -29,6 +29,7 @@ export { AmbienteHostLocal };
 export { AmbienteContainer } from "../../src/modulos/ambiente/execucao/infra/container/ambiente_container.ts";
 export {
   inserirAmbienteAlocado,
+  lerNomeDaInstancia,
   liberarAmbiente,
   listarAmbientes,
 } from "../../src/modulos/ambiente/sandboxes/armazenamento/ambientes.ts";

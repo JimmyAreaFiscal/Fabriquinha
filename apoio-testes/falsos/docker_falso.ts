@@ -314,10 +314,13 @@ function executarDockerFalso(): void {
       for (const { nome } of lerContainers(dir)) if (nome?.includes(filtro.slice("name=".length))) console.log(nome);
       return;
     }
-    const rotulo = filtro.replace(/^label=/, "");
+    const [rotulo = "", valorPedido] = filtro.replace(/^label=/, "").split(/=(.*)/s);
     for (const container of lerContainers(dir))
-      if (!rotulo || rotulo in container.rotulos)
-        console.log(`${container.id}\t${container.rotulos[rotulo] ?? ""}\t${container.estado}`);
+      if (
+        !rotulo ||
+        (rotulo in container.rotulos && (valorPedido === undefined || container.rotulos[rotulo] === valorPedido))
+      )
+        console.log(`${container.id}\t${container.rotulos["fabriquinha.ambiente"] ?? ""}\t${container.estado}`);
   } else if (comando === "inspect") {
     const container = achar(args.at(-1) ?? "");
     if (tirarOpcoes(args, ["--format"]).opcoes["--format"]?.[0] === "{{.State.Running}}")

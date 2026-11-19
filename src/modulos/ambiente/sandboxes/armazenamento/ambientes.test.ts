@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { ErroDeInexistente } from "../../../../shared/nucleo/erros.ts";
 import {
@@ -9,6 +12,7 @@ import {
   inserirAmbienteAlocado,
   liberarAmbiente,
   reservarAmbienteParaEliminar,
+  lerNomeDaInstancia,
   listarAmbientes,
 } from "./ambientes.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
@@ -168,4 +172,18 @@ test("reservar para eliminar só vale para o livre ou sujo, uma vez, e devolve o
   assert.equal(alocarAmbienteLivreDaImagem(banco, "fabriquinha/loja:abc", "I-2/1"), undefined);
   assert.equal(reservarAmbienteParaEliminar(banco, "nao-existe"), undefined);
   banco.close();
+});
+
+test("o nome da instância sai do banco e continua o mesmo quando o serviço sobe de novo sobre o mesmo arquivo", () => {
+  const arquivo = join(mkdtempSync(join(tmpdir(), "instancia-")), "banco.sqlite");
+  const primeiraSubida = new DatabaseSync(arquivo);
+  migrarBancoDaFabriquinha(primeiraSubida);
+  const nome = lerNomeDaInstancia(primeiraSubida);
+  primeiraSubida.close();
+
+  const segundaSubida = new DatabaseSync(arquivo);
+  migrarBancoDaFabriquinha(segundaSubida);
+  assert.match(nome, /^fab-[0-9a-f]{4}$/);
+  assert.equal(lerNomeDaInstancia(segundaSubida), nome);
+  segundaSubida.close();
 });
