@@ -14,6 +14,9 @@ ALTER TABLE ambiente ADD COLUMN slot INTEGER CHECK (slot IS NULL OR (typeof(slot
 CREATE UNIQUE INDEX ux_ambiente_slot ON ambiente(slot) WHERE estado <> 'eliminado';
 `;
 
+/** @testes o teste da migração monta o banco na versão anterior a ela */
+export const VERSAO_DA_INSTALACAO_DO_HARNESS = 61;
+
 /** A migração da instância: a Fabriquinha ganha um nome (`fab-3f9a`) que rotula e nomeia os containers dela no docker. */
 const MIGRACAO_DA_INSTANCIA = `
 CREATE TABLE instancia_da_fabriquinha (
@@ -23,11 +26,15 @@ CREATE TABLE instancia_da_fabriquinha (
 INSERT INTO instancia_da_fabriquinha (id, nome) VALUES (1, 'fab-' || lower(hex(randomblob(2))));
 `;
 
+/** A instalação do harness (o pi do host) com que o container foi criado; nula nas linhas que existem, que contam como instalação diferente. */
+const MIGRACAO_DA_INSTALACAO_DO_HARNESS = "ALTER TABLE ambiente ADD COLUMN instalacao_do_harness TEXT;";
+
 /** As migrações de Ambiente, cada uma com a versão do banco que ela entrega; a composição as registra em `abrir`. */
 export const MIGRACOES_DE_AMBIENTE = {
   dominio: "ambiente",
   migracoes: [
     { versao: VERSAO_DO_SLOT_DO_AMBIENTE, migracao: MIGRACAO_DO_SLOT_DO_AMBIENTE },
     { versao: VERSAO_DA_INSTANCIA, migracao: MIGRACAO_DA_INSTANCIA },
+    { versao: VERSAO_DA_INSTALACAO_DO_HARNESS, migracao: MIGRACAO_DA_INSTALACAO_DO_HARNESS },
   ],
 };

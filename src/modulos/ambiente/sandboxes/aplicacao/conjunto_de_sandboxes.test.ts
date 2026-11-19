@@ -3,16 +3,16 @@
 import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
-import { ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { migrarBancoDaFabriquinha } from "../../../../server/system/banco_da_fabriquinha.ts";
-import { PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import { identidadeDaInstalacaoDoHarness, PACOTE } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import {
   inserirAmbienteAlocado,
@@ -65,10 +65,36 @@ const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join
 const ehAIndisponibilidadeDoConjunto = (erro: unknown) =>
   erro instanceof ErroExterno && erro.message.includes("nenhum sandbox disponível: o conjunto está na capacidade");
 
+/** O pi do host de um cenário: a pasta do pacote, que o `npm install -g` troca por outra no mesmo caminho. */
+function piDoHost(raiz: string) {
+  let executavel = "";
+  const instalar = (arquivoDoExecutavel: string) => {
+    // A nova nasce antes de a antiga sair, como no npm; assim não herda o inode dela.
+    mkdirSync(`${raiz}-nova`);
+    writeFileSync(join(`${raiz}-nova`, "package.json"), "{}");
+    writeFileSync(join(`${raiz}-nova`, arquivoDoExecutavel), "");
+    rmSync(raiz, { recursive: true, force: true });
+    renameSync(`${raiz}-nova`, raiz);
+    executavel = join(raiz, arquivoDoExecutavel);
+  };
+  instalar("cli.js");
+  return {
+    reinstalar: instalar,
+    remover: () => {
+      rmSync(raiz, { recursive: true });
+    },
+    instalacao: () => {
+      if (!existsSync(raiz)) throw new ErroDeRegra("não achei o pi no host", "instale o pi");
+      return { comando: "pi", executavel, raiz };
+    },
+  };
+}
+
 let cenarios = 0;
 function cenario(conjuntoConfigurado: Record<string, unknown>) {
   const pastaDoDocker = join(base, `docker-${String(++cenarios)}`);
   const docker = instalarDockerFalso(pastaDoDocker);
+  const pi = piDoHost(join(base, `pi-${String(cenarios)}`));
   const banco = new DatabaseSync(":memory:");
   migrarBancoDaFabriquinha(banco);
   const nomeDaInstancia = lerNomeDaInstancia(banco);
@@ -84,7 +110,7 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
     banco,
     new GeradorDeAmbientes(nomeDaInstancia),
     () => configuracao,
-    SERVICO,
+    { ...SERVICO, instalacao_do_harness: pi.instalacao },
     relogio,
   );
   const criacoes = () => docker.registro().filter(([comando, opcao]) => comando === "run" && opcao !== "--rm").length;
@@ -99,6 +125,7 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
   return {
     docker,
     banco,
+    pi,
     nomeDaInstancia,
     conjunto,
     liberar,
@@ -450,4 +477,137 @@ test("na subida, o container alocado sem slot recolhe as sessões e execuções 
   assert.equal(readFileSync(join(base, "espacos", "I-77", "sessoes", "s-77", "conversa.jsonl"), "utf8"), "{}");
   assert.deepEqual(docker.containers(), []);
   assert.deepEqual(listarAmbientes(banco), []);
+});
+
+const estadoDaLinha = (banco: DatabaseSync, containerId: string) =>
+  (banco.prepare("SELECT estado FROM ambiente WHERE container_id = ?").get(containerId) as { estado: string }).estado;
+
+test("o livre com a pasta do pi sem mudança desde a criação é entregue de novo, sem container novo", async () => {
+  const { conjunto, criacoes, liberar } = cenario({ conjunto: "variavel" });
+  const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+
+  const segundo = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.equal(segundo.container_id, primeiro.container_id);
+  assert.equal(criacoes(), 1);
+});
+
+test("o livre criado antes de o pi ser reinstalado, mesmo com a versão igual, é eliminado e o ocupante recebe um container com a identidade atual", async () => {
+  const { conjunto, docker, banco, pi, liberar } = cenario({ conjunto: "variavel" });
+  const antigo = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  pi.reinstalar("cli.js");
+
+  const novo = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.notEqual(novo.container_id, antigo.container_id);
+  assert.equal(estadoDaLinha(banco, antigo.container_id), "eliminado");
+  assert.deepEqual(
+    docker.containers().map(({ id }) => id),
+    [novo.container_id],
+  );
+  assert.equal(novo.instalacao_do_harness, identidadeDaInstalacaoDoHarness(pi.instalacao()));
+  assert.equal(listarAmbientes(banco)[0]?.instalacao_do_harness, novo.instalacao_do_harness);
+});
+
+test("o livre criado antes de o pi mudar de versão é eliminado e o /usr/local/bin/pi do novo aponta para o executável atual", async () => {
+  const { conjunto, docker, banco, pi, liberar } = cenario({ conjunto: "variavel" });
+  const antigo = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  pi.reinstalar("cli-v2.js");
+
+  const novo = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.equal(estadoDaLinha(banco, antigo.container_id), "eliminado");
+  const ligacoes = docker
+    .registro()
+    .filter((argumentos) => argumentos.some((argumento) => argumento.includes("ln -sf")))
+    .map((argumentos) => argumentos.join(" "));
+  assert.equal(ligacoes.length, 2);
+  assert.match(String(ligacoes[1]), new RegExp(`'${pi.instalacao().executavel}' /usr/local/bin/pi`));
+  assert.ok(docker.containers().some(({ id }) => id === novo.container_id));
+});
+
+test("o livre gravado antes da coluna da instalação, com ela nula, conta como diferente e é eliminado", async () => {
+  const { conjunto, banco, liberar } = cenario({ conjunto: "variavel" });
+  const antigo = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  banco.exec("UPDATE ambiente SET instalacao_do_harness = NULL");
+
+  const novo = await conjunto.alocar(ocupante("I-2"), doNode);
+
+  assert.notEqual(novo.container_id, antigo.container_id);
+  assert.equal(estadoDaLinha(banco, antigo.container_id), "eliminado");
+  assert.ok(novo.instalacao_do_harness);
+});
+
+test("sem o pi no host, o pedido falha com o erro de hoje e o livre, o docker e a criação ficam como estavam", async () => {
+  const { conjunto, docker, banco, pi, criacoes, liberar } = cenario({ conjunto: "variavel" });
+  const livre = await conjunto.alocar(ocupante("I-1"), doNode);
+  await liberar("I-1");
+  pi.remover();
+
+  await assert.rejects(
+    conjunto.alocar(ocupante("I-2"), doNode),
+    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.startsWith("não achei o"),
+  );
+
+  assert.equal(estadoDaLinha(banco, livre.container_id), "livre");
+  assert.equal(criacoes(), 1);
+  assert.equal(docker.registro().filter(([comando]) => comando === "rm").length, 0);
+});
+
+test("o ticket que pede de novo o sandbox que já tem recebe o mesmo, mesmo com o pi reinstalado depois da alocação", async () => {
+  const { conjunto, docker, banco, pi } = cenario({ conjunto: "variavel" });
+  const alocado = await conjunto.alocar(ocupante("I-1"), doNode);
+  pi.reinstalar("cli.js");
+
+  const denovo = await conjunto.alocar(ocupante("I-1"), doNode);
+
+  assert.equal(denovo.container_id, alocado.container_id);
+  assert.equal(estadoDaLinha(banco, alocado.container_id), "alocado");
+  assert.equal(docker.registro().filter(([comando]) => comando === "rm").length, 0);
+});
+
+test("a liberação com o pi reinstalado recolhe ao Espaço e elimina o container em vez de limpá-lo; o próximo ticket recebe um novo", async () => {
+  const { conjunto, docker, banco, pi, liberar } = cenario({ conjunto: "variavel" });
+  const alocado = await conjunto.alocar(ocupante("I-318-5"), doNode);
+  const sessao = join(base, "ambientes", alocado.id, "sessoes", "s-5");
+  mkdirSync(sessao, { recursive: true });
+  writeFileSync(join(sessao, "conversa.jsonl"), "{}");
+  pi.reinstalar("cli.js");
+
+  await liberar("I-318-5");
+
+  assert.equal(readFileSync(join(base, "espacos", "I-318-5", "sessoes", "s-5", "conversa.jsonl"), "utf8"), "{}");
+  assert.equal(estadoDaLinha(banco, alocado.container_id), "eliminado");
+  assert.deepEqual(docker.containers(), []);
+  const proximo = await conjunto.alocar(ocupante("I-318-6"), doNode);
+  assert.notEqual(proximo.container_id, alocado.container_id);
+});
+
+test("o docker rm que falha na liberação não falha o ticket: a linha fica eliminada e a subida seguinte tira o órfão", async () => {
+  const { conjunto, docker, banco, pi, pastaDoDocker, liberar } = cenario({ conjunto: "variavel" });
+  const alocado = await conjunto.alocar(ocupante("I-318-7"), doNode);
+  pi.reinstalar("cli.js");
+  docker.falharComando("rm", "docker travado");
+
+  await liberar("I-318-7");
+
+  assert.equal(estadoDaLinha(banco, alocado.container_id), "eliminado");
+  assert.equal(docker.containers().length, 1);
+  rmSync(join(pastaDoDocker, "falhas", "rm"));
+  await conjunto.reconciliarNaSubida();
+  assert.deepEqual(docker.containers(), []);
+});
+
+test("a liberação que não consegue ler a instalação do host mantém a de hoje: o container volta livre", async () => {
+  const { conjunto, banco, pi, liberar } = cenario({ conjunto: "variavel" });
+  const alocado = await conjunto.alocar(ocupante("I-318-8"), doNode);
+  pi.remover();
+
+  await liberar("I-318-8");
+
+  assert.equal(estadoDaLinha(banco, alocado.container_id), "livre");
 });

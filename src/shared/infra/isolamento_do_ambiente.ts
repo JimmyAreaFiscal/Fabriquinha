@@ -2,7 +2,7 @@
 // código do agente no host tira daqui as credenciais do serviço, o Ambiente em container leva só as chaves do LLM, e o
 // Repositório e o Ambiente combinam a pasta das entradas de worktree da Fabriquinha.
 
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,6 +70,16 @@ export interface InstalacaoDoHarness {
   executavel: string;
   /** A pasta do pacote que contém o executável, montada em leitura no mesmo caminho. */
   raiz: string;
+}
+
+/**
+ * Quem é a instalação do harness: o caminho da raiz, o inode e o instante de criação dela. O `npm install -g` troca a
+ * pasta por outra no mesmo caminho (o bind mount segue preso à apagada), então o caminho e a versão não bastam; o
+ * instante de criação cobre o inode que o ext4 reaproveita. Sem instante de criação, `birthtimeNs` é 0 e o inode decide.
+ */
+export function identidadeDaInstalacaoDoHarness({ raiz }: InstalacaoDoHarness): string {
+  const { ino, birthtimeNs } = statSync(raiz, { bigint: true });
+  return `${raiz}:${String(ino)}:${String(birthtimeNs)}`;
 }
 
 /** A pasta mais próxima do executável com `package.json`; sem nenhuma, a própria pasta dele (nunca a raiz do disco). */

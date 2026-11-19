@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { instalacaoDoPi } from "./isolamento_do_ambiente.ts";
+import { identidadeDaInstalacaoDoHarness, instalacaoDoPi } from "./isolamento_do_ambiente.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-instalacao-do-pi-")));
 after(() => {
@@ -58,4 +58,21 @@ test("instalacaoDoPi sem o pi no host recusa com a orientação", () => {
       return true;
     },
   );
+});
+
+test("identidadeDaInstalacaoDoHarness repete na mesma pasta e muda quando outra pasta toma o lugar, com o mesmo package.json", () => {
+  const { executavel, raiz } = instalarPacote("npm-identidade");
+  const instalacao = { comando: "pi", executavel, raiz };
+  const antes = identidadeDaInstalacaoDoHarness(instalacao);
+  assert.equal(identidadeDaInstalacaoDoHarness(instalacao), antes);
+  assert.ok(antes.startsWith(raiz));
+
+  // Como o `npm install -g`: a nova nasce antes de a antiga sair, então não herda o inode dela.
+  const nova = `${raiz}-nova`;
+  mkdirSync(nova);
+  writeFileSync(join(nova, "package.json"), "{}");
+  rmSync(raiz, { recursive: true });
+  renameSync(nova, raiz);
+
+  assert.notEqual(identidadeDaInstalacaoDoHarness(instalacao), antes);
 });
