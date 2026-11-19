@@ -22,7 +22,8 @@ import {
   REF_RODADA,
 } from "../../../../../../apoio-testes/cenarios/cenarios_de_demanda.ts";
 import { decidirGate } from "../gates.ts";
-import { prepararRevisaoRodada } from "./revisao_rodada.ts";
+import { projetosCadastrados } from "../projetos_cadastrados.ts";
+import { gravarMatrizFitnessDoTicket, prepararRevisaoRodada } from "./revisao_rodada.ts";
 import { AmbienteHostLocal, modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { buscarProjeto, gravarProjeto } from "../../../../../../apoio-testes/demandas_de_teste.ts";
 
@@ -108,6 +109,19 @@ test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; reg
   assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /certo/);
   assert.equal(evidencia(banco, "arquivos_alterados").length, 1);
   assert.deepEqual(evidencias[0]?.autor, FABRIQUINHA);
+});
+
+test("gravarMatrizFitnessDoTicket sem arquivos alterados grava só a matriz_fitness do ticket", async () => {
+  const { c, banco } = await cenarioRevisao();
+  await gravarMatrizFitnessDoTicket(banco, {
+    etapa: "revisar_rodada",
+    projeto: projetosCadastrados().carregarProjeto(banco, "loja"),
+    ambiente,
+    worktree: caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1"),
+    dono: Endereco.doTicket("I-1", 2),
+  });
+  assert.equal(evidencia(banco, "matriz_fitness").length, 1);
+  assert.equal(evidencia(banco, "arquivos_alterados").length, 0);
 });
 
 test("fitness que falha: erro e nenhuma das duas evidências fica gravada", async () => {

@@ -3,35 +3,11 @@
 import {
   arquivosAlteradosDoRevisor,
   type ArquivosAlterados,
-  linhaDoAnexo,
   secao,
+  secaoMatrizFitness,
   secaoVerificacoesJaFeitas,
 } from "../prompt/secoes_do_prompt.ts";
 import { type ContextoDoPrompt } from "../prompt/contexto_do_prompt.ts";
-
-type LinhaFitness = Record<"nome" | "descricao" | "comando" | "log", string> & {
-  codigoSaida: number | null;
-  estourou: boolean;
-};
-
-/** Revisar rodada: a matriz que a Fabriquinha coletou antes do pi, com o arquivo de cada log; o revisor a explica. */
-function secaoMatrizFitness({ ag, ticket, anexos }: ContextoDoPrompt): string {
-  const ehMatrizDoTicket = (e: { tipo: string; ticket_id?: number }) =>
-    e.tipo === "matriz_fitness" && e.ticket_id === ticket.ticket_id;
-  const linhasDaMatriz =
-    (ag.evidencias.find(ehMatrizDoTicket)?.dados as { linhas: LinhaFitness[] } | undefined)?.linhas ?? [];
-  const resultadoDoComando = (l: LinhaFitness) =>
-    l.estourou ? "estourou o tempo" : `saiu com código ${String(l.codigoSaida)}`;
-  return secao(
-    "Matriz de fitness functions",
-    "A Fabriquinha rodou cada fitness function na worktree antes desta execução:\n\n" +
-      (linhasDaMatriz
-        .map((l) => `- **${l.nome}** (${l.descricao}): \`${l.comando}\` ${resultadoDoComando(l)}; log \`${l.log}\``)
-        .join("\n") || "(nenhuma)") +
-      "\n\nOs logs, em arquivos que você lê:\n\n" +
-      (anexos.filter(ehMatrizDoTicket).map(linhaDoAnexo).join("\n") || "(nenhum)"),
-  );
-}
 
 /** Revisar rodada: o diff da rodada que a Fabriquinha apurou antes do pi, cada arquivo com o caminho do plano que casou. */
 function secaoArquivosAlterados({ ag, ticket }: ContextoDoPrompt): string {
