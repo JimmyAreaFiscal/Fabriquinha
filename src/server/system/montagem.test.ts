@@ -80,7 +80,17 @@ after(() => {
   rmSync(pastaDoPacote, { recursive: true, force: true });
 });
 
-const subir = (raiz = novaRaiz()) => iniciarServico(raiz, pastaDoPacote);
+/**
+ * Sobe o serviço do teste `t` e registra a parada no fim dele, mesmo quando uma asserção falha antes: um serviço de pé
+ * segura o processo do `node --test`. O `parar` devolvido é idempotente, para o teste que confere o depois parar antes.
+ */
+async function subirComParadaNoFimDoTeste(t: TestContext, raiz = novaRaiz()) {
+  const servico = await iniciarServico(raiz, pastaDoPacote);
+  let paradaDoServico: Promise<void> | undefined;
+  const pararUmaVez = () => (paradaDoServico ??= servico.parar());
+  t.after(pararUmaVez);
+  return { ...servico, parar: pararUmaVez };
+}
 
 /** A porta do teste está livre: dá para escutar nela. */
 async function portaLivre(): Promise<void> {
@@ -110,10 +120,10 @@ test("porta: $FABRIQUINHA_PORTA, padrão 4317", () => {
   assert.equal(portaDoServico({ FABRIQUINHA_PORTA: "5000" }), 5000);
 });
 
-test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida", async () => {
+test("porta 0: o serviço escuta numa porta livre, e o web.url leva a escolhida", async (t) => {
   process.env.FABRIQUINHA_PORTA = "0";
   const raiz = novaRaiz();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   const link = new URL(readFileSync(join(raiz, "web.url"), "utf8"));
   assert.notEqual(link.port, "0");
   assert.equal((await fetch(link, { redirect: "manual" })).status, 303, "o link de entrada responde nela");
@@ -148,9 +158,9 @@ test("falha ao gerar o pacote do agente: o serviço não sobe e a porta fica liv
   await portaLivre();
 });
 
-test("instância única: a porta é a trava, e a segunda instância sai com erro antes de abrir o banco", async () => {
+test("instância única: a porta é a trava, e a segunda instância sai com erro antes de abrir o banco", async (t) => {
   const raiz = novaRaiz();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   const porta = String(portaDoServico());
   assert.match(await (await fetch(`http://127.0.0.1:${porta}/home`)).text(), /^<!doctype html>/, "a porta serve o web");
 
@@ -163,23 +173,23 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
       erro.message.startsWith(`a Fabriquinha não conseguiu abrir 127.0.0.1:${porta}: listen EADDRINUSE`),
   );
   assert.equal(existsSync(outraRaiz), false);
-  await assert.rejects(subir(raiz), ErroDeRegra);
+  await assert.rejects(subirComParadaNoFimDoTeste(t, raiz), ErroDeRegra);
 
   await s.parar();
-  const outra = await subir(raiz); // parada a primeira, a porta fica livre
+  const outra = await subirComParadaNoFimDoTeste(t, raiz); // parada a primeira, a porta fica livre
   await outra.parar();
 });
 
-test("subida que falha ao publicar web.url fecha o banco e libera a porta", async () => {
+test("subida que falha ao publicar web.url fecha o banco e libera a porta", async (t) => {
   const raiz = novaRaiz();
   mkdirSync(join(raiz, "web.url"));
-  await assert.rejects(subir(raiz), /EISDIR/);
+  await assert.rejects(subirComParadaNoFimDoTeste(t, raiz), /EISDIR/);
   await portaLivre();
 });
 
-test("parar apaga o web.url: o abrir diz que o serviço não está rodando em vez de abrir um link morto", async () => {
+test("parar apaga o web.url: o abrir diz que o serviço não está rodando em vez de abrir um link morto", async (t) => {
   const raiz = novaRaiz();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   assert.equal(existsSync(join(raiz, "web.url")), true);
   await s.parar();
   assert.equal(existsSync(join(raiz, "web.url")), false);
@@ -201,9 +211,9 @@ function precosVigentes(raiz: string) {
   }
 }
 
-test("a subida grava no catálogo os preços que o harness informa, e o parar espera a gravação", async () => {
+test("a subida grava no catálogo os preços que o harness informa, e o parar espera a gravação", async (t) => {
   const raiz = novaRaiz();
-  await (await subir(raiz)).parar();
+  await (await subirComParadaNoFimDoTeste(t, raiz)).parar();
   // O pi falso dos testes declara o preço do opus e do sonnet.
   assert.deepEqual(precosVigentes(raiz), [
     { modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", usd_por_milhao_entrada: 4, origem: "pi" },
@@ -217,7 +227,7 @@ test("o harness que não informa os preços não impede a subida: o erro vai par
   process.env.FABRIQUINHA_PI = join(tmpdir(), "pi-que-nao-existe");
   const raiz = novaRaiz();
   try {
-    await (await subir(raiz)).parar();
+    await (await subirComParadaNoFimDoTeste(t, raiz)).parar();
   } finally {
     process.env.FABRIQUINHA_PI = pi;
   }
@@ -225,7 +235,7 @@ test("o harness que não informa os preços não impede a subida: o erro vai par
   assert.match(String(erros.mock.calls[0]?.arguments[1]), /não foi possível rodar .*pi-que-nao-existe/);
 });
 
-test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas históricas delas ficam como estão e nenhum grupo delas é sinalizado", async () => {
+test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas históricas delas ficam como estão e nenhum grupo delas é sinalizado", async (t) => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   try {
@@ -244,7 +254,7 @@ test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas hi
       .run(pi.pid ?? null);
     banco.close();
 
-    const s = await subir(raiz);
+    const s = await subirComParadaNoFimDoTeste(t, raiz);
     assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, pi.pid);
     assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_simulada").get(), {
       status: "em_andamento",
@@ -259,7 +269,7 @@ test("reinício: a Avaliação e a Simulação saíram (ticket 02); as linhas hi
   }
 });
 
-test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async () => {
+test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async (t) => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
@@ -277,7 +287,7 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
     .run(AGORA, pi.pid ?? null);
   banco.close();
 
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   assert.deepEqual(await saiu, [null, "SIGKILL"]);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM processo_do_trabalho").get(), {
     falha: 1,
@@ -307,10 +317,10 @@ function bancoComDemanda(raiz: string): DatabaseSync {
   return banco;
 }
 
-test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é rejeitado sem alteração", async () => {
+test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é rejeitado sem alteração", async (t) => {
   const arquivo = join(novaRaiz(), "raiz-que-e-arquivo");
   writeFileSync(arquivo, "");
-  await assert.rejects(subir(arquivo), /EEXIST|ENOTDIR/);
+  await assert.rejects(subirComParadaNoFimDoTeste(t, arquivo), /EEXIST|ENOTDIR/);
   await portaLivre();
 
   const raiz = novaRaiz();
@@ -318,7 +328,7 @@ test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco ant
   antigo.exec("PRAGMA user_version = 35");
   antigo.close();
   await assert.rejects(
-    subir(raiz),
+    subirComParadaNoFimDoTeste(t, raiz),
     (erro: unknown) => erro instanceof ErroDeRegra && erro.message.startsWith("o banco está na versão 35"),
   );
   await portaLivre();
@@ -336,7 +346,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('I-1', '${AGORA}');`);
   legado.close();
   for (const vez of [1, 2]) {
-    const s = await subir(raiz);
+    const s = await subirComParadaNoFimDoTeste(t, raiz);
     const tabelas = s.banco
       .prepare(
         "SELECT name FROM sqlite_master WHERE name LIKE 'iss%' OR name IN ('demanda_historico', 'sequencia') ORDER BY name",
@@ -362,7 +372,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
 test("próxima busca: a batida em que o contador chega ao intervaloMin; desligado além dele, a batida seguinte", async (t) => {
   const inicio = Date.parse("2026-10-12T14:00:00.000Z");
   t.mock.timers.enable({ apis: ["setInterval", "Date"], now: inicio });
-  const s = await subir();
+  const s = await subirComParadaNoFimDoTeste(t);
   const proxima = () => s.proximaBusca().toISOString();
   assert.equal(proxima(), "2026-10-12T14:05:00.000Z", "padrão: 5 minutos depois da subida");
   t.mock.timers.tick(2 * 60_000);
@@ -378,7 +388,7 @@ test("próxima busca: a batida em que o contador chega ao intervaloMin; desligad
 test("o ciclo nunca trava nem lança: erro na batida vai para o log e a batida seguinte roda", async (t) => {
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
-  const s = await subir();
+  const s = await subirComParadaNoFimDoTeste(t);
   salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
 
   s.banco.exec("ALTER TABLE configuracao RENAME TO guardada");
@@ -395,7 +405,7 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
   const dir = mkdtempSync(join(raiz, "repo-"));
@@ -434,7 +444,7 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   const dir = mkdtempSync(join(raiz, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
@@ -476,7 +486,7 @@ const estadoDoTicketDaDemanda = (banco: DatabaseSync, id: string) =>
 
 test("o relógio bate e a demanda é despachada", async (t) => {
   const minuto = relogio(t);
-  const s = await subir();
+  const s = await subirComParadaNoFimDoTeste(t);
   salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 1 }));
   demandaEmExecucao(s.banco, 1);
   minuto();
@@ -487,7 +497,7 @@ test("o relógio bate e a demanda é despachada", async (t) => {
 
 test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem esperar o intervalo inteiro", async (t) => {
   const minuto = relogio(t);
-  const s = await subir();
+  const s = await subirComParadaNoFimDoTeste(t);
   salvarConfiguracao(s.banco, Configuracao.parse({ agendadorAtivo: true, intervaloMin: 5 }));
   demandaEmExecucao(s.banco, 1);
   for (let i = 0; i < 5; i++) minuto();
@@ -503,8 +513,8 @@ test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem 
   await s.parar();
 });
 
-test("executarAgora: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
-  const s = await subir();
+test("executarAgora: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async (t) => {
+  const s = await subirComParadaNoFimDoTeste(t);
   demandaEmExecucao(s.banco, 1);
   s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
     VALUES ('I-1', 2, 'implementar', 'aberto', '${AGORA}', 1)`);
@@ -515,8 +525,8 @@ test("executarAgora: inicia o ticket elegível já, sem o agendador, e recusa o 
   await s.parar();
 });
 
-test("executarAgora: com o limite global ocupado, devolve o motivo e não inicia o ticket", async () => {
-  const s = await subir();
+test("executarAgora: com o limite global ocupado, devolve o motivo e não inicia o ticket", async (t) => {
+  const s = await subirComParadaNoFimDoTeste(t);
   s.banco.exec("UPDATE configuracao SET limite_paralelismo = 1");
   demandaEmExecucao(s.banco, 1);
   demandaEmExecucao(s.banco, 2);
@@ -541,13 +551,13 @@ const AMBIENTE_EM_CONTAINER = ConfiguracaoDoAmbiente.parse({
 test("com tipo host_local, o padrão, subir, bater o relógio e parar não chamam o docker", async (t) => {
   const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-host-local-")));
   const minuto = relogio(t);
-  const s = await subir();
+  const s = await subirComParadaNoFimDoTeste(t);
   minuto();
   await s.parar();
   assert.deepEqual(docker.registro(), []);
 });
 
-test("com tipo container, a subida elimina o órfão da própria instância e nunca toca o container sem o rótulo dela", async () => {
+test("com tipo container, a subida elimina o órfão da própria instância e nunca toca o container sem o rótulo dela", async (t) => {
   const docker = instalarDockerFalso(mkdtempSync(join(tmpdir(), "docker-reconciliar-")));
   const sonar = docker.semearContainer({ imagem: "sonarqube" });
   const { raiz, banco } = abrirBancoTemporario();
@@ -556,7 +566,7 @@ test("com tipo container, a subida elimina o órfão da própria instância e nu
   });
   salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   banco.close();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   await s.parar();
   assert.deepEqual(
     docker.containers().map(({ id }) => id),
@@ -592,8 +602,7 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
   }
   liberarAmbiente(banco, "ocioso", "livre", "2020-01-01T00:00:00.000Z");
   banco.close();
-  const s = await subir(raiz);
-  t.after(() => s.parar());
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   minuto();
   await ate(() => listarAmbientes(s.banco).length === 1);
   assert.deepEqual(
@@ -610,7 +619,7 @@ test("com tipo container e o docker fora do ar, o serviço sobe e a batida do re
   const { raiz, banco } = abrirBancoTemporario();
   salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
   banco.close();
-  const s = await subir(raiz);
+  const s = await subirComParadaNoFimDoTeste(t, raiz);
   minuto();
   await s.parar();
   assert.ok(erros.mock.callCount() > 0);

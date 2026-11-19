@@ -85,33 +85,35 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
 
   // Nenhuma largura rola a página na horizontal nem quebra um endereço (I-206, I-206.R1, I-206.T3). A 1440 e a 1320 px
   // as 11 colunas cabem inteiras, sem texto cortado; abaixo disso (375 px) o board rola dentro dele.
-  const board = pagina.locator(".board-etapas");
+  // O Início se redesenha a cada 5 s trocando o board inteiro: cada largura se mede numa avaliação só, porque entre duas
+  // chamadas o elemento achado pode já ter saído do DOM e medir zero.
   for (const largura of [1440, 1320, 375]) {
     await pagina.setViewportSize({ width: largura, height: 900 });
-    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const rola = await board.evaluate((etapas) => etapas.scrollWidth > etapas.clientWidth);
-    expect(rola, `o board rola a ${String(largura)} px`).toBe(largura < 1320);
-    if (largura >= 1320) {
-      const ultima = await coluna(pagina, "Encerramento da demanda").boundingBox();
-      const caixa = await board.boundingBox();
-      expect(Number(ultima?.x) + Number(ultima?.width)).toBeLessThanOrEqual(Number(caixa?.x) + Number(caixa?.width));
-      expect(
-        await board.evaluate((etapas) =>
-          [...etapas.querySelectorAll("*")]
-            .filter((e) => e.scrollWidth > e.clientWidth)
-            .map((e) => `${e.className} ${String(e.scrollWidth)}/${String(e.clientWidth)}`),
-        ),
-        "texto cortado no board",
-      ).toEqual([]);
-    }
-    expect(
-      await board.evaluate((etapas) =>
-        [...etapas.querySelectorAll(".id, .mono, .endereco")]
+    const medidas = await pagina.evaluate(() => {
+      const etapas = document.querySelector(".board-etapas");
+      const ultima = [...(etapas?.querySelectorAll(".coluna") ?? [])].find((c) =>
+        c.querySelector(".coluna-cabeca")?.textContent.startsWith("Encerramento da demanda "),
+      );
+      if (!etapas || !ultima) throw new Error("o board ou a coluna do encerramento não está na página");
+      return {
+        paginaRola: document.documentElement.scrollWidth > innerWidth,
+        boardRola: etapas.scrollWidth > etapas.clientWidth,
+        ultimaColunaCabe: ultima.getBoundingClientRect().right <= etapas.getBoundingClientRect().right,
+        textosCortados: [...etapas.querySelectorAll("*")]
+          .filter((e) => e.scrollWidth > e.clientWidth)
+          .map((e) => `${e.className} ${String(e.scrollWidth)}/${String(e.clientWidth)}`),
+        enderecosQuebrados: [...etapas.querySelectorAll(".id, .mono, .endereco")]
           .filter((e) => e.getClientRects().length > 1)
           .map((e) => e.textContent),
-      ),
-      "endereço quebrado no board",
-    ).toEqual([]);
+      };
+    });
+    expect(medidas.paginaRola).toBe(false);
+    expect(medidas.boardRola, `o board rola a ${String(largura)} px`).toBe(largura < 1320);
+    if (largura >= 1320) {
+      expect(medidas.ultimaColunaCabe).toBe(true);
+      expect(medidas.textosCortados, "texto cortado no board").toEqual([]);
+    }
+    expect(medidas.enderecosQuebrados, "endereço quebrado no board").toEqual([]);
     if (largura !== 1320) await fotografar(pagina, info, `inicio-${String(largura)}`);
   }
   await pagina.setViewportSize({ width: 1440, height: 900 });
