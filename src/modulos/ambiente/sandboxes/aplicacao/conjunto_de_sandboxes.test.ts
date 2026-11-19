@@ -317,6 +317,42 @@ test("a criação que falha com alguém na fila acorda o primeiro, que cria o co
   assert.equal(docker.containers().length, 1);
 });
 
+test("o acordado que lança antes de tomar a vaga passa a vez: o próximo da fila recebe o sandbox livre", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  let dependenciasInvalidas = false; // o arquivo de dependências some depois de o I-2 entrar na fila
+  const projetoDoI2 = {
+    ...doPython,
+    get arquivos_de_dependencias() {
+      return dependenciasInvalidas ? ["inexistente.txt"] : ["requirements.txt"];
+    },
+  };
+  const esperaDoI2 = conjunto.alocar(ocupante("I-2"), projetoDoI2);
+  await esperarNaFila(conjunto, 1);
+  const esperaDoI3 = conjunto.alocar(ocupante("I-3"), doNode);
+  await esperarNaFila(conjunto, 2);
+
+  dependenciasInvalidas = true;
+  await liberar("I-1");
+  await assert.rejects(esperaDoI2);
+  assert.equal((await esperaDoI3).alocado_para, "I-3");
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
+});
+
+test("duas esperas do mesmo dono: a primeira recebe o sandbox e a segunda resolve na hora com o mesmo container", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const primeira = conjunto.alocar(ocupante("I-2"), doNode);
+  await esperarNaFila(conjunto, 1);
+  const segunda = conjunto.alocar(ocupante("I-2"), doNode);
+  await esperarNaFila(conjunto, 2);
+
+  await liberar("I-1");
+  const [recebidaPrimeira, recebidaSegunda] = await Promise.all([primeira, segunda]);
+  assert.equal(recebidaSegunda.id, recebidaPrimeira.id);
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
+});
+
 test("o fixo mantém os parados além da ociosidade", async () => {
   const { conjunto, estados, liberar, imagemDe } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 2 });
   await conjunto.alocar(ocupante("I-1"), doNode);
