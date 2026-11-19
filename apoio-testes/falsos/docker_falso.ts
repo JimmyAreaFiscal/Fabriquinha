@@ -52,6 +52,8 @@ export interface ContainerFalso {
   hospedeiros: string[];
   /** O que o `docker stats` mostra dele, como o docker de verdade escreve (`12.50%`, `256MiB / 2GiB`). */
   uso?: { cpu: string; memoria: string };
+  /** Roda mas não responde: todo `exec` nele não volta, e o `inspect` segue `running`. */
+  travado?: boolean;
 }
 
 export interface DockerFalso {
@@ -85,6 +87,8 @@ export interface DockerFalso {
   pararContainer: (id: string) => void;
   /** Religa o container parado `id`, como alguém fora da Fabriquinha faria: sobe sem o que vive no tmpfs. */
   religarContainer: (id: string) => void;
+  /** O container `id` segue `running`, mas todo `docker exec` nele fica pendurado, nem o `kill` volta. */
+  travarContainer: (id: string) => void;
   /** Faz todo comando do docker (`run`, `exec`...) falhar com esta mensagem e código 1. */
   falharComando: (comando: string, mensagem: string) => void;
 }
@@ -178,6 +182,10 @@ export function instalarDockerFalso(dir: string): DockerFalso {
     religarContainer: (id) => {
       const container = lerContainers(dir).find((candidato) => candidato.id === id);
       if (container) gravarContainer(dir, { ...container, estado: "running", marcadores: [] });
+    },
+    travarContainer: (id) => {
+      const container = lerContainers(dir).find((candidato) => candidato.id === id);
+      if (container) gravarContainer(dir, { ...container, travado: true });
     },
     falharComando: (comando, mensagem) => {
       writeFileSync(join(falhas, comando), mensagem);
@@ -349,6 +357,10 @@ function executarDockerFalso(): void {
     const { opcoes, resto } = tirarOpcoes(args, ["-w", "--env-file", "-u"]);
     const container = achar(resto[0] ?? "");
     if (container.estado !== "running") sair(1, `Error response from daemon: container ${container.id} is not running`);
+    if (container.travado) {
+      setInterval(() => undefined, 60_000); // mantém o processo vivo: o exec não volta
+      return;
+    }
     const programa = resto.slice(1);
     gravarContainer(dir, { ...container, comandos: [...container.comandos, programa] });
     const [shell, opcaoC, roteiro = ""] = programa;

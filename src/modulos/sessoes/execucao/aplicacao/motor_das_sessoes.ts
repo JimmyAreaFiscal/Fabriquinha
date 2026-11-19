@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { instanteDepois, type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
+import { LIMITE_COMANDO_MS } from "../../../../shared/nucleo/primitivos.ts";
 import { anotar, noLog } from "../../../../shared/infra/registro.ts";
 import type { Ambiente, GestaoDeAmbientes, IdentificadorDoProcesso } from "../../../ambiente/publico.ts";
 import {
@@ -47,6 +48,11 @@ const ABORTADA: FalhaDaExecucao = { tipo: "abortada", motivo: "abortada pelo Aud
  * evento. 15 min dá folga de 2,5 vezes sobre a mais longa sem segurar à toa a retomada automática.
  */
 const SILENCIO_MAXIMO_DO_MODELO_MIN = 15;
+/**
+ * A ferramenta que passa do limite de comando do `bash` mais esta folga não foi encerrada pelo pi (o container travou ou
+ * o pi não conseguiu matar o comando): a execução falha em vez de esperar o `timeout_min` inteiro.
+ */
+const FOLGA_DO_VIGIA_DE_FERRAMENTA_MS = 5 * 60_000;
 
 interface Viva extends Omit<Situacao, "dialogos"> {
   sessao: string;
@@ -89,6 +95,8 @@ export interface PedidoDeProcesso {
   triarPergunta?: (pergunta: PerguntaDoAgente) => Promise<RespostaAPergunta | undefined>;
   /** Padrão: SILENCIO_MAXIMO_DO_MODELO_MIN; os testes encurtam. */
   silencioMaximoDoModeloMin?: number;
+  /** Padrão: LIMITE_COMANDO_MS mais a folga do vigia de ferramenta; os testes encurtam. */
+  prazoDaFerramentaMs?: number;
 }
 
 /** A resposta a um diálogo pendente do pi: o valor, a confirmação ou o cancelamento. */
@@ -380,6 +388,12 @@ export class MotorDasSessoes {
       /** As ferramentas em execução, por `toolCallId`: enquanto alguma roda, o silêncio do pi não é do modelo. */
       const ferramentasRodando = new Set<string>();
       let vigiaDoModelo: NodeJS.Timeout | undefined;
+      /** Um prazo por `toolCallId`: a ferramenta que não termina a tempo falha a execução. A `perguntar` espera o Auditor e fica fora. */
+      const vigiasDeFerramenta = new Map<string, NodeJS.Timeout>();
+      const desarmarVigiaDaFerramenta = (chamada: string) => {
+        clearTimeout(vigiasDeFerramenta.get(chamada));
+        vigiasDeFerramenta.delete(chamada);
+      };
       let feito = false;
       this.sessoesEmCurso.add(sessao);
       const fim = (falha?: FalhaDaExecucao) => {
@@ -387,6 +401,7 @@ export class MotorDasSessoes {
         feito = true;
         clearTimeout(temporizadorDoLimite);
         clearTimeout(vigiaDoModelo);
+        for (const t of vigiasDeFerramenta.values()) clearTimeout(t);
         for (const t of expiracoes.values()) clearTimeout(t);
         this.vivas.delete(id);
         void pi.parar().then(() => {
@@ -443,6 +458,21 @@ export class MotorDasSessoes {
           // Com o sandbox vivo a falha é a de sempre; com ele caído, o silêncio é consequência dele.
           void falhaConsiderandoOSandbox(falha).then(fim);
         }, silencioMin * 60_000);
+      };
+      const armarVigiaDaFerramenta = (chamada: string, nome: string) => {
+        const prazoMs = r.prazoDaFerramentaMs ?? LIMITE_COMANDO_MS + FOLGA_DO_VIGIA_DE_FERRAMENTA_MS;
+        vigiasDeFerramenta.set(
+          chamada,
+          setTimeout(() => {
+            const falha: Extract<FalhaDaExecucao, { tipo: "falha_infraestrutura" }> = {
+              tipo: "falha_infraestrutura",
+              causa: "tempo_limite",
+              motivo: `a ferramenta ${nome} passou de ${String(prazoMs / 60_000)} min sem terminar`,
+            };
+            anotar(r.log, falha.motivo);
+            void falhaConsiderandoOSandbox(falha).then(fim);
+          }, prazoMs),
+        );
       };
       const mudou = () => {
         rearmarVigiaDoModelo();
@@ -594,10 +624,12 @@ export class MotorDasSessoes {
             }
             case "tool_execution_start":
               ferramentasRodando.add(evento.toolCallId);
+              if (evento.toolName !== "perguntar") armarVigiaDaFerramenta(evento.toolCallId, evento.toolName);
               if (evento.toolName === "perguntar") perguntas.set(evento.toolCallId, evento.args);
               break;
             case "tool_execution_end":
               ferramentasRodando.delete(evento.toolCallId);
+              desarmarVigiaDaFerramenta(evento.toolCallId);
               perguntas.delete(evento.toolCallId);
               // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
               this.avisar(sessao, r.log);

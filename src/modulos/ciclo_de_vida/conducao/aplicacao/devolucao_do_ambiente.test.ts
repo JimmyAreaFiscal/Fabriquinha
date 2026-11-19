@@ -1,7 +1,7 @@
 // A devolução do Ambiente ocioso (I-312): o gate parado, o Espaço recém-preparado e o ticket falho não seguram sandbox do
 // conjunto, e a retomada aloca de novo na mesma worktree. Banco real, git real, docker falso e conjunto fixo.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { type TestContext, test } from "node:test";
@@ -16,8 +16,11 @@ import { relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
 import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import {
+  AmbienteFalso,
+  gestaoQueSoUsa,
   inserirAmbienteAlocado,
   ligarGestaoDeAmbientesDoTeste,
+  ligarGestaoDeAmbientesNosModulos,
   listarAmbientes,
   modulosDoCicloDeTeste,
 } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
@@ -139,6 +142,55 @@ test("o git do Espaço que devolveu o Ambiente roda num sandbox realocado, nunca
     .filter((argumentos) => argumentos[0] === "exec" && JSON.stringify(argumentos).includes("rev-parse"));
   assert.equal(gitNoSandbox.length, 1, "o rev-parse rodou pelo docker exec, no sandbox");
   assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "livre", alocado_para: null }]);
+});
+
+test("CA-9: o sandbox do Espaço sem resposta ao fim da Tentativa sai sujo e a Tentativa seguinte roda noutro", async (t) => {
+  const { banco, c } = await cenarioComConjunto(t, 2, { estado: "planejar", estadoDoTicket: "em_execucao" });
+  await prepararEspacoDoTicket(banco, {});
+  const [semResposta] = listarAmbientes(banco);
+  assert.equal(semResposta?.estado, "alocado");
+  const falhaDoExec = join(c.raiz, "docker", "falhas", "exec");
+  writeFileSync(falhaDoExec, "container sem resposta"); // o `docker exec ... true` do sandboxCaiu falha, e o limpar também
+  await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), { demanda_id: "I-1", ticket_id: 1 });
+  assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "sujo", alocado_para: null }]);
+  assert.match(
+    readFileSync(join(c.raiz, "execucoes", "devolucao-I-1.log"), "utf8"),
+    /o sandbox do Espaço não responde/,
+  );
+  rmSync(falhaDoExec);
+  await prepararEspacoDoTicket(banco, {});
+  const alocado = listarAmbientes(banco).find((ambiente) => ambiente.estado === "alocado");
+  assert.equal(alocado?.alocado_para, "I-1");
+  assert.notEqual(alocado.id, semResposta.id);
+});
+
+test("CA-10: o sandbox do Espaço respondendo com o ticket retomado segue alocado", async (t) => {
+  const { banco } = await cenarioComConjunto(t, 1, { estado: "planejar", estadoDoTicket: "em_execucao" });
+  await prepararEspacoDoTicket(banco, {});
+  await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), { demanda_id: "I-1", ticket_id: 1 });
+  assert.deepEqual(situacaoDoConjunto(banco), [{ estado: "alocado", alocado_para: "I-1" }]);
+});
+
+test("o sandboxCaiu() do Ambiente do Espaço decide a devolução, sem gate nem falha", async (t) => {
+  const { banco } = cenarioDePlanejamento({ estado: "planejar", estadoDoTicket: "em_execucao" });
+  const ambiente = new AmbienteFalso();
+  const limpos: string[] = [];
+  ligarGestaoDeAmbientesNosModulos({
+    ...gestaoQueSoUsa(ambiente),
+    limpar: (id) => {
+      limpos.push(id);
+      return Promise.resolve();
+    },
+  });
+  t.after(() => {
+    ligarGestaoDeAmbientesNosModulos();
+  });
+  const ticket = { demanda_id: "I-1", ticket_id: 1 };
+  await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), ticket);
+  assert.deepEqual(limpos, []);
+  ambiente.sandboxCaido = true;
+  await devolverAmbienteSeOTicketEsperaOHumano(modulosDoCicloDeTeste(banco), ticket);
+  assert.deepEqual(limpos, [ambiente.id]);
 });
 
 test("ticket inexistente não devolve nada", async (t) => {

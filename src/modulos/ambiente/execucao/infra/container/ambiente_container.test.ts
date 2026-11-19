@@ -370,6 +370,37 @@ test("sandboxCaiu: só o container rodando e com o docker respondendo está de p
   );
 });
 
+test("sandboxCaiu: container rodando que não responde ao docker exec caiu em até 35 s", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-4",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  docker.travarContainer(id);
+  const inicio = Date.now();
+  assert.equal(await doContainer.sandboxCaiu(), true);
+  assert.ok(Date.now() - inicio < 35_000);
+});
+
+test("executar: comando que não volta nem com o kill sai em limiteMs mais 30 s, com limiteEstourado", async () => {
+  const { id } = docker.semearContainer({});
+  const doContainer = new AmbienteContainer({
+    id: "amb-5",
+    container_id: id,
+    bin_do_pacote: binDoPacote,
+    raiz: base,
+    url_da_api: urlDaApi,
+  });
+  docker.travarContainer(id);
+  const inicio = Date.now();
+  const saida = await doContainer.executar(comandoNoShell("npm run check", { limiteMs: 300 }));
+  assert.deepEqual([saida.codigo, saida.limiteEstourado], [null, true]);
+  assert.ok(Date.now() - inicio < 300 + 35_000);
+});
+
 test("o caminho no ambiente é o do host (mesmos caminhos nas montagens)", () => {
   assert.equal(ambiente.caminhoNoAmbiente("/a/b"), "/a/b");
   assert.equal(ambiente.id, "amb-1");

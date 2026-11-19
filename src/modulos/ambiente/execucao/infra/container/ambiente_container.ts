@@ -105,7 +105,11 @@ export class AmbienteContainer implements Ambiente {
             limite.matouOGrupo = this.sinalizar(identificador, "SIGKILL");
           }, limiteMs);
     try {
-      const r = await executar("docker", argumentosDoDocker, { ultimos: ultimosBytes });
+      // O `docker exec` do host também tem prazo: com o container travado, nem o `kill` dentro dele volta.
+      const r = await executar("docker", argumentosDoDocker, {
+        ultimos: ultimosBytes,
+        limiteMs: limiteMs === undefined ? undefined : limiteMs + LIMITE_DO_SINAL_MS,
+      });
       await limite.matouOGrupo;
       // Como no host: `null` no limite e, no shell, stderr e stdout juntos em `saida`, sem byte nulo.
       return {
@@ -164,15 +168,22 @@ export class AmbienteContainer implements Ambiente {
     );
   }
 
+  /** Caiu se o container não roda ou, rodando, não responde a um `docker exec` em `LIMITE_DO_SINAL_MS`. */
   async sandboxCaiu(): Promise<boolean> {
-    const inspecaoDoEstadoRodando = await executar(
-      "docker",
-      ["inspect", "--format", "{{.State.Running}}", this.container_id],
-      {
+    try {
+      const inspecaoDoEstadoRodando = await executar(
+        "docker",
+        ["inspect", "--format", "{{.State.Running}}", this.container_id],
+        { limiteMs: LIMITE_DO_SINAL_MS },
+      );
+      if (inspecaoDoEstadoRodando.codigo !== 0 || inspecaoDoEstadoRodando.saida.trim() !== "true") return true;
+      const respostaDoContainer = await executar("docker", ["exec", this.container_id, "true"], {
         limiteMs: LIMITE_DO_SINAL_MS,
-      },
-    ).catch(() => undefined);
-    return inspecaoDoEstadoRodando?.codigo !== 0 || inspecaoDoEstadoRodando.saida.trim() !== "true";
+      });
+      return respostaDoContainer.codigo !== 0;
+    } catch {
+      return true;
+    }
   }
 
   caminhoNoAmbiente(caminhoNoHost: string): string {

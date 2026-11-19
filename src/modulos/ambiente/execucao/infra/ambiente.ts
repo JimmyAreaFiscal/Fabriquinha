@@ -74,7 +74,7 @@ export interface Ambiente {
   executar(comando: ComandoNoAmbiente): Promise<SaidaDoComando>;
   /** Lança o processo num grupo próprio e devolve sem esperar. */
   lancar(comando: ComandoNoAmbiente): ProcessoNoAmbiente;
-  /** O sandbox onde ele roda caiu (o docker não responde, o container parou ou sumiu)? O host local nunca cai. */
+  /** O sandbox onde ele roda caiu (o docker não responde, o container parou, sumiu ou não responde a um comando no container)? O host local nunca cai. */
   sandboxCaiu(): Promise<boolean>;
   /** Também serve à recuperação da subida, com o identificador gravado antes do reinício. */
   sinalizar(identificador: IdentificadorDoProcesso, sinal: NodeJS.Signals): Promise<void>;
