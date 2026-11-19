@@ -338,6 +338,20 @@ test.describe("CA-26", () => {
       /Sessão pi ativa|Em execução \(sistema\)/,
     );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
+    // O ticket fica em "Em execução (sistema)" até a condução abrir a sessão, o que sob carga leva segundos. O Início só
+    // relê a cada 5 s, o mesmo prazo do expect: aberto antes da sessão, a releitura seguinte podia chegar tarde demais.
+    // Espera-se a sessão, com folga para a condução sob carga; o Início aberto depois já a desenha na primeira leitura.
+    await expect
+      .poll(
+        async () => {
+          const { rodando } = (await (await pagina.request.get(`${fabriquinha.base}/api/inicio`)).json()) as {
+            rodando: { ticket: string }[];
+          };
+          return rodando.map(({ ticket }) => ticket);
+        },
+        { timeout: 15_000 },
+      )
+      .toContain("I-216.T1");
     // Pelo menu, sem recarregar: o Início mostra a sessão do pi parado rodando.
     await pagina
       .getByRole("navigation", { name: "Páginas" })
