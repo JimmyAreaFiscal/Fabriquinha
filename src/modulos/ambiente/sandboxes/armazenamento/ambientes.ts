@@ -11,13 +11,16 @@ export interface AmbienteGravado {
   imagem: string;
   /** O número do container (`fabriquinha-slot-<n>`); nulo no que nasceu antes de o slot existir. */
   slot: number | null;
+  /** A identidade da instalação do harness do host com que o container foi criado; nula no que nasceu antes dela existir. */
+  instalacao_do_harness: string | null;
   estado: EstadoDoAmbiente;
   alocado_para: string | null;
   criado_em: string;
   liberado_em: string | null;
 }
 
-const COLUNAS_DO_AMBIENTE = "id, container_id, imagem, slot, estado, alocado_para, criado_em, liberado_em";
+const COLUNAS_DO_AMBIENTE =
+  "id, container_id, imagem, slot, instalacao_do_harness, estado, alocado_para, criado_em, liberado_em";
 
 // O node:sqlite devolve objetos sem protótipo; a cópia dá um objeto comum.
 const comoAmbiente = (linha: Record<string, unknown> | undefined): AmbienteGravado | undefined =>
@@ -29,13 +32,22 @@ export function inserirAmbienteAlocado(
   novo: Pick<AmbienteGravado, "id" | "container_id" | "imagem" | "criado_em"> & {
     alocado_para: string;
     slot?: number | null;
+    instalacao_do_harness?: string | null;
   },
 ): void {
   banco
     .prepare(
-      "INSERT INTO ambiente (id, container_id, imagem, slot, estado, alocado_para, criado_em) VALUES (?, ?, ?, ?, 'alocado', ?, ?)",
+      "INSERT INTO ambiente (id, container_id, imagem, slot, instalacao_do_harness, estado, alocado_para, criado_em) VALUES (?, ?, ?, ?, ?, 'alocado', ?, ?)",
     )
-    .run(novo.id, novo.container_id, novo.imagem, novo.slot ?? null, novo.alocado_para, novo.criado_em);
+    .run(
+      novo.id,
+      novo.container_id,
+      novo.imagem,
+      novo.slot ?? null,
+      novo.instalacao_do_harness ?? null,
+      novo.alocado_para,
+      novo.criado_em,
+    );
 }
 
 /**

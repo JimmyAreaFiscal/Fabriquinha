@@ -21,6 +21,8 @@ const AmbienteDoConjunto = z.strictObject({
   container_id: z.string(),
   imagem: z.string(),
   slot: z.number().nullable(),
+  /** A instalação do harness do host com que o container nasceu; a tela não a mostra. */
+  instalacao_do_harness: z.string().nullable(),
   estado: z.enum(["livre", "alocado", "sujo", "eliminado"]),
   alocado_para: z.string().nullable(),
   criado_em: z.string(),
