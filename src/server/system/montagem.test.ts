@@ -21,6 +21,7 @@ import {
   listarAmbientes,
 } from "../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ErroDeRegra } from "../../shared/nucleo/erros.ts";
+import { identidadeDaInstalacaoDoHarness, instalacaoDoPi } from "../../shared/infra/isolamento_do_ambiente.ts";
 import { escrever, novoId } from "../../shared/armazenamento/banco.ts";
 import { migrarBancoDaFabriquinha } from "./banco_da_fabriquinha.ts";
 import { Configuracao, salvarConfiguracao } from "../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
@@ -570,6 +571,8 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
   const minuto = relogio(t);
   const { raiz, banco } = abrirBancoTemporario();
   salvarConfiguracaoDoAmbiente(banco, AMBIENTE_EM_CONTAINER);
+  // A subida elimina o alocado de outra instalação do pi, então os dois levam a instalação atual do host.
+  const instalacaoDoHarness = identidadeDaInstalacaoDoHarness(instalacaoDoPi());
   for (const [id, alocadoPara, slot] of [
     ["ocioso", "I-1", 1],
     ["em-uso", "I-2", 2],
@@ -582,6 +585,7 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
       container_id: container.id,
       imagem: "alpine",
       slot,
+      instalacao_do_harness: instalacaoDoHarness,
       criado_em: "2020-01-01T00:00:00.000Z",
       alocado_para: alocadoPara,
     });
@@ -589,13 +593,13 @@ test("com tipo container, a batida do relógio elimina o livre ocioso e deixa o 
   liberarAmbiente(banco, "ocioso", "livre", "2020-01-01T00:00:00.000Z");
   banco.close();
   const s = await subir(raiz);
+  t.after(() => s.parar());
   minuto();
   await ate(() => listarAmbientes(s.banco).length === 1);
   assert.deepEqual(
     listarAmbientes(s.banco).map(({ id }) => id),
     ["em-uso"],
   );
-  await s.parar();
 });
 
 test("com tipo container e o docker fora do ar, o serviço sobe e a batida do relógio não lança", async (t) => {

@@ -634,6 +634,18 @@ test("na subida o container ainda alocado é de um Espaço morto pelo reinício:
   assert.equal(comoContainer(await gestao.alocar(espacoB, projeto)).container_id, ambiente.container_id);
 });
 
+test("na subida o container alocado antes de o pi ser atualizado no host é eliminado em vez de voltar livre", async () => {
+  const { docker, banco, alocar } = await cenario();
+  const ambiente = await alocar();
+  banco.prepare("UPDATE ambiente SET instalacao_do_harness = 'pasta-do-pi-antiga' WHERE id = ?").run(ambiente.id);
+
+  const { gestao } = await subirDeNovo(banco);
+
+  assert.deepEqual(listarAmbientes(banco), []);
+  assert.deepEqual(docker.containers(), []);
+  assert.notEqual(comoContainer(await gestao.alocar(espacoB, projeto)).container_id, ambiente.container_id);
+});
+
 test("na subida, a limpeza que falha deixa o alocado sujo, e o que o docker perdeu não é limpo", async () => {
   const { docker, banco, alocar, pastaDoDocker } = await cenario();
   const comFalha = await alocar();

@@ -4,7 +4,11 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { migrarBancoDaFabriquinha } from "../../../server/system/banco_da_fabriquinha.ts";
-import { VERSAO_DA_INSTANCIA, VERSAO_DO_SLOT_DO_AMBIENTE } from "./migracoes_de_ambiente.ts";
+import {
+  VERSAO_DA_INSTALACAO_DO_HARNESS,
+  VERSAO_DA_INSTANCIA,
+  VERSAO_DO_SLOT_DO_AMBIENTE,
+} from "./migracoes_de_ambiente.ts";
 
 const CRIADO_EM_DOS_AMBIENTES = "2026-01-01T00:00:00.000Z";
 
@@ -72,5 +76,26 @@ test("a migração da instância dá ao banco um nome fab- com 4 hexadecimais, q
   assert.throws(() => {
     banco.exec("INSERT INTO instancia_da_fabriquinha (id, nome) VALUES (2, 'fab-3f9a')");
   }, /CHECK/);
+  banco.close();
+});
+
+test("a migração da instalação do harness não perde linha e deixa a coluna nula nos Ambientes que existem", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrarBancoDaFabriquinha(banco, VERSAO_DA_INSTALACAO_DO_HARNESS - 1);
+  inserirAmbiente(banco, "c1", "livre");
+  inserirAmbiente(banco, "c2", "alocado");
+
+  migrarBancoDaFabriquinha(banco);
+
+  assert.deepEqual(
+    banco
+      .prepare("SELECT id, instalacao_do_harness FROM ambiente ORDER BY id")
+      .all()
+      .map((linha) => ({ ...linha })),
+    [
+      { id: "c1", instalacao_do_harness: null },
+      { id: "c2", instalacao_do_harness: null },
+    ],
+  );
   banco.close();
 });

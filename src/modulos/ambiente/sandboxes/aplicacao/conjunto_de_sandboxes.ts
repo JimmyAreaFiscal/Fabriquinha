@@ -4,7 +4,10 @@
 // informa a indisponibilidade (MELHORIAS §8, regra 4).
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que cria e elimina os containers. A alocação devolvida é a
 // referência que a Execução usa para rodar comandos no container.
-import type { InstalacaoDoHarness } from "../../../../shared/infra/isolamento_do_ambiente.ts";
+import {
+  identidadeDaInstalacaoDoHarness,
+  type InstalacaoDoHarness,
+} from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
@@ -42,7 +45,10 @@ export interface ServicoDoConjunto {
   porta_da_api: number;
   home_do_usuario: string;
   pacote_do_harness: string;
-  /** Perguntada só ao criar um container: o host sem o harness instalado roda no host_local. */
+  /**
+   * Perguntada a cada entrega de um sandbox livre (a identidade dela confere com a do container) e na criação: o host sem o
+   * harness instalado roda no host_local. Na liberação, a falha ao perguntar mantém a liberação de hoje.
+   */
   instalacao_do_harness: () => InstalacaoDoHarness;
   dir_do_harness_do_auditor: string;
 }
@@ -145,6 +151,9 @@ export class ConjuntoDeSandboxes {
   ): Promise<AmbienteGravado> {
     const servico = this.#servico;
     const imagem = await this.#gerador.garantirImagem(projeto);
+    // Lida uma vez, antes de tocar nos livres: sem o pi no host o pedido falha e nenhum livre é descartado.
+    const instalacaoDoHarness = servico.instalacao_do_harness();
+    const identidadeDaInstalacao = identidadeDaInstalacaoDoHarness(instalacaoDoHarness);
     // Pegar o livre é um UPDATE só, então dois alocar ao mesmo tempo nunca pegam o mesmo; a conferência vem depois.
     const jaAlocado = buscarAmbienteAlocadoPara(this.#banco, alocadoPara);
     if (jaAlocado) {
@@ -154,6 +163,11 @@ export class ConjuntoDeSandboxes {
     // Cada livre é entregue só depois de conferido, porque o docker pode ter parado enquanto ele esperava.
     const pegarLivre = () => alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
     for (let livre = pegarLivre(); livre; livre = pegarLivre()) {
+      // O pi do host foi reinstalado depois de o container nascer: o bind mount dele aponta para a pasta apagada.
+      if (livre.instalacao_do_harness !== identidadeDaInstalacao) {
+        await this.#eliminarPerdido(livre);
+        continue;
+      }
       if (await this.#gerador.regrasDeRedeIntactas(livre)) return livre;
       await this.#eliminarPerdido(livre);
     }
@@ -162,7 +176,7 @@ export class ConjuntoDeSandboxes {
       raiz_git: projeto.raiz_git,
       raiz: servico.raiz,
       pacote: servico.pacote_do_harness,
-      harness: servico.instalacao_do_harness(),
+      harness: instalacaoDoHarness,
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
@@ -172,7 +186,15 @@ export class ConjuntoDeSandboxes {
       // Lido depois do `rm` do parado, para o slot dele voltar a servir; do `await` à reserva não há outro.
       const slotsTomadosNoDocker = await this.#gerador.listarSlotsTomadosNoDocker();
       slot = this.#reservarMenorSlotLivre(slotsTomadosNoDocker);
-      return await this.#criarAlocado(imagem, alocadoPara, servico.porta_da_api, slot, montagens, copias);
+      return await this.#criarAlocado(
+        imagem,
+        alocadoPara,
+        servico.porta_da_api,
+        slot,
+        montagens,
+        copias,
+        identidadeDaInstalacao,
+      );
     } finally {
       this.#criacoesEmAndamento--;
       if (slot !== undefined) this.#slotsEmCriacao.delete(slot);
@@ -227,11 +249,28 @@ export class ConjuntoDeSandboxes {
     if (alocado) await this.#limparEDevolver(alocado);
   }
 
+  /** Se a instalação do harness do host já não é a do container; a falha ao lê-la mantém a liberação de hoje. */
+  #instalacaoDoHarnessMudou(ambiente: AmbienteGravado): boolean {
+    try {
+      const identidadeAtual = identidadeDaInstalacaoDoHarness(this.#servico.instalacao_do_harness());
+      return ambiente.instalacao_do_harness !== identidadeAtual;
+    } catch {
+      return false;
+    }
+  }
+
   async #limparEDevolver(ambiente: AmbienteGravado): Promise<void> {
     let estadoDepoisDaLiberacao: "livre" | "sujo" = "livre";
     try {
       // As sessões e execuções do ocupante saem do container antes de ele servir a outro ocupante.
       recolherParaOEspaco(this.#servico.raiz, ambiente.id, String(ambiente.alocado_para));
+      if (this.#instalacaoDoHarnessMudou(ambiente)) {
+        // O container não serve mais ninguém (o `pi` dele aponta para o vazio): sai em vez de ser limpo. O `rm` que
+        // falha deixa o órfão para a `reconciliarNaSubida` seguinte e não falha a liberação.
+        eliminarAmbiente(this.#banco, ambiente.id);
+        await this.#gerador.eliminar(ambiente).catch(() => undefined);
+        return;
+      }
       await this.#gerador.limpar(ambiente);
     } catch {
       estadoDepoisDaLiberacao = "sujo";
@@ -310,6 +349,7 @@ export class ConjuntoDeSandboxes {
     slot: number,
     montagens: Montagens,
     copias: Copias,
+    identidadeDaInstalacao: string,
   ): Promise<AmbienteGravado> {
     const criado = await this.#gerador.criar(imagem, this.#configuracao(), portaDaApi, slot, montagens, copias);
     const alocado: AmbienteGravado = {
@@ -317,6 +357,7 @@ export class ConjuntoDeSandboxes {
       imagem,
       estado: "alocado",
       alocado_para: alocadoPara,
+      instalacao_do_harness: identidadeDaInstalacao,
       criado_em: this.#relogio.agora(),
       liberado_em: null,
     };
