@@ -112,6 +112,7 @@ function estado(raiz: string) {
       motivo: t && motivoDaFalhaDoTicket(ag.tentativas, t),
       decisoes: ag.decisoes.length,
       rodada: ag.rodadas[0]?.estado,
+      matrizes: ag.evidencias.filter((e) => e.ticket_id === 2 && e.tipo === "matriz_fitness").length,
     };
   } finally {
     banco.close();
@@ -153,7 +154,7 @@ for (const [ca, integral] of [
     semear(fabriquinha.raiz, "[sem decidir]", integral);
     await executar(pagina, fabriquinha.base, "Falhou");
     await expect(pagina.locator(".dm-ticket", { hasText: "I-250.T2" })).toContainText(SEM_DECISAO);
-    expect(estado(fabriquinha.raiz)).toMatchObject({ estado: "falhou", motivo: SEM_DECISAO, decisoes: 0 });
+    expect(estado(fabriquinha.raiz)).toMatchObject({ estado: "falhou", motivo: SEM_DECISAO, decisoes: 0, matrizes: 1 });
 
     await pagina.getByRole("button", { name: "Reabrir" }).click();
     await pagina.getByLabel(/Instrução/).fill("decida ao final");

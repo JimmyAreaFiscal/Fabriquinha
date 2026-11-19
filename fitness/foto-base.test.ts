@@ -56,6 +56,10 @@ const USE_AS_VERIFICACOES_JA_FEITAS =
   ' Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).';
 const SECAO_VERIFICACOES_JA_FEITAS =
   "## Verificações já feitas\n\nA Fabriquinha rodou estas verificações no commit de cada ticket abaixo, antes de commitá-lo. Se `git rev-parse HEAD^{tree}` na worktree é igual a `git rev-parse <sha>^{tree}` de um deles e `git status --porcelain` está vazio, o código é o verificado: use estes resultados e logs, sem rodar de novo os comandos listados.\n\n(nenhuma)\n\n";
+const MOTIVO_MATRIZ_NA_REVISAO_DA_DEMANDA =
+  "I-322: a revisar_demanda recebe a matriz de fitness rodada na worktree da demanda, e matriz com falha impede aprovar";
+const SECAO_MATRIZ_SEM_LINHAS =
+  "## Matriz de fitness functions\n\nA Fabriquinha rodou cada fitness function na worktree antes desta execução:\n\n(nenhuma)\n\nOs logs, em arquivos que você lê:\n\n(nenhum)\n\n";
 const PASSO_4_DO_PLANEJAR =
   "4. Monte o plano: rodadas com os critérios que cada uma atende, tickets de implementação com dependências e caminhos.\n";
 const PERMISSAO_DO_IMPLEMENTAR =
@@ -325,6 +329,24 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     para: `${SECAO_VERIFICACOES_JA_FEITAS}## Modo de trabalhar: ${etapa.replace("_", " ")}\n`,
     motivo: MOTIVO_VERIFICACOES_JA_FEITAS,
   })),
+  {
+    arquivo: "prompts/revisar_demanda.txt",
+    de: SECAO_VERIFICACOES_JA_FEITAS,
+    para: `${SECAO_MATRIZ_SEM_LINHAS}${SECAO_VERIFICACOES_JA_FEITAS}`,
+    motivo: MOTIVO_MATRIZ_NA_REVISAO_DA_DEMANDA,
+  },
+  ...emPromptETexto("revisar_demanda").map((arquivo) => ({
+    arquivo,
+    de: ", o plano e o resultado de cada rodada.\n2. Confira",
+    para: ', o plano e o resultado de cada rodada, e a seção "Matriz de fitness functions": a Fabriquinha rodou cada fitness function na worktree da demanda, com todas as rodadas integradas, e o arquivo do log de cada linha está lá. Matriz com alguma linha fora do código 0 impede aprovar: reprove com uma rodada corretiva que conserte a linha.\n2. Confira',
+    motivo: MOTIVO_MATRIZ_NA_REVISAO_DA_DEMANDA,
+  })),
+  {
+    arquivo: "prompts/revisar_demanda.txt",
+    de: "A Fabriquinha não produz evidência nesta etapa.\n\n",
+    para: "A Fabriquinha produz:\n\n- `matriz_fitness`\n\n",
+    motivo: MOTIVO_MATRIZ_NA_REVISAO_DA_DEMANDA,
+  },
   ...(
     [
       [

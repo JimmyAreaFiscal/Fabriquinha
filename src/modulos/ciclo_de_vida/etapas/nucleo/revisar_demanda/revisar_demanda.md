@@ -4,7 +4,7 @@
 
 **Passos:**
 
-1. Leia os critérios de aceite da demanda {demanda}, o plano e o resultado de cada rodada.
+1. Leia os critérios de aceite da demanda {demanda}, o plano e o resultado de cada rodada, e a seção "Matriz de fitness functions": a Fabriquinha rodou cada fitness function na worktree da demanda, com todas as rodadas integradas, e o arquivo do log de cada linha está lá. Matriz com alguma linha fora do código 0 impede aprovar: reprove com uma rodada corretiva que conserte a linha.
 2. Confira o código integrado da worktree contra cada critério da demanda. Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).
 3. Exercite o que a demanda entrega sob carga e entradas extremas e registre o que quebrou ou aguentou.
    Só rode o estresse do projeto se o diff tocar carga ou concorrência; na Fabriquinha, `npm run estresse` só roda se o diff tocar `estresse/`, `src/server/system/`, qualquer pasta `armazenamento/` ou `infra/` de `src/` ou os condutores do agendador e das execuções (`src/modulos/ciclo_de_vida/despacho/aplicacao/`, `src/modulos/ciclo_de_vida/conducao/aplicacao/execucao/execucao_demanda.ts`, `src/modulos/ciclo_de_vida/conducao/aplicacao/chat_do_auditor/`, `src/modulos/sessoes/execucao/aplicacao/motor_das_sessoes.ts`). Sem estresse, a evidência vai com `aplicavel: false` e a justificativa.

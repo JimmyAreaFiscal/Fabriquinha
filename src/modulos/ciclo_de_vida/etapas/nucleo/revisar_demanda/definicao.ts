@@ -1,4 +1,4 @@
-// A definição do `revisar_demanda`: o agente confere a demanda inteira na worktree dela e decide o gate.
+// A definição do `revisar_demanda`: a Fabriquinha roda a fitness na worktree da demanda antes do agente, que a confere e decide o gate.
 import { type DefinicaoDaEtapa, evidenciaExigida, EXTENSOES_DO_AGENTE } from "../definicao/definicao_da_etapa.ts";
 
 export const DEFINICAO_DO_REVISAR_DEMANDA = {
@@ -7,11 +7,13 @@ export const DEFINICAO_DO_REVISAR_DEMANDA = {
   escopo: "demanda",
   executor: "agente_autonomo",
   evidencias: [
+    // Sem regra: a matriz com fitness falhando entra, e a recusa vem na aprovação, para o revisor reprovar.
+    evidenciaExigida("revisar_demanda", "matriz_fitness", "fabriquinha"),
     evidenciaExigida("revisar_demanda", "comprovacao_criterios", "agente", true, "criterios_demanda_atendidos"),
     evidenciaExigida("revisar_demanda", "testes_estresse", "agente"),
     evidenciaExigida("revisar_demanda", "analise_seguranca", "agente"),
   ],
-  verificacoes: [],
+  verificacoes: ["fitness"],
   metricas: ["uso", "exigencias_de_alteracao", "bugs_nos_arquivos_revisados"],
   capacidades: {
     skills: ["artefato-comprovacao-criterios", "artefato-testes-estresse", "artefato-analise-seguranca"],

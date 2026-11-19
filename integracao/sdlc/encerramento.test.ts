@@ -34,6 +34,7 @@ import {
   execucoesDe,
   pi,
   revisaoIntegral,
+  revisaoIntegralComFitnessQuebrada,
   revisar,
   rodadaDe,
   rodadaEmEncerramento,
@@ -41,6 +42,7 @@ import {
 import { base, type Cenario, ciclo, criarCenario, demanda, git } from "../apoio.ts";
 import type { PRFalso } from "../../apoio-testes/falsos/hospedagem_falsa.ts";
 import { ghFalso } from "../falsos.ts";
+import { buscarProjeto, gravarProjeto } from "../../apoio-testes/demandas_de_teste.ts";
 
 const gh = ghFalso(base);
 
@@ -147,6 +149,60 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
       .map((d) => d.resultado),
     ["reprovado", "aprovado"],
   );
+});
+
+test("I-322 CA-3, CA-4: fitness que quebra só no branch da demanda recusa a aprovação, sem encerrar_demanda nem PR final, até a rodada corretiva", async (t) => {
+  const c = criarCenario(t);
+  const projeto = buscarProjeto(c.banco, c.projeto);
+  assert.ok(projeto);
+  const fitnessComComando = (comando: string) => ({
+    ...projeto,
+    verificacoes: { ...projeto.verificacoes, fitness: [{ nome: "integracao", comando, descricao: "d" }] },
+  });
+  gravarProjeto(c.banco, fitnessComComando("true"));
+  gh.zerar();
+  const id = await rodadaEmEncerramento(c);
+  await encerrar(c, id);
+  await aprovarRodada(c, id, 1);
+  const prsDasRodadas = gh.prs().length;
+
+  // A fitness passou nas rodadas e quebra no branch da demanda: a Fabriquinha a roda de verdade na revisão integral.
+  gravarProjeto(c.banco, fitnessComComando("exit 1"));
+  const { revisor, recusa } = await revisaoIntegralComFitnessQuebrada(c, id);
+  assert.match(recusa, /fitness que falhou: integracao/);
+  const ag = demanda(c, id);
+  assert.equal(ag.demanda.estado, "em_execucao");
+  assert.deepEqual(
+    ag.decisoes.filter((d) => d.ticket_id === revisor).map((d) => d.resultado),
+    ["reprovado"],
+  );
+  assert.equal(tickets(c, id, "encerrar_demanda").length, 0);
+  assert.equal(gh.prs().length, prsDasRodadas, "nenhum PR final foi aberto");
+  const matrizQuebrada = demanda(c, id).evidencias.find((e) => e.ticket_id === revisor && e.tipo === "matriz_fitness");
+  assert.deepEqual(
+    (matrizQuebrada?.dados as { linhas: { nome: string; codigoSaida: number }[] }).linhas.map((l) => [
+      l.nome,
+      l.codigoSaida,
+    ]),
+    [["integracao", 1]],
+  );
+
+  // A rodada corretiva percorre o ciclo; o revisar_demanda seguinte roda a matriz outra vez, na worktree da demanda.
+  gravarProjeto(c.banco, fitnessComComando("true"));
+  pi.roteirizar([{ agente }]);
+  await ciclo(c, deps());
+  await revisar(c, id, { resultado: "aprovado" }, 2);
+  await encerrar(c, id, 2);
+  await aprovarRodada(c, id, 2);
+  const segundo = await revisaoIntegral(c, id, "aprovada");
+  assert.ok(segundo > revisor);
+  assert.equal(pi.prompts().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
+  const matriz = demanda(c, id).evidencias.find((e) => e.ticket_id === segundo && e.tipo === "matriz_fitness");
+  assert.deepEqual(
+    (matriz?.dados as { linhas: { nome: string; codigoSaida: number }[] }).linhas.map((l) => [l.nome, l.codigoSaida]),
+    [["integracao", 0]],
+  );
+  assert.equal(demanda(c, id).demanda.estado, "encerrar_demanda");
 });
 
 test("CA-SDLC-15: revisão integral aprovada encerra com o merge humano; conflito abre agente e check falho bloqueia sem integrar nem limpar", async (t) => {
