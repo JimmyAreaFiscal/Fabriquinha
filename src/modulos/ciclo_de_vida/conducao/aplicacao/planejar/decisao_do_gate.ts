@@ -1,5 +1,5 @@
 // Efeitos do gate do planejamento fora do agregado (comparacao-sdlc-implementacao.md §§3 e 6): preparar as worktrees
-// antes de aprovar e falar com o pi vivo da sessão de planejamento. Git e pi ficam fora da transação.
+// ao aprovar e falar com o pi vivo da sessão de planejamento. Git e pi ficam fora da transação.
 import type { DatabaseSync } from "node:sqlite";
 import {
   type AgregadoDemanda,
@@ -8,7 +8,7 @@ import {
   type EntradaDoGate,
 } from "../../../processo/publico.ts";
 import type { Ator, Endereco } from "../../../etapas/publico.ts";
-import { ErroDeRegra, mensagem } from "../../../../../shared/nucleo/erros.ts";
+import { mensagem } from "../../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDoTicket } from "../../../../repositorio/publico.ts";
 import { GateDoPlanejamento } from "./gate.ts";
 import type { GateComEfeitos } from "../decisao_dos_gates/gate_com_efeitos.ts";
@@ -22,6 +22,12 @@ import { projetosCadastrados } from "../projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "../modulos_do_ciclo.ts";
 
 const gate = new GateDoPlanejamento();
+const preparacoesEmAndamento = new Set<Promise<void>>();
+
+/** Espera as preparações soltas que as aprovações deixaram (os testes a usam para ver o resultado delas). */
+export const esperarPreparacoesDaAprovacao = async (): Promise<void> => {
+  await Promise.all(preparacoesEmAndamento);
+};
 
 /**
  * O Auditor reprova com motivo; a demanda volta a `planejar`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
@@ -46,9 +52,8 @@ function reprovarGateDoPlanejamento(
 }
 
 /**
- * Prepara antes de confirmar (§6): garante a worktree da demanda e a de cada rodada independente e só então grava a
- * aprovação. Falha de preparação deixa o gate aberto, vai ao log e sobe com o caminho da worktree. Repetível: o que já
- * existe é reaproveitado.
+ * Grava a aprovação e responde na hora; a preparação da worktree da demanda e da de cada rodada independente roda solta,
+ * porque pode esperar vaga de sandbox. Repetível: o que já existe é reaproveitado, e a condução refaz o que falhou.
  */
 async function aprovarGateDoPlanejamento(
   modulos: ModulosDoCiclo,
@@ -69,7 +74,7 @@ async function aprovarGateDoPlanejamento(
   // Cada Espaço devolve o Ambiente assim que fica pronto: preparar todos de uma vez exigiria um sandbox por Espaço ao mesmo tempo.
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
     await repositorio.prepararEspaco(projeto, espaco, log);
-    await devolverAmbienteDoEspaco(modulos, espaco.dono);
+    await devolverAmbienteDoEspaco(modulos, espaco.dono, true);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
@@ -82,23 +87,32 @@ async function aprovarGateDoPlanejamento(
         return { caminho: espaco.pasta, garantir: () => garantirEspaco(espaco) };
       }),
   ];
-  for (const { caminho, garantir } of passos) {
+  // Para na primeira falha; o Ambiente do Espaço da demanda, que o pi vivo segurava, volta ao conjunto de qualquer jeito.
+  const prepararEspacosDaAprovacao = async (): Promise<void> => {
     try {
-      await garantir();
-    } catch (erro) {
-      anotar(log, `preparação falhou em ${caminho}: ${mensagem(erro)}`);
-      throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
+      for (const { caminho, garantir } of passos) {
+        await garantir().catch((erro: unknown) => {
+          throw new Error(`em ${caminho}: ${mensagem(erro)}`);
+        });
+      }
+    } finally {
+      await devolverAmbienteDoEspaco(modulos, { demanda_id }, true);
     }
-  }
+  };
   const aprovado = decidirGateNaDemanda(banco, gate, endereco, entrada, ator, relogio);
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
   await encerrarPiVivo(banco, { demanda_id, ticket_id });
-  // O pi vivo impediu a devolução do Espaço da demanda ao prepará-lo; sem ele, o Ambiente volta ao conjunto.
-  await devolverAmbienteDoEspaco(modulos, { demanda_id });
+  // Promessa solta: o Espaço pode esperar vaga no conjunto de sandboxes e a resposta não espera. Falha vai ao log; a condução refaz a preparação.
+  const preparacao = prepararEspacosDaAprovacao()
+    .catch((erro: unknown) => {
+      anotar(log, `preparação falhou ${mensagem(erro)}`);
+    })
+    .finally(() => preparacoesEmAndamento.delete(preparacao));
+  preparacoesEmAndamento.add(preparacao);
   return aprovado;
 }
 
-/** O Gate do planejamento: a aprovação prepara as worktrees antes de gravar; a reprovação fala com o pi vivo. */
+/** O Gate do planejamento: a aprovação grava e prepara as worktrees sem esperar; a reprovação fala com o pi vivo. */
 export const GATE_DO_PLANEJAMENTO: GateComEfeitos = {
   regra: gate,
   async decidir(modulos, endereco, entrada, ator, relogio) {

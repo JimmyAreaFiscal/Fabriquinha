@@ -407,6 +407,33 @@ test("a batida cuja Configuração não se lê vai para o registro de erros, sem
   assert.deepEqual(erros, [ilegivel]);
 });
 
+test("na capacidade, o ocupante espera na fila da gestão e recebe o sandbox quando o dono o devolve; parar rejeita a espera que sobra", async () => {
+  const { gestao, configuracao, alocar } = await cenario();
+  configuracao.atual = ConfiguracaoDoAmbiente.parse({ ...LIMITES, capacidade_do_conjunto: 1 });
+  const ambiente = await alocar();
+  const espera = gestao.alocar(espacoB, projeto);
+  const rejeitada = assert.rejects(espera, (erro) => erro instanceof ErroExterno && erro.message.includes("parando"));
+  while (gestao.ocupantesNaFilaDeEspera().length === 0) await setTimeout(5);
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), [espacoB.dono]);
+
+  await gestao.parar();
+  await rejeitada;
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), []);
+  assert.equal(gestao.ambienteDo(espacoA.dono).id, ambiente.id);
+});
+
+test("na capacidade, o sandbox devolvido vai ao primeiro da fila da gestão", async () => {
+  const { gestao, configuracao, alocar } = await cenario();
+  configuracao.atual = ConfiguracaoDoAmbiente.parse({ ...LIMITES, capacidade_do_conjunto: 1 });
+  const ambiente = await alocar();
+  const espera = gestao.alocar(espacoB, projeto);
+  while (gestao.ocupantesNaFilaDeEspera().length === 0) await setTimeout(5);
+
+  await gestao.limpar(ambiente.id);
+  assert.equal(comoContainer(await espera).container_id, ambiente.container_id);
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), []);
+});
+
 test("parar desliga a eliminação dos ociosos", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const { relogio, aos } = relogioQueAvanca();

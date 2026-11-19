@@ -40,7 +40,7 @@ export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string
 /** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
 export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
 
-/** O texto de cada tipo de `MotivoDeRecusa`: por que o item não foi despachado. O `tsc` exige os seis tipos. */
+/** O texto de cada tipo de `MotivoDeRecusa`: por que o item não foi despachado. O `tsc` exige os sete tipos. */
 const ROTULO_DO_MOTIVO_DE_RECUSA: {
   [Tipo in MotivoDeRecusaEmJson["tipo"]]: (motivo: Extract<MotivoDeRecusaEmJson, { tipo: Tipo }>) => string;
 } = {
@@ -50,6 +50,7 @@ const ROTULO_DO_MOTIVO_DE_RECUSA: {
   ocupado: (m) => `Ocupado por ${m.por}`,
   bloqueado: (m) => `Bloqueado: ${m.motivo}`,
   aguarda_acao_externa: () => "Aguarda o merge do PR na plataforma",
+  aguarda_sandbox_livre: (m) => `Aguarda sandbox livre: ${String(m.posicao_na_fila)}.º na fila`,
 };
 
 /** O motivo da recusa em texto puro; quem o põe no HTML o escapa. */
@@ -104,7 +105,7 @@ function linhaDaSessaoRodando(s: SessaoRodando, agora: number): string {
 
 /** Linha de um item parado: o ticket e o motivo de o Despacho não o ter despachado; abre a página da demanda. */
 function linhaDoItemParado({ item, motivo }: RecusaDoDespacho): string {
-  const demanda = item.slice(0, item.indexOf(".T"));
+  const demanda = item.replace(/\..*/, ""); // o item é um ticket (`I-1.T2`) ou, na fila de sandbox, o Espaço (`I-1.R1`)
   return `<a class="rodando-linha" href="${caminhoDaDemanda(demanda)}">
     <span class="pill pill-neutro">parado</span>
     <span class="id">${escapar(demanda)}</span>

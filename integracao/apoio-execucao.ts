@@ -9,6 +9,7 @@ import {
   type RegistroDaVerificacao,
   Endereco,
   decidirGate,
+  esperarPreparacoesDaAprovacao,
   despachoDasEtapas,
   ConducaoDePlanejar,
   cicloDoDespacho,
@@ -173,6 +174,7 @@ export async function demandaEmExecucao(
     { resultado: "aprovado" },
     AUDITOR,
   );
+  await esperarPreparacoesDaAprovacao();
   assert.equal(demanda(c, id).demanda.estado, "em_execucao");
   return id;
 }

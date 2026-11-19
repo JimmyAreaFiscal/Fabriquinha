@@ -520,6 +520,21 @@ test("ocupação ignora o planejar reprovado sem execução aberta, mas conta o 
   assert.equal(contar([...reprovado, recusaDoPlano(2, "aprovado", t1)]), 2);
 });
 
+test("CA-7: o ticket na fila de sandbox não ocupa vaga, e o aberto da rodada que tem o sandbox é despachado", () => {
+  const proximoDeI1 = demandaNum("I-1", { rodadas: [rd(1)], tickets: [tk(1, 1, "concluido"), tk(2, 1)] });
+  const naFilaDeI2 = demandaNum("I-2", rodando);
+  const selecionar = (naFilaDeSandbox: Endereco[]) =>
+    new Despacho(1).selecionar({ demandas: [proximoDeI1, naFilaDeI2], vivos: [], naFilaDeSandbox });
+
+  assert.deepEqual(selecionar([]).prontos, [], "o ticket em execução de I-2 ocupa o limite");
+  const { prontos, recusas } = selecionar([ticketDe(2, "I-2")]);
+  assert.deepEqual(
+    prontos.map((t) => [t.demanda_id, t.ticket_id]),
+    [["I-1", 2]],
+  );
+  assert.equal(recusas.size, 0);
+});
+
 test("sem limite informado, a seleção não corta ninguém; o limite 0 corta todos", () => {
   assert.equal(globais(3, Number.POSITIVE_INFINITY, 2).length, 3);
   assert.equal(globais(3, 0, 0).length, 0);

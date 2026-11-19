@@ -49,17 +49,20 @@ export interface GestaoDeAmbientes {
   listar(): Promise<SituacaoDoAmbiente[]>;
   /**
    * O Ambiente em que o ocupante passa a rodar. No `container`, o do conjunto: o que ele já tem, um livre da imagem do
-   * projeto ou um novo; na capacidade e sem parado que ceda a vaga, lança `ErroExterno`. No `host_local`, ou para o
-   * projeto sem arquivo de dependências, o do serviço.
+   * projeto ou um novo; na capacidade e sem parado que ceda a vaga, espera na fila (por ordem de chegada) até um sandbox
+   * ser liberado, ou até `parar`, que lança `ErroExterno`. No `host_local`, ou para o projeto sem arquivo de
+   * dependências, o do serviço, sem espera.
    */
   alocar(ocupante: OcupanteDoAmbiente, projeto: ProjetoDoAmbiente): Promise<Ambiente>;
+  /** Os ocupantes que esperam um sandbox livre, na ordem de chegada; vazia no `host_local` e sem capacidade no conjunto. */
+  ocupantesNaFilaDeEspera(): readonly string[];
   /** O Ambiente já alocado ao `ocupante`; sem alocação, sem ocupante ou no `host_local`, o do serviço. */
   ambienteDo(ocupante?: string): Ambiente;
   /** Limpa o container `id` alocado e o devolve ao conjunto (`sujo`, se a limpeza falha); o do serviço e o não alocado ficam como estão. */
   limpar(id: string): Promise<void>;
   /** Elimina o container `id` livre ou sujo; o alocado e o desconhecido são recusados com `ErroDeRegra`. */
   deletar(id: string): Promise<void>;
-  /** Desliga a eliminação dos ociosos e espera a que está em andamento. */
+  /** Encerra as esperas por sandbox (o `alocar` de cada uma lança `ErroExterno`), desliga a eliminação dos ociosos e espera a que está em andamento. */
   parar(): Promise<void>;
 }
 
@@ -136,6 +139,10 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     return container;
   }
 
+  ocupantesNaFilaDeEspera(): readonly string[] {
+    return this.#sandboxes.ocupantesNaFilaDeEspera();
+  }
+
   ambienteDo(ocupante?: string): Ambiente {
     const alocado = ocupante !== undefined && this.#ehContainer ? this.#sandboxes.alocacaoDe(ocupante) : undefined;
     return alocado ? this.#comoAmbienteContainer(alocado) : this.#doServico;
@@ -150,6 +157,9 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
   }
 
   async parar(): Promise<void> {
+    this.#sandboxes.rejeitarEsperas(
+      new ErroExterno("o serviço está parando", "o trabalho volta a tentar quando o serviço subir"),
+    );
     clearInterval(this.#relogioDaManutencaoDoConjunto);
     await this.#manutencaoDoConjuntoEmAndamento;
   }

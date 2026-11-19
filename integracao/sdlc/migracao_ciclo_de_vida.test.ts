@@ -7,6 +7,7 @@ import {
   AUDITOR,
   Endereco,
   decidirGate,
+  esperarPreparacoesDaAprovacao,
   concluirSessaoAjustes,
   iniciarRevisaoIntegral,
   type EstadoDemanda,
@@ -144,6 +145,7 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
           { resultado: "aprovado" },
           AUDITOR,
         );
+        await esperarPreparacoesDaAprovacao();
         break;
       case "em_execucao": {
         const rodada = rodadas.find((r) => r.estado !== "concluida");

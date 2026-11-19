@@ -1,11 +1,12 @@
 // Rotas do Início: o painel das demandas em andamento (a consulta monta o contrato), o contador de pendências do menu,
 // numa consulta leve própria, e as recusas do último ciclo do Despacho.
-import { type CicloDeVida, Endereco, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
+import { Endereco, type MotivoDeRecusa } from "../../../../modulos/ciclo_de_vida/publico.ts";
 import { consultarInicio } from "./consulta_inicio.ts";
 import { consultarQuantidadeDePendencias } from "./quantidade_de_pendencias.ts";
 import { RecusasDoDespacho } from "../contrato/despacho.ts";
 import { DadosDoInicio, QuantidadeDePendencias } from "../contrato/inicio.ts";
-import type { Rota } from "../rotas.ts";
+import { traduzirOcupanteEmDemanda } from "../ambientes/consulta_ambientes.ts";
+import type { Pedido, Rota } from "../rotas.ts";
 
 /** Um motivo de recusa como JSON: os Endereços saem pelo texto público (`I-1.T2`). */
 export const recusaEmJson = (motivo: MotivoDeRecusa): unknown =>
@@ -13,11 +14,20 @@ export const recusaEmJson = (motivo: MotivoDeRecusa): unknown =>
     JSON.stringify(motivo, (_chave, valor: unknown) => (valor instanceof Endereco ? valor.toString() : valor)),
   );
 
-/** `GET /api/despacho`: por que cada item parado no último ciclo do Despacho não foi despachado. */
-const recusasDoDespacho = ({ cicloDeVida }: { cicloDeVida: CicloDeVida }) => ({
-  recusas: cicloDeVida
-    .recusasDoDespacho()
-    .map(({ item, motivo }) => ({ item: item.toString(), motivo: recusaEmJson(motivo) })),
+/**
+ * `GET /api/despacho`: por que cada item parado no último ciclo do Despacho não foi despachado, mais um item por ocupante
+ * na fila de espera por sandbox livre: o ticket em execução do Espaço ou, sem ele, o endereço do Espaço.
+ */
+const recusasDoDespacho = ({ cicloDeVida, ambientes, demandas }: Pedido) => ({
+  recusas: [
+    ...cicloDeVida
+      .recusasDoDespacho()
+      .map(({ item, motivo }) => ({ item: item.toString(), motivo: recusaEmJson(motivo) })),
+    ...ambientes.gestao.ocupantesNaFilaDeEspera().map((ocupante, indice) => ({
+      item: traduzirOcupanteEmDemanda(ocupante, cicloDeVida, demandas, ambientes.raiz).ticket ?? ocupante,
+      motivo: { tipo: "aguarda_sandbox_livre", posicao_na_fila: indice + 1 },
+    })),
+  ],
 });
 
 export const ROTAS_DO_INICIO: Rota[] = [

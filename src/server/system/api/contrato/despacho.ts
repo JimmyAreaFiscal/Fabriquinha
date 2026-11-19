@@ -11,6 +11,7 @@ export const MotivoDeRecusaEmJson = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("ocupado"), por: z.string() }),
   z.object({ tipo: z.literal("bloqueado"), motivo: Motivo }),
   z.object({ tipo: z.literal("aguarda_acao_externa") }),
+  z.object({ tipo: z.literal("aguarda_sandbox_livre"), posicao_na_fila: z.number().int().positive() }),
 ]);
 export type MotivoDeRecusaEmJson = z.infer<typeof MotivoDeRecusaEmJson>;
 

@@ -41,6 +41,7 @@ export { type RefRodada } from "./aplicacao/encerrar_rodada/encerramento_rodada.
 export { decidirGate, GATE_DA_DEMANDA, GATES } from "./aplicacao/gates.ts";
 export { ConducaoDeImplementar } from "./aplicacao/implementar/conducao_de_implementar.ts";
 export { ConducaoDePlanejar } from "./aplicacao/planejar/conducao_de_planejar.ts";
+export { esperarPreparacoesDaAprovacao } from "./aplicacao/planejar/decisao_do_gate.ts";
 export {
   iniciarExecucaoDemanda,
   interromperExecucaoDemanda,

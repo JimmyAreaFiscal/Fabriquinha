@@ -4,7 +4,7 @@
 // e pelo agendador, com banco e git reais numa raiz temporária e o pi falso; nada passa pela web.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
@@ -13,6 +13,7 @@ import {
   type Ator,
   Endereco,
   decidirGate,
+  esperarPreparacoesDaAprovacao,
   despachoDasEtapas,
   interromperExecucaoDemanda,
   cicloDoDespacho,
@@ -34,8 +35,17 @@ import { liberacaoDasDemandas } from "../../apoio-testes/ciclo_de_vida/ciclo_de_
 
 const pi = instalarPiFalso(base);
 
-const decidirPlanejamento = (banco: DatabaseSync, id: string, entrada: object) =>
-  decidirGate(modulosDoCicloDeTeste(banco), "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
+const decidirPlanejamento = async (banco: DatabaseSync, id: string, entrada: object) => {
+  const decidido = await decidirGate(
+    modulosDoCicloDeTeste(banco),
+    "gate_planejamento",
+    Endereco.daDemanda(id),
+    entrada,
+    AUDITOR,
+  );
+  await esperarPreparacoesDaAprovacao();
+  return decidido;
+};
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -150,7 +160,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   ]);
 });
 
-test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate aberto, sem aprovação nem execução de rodada", async (t) => {
+test("CA-SDLC-05: falha ao preparar a worktree de uma rodada na aprovação do planejamento vai ao log e não desfaz a aprovação", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
   const id = await demandaAprovada(c);
@@ -171,36 +181,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   await ciclaPlanejamentos(c, [id]);
   proporPlanoDoAgente(banco, id, plano(id, "r", 2), agente(1));
   writeFileSync(quebra, "");
-  const chamadas = pi.prompts().length;
 
-  await assert.rejects(
-    decidirPlanejamento(banco, id, { resultado: "aprovado", nota: 4 }),
-    /a preparação da worktree falhou/,
-  );
-  const ag = demanda(c, id);
-  assert.equal(ag.demanda.estado, "gate_planejamento");
-  assert.deepEqual(ag.rodadas, []);
-  assert.deepEqual(etapasEStatus(c, id), [
-    ["entender_e_desenhar", "concluido"],
-    ["planejar", "em_execucao"],
-  ]);
-  assert.equal(
-    ag.decisoes.some((d) => d.ticket_id === PLANEJAR),
-    false,
-  );
-  assert.match(
-    readFileSync(join(c.raiz, "execucoes", `planejamento-${id}.log`), "utf8"),
-    /preparação falhou em .*rodadas\/2/,
-  );
-  // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
-  assert.equal(
-    cicloDoDespacho(modulosDoCicloDeTeste(banco), c.config, despachoDasEtapas(), liberacaoDasDemandas(banco)).length,
-    0,
-  );
-  assert.equal(pi.prompts().length, chamadas);
-
-  // Corrigida a causa, a mesma aprovação conclui.
-  rmSync(quebra);
   await decidirPlanejamento(banco, id, { resultado: "aprovado", nota: 4 });
   assert.deepEqual(
     demanda(c, id).rodadas.map((r) => [r.rodada_id, r.estado]),
@@ -208,6 +189,10 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
       [1, "implementar"],
       [2, "implementar"],
     ],
+  );
+  assert.match(
+    readFileSync(join(c.raiz, "execucoes", `planejamento-${id}.log`), "utf8"),
+    /preparação falhou em .*rodadas\/2/,
   );
 });
 

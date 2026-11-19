@@ -238,18 +238,20 @@ function planejarComEspiaDaDevolucao(banco: DatabaseSync, minutosDeOciosidade: n
   const fim = new ConducaoDePlanejar({ ...modulos, repositorio, relogio: relogioDoSistema, registro: anotar }).conduzir(
     reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 1)),
   );
-  return { modulos, devolvidos, fim };
+  return { modulos, repositorio, devolvidos, fim };
 }
 
 test("o pi que assenta com a demanda no gate do plano é encerrado e o Espaço devolve o Ambiente", async () => {
   const { banco, prompts } = cenarioDePlanejamento({ estadoDoTicket: "em_execucao" });
   // A ociosidade só encerraria o pi em 30 s: o encerramento em segundos tem de vir do gate.
-  const { modulos, devolvidos, fim } = planejarComEspiaDaDevolucao(banco, 0.5);
+  const { modulos, repositorio, devolvidos, fim } = planejarComEspiaDaDevolucao(banco, 0.5);
   while (prompts().length === 0) await new Promise((acordar) => setTimeout(acordar, 20));
   await new Promise((acordar) => setTimeout(acordar, 100)); // o pi assenta: ocioso, à espera do Auditor
   proporPlanoDoAgente(banco, "I-1", plano()); // o plano chega e a demanda vai ao gate
   const viva = modulos.sessoes.listar({ demandas: ["I-1"] })[0]?.situacao;
   assert.ok(viva);
+  await devolverAmbienteDoEspaco({ ...modulos, repositorio }, { demanda_id: "I-1" });
+  assert.deepEqual(devolvidos, [], "com o pi vivo, a devolução não toca o Ambiente");
   modulos.sessoes.mandar(String(viva.execucao), { type: "prompt", message: "o plano foi enviado" });
   const encerradoPeloGate = await Promise.race([
     fim.then(() => true),
