@@ -11,7 +11,18 @@ const RELOGIO = relogioFixo("2026-01-01T00:00:00.000Z");
 import { motorDoBanco } from "../../../../../../apoio-testes/sessoes_de_teste.ts";
 import { ConducaoDeRevisarDemanda } from "../revisar_demanda/conducao_de_revisar_demanda.ts";
 import { reservadoPeloDespacho } from "../../../../../../apoio-testes/reserva_do_despacho.ts";
-import { modulosDoCicloDeTeste } from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  AmbienteHostLocal,
+  gestaoQueSoUsa,
+  ligarGestaoDeAmbientesNosModulos,
+  modulosDoCicloDeTeste,
+} from "../../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import { ErroExterno } from "../../../../../shared/nucleo/erros.ts";
+import {
+  cenarioDeImplementacao,
+  enderecoDoTicket,
+} from "../../../../../../apoio-testes/cenarios/cenario_de_implementacao.ts";
+import { ConducaoDeImplementar } from "../implementar/conducao_de_implementar.ts";
 
 test("só se conduz o endereço de um ticket", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
@@ -43,4 +54,36 @@ test("o limite informado nas deps é o que o agente recebe; sem ele vale o timeo
     }).conduzir(reservadoPeloDespacho(banco, Endereco.doTicket("I-1", 3)));
   }
   assert.deepEqual(limites, [0.5, timeoutDaConfiguracao]);
+});
+
+test("CA-8: o ticket que espera sandbox quando o serviço para falha como serviço reiniciado, que a retomada devolve na hora", async (t: TestContext) => {
+  const c = await cenarioDeImplementacao();
+  let pararOServico!: (erro: Error) => void;
+  let esperaIniciada!: () => void;
+  const comecouAEsperar = new Promise<void>((resolver) => {
+    esperaIniciada = resolver;
+  });
+  ligarGestaoDeAmbientesNosModulos({
+    ...gestaoQueSoUsa(new AmbienteHostLocal()),
+    alocar: () =>
+      new Promise((_, rejeitar) => {
+        pararOServico = rejeitar;
+        esperaIniciada();
+      }),
+  });
+  t.after(() => {
+    ligarGestaoDeAmbientesNosModulos();
+  });
+  let emParada = false;
+  const conducao = new ConducaoDeImplementar(
+    c.deps(() => emParada),
+    {},
+  ).conduzir(reservadoPeloDespacho(c.banco, enderecoDoTicket(1)));
+
+  await comecouAEsperar;
+  assert.equal(c.status(1)?.estado, "em_execucao");
+  emParada = true;
+  pararOServico(new ErroExterno("o serviço está parando", "o trabalho volta a tentar quando o serviço subir"));
+  await conducao;
+  assert.deepEqual([c.status(1)?.estado, c.motivo(1)], ["falhou", "serviço reiniciado"]);
 });

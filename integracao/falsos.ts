@@ -142,6 +142,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
         }
         return ambiente;
       },
+      ocupantesNaFilaDeEspera: () => montada.ocupantesNaFilaDeEspera(),
       ambienteDo: (ocupante) => montada.ambienteDo(ocupante),
       limpar: (id) => montada.limpar(id),
       deletar: (id) => montada.deletar(id),

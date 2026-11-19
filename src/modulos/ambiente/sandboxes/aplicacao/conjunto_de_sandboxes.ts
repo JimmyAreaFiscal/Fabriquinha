@@ -1,7 +1,7 @@
 // O conjunto compartilhado de sandboxes em container (CONCEITOS.md §7 e §13): aloca um container a cada ocupante
 // (exclusivo enquanto ele o usa), limpa e devolve ao conjunto quando ele acaba e, no conjunto variável, elimina os que
-// ficam ociosos até o mínimo; o fixo os mantém. Na capacidade, um parado cede a vaga ao novo e, sem parado, o conjunto
-// informa a indisponibilidade (MELHORIAS §8, regra 4).
+// ficam ociosos até o mínimo; o fixo os mantém. Na capacidade, um parado cede a vaga ao novo e, sem parado, o ocupante
+// espera numa fila por ordem de chegada até um sandbox ser liberado (MELHORIAS §8, regra 4).
 // O banco diz quem é de quem; o `GeradorDeAmbientes` é o único que cria e elimina os containers. A alocação devolvida é a
 // referência que a Execução usa para rodar comandos no container.
 import {
@@ -9,7 +9,7 @@ import {
   type InstalacaoDoHarness,
 } from "../../../../shared/infra/isolamento_do_ambiente.ts";
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeRegra } from "../../../../shared/nucleo/erros.ts";
 import type { Instante } from "../../../../shared/nucleo/primitivos.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import {
@@ -32,6 +32,26 @@ const MS_POR_MINUTO = 60_000;
 const primeiroOSujoDepoisOMaisAntigo = (a: AmbienteGravado, b: AmbienteGravado): number =>
   Number(a.estado !== "sujo") - Number(b.estado !== "sujo") ||
   String(a.liberado_em).localeCompare(String(b.liberado_em));
+
+/** O que `#alocarSeHouverVaga` devolve quando o ocupante deve esperar na fila. */
+const SEM_VAGA = Symbol("sem_vaga");
+
+/** Um ocupante na fila de espera por vaga: com `sono`, dorme até uma liberação o acordar para refazer a alocação. */
+interface EsperaPorVaga {
+  dono: string;
+  sono?: { acordar: () => void; rejeitar: (erro: Error) => void } | undefined;
+}
+
+type EsperaDormindo = EsperaPorVaga & { sono: NonNullable<EsperaPorVaga["sono"]> };
+
+/** Tira o ocupante do sono e devolve como acordá-lo. */
+function tirarDoSono(espera: EsperaDormindo): EsperaDormindo["sono"] {
+  const { sono } = espera;
+  (espera as EsperaPorVaga).sono = undefined;
+  return sono;
+}
+
+const estaDormindo = (espera: EsperaPorVaga): espera is EsperaDormindo => espera.sono !== undefined;
 
 const estaParado = ({ estado, liberado_em }: AmbienteGravado): boolean => estado !== "alocado" && liberado_em !== null;
 
@@ -93,6 +113,10 @@ export class ConjuntoDeSandboxes {
   #criacoesEmAndamento = 0;
   /** Os slots desses containers: o banco ainda não os tem, mas já não estão livres para outro `alocar`. */
   readonly #slotsEmCriacao = new Set<number>();
+  /** Quem espera vaga, por ordem de chegada; fica na fila (acordado ou não) até receber o sandbox ou falhar. */
+  readonly #filaDeEsperaPorVaga: EsperaPorVaga[] = [];
+  /** O erro de `rejeitarEsperas`: depois dele ninguém mais espera, nem quem estava refazendo a alocação. */
+  #erroDasEsperasEncerradas: Error | undefined;
 
   constructor(
     banco: DatabaseSync,
@@ -141,14 +165,64 @@ export class ConjuntoDeSandboxes {
 
   /**
    * Dá ao ocupante um livre da mesma imagem ou, sem nenhum, um container novo; o que já tem um recebe o mesmo. Na
-   * capacidade, o novo toma a vaga de um parado e, sem parado, lança `ErroExterno` de indisponibilidade: quem pede decide
-   * se aguarda ou reagenda (a Condução reagenda como falha de infraestrutura). O container que parou, ou que foi religado
-   * fora da Fabriquinha e perdeu as regras de rede, nunca é entregue: é eliminado e o ocupante recebe outro.
+   * capacidade, o novo toma a vaga de um parado e, sem parado, espera na fila: cada liberação de vaga acorda o primeiro,
+   * que refaz a alocação, e quem chega com a fila não vazia entra atrás. `rejeitarEsperas` encerra a espera com erro. O
+   * container que parou, ou que foi religado fora da Fabriquinha e perdeu as regras de rede, nunca é entregue: é
+   * eliminado e o ocupante recebe outro.
    */
-  async alocar(
+  async alocar(ocupante: OcupanteDoAmbiente, projeto: Required<ProjetoDoAmbiente>): Promise<AmbienteGravado> {
+    let espera: EsperaPorVaga | undefined;
+    try {
+      for (;;) {
+        const alocado = await this.#alocarSeHouverVaga(ocupante, projeto, espera !== undefined);
+        if (alocado !== SEM_VAGA) return alocado;
+        if (this.#erroDasEsperasEncerradas) throw this.#erroDasEsperasEncerradas;
+        espera ??= this.#entrarNaFilaDeEspera(ocupante.dono);
+        await this.#dormirAteAcordar(espera);
+      }
+    } finally {
+      if (espera) this.#filaDeEsperaPorVaga.splice(this.#filaDeEsperaPorVaga.indexOf(espera), 1);
+    }
+  }
+
+  /** Os ocupantes que esperam vaga, na ordem de chegada. */
+  ocupantesNaFilaDeEspera(): readonly string[] {
+    return this.#filaDeEsperaPorVaga.map(({ dono }) => dono);
+  }
+
+  /** Encerra a espera de todos os ocupantes da fila e de quem pedir vaga depois: o `alocar` de cada um lança `erro`. */
+  rejeitarEsperas(erro: Error): void {
+    this.#erroDasEsperasEncerradas = erro;
+    for (const espera of this.#filaDeEsperaPorVaga.filter(estaDormindo)) {
+      tirarDoSono(espera).rejeitar(erro);
+    }
+  }
+
+  #entrarNaFilaDeEspera(dono: string): EsperaPorVaga {
+    const espera: EsperaPorVaga = { dono };
+    this.#filaDeEsperaPorVaga.push(espera);
+    return espera;
+  }
+
+  #dormirAteAcordar(espera: EsperaPorVaga): Promise<void> {
+    return new Promise<void>((acordar, rejeitar) => {
+      espera.sono = { acordar, rejeitar };
+    });
+  }
+
+  /** Chamada a cada vaga liberada: acorda o primeiro da fila que dorme; o acordado refaz a alocação sem perder o lugar. */
+  #acordarOPrimeiroDaFila(): void {
+    const primeiro = this.#filaDeEsperaPorVaga.find(estaDormindo);
+    if (!primeiro) return;
+    tirarDoSono(primeiro).acordar();
+  }
+
+  /** Uma tentativa de alocação; `SEM_VAGA` manda o ocupante esperar. `naFila`: já está na fila, então não cede o lugar. */
+  async #alocarSeHouverVaga(
     { dono: alocadoPara, pasta_das_worktrees_do_projeto }: OcupanteDoAmbiente,
     projeto: Required<ProjetoDoAmbiente>,
-  ): Promise<AmbienteGravado> {
+    naFila: boolean,
+  ): Promise<AmbienteGravado | typeof SEM_VAGA> {
     const servico = this.#servico;
     const imagem = await this.#gerador.garantirImagem(projeto);
     // Lida uma vez, antes de tocar nos livres: sem o pi no host o pedido falha e nenhum livre é descartado.
@@ -160,6 +234,9 @@ export class ConjuntoDeSandboxes {
       if (await this.#gerador.regrasDeRedeIntactas(jaAlocado)) return jaAlocado;
       await this.#eliminarPerdido(jaAlocado); // parou ou foi religado sem as regras: o ocupante recebe um novo
     }
+    // Quem chega com a fila não vazia espera atrás: a vaga liberada é de quem já espera (sem capacidade não há fila).
+    if (!naFila && this.#filaDeEsperaPorVaga.length > 0 && this.#configuracao().capacidade_do_conjunto !== null)
+      return SEM_VAGA;
     // Cada livre é entregue só depois de conferido, porque o docker pode ter parado enquanto ele esperava.
     const pegarLivre = () => alocarAmbienteLivreDaImagem(this.#banco, imagem, alocadoPara);
     for (let livre = pegarLivre(); livre; livre = pegarLivre()) {
@@ -180,13 +257,15 @@ export class ConjuntoDeSandboxes {
     };
     const copias: Copias = { dir_do_pi: servico.dir_do_harness_do_auditor, home_do_usuario: servico.home_do_usuario };
     const paradoQueCedeAVaga = this.#reservarVagaNoConjunto();
+    if (paradoQueCedeAVaga === SEM_VAGA) return SEM_VAGA;
     let slot: number | undefined;
+    let criou = false;
     try {
       if (paradoQueCedeAVaga) await this.#eliminarContainerReservado(paradoQueCedeAVaga);
       // Lido depois do `rm` do parado, para o slot dele voltar a servir; do `await` à reserva não há outro.
       const slotsTomadosNoDocker = await this.#gerador.listarSlotsTomadosNoDocker();
       slot = this.#reservarMenorSlotLivre(slotsTomadosNoDocker);
-      return await this.#criarAlocado(
+      const alocado = await this.#criarAlocado(
         imagem,
         alocadoPara,
         servico.porta_da_api,
@@ -195,18 +274,21 @@ export class ConjuntoDeSandboxes {
         copias,
         identidadeDaInstalacao,
       );
+      criou = true;
+      return alocado;
     } finally {
       this.#criacoesEmAndamento--;
       if (slot !== undefined) this.#slotsEmCriacao.delete(slot);
+      if (!criou) this.#acordarOPrimeiroDaFila(); // a criação que falha devolve a vaga
     }
   }
 
   /**
    * Reserva a vaga do container que o `alocar` vai criar, ainda no trecho síncrono: abaixo da capacidade (ou sem ela),
-   * só conta a criação; na capacidade, reserva para eliminar o parado que cede a vaga e o devolve; sem parado, lança a
-   * indisponibilidade.
+   * só conta a criação; na capacidade, reserva para eliminar o parado que cede a vaga e o devolve; sem parado, devolve
+   * `SEM_VAGA`.
    */
-  #reservarVagaNoConjunto(): AmbienteGravado | undefined {
+  #reservarVagaNoConjunto(): AmbienteGravado | typeof SEM_VAGA | undefined {
     const capacidade = this.#configuracao().capacidade_do_conjunto;
     const vivos = listarAmbientes(this.#banco);
     let paradoQueCedeAVaga: AmbienteGravado | undefined;
@@ -214,11 +296,7 @@ export class ConjuntoDeSandboxes {
       // Da leitura à reserva não há `await`: o primeiro parado da lista ainda está parado.
       const [primeiroParado] = vivos.filter(estaParado).sort(primeiroOSujoDepoisOMaisAntigo);
       paradoQueCedeAVaga = primeiroParado && reservarAmbienteParaEliminar(this.#banco, primeiroParado.id);
-      if (!paradoQueCedeAVaga)
-        throw new ErroExterno(
-          `nenhum sandbox disponível: o conjunto está na capacidade de ${String(capacidade)}, todos ocupados`,
-          "o trabalho volta a tentar quando um sandbox for liberado; ou aumente a capacidade na Configuração do Ambiente",
-        );
+      if (!paradoQueCedeAVaga) return SEM_VAGA;
     }
     this.#criacoesEmAndamento++;
     return paradoQueCedeAVaga;
@@ -269,6 +347,7 @@ export class ConjuntoDeSandboxes {
         // falha deixa o órfão para a `reconciliarNaSubida` seguinte e não falha a liberação.
         eliminarAmbiente(this.#banco, ambiente.id);
         await this.#gerador.eliminar(ambiente).catch(() => undefined);
+        this.#acordarOPrimeiroDaFila();
         return;
       }
       await this.#gerador.limpar(ambiente);
@@ -276,12 +355,13 @@ export class ConjuntoDeSandboxes {
       estadoDepoisDaLiberacao = "sujo";
     }
     liberarAmbiente(this.#banco, ambiente.id, estadoDepoisDaLiberacao, this.#relogio.agora());
+    this.#acordarOPrimeiroDaFila();
   }
 
   /** Elimina um container do conjunto; só vale para o `livre` ou `sujo`, nunca para o que um ocupante está usando. */
   async eliminar(id: string): Promise<void> {
     const reservado = reservarAmbienteParaEliminar(this.#banco, id);
-    if (reservado) return this.#eliminarContainerReservado(reservado);
+    if (reservado) return this.#eliminarContainerReservadoEAcordar(reservado);
     const ambiente = listarAmbientes(this.#banco).find((candidato) => candidato.id === id);
     if (!ambiente) throw new ErroDeRegra(`o ambiente ${id} não existe`, "confira o id do ambiente");
     throw new ErroDeRegra(`o ambiente ${id} está alocado a ${String(ambiente.alocado_para)}`, "espere o Espaço acabar");
@@ -305,7 +385,7 @@ export class ConjuntoDeSandboxes {
       .slice(0, Math.max(0, vivos.length - minimo_do_conjunto))
       .map(({ id }) => reservarAmbienteParaEliminar(this.#banco, id))
       .filter((reservado) => reservado !== undefined);
-    for (const reservado of reservados) await this.#eliminarContainerReservado(reservado);
+    for (const reservado of reservados) await this.#eliminarContainerReservadoEAcordar(reservado);
   }
 
   /**
@@ -374,12 +454,25 @@ export class ConjuntoDeSandboxes {
   async #eliminarPerdido(perdido: AmbienteGravado): Promise<void> {
     if (perdido.estado === "alocado") recolherParaOEspaco(this.#servico.raiz, perdido.id, String(perdido.alocado_para));
     eliminarAmbiente(this.#banco, perdido.id);
-    await this.#gerador.eliminar(perdido);
+    try {
+      await this.#gerador.eliminar(perdido);
+    } finally {
+      this.#acordarOPrimeiroDaFila();
+    }
   }
 
   // A linha já está `eliminado` (reservada). Se o docker falhar aqui, o container fica órfão com o rótulo e a
   // `reconciliarNaSubida` seguinte o elimina.
   async #eliminarContainerReservado(reservado: AmbienteGravado): Promise<void> {
     await this.#gerador.eliminar(reservado);
+  }
+
+  /** Elimina o container reservado e, acabado o `rm`, acorda o primeiro da fila: a vaga que ele deixa é de quem espera. */
+  async #eliminarContainerReservadoEAcordar(reservado: AmbienteGravado): Promise<void> {
+    try {
+      await this.#eliminarContainerReservado(reservado);
+    } finally {
+      this.#acordarOPrimeiroDaFila();
+    }
   }
 }

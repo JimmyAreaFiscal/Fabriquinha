@@ -62,8 +62,13 @@ const projetoDoArquivo = (arquivo: string) => ({
 const doNode = projetoDoArquivo("package.json");
 const doPython = projetoDoArquivo("requirements.txt");
 const ocupante = (dono: string) => ({ dono, pasta_das_worktrees_do_projeto: join(base, "worktrees", "loja") });
-const ehAIndisponibilidadeDoConjunto = (erro: unknown) =>
-  erro instanceof ErroExterno && erro.message.includes("nenhum sandbox disponível: o conjunto está na capacidade");
+/** Espera o conjunto registrar `quantos` ocupantes na fila: o `alocar` chega à fila depois de alguns `await`. */
+async function esperarNaFila(conjunto: ConjuntoDeSandboxes, quantos: number): Promise<void> {
+  for (let tentativa = 0; conjunto.ocupantesNaFilaDeEspera().length !== quantos; tentativa++) {
+    assert.ok(tentativa < 200, `a fila não chegou a ${String(quantos)}: ${conjunto.ocupantesNaFilaDeEspera().join()}`);
+    await new Promise((resolver) => setTimeout(resolver, 5));
+  }
+}
 
 /** O pi do host de um cenário: a pasta do pacote, que o `npm install -g` troca por outra no mesmo caminho. */
 function piDoHost(raiz: string) {
@@ -140,7 +145,7 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
   };
 }
 
-test("variável na capacidade e sem parado: informa a indisponibilidade sem criar container; liberado um, o próximo o reusa", async () => {
+test("variável na capacidade e sem parado: o ocupante espera na fila sem criar container; liberado um, ele o reusa", async () => {
   const { conjunto, criacoes, estados, liberar, imagemDe } = cenario({
     conjunto: "variavel",
     capacidade_do_conjunto: 2,
@@ -148,11 +153,14 @@ test("variável na capacidade e sem parado: informa a indisponibilidade sem cria
   const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
   await conjunto.alocar(ocupante("I-2"), doNode);
 
-  await assert.rejects(conjunto.alocar(ocupante("I-3"), doNode), ehAIndisponibilidadeDoConjunto);
+  const espera = conjunto.alocar(ocupante("I-3"), doNode);
+  await esperarNaFila(conjunto, 1);
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-3"]);
   assert.equal(criacoes(), 2);
 
   await liberar("I-1");
-  const reusado = await conjunto.alocar(ocupante("I-3"), doNode);
+  const reusado = await espera;
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
   assert.equal(reusado.container_id, primeiro.container_id);
   assert.equal(criacoes(), 2);
   assert.deepEqual(estados(), [
@@ -187,16 +195,101 @@ test("fixo na capacidade: o parado de outra imagem cede a vaga, o sujo primeiro,
   assert.equal(docker.containers().length, 2);
 });
 
-test("dois alocar ao mesmo tempo na última vaga: um recebe o container, o outro é informado da indisponibilidade", async () => {
-  const { docker, conjunto } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
-  const resultados = await Promise.allSettled([
-    conjunto.alocar(ocupante("I-1"), doNode),
-    conjunto.alocar(ocupante("I-2"), doNode),
-  ]);
-  assert.deepEqual(resultados.map(({ status }) => status).sort(), ["fulfilled", "rejected"]);
-  const recusa = resultados.find((resultado) => resultado.status === "rejected");
-  assert.ok(ehAIndisponibilidadeDoConjunto(recusa?.reason));
+test("dois alocar ao mesmo tempo na última vaga: um recebe o container, o outro espera na fila e o recebe quando o primeiro o libera", async () => {
+  const { docker, conjunto, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
+  const pedidos = new Map(["I-1", "I-2"].map((dono) => [dono, conjunto.alocar(ocupante(dono), doNode)] as const));
+  await esperarNaFila(conjunto, 1);
+  // Qual dos dois chega primeiro à vaga é do acaso: o outro é o que espera.
+  const [quemEspera] = conjunto.ocupantesNaFilaDeEspera();
+  const quemRecebeu = quemEspera === "I-1" ? "I-2" : "I-1";
+  assert.equal((await pedidos.get(quemRecebeu))?.alocado_para, quemRecebeu);
   assert.equal(docker.containers().length, 1);
+
+  await liberar(quemRecebeu);
+  assert.equal((await pedidos.get(String(quemEspera)))?.alocado_para, quemEspera);
+  assert.equal(docker.containers().length, 1);
+});
+
+test("os ocupantes na fila recebem o sandbox na ordem de chegada, um a cada liberação", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const recebidos: string[] = [];
+  const esperas: Promise<unknown>[] = [];
+  for (const [indice, dono] of ["I-2", "I-3", "I-4"].entries()) {
+    esperas.push(conjunto.alocar(ocupante(dono), doNode).then(() => recebidos.push(dono)));
+    await esperarNaFila(conjunto, indice + 1);
+  }
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-2", "I-3", "I-4"]);
+
+  for (const [indice, dono] of ["I-1", "I-2", "I-3"].entries()) {
+    await liberar(dono);
+    await esperarNaFila(conjunto, 2 - indice);
+    assert.equal(recebidos.length, indice + 1);
+  }
+  await Promise.all(esperas);
+  assert.deepEqual(recebidos, ["I-2", "I-3", "I-4"]);
+});
+
+test("quem chega depois que o sandbox foi liberado entra atrás de quem já espera", async () => {
+  const { conjunto, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const esperaDoI2 = conjunto.alocar(ocupante("I-2"), doNode);
+  await esperarNaFila(conjunto, 1);
+
+  await liberar("I-1");
+  const esperaDoI3 = conjunto.alocar(ocupante("I-3"), doNode);
+  assert.equal((await esperaDoI2).alocado_para, "I-2");
+  await esperarNaFila(conjunto, 1);
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-3"]);
+
+  await liberar("I-2");
+  assert.equal((await esperaDoI3).alocado_para, "I-3");
+});
+
+test("o ocupante que já tem o sandbox o recebe de novo na hora, mesmo com a fila cheia", async () => {
+  const { conjunto } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
+  const alocado = await conjunto.alocar(ocupante("I-1"), doNode);
+  void conjunto.alocar(ocupante("I-2"), doNode).catch(() => undefined);
+  await esperarNaFila(conjunto, 1);
+
+  assert.equal((await conjunto.alocar(ocupante("I-1"), doNode)).container_id, alocado.container_id);
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-2"]);
+  conjunto.rejeitarEsperas(new Error("fim do teste"));
+});
+
+test("sem capacidade, ninguém entra na fila e o conjunto cresce", async () => {
+  const { conjunto, criacoes } = cenario({ conjunto: "variavel", capacidade_do_conjunto: null });
+  await Promise.all(["I-1", "I-2", "I-3"].map((dono) => conjunto.alocar(ocupante(dono), doNode)));
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
+  assert.equal(criacoes(), 3);
+});
+
+test("rejeitarEsperas encerra a espera de quem está na fila com o erro dado, e a fila esvazia", async () => {
+  const { conjunto } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const esperas = ["I-2", "I-3"].map((dono) => conjunto.alocar(ocupante(dono), doNode));
+  const rejeitadas = Promise.allSettled(esperas);
+  await esperarNaFila(conjunto, 2);
+
+  conjunto.rejeitarEsperas(new ErroExterno("parando", "suba de novo"));
+  const resultados = await rejeitadas;
+  assert.ok(resultados.every((r) => r.status === "rejected" && r.reason instanceof ErroExterno));
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), []);
+  await assert.rejects(conjunto.alocar(ocupante("I-5"), doNode), ErroExterno);
+  assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), [], "depois da parada ninguém mais entra na fila");
+});
+
+test("o livre de outra imagem, liberado com alguém na fila, cede a vaga ao primeiro, que cria o container", async () => {
+  const { conjunto, liberar, estados, imagemDe } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
+  const primeiro = await conjunto.alocar(ocupante("I-1"), doNode);
+  const espera = conjunto.alocar(ocupante("I-2"), doPython);
+  await esperarNaFila(conjunto, 1);
+
+  await liberar("I-1");
+  const recebido = await espera;
+  assert.equal(recebido.alocado_para, "I-2");
+  assert.notEqual(recebido.container_id, primeiro.container_id);
+  assert.deepEqual(estados(), [["alocado", "I-2", await imagemDe(doPython)]]);
 });
 
 test("a criação que falha devolve a vaga ao conjunto", async () => {
@@ -205,6 +298,22 @@ test("a criação que falha devolve a vaga ao conjunto", async () => {
   await assert.rejects(conjunto.alocar(ocupante("I-1"), doNode), /docker travado/);
   rmSync(join(pastaDoDocker, "falhas", "run"));
   await conjunto.alocar(ocupante("I-1"), doNode);
+  assert.equal(docker.containers().length, 1);
+});
+
+test("a criação que falha com alguém na fila acorda o primeiro, que cria o container", async () => {
+  const { docker, conjunto, pastaDoDocker, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
+  await conjunto.alocar(ocupante("I-1"), doNode);
+  const esperaDoI2 = conjunto.alocar(ocupante("I-2"), doPython);
+  await esperarNaFila(conjunto, 1);
+
+  docker.falharComando("run", "docker travado");
+  const esperaDoI3 = conjunto.alocar(ocupante("I-3"), doNode);
+  await esperarNaFila(conjunto, 2);
+  await liberar("I-1");
+  await assert.rejects(esperaDoI2, /docker travado/);
+  rmSync(join(pastaDoDocker, "falhas", "run"));
+  assert.equal((await esperaDoI3).alocado_para, "I-3");
   assert.equal(docker.containers().length, 1);
 });
 

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarPiFalso, INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
@@ -34,11 +35,10 @@ import {
   AmbienteHostLocal,
   inserirAmbienteAlocado,
   ligarGestaoDeAmbientesDoTeste,
+  listarAmbientes,
   modulosDoCicloDeTeste,
 } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
-import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
-import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { registrarProjeto, registrarDependencia } from "../../../../../apoio-testes/demandas_de_teste.ts";
 import {
   criarSessao,
@@ -346,7 +346,7 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
 });
 
-test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
+test("CA-1: conjunto de sandboxes na capacidade: o ticket espera em execução, sem Tentativa nem container novo, e a parada o falha por infraestrutura", async (t) => {
   const { c, banco, config } = await cenario(3);
   commitarArquivo(c.repo, "package.json", "{}");
   commitarArquivo(c.repo, "package-lock.json", "{}");
@@ -365,7 +365,7 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
     dir_do_harness_do_auditor: c.raiz,
   };
   const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
-  await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
+  const gestao = await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
   inserirAmbienteAlocado(banco, {
     id: "amb-ocupado",
     container_id: "c-ocupado",
@@ -375,21 +375,21 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
   });
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
 
-  await Promise.all(
+  const ciclo = Promise.all(
     cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
+  while (gestao.ocupantesNaFilaDeEspera().length === 0) await setTimeout(5);
 
-  const ag = carregarDemanda(banco, "I-2");
-  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
-  const resultado = ag.tentativas.at(-1)?.resultado;
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), ["I-2.R1"]);
+  assert.equal(estadoDoTicket(banco, 2, 1), "em_execucao");
+  assert.deepEqual(carregarDemanda(banco, "I-2").tentativas, []);
+  assert.equal(listarAmbientes(banco).length, 1, "nenhum container novo");
+
+  await gestao.parar();
+  await ciclo;
+  const resultado = carregarDemanda(banco, "I-2").tentativas.at(-1)?.resultado;
   assert.ok(resultado?.tipo === "falha_infraestrutura");
-  assert.equal(resultado.causa, "servico_externo_inacessivel");
-  assert.match(resultado.motivo, /nenhum sandbox disponível: o conjunto está na capacidade de 1/);
-  const falhouEm = Date.parse(String(ag.tickets[0]?.estado_alterado_em));
-  const depoisDe = (minutos: number) => relogioFixo(new Date(falhouEm + minutos * 60_000).toISOString());
-  assert.deepEqual(retomarFalhasDeInfraestrutura(banco, depoisDe(1)), [], "aguarda a espera da política");
-  assert.equal(retomarFalhasDeInfraestrutura(banco, depoisDe(2)).length, 1);
-  assert.equal(estadoDoTicket(banco, 2, 1), "aberto");
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {
