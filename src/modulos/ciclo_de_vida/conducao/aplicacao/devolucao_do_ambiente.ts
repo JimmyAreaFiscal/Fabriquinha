@@ -1,7 +1,7 @@
 // A devolução do Ambiente ocioso (I-312): o Espaço que espera o humano (gate ou ticket falho) ou que acabou de ser preparado
 // não segura sandbox do conjunto. A worktree fica no host; a próxima operação do Espaço passa por `prepararEspaco` e aloca de novo.
 import { type AgregadoDemanda, carregarDemanda, type TicketDemanda } from "../../processo/publico.ts";
-import { espacoDoTicket } from "../../../repositorio/publico.ts";
+import { espacoDoTicket, ocupanteDoDono } from "../../../repositorio/publico.ts";
 import { raizDo } from "../../../../shared/armazenamento/banco.ts";
 import { mensagem } from "../../../../shared/nucleo/erros.ts";
 import { anotar, logDaOperacao } from "../../../../shared/infra/registro.ts";
@@ -9,7 +9,7 @@ import type { ExecucaoLancada } from "../../../sessoes/publico.ts";
 import { projetosCadastrados } from "./projetos_cadastrados.ts";
 import type { ModulosDoCiclo } from "./modulos_do_ciclo.ts";
 
-type ModulosDaDevolucao = Pick<ModulosDoCiclo, "banco" | "repositorio" | "sessoes">;
+type ModulosDaDevolucao = Pick<ModulosDoCiclo, "ambientes" | "banco" | "repositorio" | "sessoes">;
 
 /** O dono de um Espaço: a demanda (sem `rodada_id`) ou uma rodada dela. */
 interface DonoDoEspaco {
@@ -60,8 +60,9 @@ function espacoDoTicketEsperaOHumano(demanda: AgregadoDemanda, ticket: TicketDem
 }
 
 /**
- * Depois do fim da execução do ticket: se o Espaço dele espera uma decisão humana (`espacoDoTicketEsperaOHumano`) ou o
- * ticket falhou à espera do Auditor, o Espaço devolve o Ambiente.
+ * Depois do fim da execução do ticket: se o Espaço dele espera uma decisão humana (`espacoDoTicketEsperaOHumano`), o
+ * ticket falhou à espera do Auditor ou o sandbox do Espaço não responde (I-320), o Espaço devolve o Ambiente. O `limpar`
+ * da devolução contra o sandbox sem resposta falha e o devolve `sujo`: a próxima alocação pega outro.
  */
 export async function devolverAmbienteSeOTicketEsperaOHumano(
   modulos: ModulosDaDevolucao,
@@ -70,8 +71,16 @@ export async function devolverAmbienteSeOTicketEsperaOHumano(
   const demanda = carregarDemanda(modulos.banco, ticketEncerrado.demanda_id);
   const ticket = demanda.tickets.find((candidato) => candidato.ticket_id === ticketEncerrado.ticket_id);
   if (ticket === undefined) return;
-  if (espacoDoTicketEsperaOHumano(demanda, ticket) || ticket.estado === "falhou") {
-    await devolverAmbienteDoEspaco(modulos, { demanda_id: ticketEncerrado.demanda_id, rodada_id: ticket.rodada_id });
+  const dono = { demanda_id: ticketEncerrado.demanda_id, rodada_id: ticket.rodada_id };
+  const sandboxSemResposta = await modulos.ambientes.ambienteDo(ocupanteDoDono(dono)).sandboxCaiu();
+  if (sandboxSemResposta || espacoDoTicketEsperaOHumano(demanda, ticket) || ticket.estado === "falhou") {
+    if (sandboxSemResposta) {
+      anotar(
+        logDaOperacao(raizDo(modulos.banco), `devolucao-${dono.demanda_id}`),
+        "o sandbox do Espaço não responde: devolvido para limpeza e, se a limpeza falhar, marcado sujo",
+      );
+    }
+    await devolverAmbienteDoEspaco(modulos, dono);
   }
 }
 

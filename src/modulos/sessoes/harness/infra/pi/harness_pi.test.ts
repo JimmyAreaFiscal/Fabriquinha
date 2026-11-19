@@ -39,6 +39,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
   // O pacote vem do próprio repositório, ao lado de `src/`.
   assert.equal(existsSync(join(PACOTE, "extensions", "guarda.ts")), true);
   assert.equal(existsSync(join(PACOTE, "extensions", "pergunta.ts")), true);
+  assert.equal(existsSync(join(PACOTE, "extensions", "tempo_limite.ts")), true);
   const comum = { raiz: "/r", sessao: "s-1", modo: "autonomo" as const };
   assert.deepEqual(
     harness.argumentos({
@@ -66,6 +67,8 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       `${PACOTE}/extensions/guarda.ts`,
       "-e",
       `${PACOTE}/extensions/pergunta.ts`,
+      "-e",
+      `${PACOTE}/extensions/tempo_limite.ts`,
       "--approve",
       "--exclude-tools",
       "ask_user_question",
@@ -84,12 +87,14 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     `${PACOTE}/extensions/guarda.ts`,
     "-e",
     `${PACOTE}/extensions/pergunta.ts`,
+    "-e",
+    `${PACOTE}/extensions/tempo_limite.ts`,
     "--no-approve",
     "--exclude-tools",
     "ask_user_question",
   ]);
   assert.deepEqual(harness.argumentos({ ...comum, skills: [], modelo: undefined, confianca: undefined }).slice(-3), [
-    `${PACOTE}/extensions/pergunta.ts`,
+    `${PACOTE}/extensions/tempo_limite.ts`,
     "--exclude-tools",
     "ask_user_question",
   ]);
@@ -102,7 +107,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     modo: "consulta" as const,
   };
   assert.deepEqual(harness.argumentos(consulta).slice(-3), [
-    `${PACOTE}/extensions/pergunta.ts`,
+    `${PACOTE}/extensions/tempo_limite.ts`,
     "--exclude-tools",
     "ask_user_question,edit,write,bash,powershell",
   ]);

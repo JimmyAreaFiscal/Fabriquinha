@@ -147,6 +147,7 @@ function rodar(
   silencioMaximoDoModeloMin?: number,
   relogio?: Relogio,
   ambiente?: Ambiente,
+  prazoDaFerramentaMs?: number,
 ) {
   const sessao = `s-${String(++n)}`;
   const dir = mkdtempSync(join(base, "exec-"));
@@ -183,6 +184,7 @@ function rodar(
       },
       triarPergunta,
       silencioMaximoDoModeloMin,
+      prazoDaFerramentaMs,
     },
     relogio,
   );
@@ -447,6 +449,63 @@ test("com o sandbox caído, o silêncio do modelo e a saída do pi viram falha d
     causa: "sandbox_caiu",
     motivo: `o sandbox caiu: o pi saiu antes de terminar a execução (código 7); veja o log em ${join(saida.dir, "log")}`,
   });
+});
+
+test("a ferramenta que não termina no prazo falha a execução como tempo limite; o sandbox caído vira sandbox_caiu", async () => {
+  // 300 ms de prazo da ferramenta; o silêncio do modelo (padrão de 15 min) e o limite da execução não chegam a contar.
+  const { fim, dir } = rodar(
+    [{ eventos: [inicioDaFerramentaLonga] }],
+    "autonomo",
+    1,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    300,
+  );
+  assert.deepEqual(await fim, {
+    tipo: "falha_infraestrutura",
+    causa: "tempo_limite",
+    motivo: "a ferramenta bash passou de 0.005 min sem terminar",
+  });
+  assert.match(readFileSync(join(dir, "log"), "utf8"), /a ferramenta bash passou de 0\.005 min sem terminar/);
+
+  const caida = rodar(
+    [{ eventos: [inicioDaFerramentaLonga] }],
+    "autonomo",
+    1,
+    undefined,
+    undefined,
+    undefined,
+    new AmbienteComSandboxCaido(),
+    300,
+  );
+  assert.deepEqual(await caida.fim, {
+    tipo: "falha_infraestrutura",
+    causa: "sandbox_caiu",
+    motivo: "o sandbox caiu: a ferramenta bash passou de 0.005 min sem terminar",
+  });
+});
+
+test("a ferramenta que termina no prazo e a perguntar esperando o Auditor não disparam o vigia de ferramenta", async () => {
+  const curta = rodar(
+    [{ ...ferramentaLonga, termina: "assenta" }],
+    "autonomo",
+    1,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    2000,
+  );
+  assert.equal(await curta.fim, undefined);
+
+  const perguntando = rodar([{ eventos: pergunta }], "autonomo", 1, undefined, undefined, undefined, undefined, 200);
+  await ate(() => condutor.situacao(perguntando.sessao)?.dialogos.length === 1, "a pergunta");
+  await dormir(500);
+  assert.ok(condutor.situacao(perguntando.sessao), "a execução segue aberta esperando o Auditor");
+  condutor.encerrar(perguntando.sessao);
+  assert.equal(await perguntando.fim, undefined);
 });
 
 test("o vigia do modelo pega o pi mudo desde a subida; ferramenta longa e sessão interativa ociosa não o disparam", async (t) => {
