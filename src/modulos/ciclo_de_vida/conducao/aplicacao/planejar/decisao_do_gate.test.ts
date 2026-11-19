@@ -120,6 +120,39 @@ test("CA-11: aprovar com o conjunto cheio responde sem erro e o Espaço entra na
   }
 });
 
+test("a preparação solta não devolve o Ambiente da rodada cujo ticket a condução já reservou", async () => {
+  const { banco } = aprovacao();
+  const ambiente = new AmbienteHostLocal();
+  const limpezas: string[] = [];
+  const alocacaoDaRodada = Promise.withResolvers<undefined>();
+  const rodadaAlocando = Promise.withResolvers<undefined>();
+  ligarGestaoDeAmbientesNosModulos({
+    ...gestaoQueSoUsa(ambiente),
+    alocar: async (ocupante) => {
+      if (ocupante.dono !== "I-1.R1") return ambiente;
+      rodadaAlocando.resolve(undefined);
+      await alocacaoDaRodada.promise;
+      return ambiente;
+    },
+    ambienteDo: (dono) => Object.create(ambiente, { id: { value: dono } }) as typeof ambiente,
+    limpar: (id) => {
+      limpezas.push(id);
+      return Promise.resolve();
+    },
+  });
+  try {
+    await aprovarGateDoPlanejamentoSemEsperar(banco);
+    await rodadaAlocando.promise; // a preparação solta está alocando o Espaço da rodada
+    banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1' AND rodada_id = 1"); // o Despacho reservou o ticket
+    alocacaoDaRodada.resolve(undefined);
+    // Não usa esperarPreparacoesDaAprovacao: a do CA-11 fica pendente para sempre. A última devolução da aprovação é a do Espaço da demanda.
+    while (limpezas.filter((dono) => dono === "I-1").length < 2) await new Promise((r) => setImmediate(r));
+    assert.ok(limpezas.length > 0 && !limpezas.includes("I-1.R1")); // o Espaço da rodada segue com o Ambiente da condução
+  } finally {
+    ligarGestaoDeAmbientesNosModulos();
+  }
+});
+
 test("CA-12: falha de gravação depois da primeira rodada desfaz tudo", async () => {
   const { banco } = aprovacao();
   banco.exec(

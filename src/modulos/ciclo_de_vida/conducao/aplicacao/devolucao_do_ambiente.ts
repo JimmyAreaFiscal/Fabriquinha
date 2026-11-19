@@ -20,13 +20,19 @@ interface DonoDoEspaco {
 /**
  * Devolve ao conjunto o Ambiente do Espaço de `dono`, salvo se um pi dos tickets dele está vivo: limpar o container por
  * baixo dele o mataria. A falha só vai ao log: o Ambiente segue alocado, como antes da devolução.
+ * Com `poupandoTicketEmExecucao`, também não devolve se um ticket do Espaço está em execução: a condução dele já
+ * reservou o Ambiente e pode estar preparando o Espaço, ainda sem pi vivo (a preparação solta da aprovação do plano).
  */
-export async function devolverAmbienteDoEspaco(modulos: ModulosDaDevolucao, dono: DonoDoEspaco): Promise<void> {
+export async function devolverAmbienteDoEspaco(
+  modulos: ModulosDaDevolucao,
+  dono: DonoDoEspaco,
+  poupandoTicketEmExecucao = false,
+): Promise<void> {
   const { banco, repositorio, sessoes } = modulos;
   const demanda = carregarDemanda(banco, dono.demanda_id);
-  const ticketsDoEspaco = new Set(
-    demanda.tickets.filter((ticket) => ticket.rodada_id === dono.rodada_id).map((ticket) => ticket.ticket_id),
-  );
+  const tickets = demanda.tickets.filter((ticket) => ticket.rodada_id === dono.rodada_id);
+  if (poupandoTicketEmExecucao && tickets.some((ticket) => ticket.estado === "em_execucao")) return;
+  const ticketsDoEspaco = new Set(tickets.map((ticket) => ticket.ticket_id));
   const temPiVivoNoEspaco = sessoes
     .listar({ demandas: [dono.demanda_id] })
     .some((sessao) => sessao.situacao !== undefined && ticketsDoEspaco.has(sessao.ticket_id));

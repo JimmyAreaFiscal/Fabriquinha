@@ -74,7 +74,7 @@ async function aprovarGateDoPlanejamento(
   // Cada Espaço devolve o Ambiente assim que fica pronto: preparar todos de uma vez exigiria um sandbox por Espaço ao mesmo tempo.
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
     await repositorio.prepararEspaco(projeto, espaco, log);
-    await devolverAmbienteDoEspaco(modulos, espaco.dono);
+    await devolverAmbienteDoEspaco(modulos, espaco.dono, true);
   };
   const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
@@ -96,7 +96,7 @@ async function aprovarGateDoPlanejamento(
         });
       }
     } finally {
-      await devolverAmbienteDoEspaco(modulos, { demanda_id });
+      await devolverAmbienteDoEspaco(modulos, { demanda_id }, true);
     }
   };
   const aprovado = decidirGateNaDemanda(banco, gate, endereco, entrada, ator, relogio);
