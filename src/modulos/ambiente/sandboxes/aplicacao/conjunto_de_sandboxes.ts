@@ -182,6 +182,10 @@ export class ConjuntoDeSandboxes {
       }
     } finally {
       if (espera) this.#filaDeEsperaPorVaga.splice(this.#filaDeEsperaPorVaga.indexOf(espera), 1);
+      // As esperas do mesmo dono resolvem por `jaAlocado`; e quem saiu da fila sem tomar vaga (lançou ou voltou por
+      // `jaAlocado`) passa a vez: acordar a mais é inofensivo, o acordado refaz a alocação e volta a dormir no lugar dele.
+      this.#acordarEsperasDoDono(ocupante.dono);
+      if (espera) this.#acordarOPrimeiroDaFila();
     }
   }
 
@@ -215,6 +219,12 @@ export class ConjuntoDeSandboxes {
     const primeiro = this.#filaDeEsperaPorVaga.find(estaDormindo);
     if (!primeiro) return;
     tirarDoSono(primeiro).acordar();
+  }
+
+  #acordarEsperasDoDono(dono: string): void {
+    for (const espera of this.#filaDeEsperaPorVaga.filter(estaDormindo)) {
+      if (espera.dono === dono) tirarDoSono(espera).acordar();
+    }
   }
 
   /** Uma tentativa de alocação; `SEM_VAGA` manda o ocupante esperar. `naFila`: já está na fila, então não cede o lugar. */
