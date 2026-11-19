@@ -3,7 +3,7 @@
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -346,8 +346,8 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
 });
 
-test("CA-1: conjunto de sandboxes na capacidade: o ticket espera em execução, sem Tentativa nem container novo, e a parada o falha por infraestrutura", async (t) => {
-  const { c, banco, config } = await cenario(3);
+test("CA-1, CA-2: conjunto de sandboxes na capacidade: o ticket espera em execução, sem Tentativa nem container novo, e roda ao liberar o sandbox, sem esperar outro ciclo", async (t) => {
+  const { c, banco, config } = await cenario(1);
   commitarArquivo(c.repo, "package.json", "{}");
   commitarArquivo(c.repo, "package-lock.json", "{}");
   rodarGit(c.repo, "push", "-q", "origin", c.projeto.branch_base);
@@ -355,7 +355,9 @@ test("CA-1: conjunto de sandboxes na capacidade: o ticket espera em execução, 
   banco
     .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")
     .run(c.repo);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-2", c.log);
   instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
+  writeFileSync(join(c.raiz, "auth.json"), "{}"); // o container recebe o login do pi do Auditor
   const servico = {
     raiz: c.raiz,
     porta_da_api: 4999,
@@ -385,11 +387,23 @@ test("CA-1: conjunto de sandboxes na capacidade: o ticket espera em execução, 
   assert.deepEqual(carregarDemanda(banco, "I-2").tentativas, []);
   assert.equal(listarAmbientes(banco).length, 1, "nenhum container novo");
 
-  await gestao.parar();
+  // O ticket que espera o sandbox não ocupa o limite 1: o seguinte, de outro Espaço, é despachado.
+  demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
+  assert.deepEqual([estadoDoTicket(banco, 3, 1), aberta(banco, 3, 1)], ["em_execucao", 1]);
+
+  await gestao.limpar("amb-ocupado");
   await ciclo;
-  const resultado = carregarDemanda(banco, "I-2").tentativas.at(-1)?.resultado;
-  assert.ok(resultado?.tipo === "falha_infraestrutura");
-  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), []);
+  // O agente subiu depois da espera: a Tentativa 1 é a primeira e a única. Ela termina na conferência (o ambiente do teste
+  // não tem SonarQube), mas por nenhuma falta de sandbox.
+  const { tentativas } = carregarDemanda(banco, "I-2");
+  assert.deepEqual(
+    tentativas.map(({ numero }) => numero),
+    [1],
+  );
+  assert.doesNotMatch(JSON.stringify(tentativas[0]?.resultado), /sandbox/);
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {

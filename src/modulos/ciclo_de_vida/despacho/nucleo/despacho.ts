@@ -53,10 +53,14 @@ export interface DemandaParaDespacho {
   predecessoras_pendentes: readonly string[];
 }
 
-/** O que o Despacho lê: as demandas em andamento e os tickets com trabalho vivo (execução aberta), num snapshot só. */
+/**
+ * O que o Despacho lê, num snapshot só: as demandas em andamento, os tickets com trabalho vivo (execução aberta) e os
+ * tickets em execução cujo Espaço espera um sandbox livre (quem só corta no limite, como a leitura do Auditor, os omite).
+ */
 export interface SituacaoDoDespacho {
   demandas: readonly DemandaParaDespacho[];
   vivos: readonly Endereco[];
+  naFilaDeSandbox?: readonly Endereco[];
 }
 
 /** O ticket que pode rodar agora. */
@@ -83,8 +87,10 @@ const menorAberto = (ag: ResumoDaDemanda, etapa: TicketDemanda["etapa"] | undefi
     .sort((a, b) => a.ticket_id - b.ticket_id)
     .slice(0, 1);
 
-const estaVivo = (vivos: readonly Endereco[], t: TicketDemanda): boolean =>
-  vivos.some((v) => v.demanda_id === t.demanda_id && v.ticket_id === t.ticket_id);
+const estaEntre = (enderecos: readonly Endereco[], t: TicketDemanda): boolean =>
+  enderecos.some((e) => e.demanda_id === t.demanda_id && e.ticket_id === t.ticket_id);
+
+const estaVivo = estaEntre;
 
 const decisaoMaisRecente = (ag: ResumoDaDemanda, t: TicketDemanda) =>
   ag.decisoes.filter((d) => d.ticket_id === t.ticket_id).at(-1);
@@ -199,9 +205,15 @@ function avaliarDemanda(demanda: DemandaParaDespacho, vivos: readonly Endereco[]
 
 /**
  * Ocupa vaga do limite o ticket em execução, menos o que espera gente (o da sessão de ajustes e a âncora do Gate da
- * rodada no estado de espera dele) e o planejamento reprovado sem trabalho vivo.
+ * rodada no estado de espera dele), o planejamento reprovado sem trabalho vivo e o que espera um sandbox livre: ele não
+ * roda, e se contasse os que esperam encheriam o limite e os Espaços que seguram os sandboxes não despachariam o próximo.
  */
-function ocupaVaga(ag: ResumoDaDemanda, t: TicketDemanda, vivos: readonly Endereco[]): boolean {
+function ocupaVaga(
+  ag: ResumoDaDemanda,
+  t: TicketDemanda,
+  vivos: readonly Endereco[],
+  naFilaDeSandbox: readonly Endereco[],
+): boolean {
   const gateDaEtapa = CATALOGO_DE_ETAPAS[t.etapa].gate;
   const rodadaEsperaOGateDaEtapa = ag.rodadas.some(
     (r) => r.rodada_id === t.rodada_id && gateDaEtapa?.esperaEmEstadoProprio === true && r.estado === gateDaEtapa.nome,
@@ -210,7 +222,8 @@ function ocupaVaga(ag: ResumoDaDemanda, t: TicketDemanda, vivos: readonly Endere
     t.estado === "em_execucao" &&
     gateQueEsperaGenteNaRodada(t.etapa) === undefined &&
     !rodadaEsperaOGateDaEtapa &&
-    !(ehPlanejamentoReprovado(ag, t) && !estaVivo(vivos, t))
+    !(ehPlanejamentoReprovado(ag, t) && !estaVivo(vivos, t)) &&
+    !estaEntre(naFilaDeSandbox, t)
   );
 }
 
@@ -235,14 +248,15 @@ export class Despacho {
   }
 
   /** Seleciona os prontos, ordena e corta no limite; o resto vai a `recusas` com o motivo. */
-  selecionar({ demandas, vivos }: SituacaoDoDespacho): ResultadoDoDespacho {
+  selecionar({ demandas, vivos, naFilaDeSandbox = [] }: SituacaoDoDespacho): ResultadoDoDespacho {
     const recusas = new Map<Endereco, MotivoDeRecusa>();
     const recusar: Recusar = (ticket, motivoDaRecusa) => recusas.set(enderecoDoTicket(ticket), motivoDaRecusa);
     const selecionados = demandas
       .flatMap((demanda) => avaliarDemanda(demanda, vivos, recusar))
       .sort(porDemandaRodadaETicket);
     const emUso = demandas.reduce(
-      (total, { agregado }) => total + agregado.tickets.filter((t) => ocupaVaga(agregado, t, vivos)).length,
+      (total, { agregado }) =>
+        total + agregado.tickets.filter((t) => ocupaVaga(agregado, t, vivos, naFilaDeSandbox)).length,
       0,
     );
     const vagas = Math.max(0, this.limiteDeParalelismo - emUso);
