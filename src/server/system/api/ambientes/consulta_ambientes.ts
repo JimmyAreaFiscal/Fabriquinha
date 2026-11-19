@@ -25,7 +25,7 @@ const SEM_OCUPANTE: OcupanteDoContainer = {
 };
 
 /** O ocupante do container em projeto, demanda, ticket, worktree e branch; o que o Ciclo de Vida não reconhece fica sem ocupante. */
-function traduzirOcupanteEmDemanda(
+export function traduzirOcupanteEmDemanda(
   alocadoPara: string | null,
   cicloDeVida: CicloDeVida,
   demandas: GestaoDeDemandas,

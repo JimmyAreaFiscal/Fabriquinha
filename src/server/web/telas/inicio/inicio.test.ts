@@ -213,6 +213,7 @@ const MOTIVOS_E_TEXTOS: [MotivoDeRecusaEmJson, string][] = [
   [{ tipo: "ocupado", por: "I-3.T2" }, "Ocupado por I-3.T2"],
   [{ tipo: "bloqueado", motivo: "Tentativas esgotadas" }, "Bloqueado: Tentativas esgotadas"],
   [{ tipo: "aguarda_acao_externa" }, "Aguarda o merge do PR na plataforma"],
+  [{ tipo: "aguarda_sandbox_livre", posicao_na_fila: 1 }, "Aguarda sandbox livre: 1.º na fila"],
   [{ tipo: "gate_aguardando", gate: "gate_demanda" }, "Aguarda a aprovação da demanda"],
   [{ tipo: "gate_aguardando", gate: "gate_planejamento" }, "Aguarda a aprovação do planejamento"],
   [{ tipo: "gate_aguardando", gate: "gate_revisao_rodada" }, "Aguarda a revisão da rodada"],
@@ -240,6 +241,17 @@ test("rodando: cada item parado mostra o ticket e o motivo, escapado, e leva à 
   );
   assert.match(String(bloqueado), /href="\/demandas\/I-207"/);
   assert.match(String(bloqueado), /— Bloqueado: falhou &#60;b&#62;<\/span>/);
+});
+
+test("rodando: o item na fila de sandbox livre, sem ticket, leva à demanda do Espaço", () => {
+  const html = inicio(dados(), agora, [
+    { item: "I-206.R1", motivo: { tipo: "aguarda_sandbox_livre", posicao_na_fila: 1 } },
+  ]);
+  assert.match(
+    html,
+    /href="\/demandas\/I-206">\s*<span class="pill pill-neutro">parado<\/span>\s*<span class="id">I-206<\/span>/,
+  );
+  assert.match(html, /<span class="mono">I-206\.R1<\/span> — Aguarda sandbox livre: 1\.º na fila<\/span>/);
 });
 
 test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de execução, espera e bloqueio", () => {
