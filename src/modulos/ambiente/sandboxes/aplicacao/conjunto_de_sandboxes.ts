@@ -39,6 +39,8 @@ const SEM_VAGA = Symbol("sem_vaga");
 /** Um ocupante na fila de espera por vaga: com `sono`, dorme até uma liberação o acordar para refazer a alocação. */
 interface EsperaPorVaga {
   dono: string;
+  /** Houve liberação de vaga enquanto ele refazia a alocação: ao receber `SEM_VAGA`, refaz em vez de dormir. */
+  liberadaNaRetentativa?: boolean;
   sono?: { acordar: () => void; rejeitar: (erro: Error) => void } | undefined;
 }
 
@@ -177,6 +179,10 @@ export class ConjuntoDeSandboxes {
         const alocado = await this.#alocarSeHouverVaga(ocupante, projeto, espera !== undefined);
         if (alocado !== SEM_VAGA) return alocado;
         if (this.#erroDasEsperasEncerradas) throw this.#erroDasEsperasEncerradas;
+        if (espera?.liberadaNaRetentativa) {
+          espera.liberadaNaRetentativa = false;
+          continue;
+        }
         espera ??= this.#entrarNaFilaDeEspera(ocupante.dono);
         await this.#dormirAteAcordar(espera);
       }
@@ -214,11 +220,15 @@ export class ConjuntoDeSandboxes {
     });
   }
 
-  /** Chamada a cada vaga liberada: acorda o primeiro da fila que dorme; o acordado refaz a alocação sem perder o lugar. */
+  /**
+   * Chamada a cada vaga liberada: só o primeiro da fila a recebe. Se dorme, acorda e refaz a alocação sem perder o lugar;
+   * se já está refazendo, marca a liberação para ele refazer de novo em vez de dormir. Nunca acorda o segundo no lugar dele.
+   */
   #acordarOPrimeiroDaFila(): void {
-    const primeiro = this.#filaDeEsperaPorVaga.find(estaDormindo);
+    const primeiro = this.#filaDeEsperaPorVaga[0];
     if (!primeiro) return;
-    tirarDoSono(primeiro).acordar();
+    if (estaDormindo(primeiro)) tirarDoSono(primeiro).acordar();
+    else primeiro.liberadaNaRetentativa = true;
   }
 
   #acordarEsperasDoDono(dono: string): void {

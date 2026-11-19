@@ -11,7 +11,7 @@ import { configuracaoDoAmbiente } from "../../src/shared/armazenamento/configura
 import { inserirAmbienteAlocado, liberarAmbiente, listarAmbientes } from "../../apoio-testes/falsos/ambiente_falso.ts";
 import { abrirBancoDaFabriquinha } from "../../src/server/system/banco_da_fabriquinha.ts";
 import { carregarDemanda, configuracao } from "../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
-import { exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
+import { caminhoDaWorktreeRodada, exigirGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { instalarDockerFalso } from "../../apoio-testes/falsos/docker_falso.ts";
 import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
@@ -43,6 +43,35 @@ interface Chamada {
   contem?: string;
   /** Confere o que ficou gravado; lança se for outro. */
   efeito?(): void;
+}
+
+const LIMITE_DA_PREPARACAO_SOLTA_MS = 120_000;
+
+/**
+ * Espera, de fora do serviço, a marca de preparação da worktree: é a última coisa que a preparação solta da aprovação do
+ * plano grava, e o git dela concorre com o `git config` do preparo da ação seguinte (a fila git é por processo).
+ */
+export async function esperarMarcaDePreparacao(
+  caminho: string,
+  limiteMs = LIMITE_DA_PREPARACAO_SOLTA_MS,
+): Promise<void> {
+  const prazo = performance.now() + limiteMs;
+  while (performance.now() < prazo) {
+    if (existsSync(caminho)) {
+      const marca = await exigirGit(
+        caminho,
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "fabriquinha-preparada",
+      )
+        .then((saida) => saida.trim())
+        .catch(() => undefined); // a worktree ainda está nascendo
+      if (marca !== undefined && existsSync(marca)) return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`a preparação de ${caminho} não terminou em ${String(limiteMs)} ms`);
 }
 
 function conferir(esperado: unknown, atual: unknown, oQue: string): void {
@@ -116,6 +145,8 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     orcamento: number,
     preparar: () => T | Promise<T>,
     montar: (registro: T) => Chamada,
+    /** Roda depois da medição de cada chamada (fora do tempo medido): espera o que a rota deixou solto no serviço. */
+    depois?: (registro: T) => Promise<void>,
   ): AcaoMutacao {
     let registros: Promise<T[]> | undefined;
     let proximo = 0;
@@ -132,7 +163,9 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         registros ??= prepararTodos();
         const registro = (await registros)[proximo++];
         if (registro === undefined) throw new Error(`${metodo} ${caminho}: sem registro preparado`);
-        return enviar(metodo, montar(registro));
+        const tempo = await enviar(metodo, montar(registro));
+        await depois?.(registro);
+        return tempo;
       },
     };
   }
@@ -190,6 +223,10 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
           conferir("em_execucao", estados(id).demanda, `estado de ${id}`);
         },
       }),
+      // A aprovação responde na hora e deixa a preparação das worktrees solta no serviço; sem esperá-la, o git dela
+      // disputa o repositório com o preparo das ações seguintes.
+      (id) =>
+        esperarMarcaDePreparacao(caminhoDaWorktreeRodada(amb.raiz, preparo.projeto, { demanda_id: id, rodada_id: 1 })),
     ),
     acao(
       "POST",
