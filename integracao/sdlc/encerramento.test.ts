@@ -155,14 +155,19 @@ test("I-322 CA-3, CA-4: fitness que quebra só no branch da demanda recusa a apr
   const c = criarCenario(t);
   const projeto = buscarProjeto(c.banco, c.projeto);
   assert.ok(projeto);
-  const integracao = { nome: "integracao", comando: "true", descricao: "d" };
-  gravarProjeto(c.banco, { ...projeto, verificacoes: { ...projeto.verificacoes, fitness: [integracao] } });
+  const fitnessComComando = (comando: string) => ({
+    ...projeto,
+    verificacoes: { ...projeto.verificacoes, fitness: [{ nome: "integracao", comando, descricao: "d" }] },
+  });
+  gravarProjeto(c.banco, fitnessComComando("true"));
   gh.zerar();
   const id = await rodadaEmEncerramento(c);
   await encerrar(c, id);
   await aprovarRodada(c, id, 1);
   const prsDasRodadas = gh.prs().length;
 
+  // A fitness passou nas rodadas e quebra no branch da demanda: a Fabriquinha a roda de verdade na revisão integral.
+  gravarProjeto(c.banco, fitnessComComando("exit 1"));
   const { revisor, recusa } = await revisaoIntegralComFitnessQuebrada(c, id);
   assert.match(recusa, /fitness que falhou: integracao/);
   const ag = demanda(c, id);
@@ -173,8 +178,17 @@ test("I-322 CA-3, CA-4: fitness que quebra só no branch da demanda recusa a apr
   );
   assert.equal(tickets(c, id, "encerrar_demanda").length, 0);
   assert.equal(gh.prs().length, prsDasRodadas, "nenhum PR final foi aberto");
+  const matrizQuebrada = demanda(c, id).evidencias.find((e) => e.ticket_id === revisor && e.tipo === "matriz_fitness");
+  assert.deepEqual(
+    (matrizQuebrada?.dados as { linhas: { nome: string; codigoSaida: number }[] }).linhas.map((l) => [
+      l.nome,
+      l.codigoSaida,
+    ]),
+    [["integracao", 1]],
+  );
 
   // A rodada corretiva percorre o ciclo; o revisar_demanda seguinte roda a matriz outra vez, na worktree da demanda.
+  gravarProjeto(c.banco, fitnessComComando("true"));
   pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
   await revisar(c, id, { resultado: "aprovado" }, 2);

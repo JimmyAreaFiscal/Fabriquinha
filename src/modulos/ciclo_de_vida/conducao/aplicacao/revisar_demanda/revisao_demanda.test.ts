@@ -52,20 +52,44 @@ test("CA-4: regravar no revisar_demanda seguinte substitui a matriz, rodada outr
   assert.match(JSON.stringify(matrizes[0]?.dados), /echo segunda/);
 });
 
-for (const [descricao, comando] of [
-  ["sai com código 1", "exit 1"],
-  ["não existe (código 127)", "comando-que-nao-existe-i322"],
+const linhasDaMatriz = (banco: Banco) =>
+  (matrizDoRevisor(banco)[0]?.dados as { linhas: { codigoSaida: number | null; estourou: boolean; log: string }[] })
+    .linhas;
+
+// A matriz com fitness falhando fica gravada, com o log, e a recusa vem da aprovação (conferirAprovacao).
+for (const [descricao, comando, codigoSaida] of [
+  ["sai com código 1", "exit 1", 1],
+  ["não existe (código 127)", "comando-que-nao-existe-i322", 127],
 ] as const) {
-  test(`CA-3, CA-6: fitness que ${descricao} falha o ticket e não grava a matriz`, async () => {
+  test(`CA-3, CA-6: fitness que ${descricao} deixa a matriz gravada com a linha falhando`, async () => {
     const { banco } = await cenarioRevisao({ integral: true });
     comFitness(banco, [{ nome: "integracao", comando, descricao: "d" }]);
-    await assert.rejects(
-      prepararRevisaoDemanda(modulosDoCicloDeTeste(banco), REF_GLOBAL),
-      /matriz_fitness.*todas_fitness_passam/,
-    );
-    assert.equal(matrizDoRevisor(banco).length, 0);
+    await prepararRevisaoDemanda(modulosDoCicloDeTeste(banco), REF_GLOBAL);
+    const [linha] = linhasDaMatriz(banco);
+    assert.deepEqual([linha?.codigoSaida, linha?.estourou, linha?.log], [codigoSaida, false, "integracao.log"]);
+    assert.equal(banco.prepare("SELECT caminho FROM arquivo_evidencia").all().length, 1);
   });
 }
+
+test("CA-6: fitness que estoura o tempo limite deixa a matriz gravada com estourou verdadeiro", async () => {
+  const { banco } = await cenarioRevisao({ integral: true });
+  comFitness(banco, [{ nome: "integracao", comando: "true", descricao: "d" }]);
+  const modulos = modulosDoCicloDeTeste(banco);
+  const estourada = { codigo: null, saida: "", erro: "", limiteEstourado: true, duracaoMs: 1 };
+  const repositorio = {
+    ...modulos.repositorio,
+    prepararEspaco: async (...entrada: Parameters<typeof modulos.repositorio.prepararEspaco>) => {
+      const espaco = await modulos.repositorio.prepararEspaco(...entrada);
+      const ambiente = Object.create(espaco.ambiente, {
+        executar: { value: () => Promise.resolve(estourada) },
+      }) as typeof espaco.ambiente;
+      return { ...espaco, ambiente };
+    },
+  };
+  await prepararRevisaoDemanda({ banco, repositorio }, REF_GLOBAL);
+  const [linha] = linhasDaMatriz(banco);
+  assert.deepEqual([linha?.codigoSaida, linha?.estourou], [null, true]);
+});
 
 test("CA-7: worktree que não pode ser preparada falha antes de gravar a matriz", async () => {
   const { banco } = await cenarioRevisao({ integral: true });

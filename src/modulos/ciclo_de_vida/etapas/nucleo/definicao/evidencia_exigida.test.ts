@@ -26,7 +26,7 @@ const TABELA = [
   ["encerrar_rodada", "relatorio_produtividade", F, true, "ticket", null],
   ["encerrar_rodada", "pr_aberto", F, true, "ticket", null],
   ["encerrar_rodada", "video_demonstracao", A, false, "ticket", null],
-  ["revisar_demanda", "matriz_fitness", F, true, "ticket", TF],
+  ["revisar_demanda", "matriz_fitness", F, true, "ticket", null],
   ["revisar_demanda", "comprovacao_criterios", A, true, "ticket", "criterios_demanda_atendidos"],
   ["revisar_demanda", "testes_estresse", A, true, "ticket", null],
   ["revisar_demanda", "analise_seguranca", A, true, "ticket", null],
@@ -45,13 +45,13 @@ const linha = (i: (typeof CATALOGO_ETAPAS)[number]) => [
   i.regraAprovacao,
 ];
 
-test("catálogo bate com a tabela fixa: 28 itens, 22 tipos, 11 regras", () => {
+test("catálogo bate com a tabela fixa: 28 itens, 22 tipos, 10 regras", () => {
   assert.deepEqual(
     CATALOGO_ETAPAS.map(linha),
     TABELA.map((l) => [...l]),
   );
   assert.equal(new Set(CATALOGO_ETAPAS.map((i) => i.tipo)).size, 22);
-  assert.equal(CATALOGO_ETAPAS.filter((i) => i.regraAprovacao !== null).length, 11);
+  assert.equal(CATALOGO_ETAPAS.filter((i) => i.regraAprovacao !== null).length, 10);
 });
 
 test("schema do item valida as etapas pelo enum EtapaTicket", () => {

@@ -7,7 +7,8 @@ export const DEFINICAO_DO_REVISAR_DEMANDA = {
   escopo: "demanda",
   executor: "agente_autonomo",
   evidencias: [
-    evidenciaExigida("revisar_demanda", "matriz_fitness", "fabriquinha", true, "todas_fitness_passam"),
+    // Sem regra: a matriz com fitness falhando entra, e a recusa vem na aprovação, para o revisor reprovar.
+    evidenciaExigida("revisar_demanda", "matriz_fitness", "fabriquinha"),
     evidenciaExigida("revisar_demanda", "comprovacao_criterios", "agente", true, "criterios_demanda_atendidos"),
     evidenciaExigida("revisar_demanda", "testes_estresse", "agente"),
     evidenciaExigida("revisar_demanda", "analise_seguranca", "agente"),

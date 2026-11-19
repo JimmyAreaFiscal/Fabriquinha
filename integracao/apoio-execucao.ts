@@ -371,9 +371,8 @@ const planoCorretivo = (id: string) => ({
 });
 
 /**
- * Revisão integral em que a fitness `integracao` quebra só no branch da demanda: a matriz do ticket tem a linha em código
- * 1 (entra direto, porque a Fabriquinha recusa a evidência que falha ao gravá-la), a aprovação é recusada e o agente
- * reprova com a rodada corretiva. Devolve o ticket revisor e a mensagem da recusa.
+ * Revisão integral em que a fitness `integracao` quebra só no branch da demanda: a Fabriquinha grava a matriz do ticket com a
+ * linha falhando, a aprovação é recusada e o agente reprova com a rodada corretiva. Devolve o ticket revisor e a mensagem da recusa.
  */
 export async function revisaoIntegralComFitnessQuebrada(
   c: Cenario,
@@ -386,9 +385,7 @@ export async function revisaoIntegralComFitnessQuebrada(
     assert.equal(ticket?.estado, "em_execucao", "a revisão integral espera a decisão do agente");
     revisor = ticket.ticket_id;
     const agenteDoTicket = agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id: revisor });
-    const linhaQuebrada = { nome: "integracao", descricao: "d", comando: "c", codigoSaida: 1, log: "integracao.log" };
     comoAgente(c, id, revisor, [
-      ["matriz_fitness", { linhas: [linhaQuebrada] }],
       ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
       ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
       ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
