@@ -25,7 +25,6 @@ interface PedidoDeMatrizFitness {
 /**
  * Roda as fitness functions do projeto na worktree e grava a `matriz_fitness` do ticket com o log de cada linha (regravar
  * substitui).
- * @testes o `revisar_demanda` a importa quando passar a rodar a matriz; até lá só o `prepararRevisaoRodada` e o teste a usam
  */
 export async function gravarMatrizFitnessDoTicket(
   banco: ModulosDoCiclo["banco"],
@@ -61,7 +60,8 @@ export async function gravarMatrizFitnessDoTicket(
       ];
       for (const [tipo, dados, anexos] of evidencias) {
         const avaliacao = submeterEvidencia(banco, { tipo, dono, produtor: FABRIQUINHA, dados, anexos }, { origens });
-        if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo, "corrija a revisão da rodada");
+        if (avaliacao.resultado === "recusada")
+          throw new ErroDeRegra(avaliacao.motivo, "corrija o que a fitness apontou");
       }
     });
   } finally {

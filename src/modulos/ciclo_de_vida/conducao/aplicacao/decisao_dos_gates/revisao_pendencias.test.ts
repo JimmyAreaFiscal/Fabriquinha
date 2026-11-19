@@ -32,8 +32,13 @@ const rodada = (fitness: unknown, comprovacao: unknown) =>
     explicacao_fitness: {},
     ...(comprovacao === undefined ? {} : { comprovacao_criterios: comprovacao }),
   });
-const integral = (e: unknown, s: unknown) =>
-  ag("revisar_demanda", { comprovacao_criterios: comprov(true), testes_estresse: e, analise_seguranca: s });
+const integral = (e: unknown, s: unknown, fitness: unknown = ok) =>
+  ag("revisar_demanda", {
+    matriz_fitness: fitness,
+    comprovacao_criterios: comprov(true),
+    testes_estresse: e,
+    analise_seguranca: s,
+  });
 const ok = { linhas: [linha("a", 0)] };
 const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
   assert.throws(
@@ -52,6 +57,23 @@ test("rodada com revisão aceita e tudo em ordem (CA-7)", () => {
 
 test("recusa citando a fitness que falhou (CA-5)", () => {
   recusa(rodada({ linhas: [linha("a", 0), linha("lint", 1)] }, comprov(true)), "matriz_fitness", "lint");
+});
+
+test("revisão da demanda recusa a fitness que falhou ou ausente e aceita a que passou (CA-3, CA-5)", () => {
+  recusa(
+    integral(estresse("passou"), seguranca("baixa"), { linhas: [linha("integracao", 1)] }),
+    "fitness que falhou: integracao",
+  );
+  recusa(integral(estresse("passou"), seguranca("baixa"), { linhas: [linha("integracao", 127)] }), "integracao");
+  const estourou = { nome: "integracao", codigoSaida: null, estourou: true };
+  recusa(integral(estresse("passou"), seguranca("baixa"), { linhas: [estourou] }), "fitness que falhou: integracao");
+  const { matriz_fitness: _, ...semMatriz } = Object.fromEntries(
+    integral(estresse("passou"), seguranca("baixa")).evidencias.map((e) => [e.tipo, e.dados]),
+  );
+  recusa(ag("revisar_demanda", semMatriz), "matriz_fitness ausente");
+  assert.doesNotThrow(() => {
+    conferirAprovacao(integral(estresse("passou"), seguranca("baixa")), 7);
+  });
 });
 
 test("recusa evidência ausente e reprovada (CA-6)", () => {

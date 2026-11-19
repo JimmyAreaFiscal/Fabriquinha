@@ -34,8 +34,12 @@ const seguranca = (severidade: string) => ({
 const naoSeAplica = { aplicavel: false, cenarios: [], ameacas: [], achados: [] };
 
 /** Submete as evidências do revisor integral. */
-function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = true) {
+function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = true, codigoDaFitness = 0) {
   const lista: [string, object][] = [
+    [
+      "matriz_fitness",
+      { linhas: [{ nome: "f", descricao: "d", comando: "c", codigoSaida: codigoDaFitness, log: "f.log" }] },
+    ],
     ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: comprovacao, arquivos: [] }] }],
     ["testes_estresse", estres],
     ["analise_seguranca", seg],
@@ -116,6 +120,18 @@ test("CA-16: revisão aceita vai a encerramento com encerrar_demanda aberto; nã
   const e = estado(banco);
   assert.equal(e.estado, "encerrar_demanda");
   assert.equal(e.tickets.find((t) => t.etapa === "encerrar_demanda")?.estado, "aberto");
+});
+
+test("CA-3: aprovação recusada pela fitness que falhou; a demanda continua em revisar_demanda", async () => {
+  const { banco } = await cenarioRevisao({ integral: true });
+  evidenciar(banco, { ...naoSeAplica, justificativa: "sem carga" }, seguranca("media"), true, 1);
+  await assert.rejects(aprovar(banco), /fitness que falhou: f/);
+  const e = estado(banco);
+  assert.equal(e.estado, "revisar_demanda");
+  assert.equal(
+    e.tickets.find((t) => t.etapa === "encerrar_demanda"),
+    undefined,
+  );
 });
 
 test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída continua concluída", async () => {

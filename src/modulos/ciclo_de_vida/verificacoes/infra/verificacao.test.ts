@@ -19,7 +19,7 @@ const LISTA_DA_ETAPA: Record<EtapaTicket, TipoVerificacao[]> = {
   revisar_rodada: ["fitness"],
   encerrar_rodada: ["conferencia_do_pr"],
   ajustar_resultado: [],
-  revisar_demanda: [],
+  revisar_demanda: ["fitness"],
   encerrar_demanda: ["conferencia_do_pr"],
   resolver_conflito: COM_CODIGO,
 };
