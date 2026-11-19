@@ -35,6 +35,7 @@ import {
   type RegistroDaVerificacao,
   despachoDasEtapas,
   decidirGate,
+  esperarPreparacoesDaAprovacao,
   concluirSessaoAjustes,
   cicloDoDespacho,
   configuracao,
@@ -239,6 +240,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     { resultado: "aprovado" },
     AUDITOR,
   );
+  await esperarPreparacoesDaAprovacao();
 }
 
 const verificacoes = (): RegistroDaVerificacao[] =>

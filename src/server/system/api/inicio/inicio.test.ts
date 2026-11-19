@@ -13,7 +13,11 @@ import {
 import { RecusasDoDespacho } from "../contrato/despacho.ts";
 import { type DadosDoInicio, QuantidadeDePendencias } from "../contrato/inicio.ts";
 import { ROTAS_DO_INICIO } from "./inicio.ts";
-import { modulosDoCicloDeTeste } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
+import {
+  AmbienteHostLocal,
+  gestaoQueSoUsa,
+  modulosDoCicloDeTeste,
+} from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { liberacaoDasDemandas } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_de_teste.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -70,6 +74,23 @@ test("GET /api/despacho devolve as recusas do último ciclo, com os endereços e
     { item: "I-303.T4", motivo: { tipo: "ocupado", por: "I-303.T5" } },
   );
   assert.equal((await pedir("/api/despacho", { cookie: false })).status, 401);
+});
+
+test("GET /api/despacho acrescenta um item por ocupante na fila de sandbox livre, só quando há fila (CA-6, CA-10)", async () => {
+  const banco = cenario();
+  const naFila = async (pedir: Awaited<ReturnType<typeof servir>>["pedir"]) =>
+    RecusasDoDespacho.parse((await pedir("/api/despacho")).json()).recusas.filter(
+      (r) => r.motivo.tipo === "aguarda_sandbox_livre",
+    );
+  assert.deepEqual(await naFila((await servir(banco)).pedir), []);
+  const gestaoComFila = {
+    ...gestaoQueSoUsa(new AmbienteHostLocal()),
+    ocupantesNaFilaDeEspera: () => ["I-303.R4", "I-999.R1"],
+  };
+  assert.deepEqual(await naFila((await servir(banco, undefined, gestaoComFila)).pedir), [
+    { item: "I-303.T5, I-303.T7", motivo: { tipo: "aguarda_sandbox_livre", posicao_na_fila: 1 } },
+    { item: "I-999.R1", motivo: { tipo: "aguarda_sandbox_livre", posicao_na_fila: 2 } },
+  ]);
 });
 
 test("GET /api/inicio: o custo do mês sai no texto do Uso somado, com ≥ e o aviso quando uma sessão não trouxe custo", async () => {

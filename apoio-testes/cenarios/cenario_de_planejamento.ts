@@ -18,6 +18,7 @@ import { comDemanda } from "../../src/modulos/ciclo_de_vida/processo/armazenamen
 import { anotar } from "../../src/shared/infra/registro.ts";
 import { abrirBancoTemporario } from "../banco/banco_temporario.ts";
 import { comPlanoSubmetido, gravarAgregadoPronto } from "./cenarios_de_demanda.ts";
+import { esperarPreparacoesDaAprovacao } from "../../src/modulos/ciclo_de_vida/conducao/aplicacao/planejar/decisao_do_gate.ts";
 import { limitarTempoDoPi } from "../falsos/limite_do_pi.ts";
 import { instalarPiFalso } from "../falsos/pi_falso.ts";
 import { criarRepositorioDeTeste } from "../repositorio_de_teste.ts";
@@ -170,8 +171,15 @@ export function cenarioDePlanejamento({
 
 export const agente = { tipo: "agente", trabalho_id: "1" } as const;
 const APROVACAO_SEM_NOTA = { resultado: "aprovado" };
-export const aprovarGateDoPlanejamento = (banco: DatabaseSync, entrada: unknown = APROVACAO_SEM_NOTA) =>
+/** Decide o gate e responde como o serviço: a preparação dos Espaços segue solta. */
+export const aprovarGateDoPlanejamentoSemEsperar = (banco: DatabaseSync, entrada: unknown = APROVACAO_SEM_NOTA) =>
   decidirGate(modulosDoCicloDeTeste(banco), "gate_planejamento", Endereco.daDemanda("I-1"), entrada, AUDITOR);
+/** Decide o gate e espera a preparação dos Espaços terminar. */
+export const aprovarGateDoPlanejamento = async (banco: DatabaseSync, entrada: unknown = APROVACAO_SEM_NOTA) => {
+  const decidido = await aprovarGateDoPlanejamentoSemEsperar(banco, entrada);
+  await esperarPreparacoesDaAprovacao();
+  return decidido;
+};
 export const reprovarGateDoPlanejamento = (banco: DatabaseSync, motivo: string) =>
   aprovarGateDoPlanejamento(banco, { resultado: "reprovado", motivo });
 export const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>

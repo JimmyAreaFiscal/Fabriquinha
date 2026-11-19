@@ -10,6 +10,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import {
   Endereco,
   carregarDemanda,
+  esperarPreparacoesDaAprovacao,
   type MotivoDeRecusa,
 } from "../../../../../apoio-testes/ciclo_de_vida/ciclo_de_vida_internos.ts";
 import { registrarCorrecoesSessao } from "../../../../modulos/ciclo_de_vida/processo/nucleo/transicoes/transicoes_rodada.ts";
@@ -282,6 +283,7 @@ test("CA-17: aprovar o planejamento avança de estado e cria a worktree de cada 
   assert.equal(r.status, 200);
   assert.equal(DemandaEmJson.parse(r.json()).demanda.estado, "em_execucao");
   assert.equal(estado(), "em_execucao");
+  await esperarPreparacoesDaAprovacao();
   assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
   // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
   assert.equal(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "2")), false);

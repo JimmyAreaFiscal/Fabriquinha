@@ -3,11 +3,12 @@
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../../../../apoio-testes/banco/banco_temporario.ts";
 import { instalarPiFalso, INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import { instalarDockerFalso } from "../../../../../apoio-testes/falsos/docker_falso.ts";
@@ -34,11 +35,10 @@ import {
   AmbienteHostLocal,
   inserirAmbienteAlocado,
   ligarGestaoDeAmbientesDoTeste,
+  listarAmbientes,
   modulosDoCicloDeTeste,
 } from "../../../../../apoio-testes/falsos/ambiente_falso.ts";
 import { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
-import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
-import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { registrarProjeto, registrarDependencia } from "../../../../../apoio-testes/demandas_de_teste.ts";
 import {
   criarSessao,
@@ -346,8 +346,8 @@ test("CA-7: repositório inexistente não deixa o ticket em execução e o motiv
   assert.match(readFileSync(join(c.raiz, "log"), "utf8"), /preparação falhou: .*\/nao\/existe/);
 });
 
-test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com o motivo e a retomada o devolve a aberto depois da espera", async (t) => {
-  const { c, banco, config } = await cenario(3);
+test("CA-1, CA-2: conjunto de sandboxes na capacidade: o ticket espera em execução, sem Tentativa nem container novo, e roda ao liberar o sandbox, sem esperar outro ciclo", async (t) => {
+  const { c, banco, config } = await cenario(1);
   commitarArquivo(c.repo, "package.json", "{}");
   commitarArquivo(c.repo, "package-lock.json", "{}");
   rodarGit(c.repo, "push", "-q", "origin", c.projeto.branch_base);
@@ -355,7 +355,9 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
   banco
     .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")
     .run(c.repo);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-2", c.log);
   instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
+  writeFileSync(join(c.raiz, "auth.json"), "{}"); // o container recebe o login do pi do Auditor
   const servico = {
     raiz: c.raiz,
     porta_da_api: 4999,
@@ -365,7 +367,7 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
     dir_do_harness_do_auditor: c.raiz,
   };
   const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
-  await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
+  const gestao = await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
   inserirAmbienteAlocado(banco, {
     id: "amb-ocupado",
     container_id: "c-ocupado",
@@ -375,21 +377,33 @@ test("conjunto de sandboxes na capacidade: o ticket falha por infraestrutura com
   });
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
 
-  await Promise.all(
+  const ciclo = Promise.all(
     cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
   );
+  while (gestao.ocupantesNaFilaDeEspera().length === 0) await setTimeout(5);
 
-  const ag = carregarDemanda(banco, "I-2");
-  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
-  const resultado = ag.tentativas.at(-1)?.resultado;
-  assert.ok(resultado?.tipo === "falha_infraestrutura");
-  assert.equal(resultado.causa, "servico_externo_inacessivel");
-  assert.match(resultado.motivo, /nenhum sandbox disponível: o conjunto está na capacidade de 1/);
-  const falhouEm = Date.parse(String(ag.tickets[0]?.estado_alterado_em));
-  const depoisDe = (minutos: number) => relogioFixo(new Date(falhouEm + minutos * 60_000).toISOString());
-  assert.deepEqual(retomarFalhasDeInfraestrutura(banco, depoisDe(1)), [], "aguarda a espera da política");
-  assert.equal(retomarFalhasDeInfraestrutura(banco, depoisDe(2)).length, 1);
-  assert.equal(estadoDoTicket(banco, 2, 1), "aberto");
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), ["I-2.R1"]);
+  assert.equal(estadoDoTicket(banco, 2, 1), "em_execucao");
+  assert.deepEqual(carregarDemanda(banco, "I-2").tentativas, []);
+  assert.equal(listarAmbientes(banco).length, 1, "nenhum container novo");
+
+  // O ticket que espera o sandbox não ocupa o limite 1: o seguinte, de outro Espaço, é despachado.
+  demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  await Promise.all(cicloDoDespacho(modulosDoCicloDeTeste(banco), config, deps, liberacaoDasDemandas(banco)));
+  assert.deepEqual([estadoDoTicket(banco, 3, 1), aberta(banco, 3, 1)], ["em_execucao", 1]);
+
+  await gestao.limpar("amb-ocupado");
+  await ciclo;
+
+  assert.deepEqual(gestao.ocupantesNaFilaDeEspera(), []);
+  // O agente subiu depois da espera: a Tentativa 1 é a primeira e a única. Ela termina na conferência (o ambiente do teste
+  // não tem SonarQube), mas por nenhuma falta de sandbox.
+  const { tentativas } = carregarDemanda(banco, "I-2");
+  assert.deepEqual(
+    tentativas.map(({ numero }) => numero),
+    [1],
+  );
+  assert.doesNotMatch(JSON.stringify(tentativas[0]?.resultado), /sandbox/);
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {

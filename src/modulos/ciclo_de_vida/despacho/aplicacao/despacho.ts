@@ -20,6 +20,7 @@ import {
 import { exigirSelecaoDoDespacho } from "../nucleo/reserva_ticket.ts";
 import { ErroDeRegra, existe } from "../../../../shared/nucleo/erros.ts";
 import { Endereco, exigirEtapaConduzida, formatarTicketRef } from "../../etapas/publico.ts";
+import { ocupanteDoDono } from "../../../repositorio/publico.ts";
 import { escrever } from "../../../../shared/armazenamento/banco.ts";
 import { agregadosParaDespacho, trabalhosVivos } from "../armazenamento/despacho_demanda.ts";
 import { lerEmSnapshot } from "../../../../shared/armazenamento/snapshot.ts";
@@ -71,12 +72,26 @@ let recusasDoUltimoCiclo: ReadonlyMap<Endereco, MotivoDeRecusa> = new Map();
 /** Por que cada item parado no último ciclo não foi despachado. */
 export const ultimasRecusas = (): ReadonlyMap<Endereco, MotivoDeRecusa> => recusasDoUltimoCiclo;
 
-/** A situação lida num snapshot só: as demandas em andamento e os tickets com trabalho vivo. */
-const situacaoDoDespacho = (banco: DatabaseSync, predecessorasPendentes: PredecessorasPendentes): SituacaoDoDespacho =>
-  lerEmSnapshot(banco, () => ({
-    demandas: demandasParaDespacho(banco, predecessorasPendentes),
-    vivos: trabalhosVivos(banco),
-  }));
+/** Os tickets em execução cujo Espaço (`I-n` ou `I-n.Rm`) espera um sandbox livre, que o Ambiente nomeia pelo dono. */
+const ticketsNaFilaDeSandbox = (demandas: readonly DemandaParaDespacho[], donosNaFila: readonly string[]): Endereco[] =>
+  demandas
+    .flatMap(({ agregado }) => agregado.tickets)
+    .filter((t) => t.estado === "em_execucao" && donosNaFila.includes(ocupanteDoDono(t)))
+    .map((t) => Endereco.doTicket(t.demanda_id, t.ticket_id));
+
+/** A situação lida num snapshot só: as demandas em andamento, os tickets com trabalho vivo e os que esperam sandbox. */
+const situacaoDoDespacho = (
+  { banco, ambientes }: ModulosDoCiclo,
+  predecessorasPendentes: PredecessorasPendentes,
+): SituacaoDoDespacho =>
+  lerEmSnapshot(banco, () => {
+    const demandas = demandasParaDespacho(banco, predecessorasPendentes);
+    return {
+      demandas,
+      vivos: trabalhosVivos(banco),
+      naFilaDeSandbox: ticketsNaFilaDeSandbox(demandas, ambientes.ocupantesNaFilaDeEspera()),
+    };
+  });
 
 /** O ponto único do limite global de paralelismo (MELHORIAS §11, regra 6): o ciclo e o "Executar agora" selecionam por aqui. */
 const selecionarNoLimiteGlobal = (banco: DatabaseSync, situacao: SituacaoDoDespacho): ResultadoDoDespacho =>
@@ -155,7 +170,7 @@ export function cicloDoDespacho(
       noLog(erro);
     }
   }
-  const situacao = situacaoDoDespacho(banco, predecessorasPendentes);
+  const situacao = situacaoDoDespacho(modulos, predecessorasPendentes);
   const { prontos, recusas } = selecionarNoLimiteGlobal(banco, situacao);
   recusasDoUltimoCiclo = recusas;
   const liberada = (t: TicketDemanda) =>
@@ -178,7 +193,7 @@ export function executarAgora(
 ): MotivoDeRecusa | Promise<void> {
   const { banco } = modulos;
   return escrever(banco, () => {
-    const situacao = situacaoDoDespacho(banco, predecessorasPendentes);
+    const situacao = situacaoDoDespacho(modulos, predecessorasPendentes);
     const { agregado, predecessoras_pendentes } = existe(
       situacao.demandas.find((d) => d.agregado.demanda.id === ref.demanda_id),
       `a demanda ${ref.demanda_id} não está em planejamento, execução, revisão da demanda nem encerramento`,
