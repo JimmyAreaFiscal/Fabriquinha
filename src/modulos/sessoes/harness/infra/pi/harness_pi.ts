@@ -132,7 +132,7 @@ export class HarnessPi implements Harness {
   }
 
   /**
-   * F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa, a guarda e a `perguntar`,
+   * F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa, a guarda, a `perguntar` e o `tempo_limite` do `bash`,
    * que toma o lugar da `ask_user_question` (quebrada no modo RPC; o pi não inicia com duas ferramentas de mesmo nome).
    * A consulta (F4 §6.5) copia a sessão principal para a sessão nova `sessaoPi` e tira só as ferramentas embutidas de
    * escrita; além das três da spec, o `powershell`, que o pi 0.84.4 também embute e que altera arquivos se houver `pwsh`.
@@ -152,6 +152,8 @@ export class HarnessPi implements Harness {
       join(PACOTE, "extensions", "guarda.ts"),
       "-e",
       join(PACOTE, "extensions", "pergunta.ts"),
+      "-e",
+      join(PACOTE, "extensions", "tempo_limite.ts"),
       ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
       "--exclude-tools",
       l.modo === "consulta" ? "ask_user_question,edit,write,bash,powershell" : "ask_user_question",
