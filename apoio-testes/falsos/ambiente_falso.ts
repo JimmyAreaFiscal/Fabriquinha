@@ -93,6 +93,8 @@ const dentroDeUmAmbiente = new AsyncLocalStorage<true>();
 
 export class AmbienteFalso implements Ambiente {
   readonly registro: ComandoRegistrado[] = [];
+  /** O teste liga para o sandbox "não responder": `sandboxCaiu()` passa a ser `true`. */
+  sandboxCaido = false;
   private readonly hostLocal = new AmbienteHostLocal();
   readonly id = this.hostLocal.id;
   readonly processosMorremComOServico = this.hostLocal.processosMorremComOServico;
@@ -115,7 +117,7 @@ export class AmbienteFalso implements Ambiente {
   }
 
   sandboxCaiu(): Promise<boolean> {
-    return this.hostLocal.sandboxCaiu();
+    return this.sandboxCaido ? Promise.resolve(true) : this.hostLocal.sandboxCaiu();
   }
 
   caminhoNoAmbiente(caminhoNoHost: string): string {
