@@ -363,7 +363,10 @@ test("falha de infraestrutura no passo integracao é retomada sozinha e a nova T
 
   // Sem ação do Auditor: depois da espera da falha transitória, a retomada automática reabre o encerramento.
   const passadaAEspera = relogioFixo(new Date(Date.now() + 3 * 60_000).toISOString());
-  assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, passadaAEspera), [formatarTicketRef(ticket)]);
+  assert.deepEqual(
+    retomarFalhasDeInfraestrutura(c.banco, () => true, passadaAEspera),
+    [formatarTicketRef(ticket)],
+  );
   assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
   assert.deepEqual(demanda(c, id).pull_requests, esperando.pull_requests);
 

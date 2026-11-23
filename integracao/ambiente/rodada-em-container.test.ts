@@ -677,7 +677,10 @@ test(
       assert.equal(statusDe(c, ref), "falhou");
 
       // A mesma retomada do host local: o reinício volta o ticket a `aberto` na hora.
-      assert.deepEqual(retomarFalhasDeInfraestrutura(servico.banco), [`${id}.T${String(ref.ticket_id)}`]);
+      assert.deepEqual(
+        retomarFalhasDeInfraestrutura(servico.banco, () => true),
+        [`${id}.T${String(ref.ticket_id)}`],
+      );
       assert.equal(statusDe(c, ref), "aberto");
 
       assert.equal(servico.banco.prepare("SELECT estado FROM ambiente WHERE id = ?").get(ambiente.id)?.estado, "livre");
@@ -740,9 +743,10 @@ test(
 
     // CA-5: passada a espera da política, a Fabriquinha retoma o ticket e ele roda em outro container, sem ação manual.
     const depoisDaEspera = new Date(Date.now() + 10 * 60_000).toISOString();
-    assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, relogioFixo(depoisDaEspera)), [
-      `${id}.T${String(ref.ticket_id)}`,
-    ]);
+    assert.deepEqual(
+      retomarFalhasDeInfraestrutura(c.banco, () => true, relogioFixo(depoisDaEspera)),
+      [`${id}.T${String(ref.ticket_id)}`],
+    );
     pi.roteirizar([{ escreve: { "feature.txt": "linha\n" }, uso: null }]);
     await ciclo(c, despachoComVerificacoesReais);
     assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");

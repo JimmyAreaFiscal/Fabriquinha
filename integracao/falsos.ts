@@ -142,6 +142,7 @@ export async function ligarContainerAoCenario(t: TestContext, c: Cenario, portaD
         }
         return ambiente;
       },
+      conjuntoConferidoComODocker: () => montada.conjuntoConferidoComODocker(),
       ocupantesNaFilaDeEspera: () => montada.ocupantesNaFilaDeEspera(),
       ambienteDo: (ocupante) => montada.ambienteDo(ocupante),
       limpar: (id) => montada.limpar(id),

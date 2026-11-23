@@ -38,6 +38,7 @@ export {
 export const gestaoQueSoUsa = (ambiente: Ambiente): GestaoDeAmbientes => ({
   listar: () => Promise.resolve([]),
   alocar: () => Promise.resolve(ambiente),
+  conjuntoConferidoComODocker: () => true,
   ocupantesNaFilaDeEspera: () => [],
   ambienteDo: () => ambiente,
   limpar: () => Promise.resolve(),

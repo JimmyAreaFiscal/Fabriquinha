@@ -314,7 +314,10 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   assert.deepEqual(final.slice(0, 2), historico);
   assert.equal(existsSync(join(c.raiz, "execucoes")), true);
   // O reinício não é culpa do ticket: o ciclo seguinte o devolve a aberto sozinho, sem instrução do Auditor nem executar.
-  assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco), [`${id}.T${String(t1.ticket_id)}`]);
+  assert.deepEqual(
+    retomarFalhasDeInfraestrutura(c.banco, () => true),
+    [`${id}.T${String(t1.ticket_id)}`],
+  );
   assert.equal(statusDe(c, t1), "aberto");
   assert.equal(execucoesDe(c, t1).length, 3);
 });
