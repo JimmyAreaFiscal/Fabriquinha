@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../../../../../shared/nucleo/demanda/ator.ts";
-import { ErroDeReprovacao, ErroDeRegra, ErroExterno } from "../../../../../shared/nucleo/erros.ts";
+import {
+  ErroDeConjuntoNaoConferido,
+  ErroDeReprovacao,
+  ErroDeRegra,
+  ErroExterno,
+} from "../../../../../shared/nucleo/erros.ts";
 import {
   falhaDoErro,
   falhaInterrompidaPeloAuditor,
@@ -20,6 +25,7 @@ test("o rótulo da causa: o reinício tem o seu; as demais falhas de ambiente, o
     "comando_ausente",
     "servico_externo_inacessivel",
     "sandbox_caiu",
+    "conjunto_nao_conferido",
   ] as const) {
     assert.equal(rotuloDaCausa(causa), "falha de infraestrutura");
   }
@@ -45,6 +51,23 @@ test("o erro vira resultado num ponto só: reprovação, infraestrutura ou falha
   assert.deepEqual(falhaDoErro(regra), falhaQueExigeOAuditor(regra.message));
   assert.deepEqual(falhaDoErro("texto solto"), { tipo: "interrompida", por: FABRIQUINHA, motivo: "texto solto" });
   assert.equal(falhaQueExigeOAuditor("x".repeat(3000)).motivo.length, 2000);
+});
+
+test("o conjunto não conferido tem causa própria; o ErroExterno comum segue como serviço externo inacessível", () => {
+  const recusa = new ErroDeConjuntoNaoConferido(
+    "o conjunto de sandboxes ainda não foi conferido com o docker",
+    "confira se o Docker está rodando",
+  );
+  assert.deepEqual(falhaDoErro(recusa), {
+    tipo: "falha_infraestrutura",
+    causa: "conjunto_nao_conferido",
+    motivo: `falha de infraestrutura: ${recusa.message}`,
+  });
+  assert.equal(falhaDoErro(new ErroExterno("o gh não respondeu")).tipo, "falha_infraestrutura");
+  assert.equal(
+    (falhaDoErro(new ErroExterno("o gh não respondeu")) as { causa: string }).causa,
+    "servico_externo_inacessivel",
+  );
 });
 
 test("o sandbox caído (docker parado, container parado ou sumido) é falha de infraestrutura, mesmo num erro de regra", () => {

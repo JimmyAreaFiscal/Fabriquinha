@@ -70,6 +70,7 @@ test("falha de tempo limite: espera 2, 8 e 32 min a 1ª, 2ª e 3ª e bloqueia na
       tipo: "retomar_automaticamente",
       trocarProvedor: false,
       esperaMs: minutos * MINUTO,
+      aguardaAConferenciaDoConjunto: false,
     })),
   );
   assert.deepEqual(proximoPasso("implementar", ...falhas(4)), { tipo: "bloquear" });
@@ -87,6 +88,7 @@ test("a cota esgotada retoma na hora, trocando o provedor, e conta no limite", (
     tipo: "retomar_automaticamente",
     trocarProvedor: true,
     esperaMs: 0,
+    aguardaAConferenciaDoConjunto: false,
   });
   const quatro = Array.from({ length: 4 }, () => falhaDeInfraestrutura("cota"));
   assert.deepEqual(proximoPasso("implementar", ...quatro), { tipo: "bloquear" });
@@ -94,7 +96,12 @@ test("a cota esgotada retoma na hora, trocando o provedor, e conta no limite", (
 
 test("o reinício do serviço retoma na hora e não conta no limite, por mais que se repita", () => {
   const reinicios = Array.from({ length: 5 }, () => falhaDeInfraestrutura("servico_reiniciado"));
-  const esperado = { tipo: "retomar_automaticamente", trocarProvedor: false, esperaMs: 0 };
+  const esperado = {
+    tipo: "retomar_automaticamente",
+    trocarProvedor: false,
+    esperaMs: 0,
+    aguardaAConferenciaDoConjunto: false,
+  };
   assert.deepEqual(proximoPasso("revisar_demanda", ...reinicios), esperado);
   const entreFalhas = [falhaDeInfraestrutura("tempo_limite"), ...reinicios];
   assert.deepEqual(proximoPasso("implementar", ...entreFalhas), esperado);
@@ -105,6 +112,28 @@ test("o reinício do serviço retoma na hora e não conta no limite, por mais qu
       tipo: "retomar_automaticamente",
       trocarProvedor: false,
       esperaMs: 32 * MINUTO,
+      aguardaAConferenciaDoConjunto: false,
+    },
+  );
+});
+
+test("a recusa por conjunto não conferido espera a conferência, não conta no limite e não aumenta a espera das seguintes", () => {
+  const esperaConferencia = {
+    tipo: "retomar_automaticamente",
+    trocarProvedor: false,
+    esperaMs: 0,
+    aguardaAConferenciaDoConjunto: true,
+  };
+  const recusas = Array.from({ length: 4 }, () => falhaDeInfraestrutura("conjunto_nao_conferido"));
+  assert.deepEqual(proximoPasso("implementar", ...recusas), esperaConferencia);
+  assert.deepEqual(proximoPasso("implementar", falhaDeInfraestrutura("tempo_limite"), ...recusas), esperaConferencia);
+  assert.deepEqual(
+    proximoPasso("implementar", falhaDeInfraestrutura("conjunto_nao_conferido"), falhaDeInfraestrutura("tempo_limite")),
+    {
+      tipo: "retomar_automaticamente",
+      trocarProvedor: false,
+      esperaMs: 2 * MINUTO,
+      aguardaAConferenciaDoConjunto: false,
     },
   );
 });
@@ -125,6 +154,7 @@ test("uma política com outros limites usa os dela", () => {
     tipo: "retomar_automaticamente",
     trocarProvedor: false,
     esperaMs: 2 * MINUTO,
+    aguardaAConferenciaDoConjunto: false,
   });
   const duasFalhas = [falhaDeInfraestrutura("tempo_limite"), falhaDeInfraestrutura("tempo_limite")];
   assert.deepEqual(rigorosa.proximoPasso("implementar", duasFalhas), { tipo: "bloquear" });
