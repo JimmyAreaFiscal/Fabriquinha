@@ -4,7 +4,7 @@
 // conjunto, que executa, lança e sinaliza nele. Ambiente não conhece demandas, tickets nem etapas: o ocupante é opaco.
 import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
-import { ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeConjuntoNaoConferido, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import type { ConfiguracaoDoAmbiente } from "../../../../shared/nucleo/configuracao_do_ambiente.ts";
 import { type Relogio, relogioDoSistema } from "../../../../shared/nucleo/relogio.ts";
 import {
@@ -62,6 +62,8 @@ export interface GestaoDeAmbientes {
   limpar(id: string): Promise<void>;
   /** Elimina o container `id` livre ou sujo; o alocado e o desconhecido são recusados com `ErroDeRegra`. */
   deletar(id: string): Promise<void>;
+  /** Se o `alocar` já pode usar o conjunto: o docker o conferiu; no `host_local`, sempre, porque nada é conferido lá. */
+  conjuntoConferidoComODocker(): boolean;
   /** Encerra as esperas por sandbox (o `alocar` de cada uma lança `ErroExterno`), desliga a eliminação dos ociosos e espera a que está em andamento. */
   parar(): Promise<void>;
 }
@@ -127,7 +129,7 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     const { arquivos_de_dependencias } = projeto;
     if (!this.#ehContainer || !arquivos_de_dependencias?.length) return this.#doServico;
     if (!this.#conjuntoConferido)
-      throw new ErroExterno(
+      throw new ErroDeConjuntoNaoConferido(
         "o conjunto de sandboxes ainda não foi conferido com o docker",
         "o trabalho volta a tentar quando o Docker responder; confira se o Docker está rodando",
       );
@@ -137,6 +139,10 @@ class GestaoDoConjunto implements GestaoDeAmbientes {
     const container = this.#comoAmbienteContainer(alocado);
     container.levarEnvDoProjeto(projeto.raiz_git);
     return container;
+  }
+
+  conjuntoConferidoComODocker(): boolean {
+    return !this.#ehContainer || this.#conjuntoConferido;
   }
 
   ocupantesNaFilaDeEspera(): readonly string[] {
