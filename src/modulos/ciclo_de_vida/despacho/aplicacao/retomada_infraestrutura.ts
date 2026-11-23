@@ -19,10 +19,14 @@ import { projetosCadastrados } from "../../conducao/publico.ts";
 
 /**
  * Devolve a `aberto` os tickets falhos das demandas em andamento cuja política manda retomar: o do reinício sempre e na
- * hora; o transitório depois da espera; o da cota com o modelo reserva. Os que passaram do limite de falhas seguidas, e
+ * hora; o da recusa por conjunto não conferido na hora, depois que o conjunto é conferido; o transitório depois da espera; o da cota com o modelo reserva. Os que passaram do limite de falhas seguidas, e
  * os que pedem o Auditor, ficam para ele. Devolve os endereços retomados; o erro de um não para os outros.
  */
-export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relogio = relogioDoSistema): string[] {
+export function retomarFalhasDeInfraestrutura(
+  banco: DatabaseSync,
+  conjuntoConferidoComODocker: () => boolean,
+  relogio: Relogio = relogioDoSistema,
+): string[] {
   const agora = relogio.agora();
   const retomados: string[] = [];
   for (const ag of agregadosParaDespacho(banco, ESTADOS_DESPACHADOS)) {
@@ -31,6 +35,7 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, relogio: Relo
       const historico = desdeAReabertura(tentativasDoTicket(ag.tentativas, t.ticket_id));
       const passo = POLITICA_DE_TENTATIVAS.proximoPasso(t.etapa, historico);
       if (passo.tipo !== "retomar_automaticamente") continue;
+      if (passo.aguardaAConferenciaDoConjunto && !conjuntoConferidoComODocker()) continue;
       if (Date.parse(agora) - Date.parse(t.estado_alterado_em) < passo.esperaMs) continue;
       let modelo: Modelo | undefined;
       if (passo.trocarProvedor) {

@@ -12,7 +12,7 @@ import {
   lerNomeDaInstancia,
   listarAmbientes,
 } from "../../sandboxes/armazenamento/ambientes.ts";
-import { ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
+import { ErroDeConjuntoNaoConferido, ErroDeRegra, ErroExterno } from "../../../../shared/nucleo/erros.ts";
 import { type EspacoDeTrabalho, espacoDaDemanda } from "../../../repositorio/publico.ts";
 import { espacoDaRodada, ocupanteDoAmbiente, rodarGit } from "../../../../../apoio-testes/repositorio_de_teste.ts";
 import { Projeto } from "../../../demandas/publico.ts";
@@ -520,8 +520,9 @@ test("na subida do host_local o docker nunca é chamado", async () => {
   const { docker, banco, alocar } = await cenario();
   await alocar();
   const chamadasAntes = docker.registro().length;
-  await subirDeNovo(banco, "host_local");
+  const { gestao } = await subirDeNovo(banco, "host_local");
   assert.equal(docker.registro().length, chamadasAntes);
+  assert.equal(gestao.conjuntoConferidoComODocker(), true);
 });
 
 test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele responde, a manutenção periódica confere o conjunto e libera a alocação", async (t) => {
@@ -539,7 +540,8 @@ test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele r
   after(() => gestao.parar());
   assert.match(String(erros), /Cannot connect to the Docker daemon/);
   assert.equal(listarAmbientes(banco)[0]?.estado, "alocado", "sem o docker, nada é conferido");
-  await assert.rejects(gestao.alocar(espacoB, projeto), (erro) => erro instanceof ErroExterno);
+  await assert.rejects(gestao.alocar(espacoB, projeto), (erro) => erro instanceof ErroDeConjuntoNaoConferido);
+  assert.equal(gestao.conjuntoConferidoComODocker(), false);
   assert.ok(gestao.ambienteDo("I-1") instanceof AmbienteContainer);
 
   t.mock.timers.tick(60_000); // a manutenção periódica tenta e o docker continua fora
@@ -550,6 +552,7 @@ test("com o docker fora do ar na subida, a gestão sobe sem alocar; quando ele r
   t.mock.timers.tick(60_000);
   await esperarAManutencaoDoConjunto(() => listarAmbientes(banco)[0]?.estado === "livre");
   assert.equal(listarAmbientes(banco)[0]?.estado, "livre", "o docker respondeu: a conferência rodou sozinha");
+  assert.equal(gestao.conjuntoConferidoComODocker(), true);
   assert.equal(comoContainer(await gestao.alocar(espacoB, projeto)).container_id, ambiente.container_id);
 
   const chamadasAntes = docker.registro().length;

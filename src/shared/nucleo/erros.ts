@@ -28,6 +28,11 @@ export class ErroExterno extends ErroDeRegra {
   override name = "ErroExterno";
 }
 
+/** O alocar de Ambientes recusou porque o conjunto de sandboxes ainda não foi conferido com o docker: a espera acaba na conferência, não no recuo da política. */
+export class ErroDeConjuntoNaoConferido extends ErroExterno {
+  override name = "ErroDeConjuntoNaoConferido";
+}
+
 /** Quem pede não tem permissão para o comando. */
 export class ErroDeEscopo extends Error {
   override name = "ErroDeEscopo";

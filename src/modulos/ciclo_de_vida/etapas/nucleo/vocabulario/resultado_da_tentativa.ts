@@ -3,7 +3,12 @@
 // verificações também o devolvem.
 import { z } from "zod";
 import { AUDITOR, Ator, FABRIQUINHA } from "../../../../../shared/nucleo/demanda/ator.ts";
-import { ErroDeReprovacao, ErroExterno, mensagem } from "../../../../../shared/nucleo/erros.ts";
+import {
+  ErroDeConjuntoNaoConferido,
+  ErroDeReprovacao,
+  ErroExterno,
+  mensagem,
+} from "../../../../../shared/nucleo/erros.ts";
 import { Markdown, motivo } from "../../../../../shared/nucleo/primitivos.ts";
 
 export const CausaDeInfraestrutura = z.enum([
@@ -14,6 +19,7 @@ export const CausaDeInfraestrutura = z.enum([
   "comando_ausente",
   "servico_externo_inacessivel",
   "sandbox_caiu",
+  "conjunto_nao_conferido",
 ]);
 export type CausaDeInfraestrutura = z.infer<typeof CausaDeInfraestrutura>;
 
@@ -26,6 +32,7 @@ const ROTULO_DA_CAUSA: Record<CausaDeInfraestrutura, string> = {
   comando_ausente: "falha de infraestrutura",
   servico_externo_inacessivel: "falha de infraestrutura",
   sandbox_caiu: "falha de infraestrutura",
+  conjunto_nao_conferido: "falha de infraestrutura",
 };
 export const rotuloDaCausa = (causa: CausaDeInfraestrutura): string => ROTULO_DA_CAUSA[causa];
 
@@ -78,6 +85,12 @@ const RELATO_DE_SANDBOX_CAIDO = /Cannot connect to the Docker daemon|container \
 
 /** O erro de uma etapa que não tem reprovação: o externo e o sandbox caído são infraestrutura, o resto pede o Auditor. */
 export function falhaDoErro(erro: unknown): FalhaDaTentativa {
+  if (erro instanceof ErroDeConjuntoNaoConferido)
+    return {
+      tipo: "falha_infraestrutura",
+      causa: "conjunto_nao_conferido",
+      motivo: `${rotuloDaCausa("conjunto_nao_conferido")}: ${motivo(erro.message)}`,
+    };
   if (RELATO_DE_SANDBOX_CAIDO.test(mensagem(erro)))
     return {
       tipo: "falha_infraestrutura",

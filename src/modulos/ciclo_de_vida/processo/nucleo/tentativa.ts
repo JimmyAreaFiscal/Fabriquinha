@@ -25,7 +25,12 @@ export type Tentativa = z.infer<typeof Tentativa>;
 
 type ProximoPasso =
   | { tipo: "devolver_ao_agente" }
-  | { tipo: "retomar_automaticamente"; trocarProvedor: boolean; esperaMs: number }
+  | {
+      tipo: "retomar_automaticamente";
+      trocarProvedor: boolean;
+      esperaMs: number;
+      aguardaAConferenciaDoConjunto: boolean;
+    }
   | { tipo: "bloquear" };
 
 const BLOQUEAR: ProximoPasso = { tipo: "bloquear" };
@@ -58,7 +63,8 @@ export class PoliticaDeTentativas {
   /**
    * O que fazer depois da última Tentativa do histórico, que vale desde a reabertura (`desdeAReabertura`). A conta inclui
    * a última: a reprovação só devolve até o limite; a falha de infraestrutura espera 2, 8, 32... minutos e retoma até o
-   * limite; o reinício do serviço não conta e retoma na hora; o resto bloqueia para o Auditor.
+   * limite; o reinício do serviço e a recusa por conjunto não conferido não contam (o reinício retoma na hora; a
+   * recusa, na conferência do conjunto); o resto bloqueia para o Auditor.
    */
   proximoPasso(etapa: EtapaTicket, historicoDesdeAReabertura: readonly Tentativa[]): ProximoPasso {
     const ultima = historicoDesdeAReabertura.at(-1)?.resultado;
@@ -70,10 +76,26 @@ export class PoliticaDeTentativas {
     }
     if (ultima?.tipo !== "falha_infraestrutura") return BLOQUEAR;
     if (ultima.causa === "servico_reiniciado") {
-      return { tipo: "retomar_automaticamente", trocarProvedor: false, esperaMs: 0 };
+      return {
+        tipo: "retomar_automaticamente",
+        trocarProvedor: false,
+        esperaMs: 0,
+        aguardaAConferenciaDoConjunto: false,
+      };
+    }
+    if (ultima.causa === "conjunto_nao_conferido") {
+      return {
+        tipo: "retomar_automaticamente",
+        trocarProvedor: false,
+        esperaMs: 0,
+        aguardaAConferenciaDoConjunto: true,
+      };
     }
     const falhas = historicoDesdeAReabertura.filter(
-      (t) => t.resultado?.tipo === "falha_infraestrutura" && t.resultado.causa !== "servico_reiniciado",
+      (t) =>
+        t.resultado?.tipo === "falha_infraestrutura" &&
+        t.resultado.causa !== "servico_reiniciado" &&
+        t.resultado.causa !== "conjunto_nao_conferido",
     ).length;
     if (falhas > this.limites.falhasDeInfraestrutura) return BLOQUEAR;
     const cotaEsgotada = ultima.causa === "cota";
@@ -81,6 +103,7 @@ export class PoliticaDeTentativas {
       tipo: "retomar_automaticamente",
       trocarProvedor: cotaEsgotada,
       esperaMs: cotaEsgotada ? 0 : ESPERA_INICIAL_MS * 4 ** (falhas - 1),
+      aguardaAConferenciaDoConjunto: false,
     };
   }
 
