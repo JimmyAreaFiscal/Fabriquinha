@@ -1,5 +1,3 @@
-// O conjunto fixo ou variável de sandboxes (MELHORIAS §8, regras 3 e 4, e §13, item 1): a capacidade, a vaga que um
-// parado cede e a ociosidade que só o variável elimina, até o mínimo.
 import { INSTALACAO_DO_PI_FALSO } from "../../../../../apoio-testes/falsos/pi_falso.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -44,7 +42,6 @@ const SERVICO = {
 writeFileSync(join(base, "package.json"), "{}");
 writeFileSync(join(base, "package-lock.json"), "{}");
 writeFileSync(join(base, "requirements.txt"), "requests\n");
-// A imagem lê as dependências de origin/main: o clone de teste as commita e as publica nessa ref.
 for (const argumentosDoGit of [
   ["init", "-q", "-b", "main"],
   ["add", "package.json", "package-lock.json", "requirements.txt"],
@@ -75,7 +72,6 @@ async function esperarNaFila(conjunto: ConjuntoDeSandboxes, quantos: number): Pr
 function piDoHost(raiz: string) {
   let executavel = "";
   const instalar = (arquivoDoExecutavel: string) => {
-    // A nova nasce antes de a antiga sair, como no npm; assim não herda o inode dela.
     mkdirSync(`${raiz}-nova`);
     writeFileSync(join(`${raiz}-nova`, "package.json"), "{}");
     writeFileSync(join(`${raiz}-nova`, arquivoDoExecutavel), "");
@@ -109,7 +105,6 @@ function cenario(conjuntoConfigurado: Record<string, unknown>) {
     ociosidade_para_eliminar_min: 30,
     ...conjuntoConfigurado,
   });
-  // O relógio que o teste avança: a ordem das liberações decide quem o conjunto elimina primeiro.
   let instante: Instante = "2026-11-13T10:00:00.000Z";
   const relogio = { agora: () => instante };
   const conjunto = new ConjuntoDeSandboxes(
@@ -200,7 +195,6 @@ test("dois alocar ao mesmo tempo na última vaga: um recebe o container, o outro
   const { docker, conjunto, liberar } = cenario({ conjunto: "variavel", capacidade_do_conjunto: 1 });
   const pedidos = new Map(["I-1", "I-2"].map((dono) => [dono, conjunto.alocar(ocupante(dono), doNode)] as const));
   await esperarNaFila(conjunto, 1);
-  // Qual dos dois chega primeiro à vaga é do acaso: o outro é o que espera.
   const [quemEspera] = conjunto.ocupantesNaFilaDeEspera();
   const quemRecebeu = quemEspera === "I-1" ? "I-2" : "I-1";
   assert.equal((await pedidos.get(quemRecebeu))?.alocado_para, quemRecebeu);
@@ -280,13 +274,11 @@ test("a vaga liberada vai ao primeiro da fila mesmo se ele está refazendo a alo
   const esperaDoC = conjunto.alocar(ocupante("I-4"), doNode);
   await esperarNaFila(conjunto, 3);
 
-  // A recebe a vaga e, ao sair da fila, acorda B, que fica preso no garantirImagem da retentativa.
   const { naPrisao, soltar } = prenderProximaImagemDe(projetoDoB);
   await liberarDe("I-1");
   assert.equal((await esperaDoA).alocado_para, "I-2");
   await naPrisao;
 
-  // A liberação real chega com B refazendo: C não pode tomá-la.
   await liberarDe("I-2");
   await new Promise((resolver) => setTimeout(resolver, 50));
   assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-3", "I-4"]);
@@ -305,8 +297,6 @@ test("a cabeça da fila que refaz a alocação, sozinha na fila, não perde a li
   const esperaDoA = conjunto.alocar(ocupante("I-2"), projetoDoA);
   await esperarNaFila(conjunto, 1);
 
-  // A acorda com a primeira liberação e fica presa; um ladrão leva o sandbox, que é devolvido (liberação no meio da
-  // retentativa) e levado de novo antes de A seguir: A volta sem vaga, mas com a marca, e refaz em vez de dormir.
   const { naPrisao, soltar } = prenderProximaImagemDe(projetoDoA);
   await liberarDe("I-1");
   await naPrisao;
@@ -315,9 +305,11 @@ test("a cabeça da fila que refaz a alocação, sozinha na fila, não perde a li
   assert.ok(sandbox);
   await conjunto.limpar(sandbox.id);
   assert.ok(ladraoLevaOSandbox());
+  const retentativaPelaMarca = prenderProximaImagemDe(projetoDoA);
   soltar();
-  await new Promise((resolver) => setTimeout(resolver, 50));
+  await retentativaPelaMarca.naPrisao;
   assert.deepEqual(conjunto.ocupantesNaFilaDeEspera(), ["I-2"]);
+  retentativaPelaMarca.soltar();
 
   await conjunto.limpar(sandbox.id);
   assert.equal((await esperaDoA).alocado_para, "I-2");
@@ -414,7 +406,7 @@ test("a criação que falha com alguém na fila acorda o primeiro, que cria o co
 test("o acordado que lança antes de tomar a vaga passa a vez: o próximo da fila recebe o sandbox livre", async () => {
   const { conjunto, liberar } = cenario({ conjunto: "fixo", capacidade_do_conjunto: 1 });
   await conjunto.alocar(ocupante("I-1"), doNode);
-  let dependenciasInvalidas = false; // o arquivo de dependências some depois de o I-2 entrar na fila
+  let dependenciasInvalidas = false;
   const projetoDoI2 = {
     ...doPython,
     get arquivos_de_dependencias() {
