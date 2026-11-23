@@ -158,7 +158,11 @@ export function cicloDoDespacho(
   relogio: Relogio = relogioDoSistema,
 ): Promise<void>[] {
   const { banco } = modulos;
-  const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco, relogio);
+  const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(
+    banco,
+    () => modulos.ambientes.conjuntoConferidoComODocker(),
+    relogio,
+  );
   if (retomadosPorInfraestrutura.length > 0) {
     noLog(`retomados depois de falha de ambiente: ${retomadosPorInfraestrutura.join(", ")}`);
   }

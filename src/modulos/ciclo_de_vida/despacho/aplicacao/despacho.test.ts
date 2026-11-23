@@ -30,6 +30,7 @@ import {
   type DepsDespacho,
   despachoDasEtapas,
 } from "../../conducao/publico.ts";
+import { relogioFixo } from "../../../../shared/nucleo/relogio.ts";
 import { cicloDoDespacho, demandasParaDespacho, executarAgora, ultimasRecusas } from "./despacho.ts";
 import {
   AmbienteHostLocal,
@@ -404,6 +405,132 @@ test("CA-1, CA-2: conjunto de sandboxes na capacidade: o ticket espera em execu�
     [1],
   );
   assert.doesNotMatch(JSON.stringify(tentativas[0]?.resultado), /sandbox/);
+});
+
+/** O serviço `container` montado com o docker (falso) parado: o `docker ps` da subida falha e o conjunto fica por conferir. */
+async function servicoComODockerForaDoAr(t: TestContext) {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const { c, banco, config } = await cenario(1);
+  commitarArquivo(c.repo, "package.json", "{}");
+  commitarArquivo(c.repo, "package-lock.json", "{}");
+  rodarGit(c.repo, "push", "-q", "origin", c.projeto.branch_base);
+  banco
+    .prepare("UPDATE projeto SET raiz_git = ?, arquivos_de_dependencias = '[\"package.json\"]' WHERE nome = 'loja'")
+    .run(c.repo);
+  process.env.FABRIQUINHA_PI = piFalso.caminho;
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "I-2", c.log);
+  const docker = instalarDockerFalso(join(temporario, `docker-${randomUUID()}`));
+  docker.pararDocker();
+  writeFileSync(join(c.raiz, "auth.json"), "{}");
+  const servico = {
+    raiz: c.raiz,
+    porta_da_api: 4999,
+    home_do_usuario: c.raiz,
+    pacote_do_harness: PACOTE,
+    instalacao_do_harness: () => INSTALACAO_DO_PI_FALSO,
+    dir_do_harness_do_auditor: c.raiz,
+  };
+  const configuracao = ConfiguracaoDoAmbiente.parse({ tipo: "container", conjunto: "fixo", capacidade_do_conjunto: 1 });
+  const silencio = silenciar(t);
+  const gestao = await ligarGestaoDeAmbientesDoTeste(t, { banco, configuracao: () => configuracao, servico });
+  return { banco, config, docker, gestao, log: silencio };
+}
+
+const depoisDe = (minutos: number) => relogioFixo(new Date(Date.now() + minutos * 60_000).toISOString());
+const retomadosNoLog = (log: { mock: { calls: { arguments: unknown[] }[] } }) =>
+  log.mock.calls
+    .map((chamada) => String(chamada.arguments[1]))
+    .filter((linha) => linha.includes("retomados depois de falha"));
+
+test("CA-1, CA-2: o ticket recusado pelo conjunto não conferido cai com a causa própria e volta no ciclo seguinte à conferência, com o log", async (t) => {
+  const { banco, config, docker, gestao, log } = await servicoComODockerForaDoAr(t);
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
+
+  await Promise.all(
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
+  );
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+  const resultado = carregarDemanda(banco, "I-2").tentativas.at(-1)?.resultado;
+  assert.deepEqual(
+    [resultado?.tipo, resultado?.tipo === "falha_infraestrutura" && resultado.causa],
+    ["falha_infraestrutura", "conjunto_nao_conferido"],
+  );
+  assert.match(JSON.stringify(resultado), /o conjunto de sandboxes ainda não foi conferido com o docker/);
+
+  docker.religarDocker();
+  t.mock.timers.tick(60_000);
+  for (let espera = 0; !gestao.conjuntoConferidoComODocker() && espera < 200; espera++) await setTimeout(25);
+  assert.equal(gestao.conjuntoConferidoComODocker(), true);
+
+  const fins = cicloDoDespacho(
+    modulosDoCicloDeTeste(banco),
+    config,
+    despachoDasEtapas(),
+    liberacaoDasDemandas(banco),
+    depoisDe(1),
+  );
+  assert.equal(estadoDoTicket(banco, 2, 1), "em_execucao");
+  assert.match(retomadosNoLog(log).join("\n"), /retomados depois de falha de ambiente: I-2\.T1/);
+  await Promise.all(fins);
+});
+
+test("CA-3: com o docker fora do ar por 40 minutos, o ticket segue falhou, sem Tentativa nova nem log de retomada", async (t) => {
+  const { banco, config, log } = await servicoComODockerForaDoAr(t);
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
+  await Promise.all(
+    cicloDoDespacho(modulosDoCicloDeTeste(banco), config, despachoDasEtapas(), liberacaoDasDemandas(banco)),
+  );
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+
+  for (let minuto = 1; minuto <= 40; minuto++)
+    await Promise.all(
+      cicloDoDespacho(
+        modulosDoCicloDeTeste(banco),
+        config,
+        despachoDasEtapas(),
+        liberacaoDasDemandas(banco),
+        depoisDe(minuto),
+      ),
+    );
+
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+  assert.equal(carregarDemanda(banco, "I-2").tentativas.length, 1);
+  assert.deepEqual(retomadosNoLog(log), []);
+});
+
+test("CA-6: a falta de sandbox na capacidade segue com o recuo de 2 minutos, mesmo com o conjunto conferido", async (t) => {
+  const log = silenciar(t);
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, {
+    rodadas: ["implementar"],
+    tickets: [
+      {
+        ...implementar(1),
+        estado: "falhou",
+        resultado: {
+          tipo: "falha_infraestrutura",
+          causa: "servico_externo_inacessivel",
+          motivo: "nenhum sandbox disponível: o conjunto está na capacidade 1",
+        },
+      },
+    ],
+  });
+  const cicloEm = (minutos: number) =>
+    Promise.all(
+      cicloDoDespacho(
+        modulosDoCicloDeTeste(banco),
+        config,
+        deps,
+        liberacaoDasDemandas(banco),
+        relogioFixo(new Date(Date.parse(em) + minutos * 60_000).toISOString()),
+      ),
+    );
+  await cicloEm(1);
+  assert.equal(estadoDoTicket(banco, 2, 1), "falhou");
+  assert.deepEqual(retomadosNoLog(log), []);
+  await cicloEm(2);
+  assert.equal(estadoDoTicket(banco, 2, 1), "em_execucao");
+  assert.equal(retomadosNoLog(log).length, 1);
 });
 
 test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o revisar_demanda entra em execução", async () => {
